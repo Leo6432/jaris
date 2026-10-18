@@ -38,6 +38,7 @@ window.__setContextLengthCalls = []
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
+  patchProfile: async () => null,
   getContextLengthOptions: async () => (${JSON.stringify(CONTEXT_OPTIONS)}),
   setContextLength: async (value) => { window.__setContextLengthCalls.push(value) }
 }
@@ -166,6 +167,7 @@ import OptionsMenu from './src/components/OptionsMenu'
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
+  patchProfile: async () => null,
   getContextLengthOptions: async () => (${JSON.stringify(TIGHT_OPTIONS)}),
   setContextLength: async () => {}
 }

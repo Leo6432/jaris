@@ -645,6 +645,13 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
     assert.equal(findLeakedToolName(phrase), real.findLeakedToolName(phrase), phrase)
     assert.equal(normalizeAssistantText(`${phrase} 😄 &#33;`, phrase), real.normalizeAssistantText(`${phrase} 😄 &#33;`, phrase), phrase)
   }
+  // Étape 328 : le code d'une réponse reste tel quel (indentation, entités, émojis) ; le retrait d'une sous-liste aussi.
+  const withCode = 'Voici :\n```python\ndef f():\n    return "a  b"  # 😄 &#33;\n```\nEt `x  =  1` aussi.  Fin  😄'
+  const expected = 'Voici :\n```python\ndef f():\n    return "a  b"  # 😄 &#33;\n```\nEt `x  =  1` aussi. Fin'
+  assert.equal(real.normalizeAssistantText(withCode, 'du code'), expected)
+  assert.equal(normalizeAssistantText(withCode, 'du code'), expected)
+  assert.equal(real.normalizeAssistantText('- a\n  - b  c', 'x'), '- a\n  - b c')
+  assert.equal(normalizeAssistantText('- a\n  - b  c', 'x'), '- a\n  - b c')
   // hasUnnegatedMailIntent n'est pas exportée par assistant.ts : son effet (la relance « mail ») est comparé par le test croisé.
   assert.equal(hasUnnegatedMailIntent("N'envoie pas de mail"), false)
   assert.equal(hasUnnegatedMailIntent('Envoie un mail à Paul'), true)
@@ -675,7 +682,7 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
       '"input.typeFailed": "Échec de la saisie du texte : {error}"'
     ],
     'electron/services/reminders.ts': ["`Rappel programmé dans ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''} : ${reminder.message}`", "Je n'ai pas pu programmer ce rappel : message ou délai invalide."],
-    'electron/services/memoryStore.ts': ['Noté dans la mémoire ("${title}").', 'Aucune note trouvée pour "${title}".', "const entry = `\\n\\n_${timestamp}_\\n${content}`", '`# ${sanitizeTitle(title)}${entry}`', ".replace(/[\\\\/:*?\"<>|]/g, '').slice(0, 80) || 'note'"],
+    'electron/services/memoryStore.ts': ['Noté dans la mémoire ("${title}").', 'Aucune note trouvée pour "${title}".', "const entry = `\\n\\n_${timestamp}_\\n${content}`", '`# ${sanitizeTitle(title)}${entry}`', ".replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '')", ".replace(/[\\s.]+$/, '')", '/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i'],
     'electron/services/webSearch.ts': ["t('search.noResult', { query })", '`${i + 1}. ${r.title} — ${r.content ?? \'\'} (${r.url})`'],
     'electron/services/webPage.ts': ['URL invalide : "${url}".', 'URL refusée (seuls http/https sont autorisés) : "${url}".', "chargée mais aucun texte lisible n'a pu en être extrait."],
     'electron/services/tools.ts': ["export const IMAGE_DONE_REPLY = 'Voilà ton image.'", 'toolFlag(args.replace)', 'shutdownPc(toolFlag(args.restart))', "value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true')"],

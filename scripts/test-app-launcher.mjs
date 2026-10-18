@@ -127,3 +127,17 @@ test("didAppLaunch ne reconnaît que le vrai message de succès d'openApp", () =
   assert.equal(didAppLaunch('Échec de l\'ouverture de "Discord" : spawn ENOENT'), false)
   assert.equal(didAppLaunch('Impossible de lister les applications installées : boom'), false)
 })
+
+test('la liste des applications est lue en UTF-8 : « Paramètres » ne revient pas abîmé (étape 328)', () => {
+  const launcher = readFileSync(new URL('../electron/services/appLauncher.ts', import.meta.url), 'utf8')
+  assert.match(launcher, /"\[Console\]::OutputEncoding = \[System\.Text\.Encoding\]::UTF8; Get-StartApps \| ConvertTo-Json -Compress"/)
+})
+
+test('sous Windows, la même entrée de commande rend bien les accents à Node', { skip: process.platform !== 'win32' && 'Windows seulement (CI)' }, async () => {
+  const { exec } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const command =
+    "powershell -NoProfile -Command \"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; @{ Name = 'Param' + [char]0x00E8 + 'tres' } | ConvertTo-Json -Compress\""
+  const { stdout } = await promisify(exec)(command, { windowsHide: true })
+  assert.equal(JSON.parse(stdout.trim()).Name, 'Paramètres')
+})

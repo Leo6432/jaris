@@ -92,15 +92,16 @@ test('demandes complètes : multipliées à la note des rôles de conversation, 
   const both = ['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 78/78 |']
   // Sans demandes complètes : le plus intelligent (qwen3.8:27b, 33,7 contre 22,9).
   assert.equal((await picks(md(both))).large, 'qwen3.8:27b')
-  // qwen3.8:27b ne réussit que 10 demandes sur 48 : 33,7 × 0,21 = 7,0 contre 22,9 × 46/48 = 21,9.
+  // qwen3.8:27b ne réussit que 10 demandes sur 48 : 15,2 × 0,21 = 3,2 contre 6,4 × 46/48 = 6,1 (forces, étape 328).
   const failing = await picks(md(both, ['| qwen3.5:27b | 46/48 |', '| qwen3.8:27b | 10/48 |']))
   assert.equal(failing.large, 'qwen3.5:27b')
   assert.equal(failing.code, 'qwen3.8:27b', 'le rôle Code ne regarde pas les demandes complètes')
   // Un score d'un ANCIEN test de demandes (autre total) ne compte pas.
   assert.equal((await picks(md(both, ['| qwen3.5:27b | 46/48 |', '| qwen3.8:27b | 10/40 |']))).large, 'qwen3.8:27b')
-  // Sans score de demandes, un modèle est estimé par son taux aux 78 questions, jamais compté parfait : 60/78 →
-  // 33,7 × 0,27 × 0,77 = 7,0, battu par 22,9 × 17/48 = 8,1 (avec un ×1, il aurait gagné : 9,1).
-  assert.equal((await picks(md(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 60/78 |'], ['| qwen3.5:27b | 17/48 |']))).large, 'qwen3.5:27b')
+  // Sans score de demandes, un modèle est estimé par son taux aux 78 questions, jamais compté parfait. Forces
+  // (étape 328, intelligence × part « n'invente pas ») : qwen3.8:27b 33,7 × 0,45 = 15,2 ; qwen3.5:27b 22,9 × 0,28 =
+  // 6,4. 60/78 → 15,2 × 0,27 × 0,77 = 3,1, battu par 6,4 × 27/48 = 3,6 (avec un ×1, il aurait gagné : 4,1).
+  assert.equal((await picks(md(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 60/78 |'], ['| qwen3.5:27b | 27/48 |']))).large, 'qwen3.5:27b')
 })
 
 /**
@@ -123,7 +124,9 @@ test('Rapide : un modèle plus intelligent mais bien plus lent ne passe JAMAIS d
 })
 
 test('Rapide : la fiabilité passe avant tout, même devant un modèle plus rapide ET plus intelligent', async () => {
-  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 5/6 |'].join('\n')
+  // Étape 328 : granite4.2:3b invente bien moins (force 9,1 × 0,43 = 3,9 contre 4,8 × 0,18 = 0,9 pour ministral) ;
+  // une erreur sur 6 ne suffit plus à le faire perdre ((5/6)^5 = 0,40 → 1,6). Deux erreurs sur 6 si : 3,9 × 0,13 = 0,5.
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 4/6 |'].join('\n')
   const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
   assert.equal(r.models.flash, 'ministral-3:3b')
 })
@@ -152,14 +155,13 @@ test('Vision ne choisit QUE parmi les modèles qui lisent une image', async () =
 })
 
 test('un 3/3 au test de code vaut un 6/6 au test de conversation (comparés en proportion, pas en nombre brut)', async () => {
-  // qwen3.6:35b-a3b a 3/3 au test de code ; en nombre brut, n'importe quel 6/6 l'aurait battu. Seul
-  // qwen3.6:35b-a3b est donné ici avec un Intelligence Index plus haut qu'un modèle de conversation à 6/6 :
-  // à fiabilité égale (100 % des deux côtés), l'intelligence doit trancher.
-  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.5:27b | 6/6 |', '## Code', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.6:35b-a3b | 3/3 |'].join('\n')
-  const r = await setup({ vramMib: 24 * 1024, ramGb: 64, scores }).pickBestModelsFromBenchmark()
-  // qwen3.5:27b : Intelligence 23 ; qwen3.6:35b-a3b : 18. Même fiabilité (100 %) → le plus intelligent.
-  assert.equal(r.codeModel, 'qwen3.5:27b')
-  const onlyCode = ['## Code', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.6:35b-a3b | 3/3 |', '| qwen2.5-coder:7b | 2/3 |'].join('\n')
+  // Étape 328 : le rôle Code se départage par Terminal-Bench 2.1. qwen3.6:27b (60,7) a 3/3 au test de code,
+  // qwen3.6:35b-a3b (44,9) 6/6 en conversation : en nombre brut, 6 > 3 l'aurait fait gagner ; en proportion, les
+  // deux sont à 100 % et Terminal-Bench départage.
+  const scores2 = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.6:35b-a3b | 6/6 |', '## Code', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.6:27b | 3/3 |'].join('\n')
+  assert.equal((await setup({ vramMib: 24 * 1024, ramGb: 64, scores: scores2 }).pickBestModelsFromBenchmark()).codeModel, 'qwen3.6:27b')
+  // Et un 3/3 bat un 2/3, même face à un meilleur Terminal-Bench : 44,9 contre 60,7 × (2/3)^5 = 8,0.
+  const onlyCode = ['## Code', '| Modèle | Fiabilité |', '|---|---|', '| qwen3.6:35b-a3b | 3/3 |', '| qwen3.6:27b | 2/3 |'].join('\n')
   const r2 = await setup({ vramMib: 24 * 1024, ramGb: 64, scores: onlyCode }).pickBestModelsFromBenchmark()
   assert.equal(r2.codeModel, 'qwen3.6:35b-a3b', 'un 3/3 doit battre un 2/3')
 })
@@ -250,10 +252,11 @@ test('un score de conversation du test actuel (sur 78) dispense du test ; vision
 // Léo, 04/10/2026 : Rapide 50 %, Médium 20 %, les autres sans minimum. Référence de vitesse : le plus rapide parmi
 // les meilleurs aux outils (ici granite4.2:3b, 221) ; plancher de Médium : 44.
 test('Médium : les modèles vraiment lents sont écartés (moins de 20 %), Puissant n’a pas de minimum', async () => {
-  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| granite4.2:3b | 78/78 |', '| qwen3.5:4b | 78/78 |'].join('\n')
+  // Référence de vitesse : ministral-3:3b (194), plancher de Médium 38,8.
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 78/78 |', '| qwen3.5:4b | 78/78 |'].join('\n')
   const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
-  // qwen3.5:4b est plus intelligent (13,1 contre 9,1) mais à 22, sous le plancher de 44.
-  assert.equal(r.models.medium, 'granite4.2:3b')
+  // qwen3.5:4b est plus fort (13,1 × 0,21 = 2,7 contre 4,8 × 0,18 = 0,9) mais à 22, sous le plancher de 38,8.
+  assert.equal(r.models.medium, 'ministral-3:3b')
   assert.equal(r.models.large, 'qwen3.5:4b')
 })
 
@@ -392,4 +395,54 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))], [], 'tout passé : plus proposé')
   const withoutQuestions = lines.filter((l) => l.type !== 'question')
   assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(withoutQuestions)))], [k2], 'les 78 questions manquent encore')
+})
+
+// Étape 328, Léo (« fait solution 1 et 2 ») : en conversation, la force d'un modèle = intelligence × part
+// « n'invente pas » d'AA-Omniscience ; en Code, Terminal-Bench 2.1. Sur les VRAIS scores du dépôt.
+test('force en conversation : intelligence × part « n’invente pas », jamais inventée quand rien n’est publié', () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  // qwen3.8:27b : 33,7 × (100 − 10) / 200.
+  assert.ok(Math.abs(scan.conversationStrength('qwen3.8:27b') - 33.7 * 0.45) < 1e-9)
+  // Un modèle qui refuse tout (Omniscience 0) garde la moitié de son intelligence, plus qu'un modèle qui invente.
+  assert.ok(scan.conversationStrength('hf.co/bartowski/ai9stars_G9v3-3B-GGUF') > scan.conversationStrength('qwen3.5:4b'))
+  // Intelligence publiée mais pas d'Omniscience : aucune force, jamais un facteur deviné.
+  assert.equal(scan.conversationStrength('qwen2.5-coder:7b'), null)
+  assert.equal(scan.conversationStrength('hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'), null)
+})
+
+test('force en Code : Terminal-Bench 2.1, avec un plancher d’une tâche sur 89', () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  assert.equal(scan.codeStrength('qwen3.8:27b'), 79.8)
+  // 0 % et 1,1 % ne se distinguent pas : même force.
+  assert.equal(scan.codeStrength('qwen3.5:0.8b'), scan.codeStrength('hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'))
+  assert.equal(scan.codeStrength('qwen3-coder:30b'), null, 'pas de Terminal-Bench 2.1 publié : passe après les modèles mesurés')
+})
+
+test('« n’invente pas » change le modèle Faible sur 12 Go : granite4.2:8b et plus gemma4:12b', async () => {
+  // gemma4:12b invente souvent (Omniscience −52,7) : 14,2 × 0,24 = 3,4 ; granite4.2:8b (−17,2) : 11,1 × 0,41 = 4,6.
+  const picks = await picksFor(12, 32)
+  assert.equal(picks.flash, 'granite4.2:8b')
+})
+
+test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au test de code) grâce au plancher', async () => {
+  // Ollama 0.40.5 : sinon K2 Horizon serait écarté d'office (étape 312) et le test ne prouverait rien.
+  const scan = setup({ vramMib: 0, ramGb: 16 })
+  scan.setOllamaVersionSource(() => '0.40.5')
+  const r = await scan.pickBestModelsFromBenchmark()
+  assert.equal(r.codeModel, 'qwen3.5:0.8b')
+})
+
+test('machine de Léo (8 Go, 32 Go de RAM) : les nouveaux scores ne changent aucun de ses modèles', async () => {
+  // Ollama 0.40.5, comme chez Léo : sans version connue, K2 Horizon n'est jamais choisi (étape 312).
+  const scan = setup({ vramMib: 8 * 1024, ramGb: 32 })
+  scan.setOllamaVersionSource(() => '0.40.5')
+  const r = await scan.pickBestModelsFromBenchmark()
+  const picks = { ...r.models, vision: r.visionModel, code: r.codeModel }
+  assert.deepEqual(JSON.parse(JSON.stringify(picks)), {
+    flash: 'granite4.2:8b',
+    medium: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
+    large: 'qwen3.8:27b',
+    vision: 'qwen3.8:27b',
+    code: 'qwen3.8:27b'
+  })
 })

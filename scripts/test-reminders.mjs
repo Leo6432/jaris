@@ -93,3 +93,22 @@ test('un rappel dans un mois attend vraiment un mois (étape 324 : setTimeout ra
   }
   assert.deepEqual(stored, [], 'puis disparaît du fichier')
 })
+
+// Étape 328 : plusieurs rappels en retard au lancement sonnaient ensemble ; chacun relisait la liste complète et ne
+// retirait que le sien — la dernière écriture gagnait, les autres restaient et sonnaient de nouveau au lancement suivant.
+test('plusieurs rappels en retard au lancement : tous sonnent, et tous quittent le fichier', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-rappels-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const past = new Date(Date.now() - 3_600_000).toISOString()
+  const overdue = ['Sortir le linge', 'Appeler maman', 'Prendre le médicament'].map((message, i) => ({ id: `r${i}`, message, fireAt: past }))
+  const { writeFileSync } = nodeRequire('fs')
+  writeFileSync(join(dir, 'reminders.json'), JSON.stringify(overdue))
+  const reminders = loadReminders(dir)
+  const fired = []
+  await reminders.restoreReminders((m) => fired.push(m))
+  const left = () => JSON.parse(readFileSync(join(dir, 'reminders.json'), 'utf8'))
+  const deadline = Date.now() + 5000
+  while ((fired.length < 3 || left().length) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20))
+  assert.deepEqual([...fired].sort(), ['Appeler maman', 'Prendre le médicament', 'Sortir le linge'])
+  assert.deepEqual(left(), [], 'aucun rappel déjà annoncé ne doit rester dans le fichier')
+})

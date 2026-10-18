@@ -30,7 +30,8 @@ import OptionsMenu from './src/components/OptionsMenu'
 
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
-  saveProfile: async () => {}
+  saveProfile: async () => {},
+  patchProfile: async () => null
 }
 
 window.jaris = new Proxy({}, {

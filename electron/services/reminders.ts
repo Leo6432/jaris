@@ -33,9 +33,23 @@ async function writeReminders(reminders: Reminder[]): Promise<void> {
   await writeFileAtomic(storePath, JSON.stringify(reminders, null, 2))
 }
 
-async function removeReminder(id: string): Promise<void> {
-  const reminders = await readReminders()
-  await writeReminders(reminders.filter((r) => r.id !== id))
+/**
+ * Étape 328 : chaque modification relit la liste, la change puis la réécrit — une à la fois. Plusieurs rappels en
+ * retard au démarrage sonnaient ensemble : chacun relisait la même liste complète et retirait SEULEMENT le sien, et la
+ * dernière écriture gagnait. Les autres restaient dans le fichier et sonnaient de nouveau au lancement suivant.
+ */
+let writeChain: Promise<unknown> = Promise.resolve()
+function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(task, task)
+  writeChain = run.catch(() => undefined)
+  return run
+}
+
+function removeReminder(id: string): Promise<void> {
+  return exclusive(async () => {
+    const reminders = await readReminders()
+    await writeReminders(reminders.filter((r) => r.id !== id))
+  })
 }
 
 function arm(reminder: Reminder, onFire: ReminderFireHandler): void {
@@ -71,9 +85,11 @@ export async function scheduleReminder(message: string, delayMinutes: number, on
     fireAt: new Date(Date.now() + delayMinutes * 60_000).toISOString()
   }
 
-  const reminders = await readReminders()
-  reminders.push(reminder)
-  await writeReminders(reminders)
+  await exclusive(async () => {
+    const reminders = await readReminders()
+    reminders.push(reminder)
+    await writeReminders(reminders)
+  })
   arm(reminder, onFire)
 
   return `Rappel programmé dans ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''} : ${reminder.message}`

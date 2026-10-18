@@ -75,7 +75,14 @@ import { getDataRoot } from './services/dataLocation'
 import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
 import { tmpdir } from 'os'
-import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import {
+  assertGeneratedAppDir,
+  deleteGeneratedApp,
+  generateApp,
+  getGeneratedAppsDir,
+  listGeneratedApps,
+  loadGeneratedApp
+} from './services/codeGenerator'
 import { CodeConversationsStore } from './services/codeConversationsStore'
 import { CODE_CONVERSATIONS_FILE } from '../shared/codeConversations'
 import {
@@ -105,7 +112,7 @@ import { t } from '../shared/i18n'
 import type { LanguageSetting } from '../shared/i18n/languages'
 import { VoicePipeline } from './services/voicePipeline'
 import { listAudioInputDevices } from './services/voiceClient'
-import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
+import { ensureMemoryDir, getMemoryDir, getMemoryGraph, readNoteForDisplay } from './services/memoryStore'
 import { cancelMemoryExtraction, clearPendingMemoryExchanges } from './services/memoryExtractor'
 import {
   clearConversationHistory,
@@ -118,7 +125,7 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { appendJournal, getJournalPath } from './services/requestJournal'
-import { getProfile, saveProfile } from './services/profileStore'
+import { getProfile, patchProfile, saveProfile } from './services/profileStore'
 import { setPilotWindowHooks } from './services/pilotWindows'
 import {
   getLaunchAtStartup,
@@ -128,6 +135,7 @@ import {
 } from './services/launchAtStartup'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import { isPermissionAllowed } from './services/permissions'
+import { isSameDocument, isWebUrl } from './services/navigationGuard'
 import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
@@ -523,10 +531,6 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
     // entrait en conflit avec cette bascule. On attend qu'elle soit finie, puis on vérifie qu'il est là.
     setTimeout(() => revealWidgetAfterLeaving(win), WIDGET_AFTER_BLUR_DELAY_MS)
   })
-  win.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
 
   loadRenderer(win, 'full')
   return win
@@ -674,10 +678,6 @@ function createWidgetWindow(): BrowserWindow {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   // Pas d'auto-show Electron avant le rendu : le widget est créé caché, puis showWidgetWindow() l'affiche
   // dès `ready-to-show` dans son petit état inactif. Cela conserve sa présence permanente sans flash vide.
-  win.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
   // Un clic dans une autre application fait perdre le focus avant que Chromium ne garantisse un mouseleave.
   // C'est le chemin immédiat demandé par Léo pour une barre VIDE ; collapseChatWidget protège le brouillon.
   win.on('blur', () => collapseChatWidget())
@@ -1271,7 +1271,14 @@ async function startVoicePipeline(): Promise<void> {
   }
   void ensureSearxngRunning(log)
 
-  pipeline = new VoicePipeline()
+  // Étape 328 : deux redémarrages rapprochés (micro changé deux fois de suite) créaient chacun leur moteur vocal,
+  // et le premier n'était jamais arrêté — deux moteurs, deux micros ouverts. Celui qu'on remplace s'arrête ici.
+  pipeline?.stop()
+  const current = new VoicePipeline()
+  pipeline = current
+  // Étape 328 : un moteur relancé depuis Options (micro, mot d'activation) écoutait de nouveau alors qu'on n'est
+  // pas en mode vocal. L'état de pause est posé avant son démarrage : il le transmet au moteur dès son lancement.
+  applyListeningForActiveMode()
   pipeline.on('emotion', (emotion: JarisEmotion) => {
     // Retenu même quand le widget est caché : si Léo réduit la fenêtre de réglages pendant que Jaris écoute,
     // showWidgetWindow doit pouvoir l'afficher directement à la bonne taille (voir lastEmotion).
@@ -1323,16 +1330,99 @@ async function startVoicePipeline(): Promise<void> {
 
   try {
     const profile = await getProfile()
-    await pipeline.start(profile?.audioInputDeviceIndex, profile?.activationWakeWordEnabled !== false)
+    await current.start(profile?.audioInputDeviceIndex, profile?.activationWakeWordEnabled !== false)
+    // Remplacé pendant son démarrage : c'est le suivant qui dira si l'écoute est prête.
+    if (pipeline !== current) return
     lastSetupStatus = { ready: true, missing: [] }
     broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   } catch (err) {
+    if (pipeline !== current) return
     const message = err instanceof Error ? err.message : String(err)
     broadcast(IPC_CHANNELS.log, t('voice.pipelineFailed', { message }))
     lastSetupStatus = { ready: false, missing: [message] }
     broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   }
 }
+
+/**
+ * Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
+ * n'importe quelle appli, comme le mot d'activation (déjà global car basé sur le micro).
+ * Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
+ * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
+ * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle.
+ *
+ * globalShortcut.register() peut carrément lever une exception (pas juste renvoyer false) pour un
+ * accelerator qu'il n'arrive pas à convertir en code touche natif — c'est le cas du caractère "+" tout
+ * seul sur cette machine ("conversion failure from +"), ce qui plantait le démarrage entier de Jaris
+ * (exception non rattrapée dans app.whenReady().then(...)). D'où le try/catch : un raccourci qui échoue
+ * à s'enregistrer ne doit jamais empêcher Jaris de démarrer. "numadd", la touche + du pavé numérique, est un
+ * code touche distinct et stable (pas d'ambiguïté d'agencement clavier).
+ *
+ * Étape 328 : une fois réservée, la touche est retirée à TOUTES les autres applications — même « touche + »
+ * décochée dans Options, on ne pouvait plus taper + au pavé numérique dans Excel ou la Calculatrice, ni dans le
+ * Chat de Jaris (la touche n'arrivait jamais au champ de saisie). Elle n'est donc réservée que si elle est
+ * activée, et rendue tant qu'une fenêtre de Jaris a le focus : là, c'est l'écran qui gère + (App.tsx), et
+ * il laisse écrire + dans un champ de saisie.
+ */
+const WAKE_SHORTCUT = 'numadd'
+let wakeShortcutWanted = false
+let wakeShortcutRegistered = false
+
+function syncWakeShortcut(): void {
+  const wanted = wakeShortcutWanted && BrowserWindow.getFocusedWindow() === null
+  if (wanted === wakeShortcutRegistered) return
+  if (!wanted) {
+    globalShortcut.unregister(WAKE_SHORTCUT)
+    wakeShortcutRegistered = false
+    return
+  }
+  try {
+    wakeShortcutRegistered = globalShortcut.register(WAKE_SHORTCUT, () => {
+      console.log(`[jaris] Raccourci global ${WAKE_SHORTCUT} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
+      // Relu à chaque pression : un réglage changé ailleurs ne doit jamais laisser la touche active.
+      void getProfile()
+        .catch(() => null)
+        .then((profile) => {
+          if (profile?.activationKeyEnabled === false) return
+          triggerVisibleWake()
+        })
+    })
+    if (!wakeShortcutRegistered) {
+      console.warn(
+        `[jaris] Impossible de réserver le raccourci global ${WAKE_SHORTCUT} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
+      )
+    }
+  } catch (err) {
+    console.warn(`[jaris] Raccourci global ${WAKE_SHORTCUT} invalide sur ce clavier : ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/** Options → Voix, « touche + » : relu au démarrage et à chaque enregistrement du profil. */
+function setWakeShortcutWanted(wanted: boolean): void {
+  wakeShortcutWanted = wanted
+  syncWakeShortcut()
+}
+
+// Un peu après l'évènement : pendant la perte de focus, Windows peut encore dire la fenêtre active, et passer d'une
+// fenêtre de Jaris à l'autre envoie une perte puis un gain de focus. On relit l'état une fois qu'il est stable.
+const syncWakeShortcutSoon = (): void => void setTimeout(syncWakeShortcut, 100)
+app.on('browser-window-focus', syncWakeShortcutSoon)
+app.on('browser-window-blur', syncWakeShortcutSoon)
+
+// Étape 328 : chaque fenêtre de Jaris garde sa propre page. Un fichier glissé dessus par erreur remplaçait toute
+// l'interface ; un lien ouvert depuis une page partait au système quel que soit son protocole (file:, programme…).
+// Ici pour TOUTES les fenêtres (principale, widget, démarrage), y compris celles créées plus tard.
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-navigate', (event, url) => {
+    if (isSameDocument(url, contents.getURL())) return
+    event.preventDefault()
+    if (isWebUrl(url)) void shell.openExternal(url)
+  })
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isWebUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+})
 
 app.whenReady().then(async () => {
   // `app.quit()` (voir tout en haut du fichier) n'interrompt pas forcément la suite du script de façon
@@ -1379,13 +1469,21 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.triggerWake, () => triggerVisibleWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
-  ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
+  ipcMain.handle(IPC_CHANNELS.saveProfile, async (_event, profile: Profile) => {
+    await saveProfile(profile)
+    setWakeShortcutWanted(profile.activationKeyEnabled !== false)
+  })
+  ipcMain.handle(IPC_CHANNELS.patchProfile, async (_event, change: Partial<Profile>): Promise<Profile | null> => {
+    const updated = await patchProfile(change)
+    if (updated) setWakeShortcutWanted(updated.activationKeyEnabled !== false)
+    return updated
+  })
   ipcMain.handle(IPC_CHANNELS.openMemoryFolder, async () => {
     await ensureMemoryDir()
     await shell.openPath(getMemoryDir())
   })
   ipcMain.handle(IPC_CHANNELS.getMemoryGraph, () => buildMemoryGraphWithUser())
-  ipcMain.handle(IPC_CHANNELS.getMemoryNoteContent, (_event, title: string) => recallNote(title))
+  ipcMain.handle(IPC_CHANNELS.getMemoryNoteContent, (_event, title: string) => readNoteForDisplay(title))
   // Limite large plutôt que sans limite : le fichier lui-même est déjà borné (MAX_HISTORY_ENTRIES dans
   // conversationStore.ts), une vraie limite ici n'aurait de sens que si l'onglet Historique devait un jour
   // paginer.
@@ -1411,8 +1509,9 @@ app.whenReady().then(async () => {
     return switchConversation()
   })
   ipcMain.handle(IPC_CHANNELS.deleteConversation, async (_event, id: string) => {
-    // Un échange de cette conversation encore en attente de la mémoire automatique ne doit pas être retenu après.
-    clearPendingMemoryExchanges()
+    // Un échange de cette conversation encore en attente de la mémoire automatique ne doit pas être retenu après —
+    // mais ceux des AUTRES conversations restent (étape 328).
+    clearPendingMemoryExchanges(id)
     await deleteConversation(id)
     return switchConversation()
   })
@@ -2077,7 +2176,8 @@ app.whenReady().then(async () => {
     }
   })
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
-    await shell.openPath(path || getGeneratedAppsDir())
+    // Étape 328 : jamais un chemin quelconque — shell.openPath lancerait un programme s'il en désignait un.
+    await shell.openPath(path ? assertGeneratedAppDir(path) : getGeneratedAppsDir())
   })
   ipcMain.handle(IPC_CHANNELS.getGeneratedApps, (): Promise<GeneratedAppSummary[]> => listGeneratedApps())
   ipcMain.handle(IPC_CHANNELS.deleteGeneratedApp, (_event, path: string) => deleteGeneratedApp(path))
@@ -2141,53 +2241,6 @@ app.whenReady().then(async () => {
   refreshTrayMenu()
   tray.on('click', () => showFullWindow())
 
-  /**
-   * Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
-   * n'importe quelle appli, comme le mot d'activation (déjà global car basé sur le micro).
-   * Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
-   * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
-   * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle. Une fois
-   * enregistré avec succès, Electron/Windows donnent l'exclusivité totale sur cette touche à Jaris quelle
-   * que soit l'appli active : il n'y a rien de plus à "prioriser" à ce niveau-là.
-   *
-   * globalShortcut.register() peut carrément lever une exception (pas juste renvoyer false) pour un
-   * accelerator qu'il n'arrive pas à convertir en code touche natif — c'est le cas du caractère "+" tout
-   * seul sur cette machine ("conversion failure from +"), ce qui plantait le démarrage entier de Jaris
-   * (exception non rattrapée dans app.whenReady().then(...)). D'où le try/catch : un raccourci qui échoue
-   * à s'enregistrer ne doit jamais empêcher Jaris de démarrer.
-   */
-  function registerWakeShortcut(key: string): void {
-    try {
-      const registered = globalShortcut.register(key, () => {
-        console.log(`[jaris] Raccourci global ${key} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
-        // Options → Activation (étape 81) : ce raccourci est un enregistrement GLOBAL côté main process,
-        // totalement indépendant du handleKeyDown du renderer (App.tsx, qui ne voit jamais cette touche
-        // quand Jaris n'a pas le focus) — sans ce même contrôle ici, décocher "touche +" dans Options
-        // n'avait aucun effet dès que la fenêtre de Jaris n'était pas la fenêtre active (signalé par Léo :
-        // "je desactive le plus je fait plus sa sactive").
-        void getProfile()
-          .catch(() => null)
-          .then((profile) => {
-            if (profile?.activationKeyEnabled === false) return
-            triggerVisibleWake()
-          })
-      })
-      if (registered) {
-        console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)
-      } else {
-        console.warn(
-          `[jaris] Impossible de réserver le raccourci global ${key} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
-        )
-      }
-    } catch (err) {
-      console.warn(`[jaris] Raccourci global ${key} invalide sur ce clavier : ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-
-  // Le caractère "+" seul n'est pas un accelerator valide pour globalShortcut sur cette machine (voir
-  // ci-dessus) : "numadd", la touche + du pavé numérique, est un code touche distinct et stable (pas
-  // d'ambiguïté d'agencement clavier) — visuellement c'est quand même la touche "+" cherchée à l'origine.
-  registerWakeShortcut('numadd')
 
   // Après la première configuration, l'écran de démarrage puis la fenêtre de Jaris (étapes 294-295) ; le widget
   // prend le relais quand on la réduit ou qu'on passe sur une autre application. L'onboarding au premier lancement.
@@ -2197,6 +2250,7 @@ app.whenReady().then(async () => {
   // — jamais l'écran de premier lancement, dont le premier enregistrement écraserait le vrai profil.
   const profile = await readProfileAtStartup()
   if (profile === undefined) return
+  setWakeShortcutWanted(profile?.activationKeyEnabled !== false)
   onboardingDone = Boolean(profile?.capacityScanDone)
   // Étape 165 : lancé par Windows à l'ouverture de session (Options → Général), Jaris s'affiche en grand au
   // lieu de démarrer discrètement — « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran ».

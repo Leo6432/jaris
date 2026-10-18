@@ -18,7 +18,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cha
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup(pastEntries) {
+function setup(pastEntries, { historyDelayMs = 0, onConverse = null } = {}) {
   const appended = []
   const calls = { converse: 0, vision: [], exchanges: [], memoryCancels: 0, cancelsSeenByConverse: [] }
   const modules = {
@@ -45,6 +45,7 @@ function setup(pastEntries) {
           rest[11]?.({ kind: 'search', query: 'météo Rennes', results: [{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }] })
           return 'Il fera 17 °C.'
         }
+        if (onConverse) return onConverse(prompt)
         if (prompt.startsWith('dessine')) {
           rest[9]({ path: '/donnees/generated-images/chat.png', fileName: 'chat.png' })
           return 'Voilà ton image.'
@@ -63,8 +64,12 @@ function setup(pastEntries) {
       }
     },
     './conversationStore': {
-      getConversationHistory: async () => pastEntries,
-      appendConversationEntry: async (entry) => { appended.push(entry) }
+      getConversationHistory: async () => {
+        if (historyDelayMs) await new Promise((resolve) => setTimeout(resolve, historyDelayMs))
+        return pastEntries
+      },
+      getActiveConversationId: async () => 'conv-A',
+      appendConversationEntry: async (entry, conversationId) => { appended.push({ ...entry, conversationId }) }
     },
     './conversationSession': {
       clearSessionHistory: () => {},
@@ -85,6 +90,7 @@ function setup(pastEntries) {
     module: { exports },
     // Étape 272 : le bouton « Arrêter » utilise AbortController, global de Node absent d'un contexte vm neuf.
     AbortController,
+    setTimeout,
     require: withI18n((name) => modules[name] ?? nodeRequire(name))
   })
   return { chatSession: exports.chatSession, appended, calls }
@@ -263,4 +269,31 @@ test('recherches web (étape 273) : jointes à la réponse, relayées en direct,
   // Une réponse sans recherche n'a pas de bloc (pas de « web: [] » qui afficherait un bloc vide).
   const plain = await chatSession.send('bonjour', () => {}, () => {})
   assert.equal('web' in plain, false)
+})
+
+// Étape 328 : une réponse arrivée après un changement de fil s'écrivait et s'affichait dans le NOUVEAU fil.
+test('changer de fil pendant une réponse : elle va dans SA conversation, jamais dans le fil affiché ensuite', async () => {
+  let release
+  const { chatSession, appended, calls } = setup([], { onConverse: () => new Promise((resolve) => (release = resolve)) })
+  const sending = chatSession.send('Et pour 8 personnes ?', () => {}, () => {})
+  while (!release) await new Promise((resolve) => setTimeout(resolve, 5))
+  chatSession.reset() // « Nouvelle conversation » pendant que Jaris réfléchit
+  release('Double les doses.')
+  const reply = await sending
+  assert.equal(reply.content, 'Double les doses.')
+  assert.equal(appended.length, 1)
+  assert.equal(appended[0].conversationId, 'conv-A', 'enregistrée dans la conversation où la question a été posée')
+  assert.equal(JSON.stringify(await chatSession.getVisibleMessages()), '[]', 'le nouveau fil affiché reste vide')
+  assert.equal(calls.exchanges.length, 0, 'le contexte du nouveau fil ne la reçoit pas')
+})
+
+// Étape 328 : un envoi pendant la lecture du fil (téléphone, widget) disparaissait de l'écran à la fin de la lecture.
+test('un message envoyé pendant la lecture du fil reste affiché après elle', async () => {
+  const { chatSession } = setup([{ id: '1', timestamp: 't1', transcript: 'ancienne', reply: 'ancienne réponse' }], { historyDelayMs: 30 })
+  const [, , messages] = await Promise.all([
+    chatSession.getVisibleMessages(),
+    chatSession.send('nouvelle', () => {}, () => {}),
+    new Promise((resolve) => setTimeout(resolve, 60)).then(() => chatSession.getVisibleMessages())
+  ])
+  assert.deepEqual(JSON.parse(JSON.stringify(messages)).map((m) => m.content), ['ancienne', 'ancienne réponse', 'nouvelle', 'réponse test'])
 })

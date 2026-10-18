@@ -37,6 +37,15 @@ export default function ChatPanel(): JSX.Element {
   /** Conversations (étape 96) : la liste complète et laquelle est active — affichées par Workspace. */
   const [conversations, setConversations] = useState<ConversationList | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
+  /**
+   * Étape 328 : conversation où la question en cours a été posée, et conversation affichée. Une réponse arrivée après
+   * un changement de fil s'enregistre dans la sienne (côté main) : ici, elle ne doit ni s'écrire en direct ni
+   * s'ajouter dans le fil qu'on regarde maintenant.
+   */
+  const sendingIn = useRef<string | null>(null)
+  const activeIdRef = useRef<string | null>(null)
+  activeIdRef.current = conversations?.activeId ?? null
+  const answerIsHere = (): boolean => sendingIn.current === null || sendingIn.current === activeIdRef.current
   /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
   const [savedIndex, setSavedIndex] = useState<number | null>(null)
   /**
@@ -89,7 +98,13 @@ export default function ChatPanel(): JSX.Element {
   const applyConversationChange = async (result: Promise<ConversationList>): Promise<void> => {
     setError(null)
     try {
-      setConversations(await result)
+      const list = await result
+      activeIdRef.current = list.activeId
+      setConversations(list)
+      // Réponse en cours dans un autre fil : ce qui s'écrivait en direct n'appartient pas à celui-ci.
+      setStreamingReply('')
+      setLiveWeb([])
+      setProgress(null)
       setMessages(await window.jaris.getChatHistory())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -113,10 +128,13 @@ export default function ChatPanel(): JSX.Element {
   // ollama.ts), donc ces fragments n'arrivent en pratique que pendant le tour qui répond vraiment, juste
   // après les étapes d'outil éventuelles montrées par `progress` ci-dessus.
   useEffect(() => {
-    return window.jaris.onChatStreamToken((delta) => setStreamingReply((prev) => prev + delta))
+    return window.jaris.onChatStreamToken((delta) => {
+      if (answerIsHere()) setStreamingReply((prev) => prev + delta)
+    })
   }, [])
   useEffect(() => {
     return window.jaris.onChatWebActivity((activity) => {
+      if (!answerIsHere()) return
       setLiveWeb((prev) => mergeWebActivity(prev, activity))
       // Étape 274 : recherche terminée — « Recherche sur internet… » n'est plus vrai, Jaris lit les résultats.
       if (!activity.pending) setProgress(null)
@@ -150,16 +168,18 @@ export default function ChatPanel(): JSX.Element {
     // Affiché tout de suite, sans attendre la réponse : côté main le message est de toute façon ajouté au
     // fil dès réception, donc les deux restent cohérents.
     setMessages((prev) => [...prev, { role: 'user', content: prompt, image: image?.dataUrl }])
+    sendingIn.current = activeIdRef.current
 
     try {
       const reply = await window.jaris.sendChatMessage(prompt, image?.base64)
-      setMessages((prev) => [...prev, reply])
+      if (answerIsHere()) setMessages((prev) => [...prev, reply])
       // Le titre d'une conversation est dérivé de son PREMIER message (conversationStore.ts) : sans cette
       // relecture, la liste afficherait encore "Nouvelle conversation" après le tout premier échange.
       setConversations(await window.jaris.listConversations())
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      if (answerIsHere()) setError(err instanceof Error ? err.message : String(err))
     } finally {
+      sendingIn.current = null
       setSending(false)
       setProgress(null)
       setStreamingReply('')
@@ -184,7 +204,7 @@ export default function ChatPanel(): JSX.Element {
     >
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
-          {messages.length === 0 && !sending && (
+          {messages.length === 0 && !(sending && answerIsHere()) && (
             <EmptyState
               title={t('app.voice.prompt')}
               description={t('chat.empty.hint')}
@@ -229,7 +249,7 @@ export default function ChatPanel(): JSX.Element {
             </div>
           ))}
 
-          {sending && (
+          {sending && answerIsHere() && (
             <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
               <img className="chat-panel__avatar" src={logo} alt="" />
               <div className="chat-panel__body">

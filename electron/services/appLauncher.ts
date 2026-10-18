@@ -16,9 +16,13 @@ let cache: { apps: StartApp[]; fetchedAt: number } | null = null
 async function listInstalledApps(): Promise<StartApp[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.apps
 
-  const { stdout } = await execAsync('powershell -NoProfile -Command "Get-StartApps | ConvertTo-Json -Compress"', {
-    windowsHide: true
-  })
+  // Étape 328 : redirigé, Windows PowerShell écrit dans la page de codes de la console (850 sur un Windows français),
+  // alors que Node lit de l'UTF-8 : « Paramètres » arrivait en « ParamŠtres » et ne se retrouvait plus quand on disait
+  // « ouvre les paramètres ». La sortie est imposée en UTF-8 avant d'écrire la liste.
+  const { stdout } = await execAsync(
+    'powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json -Compress"',
+    { windowsHide: true }
+  )
   const parsed: unknown = JSON.parse(stdout.trim() || '[]')
   const apps = Array.isArray(parsed) ? (parsed as StartApp[]) : [parsed as StartApp]
   cache = { apps, fetchedAt: Date.now() }

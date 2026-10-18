@@ -71,31 +71,23 @@ test('à 6/6 égalité, départage d’abord par l’Intelligence Index officiel
   assert.equal(result.models.large, 'qwen3.8:27b')
 })
 
-test('à 6/6 ET Intelligence Index EXACTEMENT égaux, repli sur MMLU-Pro puis la VRAM la plus grosse', async () => {
-  // Étape 122 a fait passer la couverture Artificial Analysis de 15 à 36/39 candidats — il n'existe donc
-  // plus de paire de candidats du palier Puissant SANS AUCUN score connu des deux côtés (l'ancien scénario
-  // de ce test). granite4.2:30b (15) et glm-4.7-flash:q4_K_M (15) partagent le MÊME Intelligence Index : ce
-  // cas-là (égalité stricte, pas absence) tombe toujours sur le repli suivant — ni l'un ni l'autre n'a de
-  // chiffre MMLU-Pro connu, donc ce repli non plus ne s'applique pas : le départage final reste purement par
-  // VRAM (glm-4.7-flash:q4_K_M, 19 Go, légèrement plus gros que granite4.2:30b, 18 Go).
+test('à fiabilité ET force EXACTEMENT égales, repli sur l’Intelligence Index, puis MMLU-Pro, puis la VRAM', async () => {
+  // Étape 328 : le rôle Code se départage par Terminal-Bench 2.1. granite4.2:3b et gpt-oss:20b y ont EXACTEMENT
+  // le même score (13,9, à la 15e décimale près dans les données d'Artificial Analysis) et le même 3/3 : ni la fiabilité ni la force ne
+  // départagent, le repli suivant (l'Intelligence Index, 9,1 contre 9,0) tranche.
   const { pickBestModelsFromBenchmark } = setup({
-    verifiedToolScoresMd: [
-      '## Conversation',
-      '| Modèle | Fiabilité |',
-      '| --- | --- |',
-      '| granite4.2:30b | 6/6 |',
-      '| glm-4.7-flash:q4_K_M | 6/6 |'
-    ].join('\n')
+    verifiedToolScoresMd: ['## Code', '| Modèle | Fiabilité |', '| --- | --- |', '| granite4.2:3b | 3/3 |', '| gpt-oss:20b | 3/3 |'].join('\n')
   })
   const result = await pickBestModelsFromBenchmark()
-  assert.equal(result.models.large, 'glm-4.7-flash:q4_K_M')
+  assert.equal(result.codeModel, 'granite4.2:3b')
 })
 
 test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 220 : relevés à une décimale, variante raisonnement)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex]))
-  // Relevés le 02/10/2026 sur les données brutes des fiches (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX).
+  // Relevés le 02/10/2026 sur les données brutes des fiches (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX) ;
+  // mistral-small3.2:24b et granite4.2:30b relus le 18/10/2026 (réévalués par Artificial Analysis).
   const expected = {
     'qwen3.5:0.8b': 6.1,
     'qwen3.5:2b': 6.9,
@@ -119,8 +111,8 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'ministral-3:8b': 5.5,
     'granite4.2:8b': 11.1,
     'granite4.1:8b': 6.6,
-    'mistral-small3.2:24b': 8.2,
-    'granite4.2:30b': 14.8,
+    'mistral-small3.2:24b': 7.0,
+    'granite4.2:30b': 12.7,
     'qwen3:1.7b': 5.2,
     'glm-4.7-flash:q4_K_M': 14.9,
     'nemotron-3.5-lightning:30b': 12.9,

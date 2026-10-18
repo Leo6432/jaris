@@ -964,8 +964,8 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'ministral-3:8b': 5.5, // Ministral 3 8B
   'granite4.2:8b': 11.1, // Granite 4.2 8B
   'granite4.1:8b': 6.6, // Granite 4.1 8B
-  'mistral-small3.2:24b': 8.2, // Mistral Small 3.2
-  'granite4.2:30b': 14.8, // Granite 4.2 30B
+  'mistral-small3.2:24b': 7.0, // Mistral Small 3.2 (8,2 jusqu'au 18/10/2026, réévalué par Artificial Analysis)
+  'granite4.2:30b': 12.7, // Granite 4.2 30B (14,8 jusqu'au 18/10/2026, réévalué par Artificial Analysis)
   'qwen3:1.7b': 5.2, // Qwen3 1.7B (Reasoning)
   'glm-4.7-flash:q4_K_M': 14.9, // GLM-4.7-Flash (Reasoning)
   'nemotron-3.5-lightning:30b': 12.9, // Nemotron 3.5 Lightning
@@ -983,10 +983,10 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4, // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
   // Étape 312 : pages Artificial Analysis relues le 14/10/2026. Pas de page pour la 32B (rien d'inventé).
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 3, // K2 Horizon 0.9B
-  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 16, // K2 Horizon 3.7B
-  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 21, // K2 Horizon 7B
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 15.6, // K2 Horizon 3.7B
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 20.6, // K2 Horizon 7B
   // Étape 316 : page relue le 15/10/2026. Valeur marquée « estimée » par Artificial Analysis eux-mêmes.
-  'phi4-mini': 6 // Phi-4 Mini Instruct
+  'phi4-mini': 6.3 // Phi-4 Mini Instruct
 }
 
 /**
@@ -1030,6 +1030,107 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'north-mini-code-1.0': 84,
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58,
   'phi4-mini': 46
+}
+
+/**
+ * Étape 328 (Léo, « fait solution 1 et 2 ») : deux mesures d'Artificial Analysis en plus de l'Intelligence Index,
+ * relevées le 18/10/2026 sur les DONNÉES BRUTES des fiches (champs `omniscience` et `terminalBench21` de l'objet
+ * du modèle de chaque page, même variante que l'Intelligence Index ci-dessus). Absence = rien de publié pour ce
+ * modèle exact, jamais un chiffre deviné.
+ *
+ * AA-Omniscience Index (« n'invente pas »), de -100 à 100 : +1 par bonne réponse, -1 par réponse inventée, 0 quand
+ * le modèle dit qu'il ne sait pas. Il combine donc les bonnes réponses ET les inventions : un modèle qui refuse tout
+ * fait 0, mieux qu'un modèle qui invente souvent, moins bien qu'un modèle qui sait. Le taux d'invention seul
+ * (« hallucination rate ») aurait fait passer pour excellent un modèle qui ne répond jamais (G9v3-3B : 6,5 % de
+ * bonnes réponses). À la voix, l'utilisateur ne voit aucune source : un modèle qui invente est le pire défaut.
+ */
+const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
+  'qwen3.5:0.8b': -54.5, // Qwen3.5 0.8B (Reasoning)
+  'qwen3.5:2b': -60.2, // Qwen3.5 2B (Reasoning)
+  'qwen3.5:4b': -58.4, // Qwen3.5 4B (Reasoning)
+  'qwen3.5:9b': -53.5, // Qwen3.5 9B (Reasoning)
+  'qwen3.5:27b': -44.0, // Qwen3.5 27B (Reasoning)
+  'qwen3.5:35b': -48.1, // Qwen3.5 35B A3B (Reasoning)
+  'qwen3.6:27b': -20.0, // Qwen3.6 27B (Reasoning)
+  'qwen3.6:35b': -22.2, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.6:35b-a3b': -22.2, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.8:27b': -10.0, // Qwen3.8 27B (Xhigh)
+  'gpt-oss:20b': -63.1, // gpt-oss-20b (High)
+  'gemma4:12b': -52.7, // Gemma 4 12B (Reasoning)
+  'gemma4:26b': -50.8, // Gemma 4 26B A4B (Reasoning)
+  'gemma4:31b': -47.9, // Gemma 4 31B (Reasoning)
+  'gemma4:e4b': -19.7, // Gemma 4 E4B (Reasoning)
+  'ministral-3:14b': -66.4, // Ministral 3 14B
+  'ministral-3:3b': -64.0, // Ministral 3 3B
+  'granite4.1:3b': -77.0, // Granite 4.1 3B
+  'granite4.2:3b': -14.7, // Granite 4.2 3B
+  'ministral-3:8b': -69.0, // Ministral 3 8B
+  'granite4.2:8b': -17.2, // Granite 4.2 8B
+  'granite4.1:8b': -64.1, // Granite 4.1 8B
+  'mistral-small3.2:24b': -50.6, // Mistral Small 3.2
+  'granite4.2:30b': -12.9, // Granite 4.2 30B
+  'qwen3:1.7b': -77.5, // Qwen3 1.7B (Reasoning)
+  'glm-4.7-flash:q4_K_M': -62.6, // GLM-4.7-Flash (Reasoning)
+  'nemotron-3.5-lightning:30b': -17.7, // Nemotron 3.5 Lightning
+  'qwen3-vl:8b': -52.3, // Qwen3 VL 8B (Reasoning)
+  'qwen3-vl:4b': -68.4, // Qwen3 VL 4B (Reasoning)
+  'qwen3-coder:30b': -50.7, // Qwen3 Coder 30B A3B Instruct
+  'north-mini-code-1.0': -48.6, // North Mini Code
+  'devstral-small-2:24b': -57.7, // Devstral Small 2
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': -4.4, // G9v3-3B
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': -19.4, // Ling 3.0 Tiny
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': -11.7, // MiniCPM5-2B
+  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': -42.5, // Nanbeige4.1-3B
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': -11.0, // LFM2.5-2.6B
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': -72.8, // K2 Horizon 0.9B
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': -28.6, // K2 Horizon 3.7B
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': -16.6, // K2 Horizon 7B
+  'phi4-mini': -61.1 // Phi-4 Mini Instruct
+}
+
+/**
+ * Terminal-Bench 2.1 mesuré par Artificial Analysis (% de tâches réussies), pour le rôle Code. Artificial Analysis
+ * ne publie plus de « Coding Index » par modèle (sa page redirige vers les agents de code) ; ses deux évaluations
+ * de code restantes sont Terminal-Bench 2.1 et SciCode, mais SciCode manque pour une quinzaine des petits modèles
+ * de Jaris (qwen3.5 0.8b à 4b, gemma4:12b, K2 Horizon…) : une moyenne qui mélange « deux mesures » et « une seule »
+ * ne serait pas comparable d'un modèle à l'autre. Terminal-Bench 2.1 seul, même protocole pour tous : écrire du
+ * code, l'exécuter, corriger, dans un vrai terminal — ce que fait l'agent de dépôt GitHub de Jaris.
+ */
+const ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21: Record<string, number> = {
+  'qwen3.5:0.8b': 0.0, // Qwen3.5 0.8B (Reasoning)
+  'qwen3.5:2b': 3.0, // Qwen3.5 2B (Reasoning)
+  'qwen3.5:4b': 25.8, // Qwen3.5 4B (Reasoning)
+  'qwen3.5:9b': 29.2, // Qwen3.5 9B (Reasoning)
+  'qwen3.6:27b': 60.7, // Qwen3.6 27B (Reasoning)
+  'qwen3.6:35b': 44.9, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.6:35b-a3b': 44.9, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.8:27b': 79.8, // Qwen3.8 27B (Xhigh)
+  'gpt-oss:20b': 13.9, // gpt-oss-20b (High)
+  'gemma4:12b': 27.3, // Gemma 4 12B (Reasoning)
+  'gemma4:26b': 39.0, // Gemma 4 26B A4B (Reasoning)
+  'gemma4:31b': 43.4, // Gemma 4 31B (Reasoning)
+  'gemma4:e4b': 1.9, // Gemma 4 E4B (Reasoning)
+  'ministral-3:14b': 9.7, // Ministral 3 14B
+  'ministral-3:3b': 0.0, // Ministral 3 3B
+  'granite4.1:3b': 1.1, // Granite 4.1 3B
+  'granite4.2:3b': 13.9, // Granite 4.2 3B
+  'ministral-3:8b': 4.1, // Ministral 3 8B
+  'granite4.2:8b': 18.4, // Granite 4.2 8B
+  'granite4.1:8b': 3.4, // Granite 4.1 8B
+  'mistral-small3.2:24b': 5.6, // Mistral Small 3.2
+  'granite4.2:30b': 26.6, // Granite 4.2 30B
+  'nemotron-3.5-lightning:30b': 24.3, // Nemotron 3.5 Lightning
+  'north-mini-code-1.0': 35.6, // North Mini Code
+  'devstral-small-2:24b': 29.6, // Devstral Small 2
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 6.0, // G9v3-3B
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 27.7, // Ling 3.0 Tiny
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 8.6, // MiniCPM5-2B
+  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 1.1, // Nanbeige4.1-3B
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 4.5, // LFM2.5-2.6B
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.1, // K2 Horizon 0.9B
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 28.1, // K2 Horizon 3.7B
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 44.2, // K2 Horizon 7B
+  'phi4-mini': 0.4 // Phi-4 Mini Instruct
 }
 
 /**
@@ -1275,6 +1376,40 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
  * sur 78 coûte 6 % de la note, 1 erreur sur 10 en coûte 41 %. La vision ne fait qu'une lecture par demande : N = 1.
  */
 export const TOOL_CHAIN_LENGTH = 5
+
+/**
+ * Force d'un modèle pour un rôle (étape 328), multipliée ensuite par sa fiabilité aux tests de Jaris (noteOf).
+ * `null` quand Artificial Analysis n'a rien publié : le modèle passe alors après ceux qui sont mesurés, jamais un
+ * zéro ni une valeur devinée.
+ * - Vision : l'Intelligence Index, comme avant.
+ * - Conversation (Faible, Moyen, Élevé) : l'Intelligence Index × la part « n'invente pas » d'AA-Omniscience,
+ *   ramenée de -100..100 à 0..1. Même poids que l'intelligence : un modèle deux fois plus sûr de ne pas inventer
+ *   vaut autant qu'un modèle deux fois plus intelligent. Choix de Léo (« n'invente pas », étape 328).
+ * - Code : Terminal-Bench 2.1 (voir ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21), plus l'intelligence générale.
+ */
+export function intelligenceStrength(model: string): number | null {
+  return ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
+}
+
+export function conversationStrength(model: string): number | null {
+  const index = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
+  const omniscience = ARTIFICIAL_ANALYSIS_OMNISCIENCE[model]
+  if (index === undefined || omniscience === undefined) return null
+  return index * ((100 + omniscience) / 200)
+}
+
+/**
+ * Terminal-Bench 2.1 compte 89 tâches : une tâche vaut 1,1 %. En dessous, deux scores ne se distinguent pas (0 % et
+ * 1,1 % = une seule tâche réussie, en moyenne, ou aucune) ; sans ce plancher, un modèle à 1,1 % battait un modèle à 0 % quelle que soit
+ * sa fiabilité, puisque 0 × n'importe quoi = 0 — K2 Horizon 0.9B (1/5 au test de code de Jaris) passait devant
+ * qwen3.5:0.8b sur une machine sans carte graphique, exactement le choix absurde corrigé à l'étape 318.
+ */
+const TERMINAL_BENCH_ONE_TASK = 100 / 89
+
+export function codeStrength(model: string): number | null {
+  const score = ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model]
+  return score === undefined ? null : Math.max(score, TERMINAL_BENCH_ONE_TASK)
+}
 const VISION_CHAIN_LENGTH = 1
 
 const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
@@ -1465,7 +1600,7 @@ function computeModelPicks(
    * `demands` (étape 241) : taux de réussite aux demandes complètes (sur SCENARIO_TEST_TOTAL), pour les rôles de
    * conversation seulement. Absent pour Vision et Code, dont le test mesure autre chose.
    */
-  type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number }
+  type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number; strength: number | null }
 
   /**
    * Étape 241, Léo (« oui » à faire compter les demandes complètes, « tu les fusionnes ? ») : réussite aux
@@ -1557,11 +1692,12 @@ function computeModelPicks(
    * 48 demandes la tâche entière — un modèle doit être bon aux deux. Remplacer la fiabilité par les seules
    * demandes (sans la puissance 5) a été mesuré avant d'être écarté : sur 4 Go de VRAM, MiniCPM5-2B (35/48)
    * battait granite4.2:3b (44/48) sur sa seule intelligence. `null` sans intelligence publiée — jamais un zéro.
+   * Étape 328 : « intelligence » est la FORCE du modèle pour ce rôle (`strength`, voir strengthFor) — plus
+   * seulement l'Intelligence Index : il intègre « n'invente pas » en conversation, et Terminal-Bench 2.1 en Code.
    */
   const noteOf = (c: Scored, chain: number): number | null => {
-    const index = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model]
-    if (index === undefined) return null
-    return index * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain) * (c.demands ?? 1)
+    if (c.strength === null) return null
+    return c.strength * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain) * (c.demands ?? 1)
   }
 
   /** Meilleure note d'abord ; un modèle sans note passe après ; `null` si la note ne départage pas. */
@@ -1627,7 +1763,8 @@ function computeModelPicks(
     allowRam: boolean,
     rank: (scored: Scored[], chain: number) => Scored[],
     chain: number = TOOL_CHAIN_LENGTH,
-    withDemands = false
+    withDemands = false,
+    strengthOf: (model: string) => number | null = intelligenceStrength
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
@@ -1638,7 +1775,7 @@ function computeModelPicks(
     const budgetOf = (c: ModelCandidate): number => (allowRam ? budgetForCandidate(c.model) : budgetGb)
     const scored = candidates
       .filter((c) => c.vramGb <= budgetOf(c))
-      .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) }))
+      .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c), strength: strengthOf(c.model) }))
       .filter((c): c is Scored => c.result?.toolCalling != null)
       .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
 
@@ -1650,7 +1787,7 @@ function computeModelPicks(
       // Étape 318 : parmi les modèles notés, aucun ne tient — le meilleur des plus légers, et non plus le plus léger.
       if (known.length) {
         const ranked = known
-          .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) as LocalBenchmarkEntry }))
+          .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) as LocalBenchmarkEntry, strength: strengthOf(c.model) }))
           .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
         const best = bestOfLightest(ranked, chain)[0]
         return entryOf(best.model, best.vramGb, best.result)
@@ -1674,11 +1811,11 @@ function computeModelPicks(
 
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
-    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true),
+    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
     // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
-    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true),
+    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true),
+    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
@@ -1687,8 +1824,8 @@ function computeModelPicks(
       smartest,
       VISION_CHAIN_LENGTH
     ),
-    // Code : le plus intelligent de tous, même lent (choix de Léo, étape 160).
-    code: pickRole(ALL_MODELS, code, true, smartest)
+    // Code : le plus fort de tous en code, même lent (choix de Léo, étape 160) — Terminal-Bench 2.1 depuis l'étape 328.
+    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeStrength)
   }
 }
 

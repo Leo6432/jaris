@@ -737,9 +737,28 @@ export async function listGeneratedApps(limit = 20): Promise<GeneratedAppSummary
     .slice(0, limit)
 }
 
+/**
+ * Le chemin d'une application vient du RENDERER : seul un ENFANT DIRECT du dossier des applications générées est
+ * accepté — ni le dossier lui-même, ni un sous-dossier plus profond, ni quoi que ce soit en dehors. Chaîne vide = le
+ * dossier racine ; ".." = en dehors ; un séparateur = plus profond. isAbsolute couvre le cas Windows d'un autre disque
+ * (D:\... depuis C:\...), où `relative` renvoie un chemin absolu plutôt qu'une suite de "..".
+ * Étape 328 : partagé par la suppression, la réouverture et « Ouvrir le dossier » — les deux derniers lisaient ou
+ * ouvraient n'importe quel chemin reçu (« Ouvrir le dossier » lançait même un programme s'il désignait un .exe).
+ */
+export function assertGeneratedAppDir(path: string): string {
+  const root = resolve(getGeneratedAppsDir())
+  const target = resolve(path)
+  const inside = relative(root, target)
+  if (!inside || inside.startsWith('..') || isAbsolute(inside) || inside.includes(sep)) {
+    throw new Error(t('codegen.notGenerated'))
+  }
+  return target
+}
+
 /** Recharge une application déjà générée depuis son dossier, pour la remontrer dans l'aperçu (voir ci-dessus). */
 export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
-  const html = await readFile(join(path, 'index.html'), 'utf-8')
+  const dir = assertGeneratedAppDir(path)
+  const html = await readFile(join(dir, 'index.html'), 'utf-8')
   // Rouvrir une application dont le JavaScript ne compile pas ne doit pas la présenter comme intacte : l'avertissement
   // de sa génération ne reviendrait sinon jamais.
   const syntax = findInlineScriptSyntaxErrors(html)
@@ -757,16 +776,7 @@ export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
  * effacerait tout d'un coup), ni un sous-dossier plus profond, ni quoi que ce soit en dehors.
  */
 export async function deleteGeneratedApp(path: string): Promise<void> {
-  const root = resolve(getGeneratedAppsDir())
-  const target = resolve(path)
-  const inside = relative(root, target)
-  // Chaîne vide = le dossier racine lui-même ; ".." = en dehors ; un séparateur = plus profond qu'un enfant
-  // direct. isAbsolute couvre le cas Windows d'un autre disque (D:\... depuis C:\...), où `relative`
-  // renvoie un chemin absolu plutôt qu'une suite de "..".
-  if (!inside || inside.startsWith('..') || isAbsolute(inside) || inside.includes(sep)) {
-    throw new Error(t('codegen.notGenerated'))
-  }
-  await rm(target, { recursive: true, force: true })
+  await rm(assertGeneratedAppDir(path), { recursive: true, force: true })
 }
 
 /**

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { config } from '../config'
 import { converse, type ConverseRestrictions } from './assistant'
 import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
-import { appendConversationEntry, getConversationHistory } from './conversationStore'
+import { appendConversationEntry, getActiveConversationId, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
@@ -33,7 +33,17 @@ const MAX_VISIBLE_MESSAGES = 200
  */
 class ChatSession {
   private visible: ChatMessage[] = []
-  private loaded = false
+  /**
+   * Étape 328 : le chargement en cours, partagé. Avant, un simple booléen passait à vrai AVANT la lecture : un envoi
+   * (téléphone, widget) arrivé pendant cette lecture ajoutait sa question, puis la lecture terminée remplaçait le fil
+   * et la question disparaissait de l'écran.
+   */
+  private loading: Promise<void> | null = null
+  /**
+   * Étape 328 : change à chaque changement de fil ou effacement. Une réponse arrivée après n'appartient plus au fil
+   * affiché : elle s'enregistre dans SA conversation, sans s'afficher dans la nouvelle ni entrer dans son contexte.
+   */
+  private epoch = 0
   /**
    * Étape 272 (Léo : « pouvoir interrompre l'IA comme sur ChatGPT ») : les réponses du Chat en cours, que le
    * bouton « Arrêter » interrompt. Pas celles venues du téléphone (`restrictions`), qui ont leur propre écran.
@@ -55,11 +65,22 @@ class ChatSession {
    * celle qui est active — c'est aussi celle dans laquelle le canal vocal écrit, pour que passer de la voix
    * à l'écrit continue toujours la même discussion. Changer de fil appelle `reset()` juste en dessous.
    */
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return
-    this.loaded = true
+  private ensureLoaded(): Promise<void> {
+    if (!this.loading) {
+      const epoch = this.epoch
+      this.loading = this.load(epoch).catch((err: unknown) => {
+        if (this.epoch === epoch) this.loading = null
+        throw err
+      })
+    }
+    return this.loading
+  }
+
+  private async load(epoch: number): Promise<void> {
     const pastEntries = await getConversationHistory(MAX_VISIBLE_MESSAGES / 2)
     const images = await Promise.all(pastEntries.map((entry) => (entry.image ? readGeneratedImageDataUrl(entry.image) : null)))
+    // Fil changé pendant la lecture : ce qui vient d'être lu est celui d'avant.
+    if (epoch !== this.epoch) return
     this.visible = pastEntries.flatMap((entry, i): ChatMessage[] => [
       { role: 'user', content: entry.transcript },
       {
@@ -80,9 +101,10 @@ class ChatSession {
 
   /** Vidé en même temps que l'historique global, depuis le menu Options (voir clearConversationHistory). */
   clear(): void {
+    this.epoch += 1
     clearSessionHistory()
     this.visible = []
-    this.loaded = true
+    this.loading = Promise.resolve()
   }
 
   /**
@@ -93,9 +115,10 @@ class ChatSession {
    * qui relit la conversation devenue active.
    */
   reset(): void {
+    this.epoch += 1
     clearSessionHistory()
     this.visible = []
-    this.loaded = false
+    this.loading = null
   }
 
   /**
@@ -144,6 +167,9 @@ class ChatSession {
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
     await this.ensureLoaded()
+    // Étape 328 : la conversation où la question est POSÉE, pour y ranger la réponse même si Léo change de fil entre-temps.
+    const epoch = this.epoch
+    const conversationId = await getActiveConversationId()
     this.pushVisible({ role: 'user', content: prompt })
     onSoundCue?.('thinking')
 
@@ -154,7 +180,7 @@ class ChatSession {
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
       onLog(t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))
       onSoundCue?.('error')
-      return this.pushVisible({ role: 'assistant', content: gpuStatus.message as string })
+      return this.pushIfSameThread(epoch, { role: 'assistant', content: gpuStatus.message as string })
     }
 
     let reply: string
@@ -200,9 +226,9 @@ class ChatSession {
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
       // La lecture d'une image ne s'interrompt pas en route : sa réponse arrivée après « Arrêter » est écartée.
-      if (controller.signal.aborted) return this.stopped(prompt, streamed, web)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId)
     } catch (err) {
-      if (controller.signal.aborted) return this.stopped(prompt, streamed, web)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId)
       this.running.delete(controller)
       const detail = err instanceof Error ? err.message : String(err)
       onLog(`Erreur Ollama (chat) : ${detail}`)
@@ -210,7 +236,7 @@ class ChatSession {
       // Le détail (déjà clair et actionnable, voir ollama.ts : "Impossible de joindre Ollama...",
       // "Ollama a répondu 500 : ...") est ajouté au lieu d'être perdu derrière un message générique — même
       // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
-      return this.pushVisible({
+      return this.pushIfSameThread(epoch, {
         role: 'assistant',
         content: t('chat.cannotThink', { detail }),
         ...(web.length ? { web } : {})
@@ -219,23 +245,32 @@ class ChatSession {
 
     this.running.delete(controller)
     onSoundCue?.('success')
-    pushSessionExchange(prompt, reply)
+    // Fil changé pendant la réponse : le contexte court terme est déjà celui du nouveau fil, il ne la reçoit pas.
+    if (epoch === this.epoch) pushSessionExchange(prompt, reply)
 
     // Exactement comme à la voix : la mémoire longue durée s'enrichit toute seule, et l'échange rejoint
     // l'historique commun (onglet Historique du menu Options, et amorçage du contexte au prochain lancement).
-    void extractMemoryFromExchange(prompt, reply, onLog)
+    void extractMemoryFromExchange(prompt, reply, onLog, conversationId)
     const image = generated as GeneratedImage | null
-    await appendConversationEntry({
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
-      transcript: prompt,
-      reply,
-      ...(image ? { image: image.fileName } : {}),
-      ...(web.length ? { web } : {})
-    })
+    await appendConversationEntry(
+      {
+        id: randomUUID(),
+        timestamp: new Date().toISOString(),
+        transcript: prompt,
+        reply,
+        ...(image ? { image: image.fileName } : {}),
+        ...(web.length ? { web } : {})
+      },
+      conversationId
+    )
 
     const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
-    return this.pushVisible({ role: 'assistant', content: reply, ...(imageUrl ? { image: imageUrl } : {}), ...(web.length ? { web } : {}) })
+    return this.pushIfSameThread(epoch, {
+      role: 'assistant',
+      content: reply,
+      ...(imageUrl ? { image: imageUrl } : {}),
+      ...(web.length ? { web } : {})
+    })
   }
 
   /**
@@ -243,20 +278,39 @@ class ChatSession {
    * reste, et rejoint l'historique comme un échange normal (le modèle le voit au tour suivant) ; rien d'affiché,
    * l'échange n'est pas enregistré — une réponse vide ne ferait que brouiller le contexte.
    */
-  private async stopped(prompt: string, streamed: string, web: WebActivity[] = []): Promise<ChatMessage> {
+  private async stopped(
+    prompt: string,
+    streamed: string,
+    web: WebActivity[],
+    epoch: number,
+    conversationId: string
+  ): Promise<ChatMessage> {
     for (const running of this.running) if (running.signal.aborted) this.running.delete(running)
     const partial = streamed.trim()
     if (partial) {
-      pushSessionExchange(prompt, partial)
-      await appendConversationEntry({
-        id: randomUUID(),
-        timestamp: new Date().toISOString(),
-        transcript: prompt,
-        reply: partial,
-        ...(web.length ? { web } : {})
-      })
+      if (epoch === this.epoch) pushSessionExchange(prompt, partial)
+      await appendConversationEntry(
+        {
+          id: randomUUID(),
+          timestamp: new Date().toISOString(),
+          transcript: prompt,
+          reply: partial,
+          ...(web.length ? { web } : {})
+        },
+        conversationId
+      )
     }
-    return this.pushVisible({ role: 'assistant', content: partial || t('chat.stopped'), stopped: true, ...(web.length ? { web } : {}) })
+    return this.pushIfSameThread(epoch, {
+      role: 'assistant',
+      content: partial || t('chat.stopped'),
+      stopped: true,
+      ...(web.length ? { web } : {})
+    })
+  }
+
+  /** Ajoute au fil affiché seulement s'il n'a pas changé depuis la question (étape 328) ; rend le message dans tous les cas. */
+  private pushIfSameThread(epoch: number, message: ChatMessage): ChatMessage {
+    return epoch === this.epoch ? this.pushVisible(message) : message
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {

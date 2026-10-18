@@ -644,11 +644,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         await audioRef.current.play()
       }
 
-      if (profile) {
-        const updated = { ...profile, ttsVoice: nextVoice.id }
-        setProfile(updated)
-        await window.jaris.saveProfile(updated)
-      }
+      if (profile) await saveProfileFlag({ ttsVoice: nextVoice.id })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -681,17 +677,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
    * Change de haut-parleur : contrairement au micro, pas de redémarrage nécessaire — juste enregistré dans
    * le profil, relu à chaque nouvelle réponse par le widget avant de lire l'audio (voir App.tsx, setSinkId).
    */
-  const chooseOutputDevice = async (deviceId: string): Promise<void> => {
-    if (!profile) return
-    setError(null)
-    const updated = { ...profile, audioOutputDeviceId: deviceId }
-    setProfile(updated)
-    try {
-      await window.jaris.saveProfile(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
+  const chooseOutputDevice = (deviceId: string): Promise<void> => saveProfileFlag({ audioOutputDeviceId: deviceId })
 
   /** Design sonore (étape 31) : absent/true par défaut (voir App.tsx), false pour tout couper. */
   const toggleSoundEffects = (enabled: boolean): Promise<void> => saveProfileFlag({ soundEffectsEnabled: enabled })
@@ -699,13 +685,18 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   /** Correcteur de ce que tu as dit (étape 207) : relu à chaque phrase par le pipeline vocal, sans redémarrage. */
   const toggleVoiceCorrection = (enabled: boolean): Promise<void> => saveProfileFlag({ voiceCorrectionEnabled: enabled })
 
+  /**
+   * Étape 328 : seuls les champs changés partent, appliqués côté main sur le profil RELU — jamais la copie gardée
+   * depuis l'ouverture d'Options, qui effaçait ce que Jaris avait changé entre-temps (modèles, micro, choix du Chat).
+   * Le profil renvoyé remplace ensuite cette copie, à jour.
+   */
   const saveProfileFlag = async (change: Partial<Profile>): Promise<void> => {
     if (!profile) return
     setError(null)
-    const updated = { ...profile, ...change }
-    setProfile(updated)
+    setProfile((prev) => (prev ? { ...prev, ...change } : prev))
     try {
-      await window.jaris.saveProfile(updated)
+      const fresh = await window.jaris.patchProfile(change)
+      if (fresh) setProfile(fresh)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
@@ -716,29 +707,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
    * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
    * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
    */
-  const toggleActivationKey = async (enabled: boolean): Promise<void> => {
-    if (!profile) return
-    setError(null)
-    const updated = { ...profile, activationKeyEnabled: enabled }
-    setProfile(updated)
-    try {
-      await window.jaris.saveProfile(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
+  const toggleActivationKey = (enabled: boolean): Promise<void> => saveProfileFlag({ activationKeyEnabled: enabled })
 
-  const toggleActivationOrbClick = async (enabled: boolean): Promise<void> => {
-    if (!profile) return
-    setError(null)
-    const updated = { ...profile, activationOrbClickEnabled: enabled }
-    setProfile(updated)
-    try {
-      await window.jaris.saveProfile(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
+  const toggleActivationOrbClick = (enabled: boolean): Promise<void> => saveProfileFlag({ activationOrbClickEnabled: enabled })
 
   /**
    * Contrairement aux deux bascules ci-dessus, le mot d'activation redémarre le pipeline vocal (voir

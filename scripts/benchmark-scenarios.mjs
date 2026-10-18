@@ -183,8 +183,14 @@ export function promiseWithoutAction(text) {
 
 const TOOL_NAME_LIST = TOOLS.map((tool) => tool.function.name)
 
-export function findLeakedToolName(text, toolNames = TOOL_NAME_LIST) {
-  return toolNames.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
+export function findLeakedToolName(text, toolNames = TOOL_NAME_LIST, english = false) {
+  return toolNames.find((name) => new RegExp(leakPattern(name, english), 'i').test(text))
+}
+
+/** Copie de leakPattern (assistant.ts, étape 328). Le test des modèles se joue en français : `english` reste faux. */
+function leakPattern(name, english) {
+  if (!english || name.includes('_')) return `\\b${name}\\b`
+  return `(?:\`${name}\`|"${name}"|\\b${name}\\s*\\()`
 }
 
 /** Copie de stripLeakedThinking (electron/services/ollama.ts, étape 314) — vérifiée identique par le test. */
@@ -209,6 +215,17 @@ function stripMarkdownForVoice(text) {
 }
 
 export function normalizeAssistantText(text, userPrompt) {
+  const userUsedEmoji = /\p{Extended_Pictographic}/u.test(userPrompt)
+  // Étape 328 (copie d'assistant.ts) : le code d'une réponse reste tel quel ; seuls les blancs au milieu d'une
+  // ligne de texte sont resserrés.
+  return text
+    .split(/(```[\s\S]*?```|`[^`\n]+`)/)
+    .map((part, index) => (index % 2 === 1 ? part : normalizeProse(part, userUsedEmoji)))
+    .join('')
+    .trim()
+}
+
+function normalizeProse(text, userUsedEmoji) {
   const decoded = text
     .replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));/gi, (entity, hex, decimal) => {
       const codePoint = Number.parseInt(hex ?? decimal ?? '', hex ? 16 : 10)
@@ -218,12 +235,11 @@ export function normalizeAssistantText(text, userPrompt) {
     })
     .replace(/&nbsp;/gi, ' ')
 
-  const userUsedEmoji = /\p{Extended_Pictographic}/u.test(userPrompt)
   const withoutUnrequestedEmoji = userUsedEmoji
     ? decoded
-    : decoded.replace(/\p{Extended_Pictographic}(?:︎|️)?(?:‍\p{Extended_Pictographic}(?:︎|️)?)*/gu, '')
+    : decoded.replace(/\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?)*/gu, '')
 
-  return withoutUnrequestedEmoji.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').trim()
+  return withoutUnrequestedEmoji.replace(/(\S)[ \t]{2,}/g, '$1 ').replace(/[ \t]+\n/g, '\n')
 }
 
 /** Réponse de Jaris quand le modèle n'a rien dit (finalize, assistant.ts) : comptée comme une réponse vide. */
@@ -330,7 +346,13 @@ export function argsOf(raw) {
 
 /** sanitizeTitle (memoryStore.ts) : le nom de fichier d'une note. */
 function sanitizeTitle(title) {
-  return title.trim().replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'note'
+  const cleaned = title
+    .replace(/[\\/:*?"<>|\x00-\x1f]/g, '')
+    .trim()
+    .slice(0, 80)
+    .replace(/[\s.]+$/, '')
+  if (!cleaned) return 'note'
+  return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(cleaned) ? `${cleaned}_` : cleaned
 }
 
 /** Ordre d'un dossier Windows (NTFS) : celui dans lequel listMemoryTitles() rend les titres. */

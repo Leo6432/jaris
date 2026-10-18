@@ -85,7 +85,7 @@ test('après l’onboarding, la fenêtre de Jaris s’ouvre après le démarrage
 
 test('la touche + ouvre la forme active et idle replie le widget vocal sans le cacher',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
- const shortcut=source.slice(source.indexOf('function registerWakeShortcut'),source.indexOf("registerWakeShortcut('numadd')"))
+ const shortcut=source.slice(source.indexOf('function syncWakeShortcut'),source.indexOf('function setWakeShortcutWanted'))
  assert.match(shortcut,/triggerVisibleWake\(\)/,'le raccourci global ne montre pas la barre avant l’écoute')
  const wake=source.slice(source.indexOf('function triggerVisibleWake'),source.indexOf('/** Envoie un évènement'))
  assert.match(wake,/activeMode\s*===\s*['"]chat['"][\s\S]*showWidgetWindow\(true\)[\s\S]*return/,'+ ne montre pas la barre du Chat')

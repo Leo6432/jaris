@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { posix as posixPath } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -38,7 +39,8 @@ function setup({ dirEntries = [], readdirError = null, files = {} } = {}) {
       mkdir: async () => {},
       writeFile: async () => {}
     },
-    path: { join: (...parts) => parts.join('/') },
+    // Les vrais calculs de chemin (posix : les chemins simulés s'écrivent en /, quel que soit le système de la CI).
+    path: posixPath,
     './ollama': {
       // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
       isModelLoaded: async () => true,
@@ -110,6 +112,19 @@ test('loadGeneratedApp relit le fichier index.html du dossier donné', async () 
   assert.equal(result.html, '<!DOCTYPE html><html></html>')
   assert.equal(result.path, '/fake/userData/generated-apps/1000-jeu-snake')
   assert.equal(result.issues.length, 0)
+})
+
+test('loadGeneratedApp refuse tout dossier qui n’est pas une application générée (étape 328)', async () => {
+  const { loadGeneratedApp } = setup({
+    files: {
+      '/fake/userData/index.html': '<html>données</html>',
+      '/fake/userData/generated-apps/index.html': '<html>racine</html>',
+      '/fake/userData/generated-apps/1000-jeu/sous/index.html': '<html>profond</html>'
+    }
+  })
+  for (const path of ['/fake/userData', '/fake/userData/generated-apps', '/fake/userData/generated-apps/1000-jeu/sous', '/fake/userData/generated-apps/../']) {
+    await assert.rejects(loadGeneratedApp(path), /application générée|generated/i, path)
+  }
 })
 
 test('rouvrir une application dont le JavaScript ne compile pas la signale encore, en mots simples', async () => {

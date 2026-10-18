@@ -60,6 +60,21 @@ function unreadableDir(): string {
 const MAX_HISTORY_ENTRIES = 300
 
 /**
+ * Étape 328 : les écritures de l'index se font une par une. Chacune relit l'index, le change puis le réécrit : deux en
+ * même temps (la voix et le Chat qui répondent ensemble, un changement de fil pendant qu'une réponse s'enregistre)
+ * auraient chacune réécrit l'index lu AVANT l'autre, et la dernière effaçait le changement de la première.
+ */
+let writeChain: Promise<unknown> = Promise.resolve()
+function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(task, task)
+  writeChain = run.catch(() => undefined)
+  return run
+}
+
+/** Un identifiant de conversation tel que Jaris les crée (randomUUID) : jamais un chemin, jamais « .. ». */
+const CONVERSATION_ID = /^[A-Za-z0-9-]{1,64}$/
+
+/**
  * Échanges d'une conversation. Étape 325 : avant, toute erreur de lecture rendait une liste VIDE, et l'échange suivant
  * réécrivait le fichier avec ce seul échange — tout le fil était perdu sur un fichier tronqué ou momentanément verrouillé
  * (antivirus). Désormais : abîmé, il est rangé de côté puis la conversation repart vide ; illisible, l'action en cours
@@ -172,60 +187,77 @@ export async function getActiveConversationId(): Promise<string> {
  * est réutilisée telle quelle : sans ça, cliquer deux fois sur "Nouvelle conversation" laisserait une traînée
  * de fils vides identiques dans la liste.
  */
-export async function createConversation(): Promise<string> {
-  const index = await readIndex()
-  const active = index.conversations.find((conversation) => conversation.id === index.activeId)
-  if (active && active.messageCount === 0) return active.id
+export function createConversation(): Promise<string> {
+  return exclusive(async () => {
+    const index = await readIndex()
+    const active = index.conversations.find((conversation) => conversation.id === index.activeId)
+    if (active && active.messageCount === 0) return active.id
 
-  const created = newConversation()
-  index.conversations.push(created)
-  index.activeId = created.id
-  await writeIndex(index)
-  return created.id
+    const created = newConversation()
+    index.conversations.push(created)
+    index.activeId = created.id
+    await writeIndex(index)
+    return created.id
+  })
 }
 
 /** Change la conversation active (Chat ET voix, voir le commentaire en tête de fichier). */
-export async function setActiveConversation(id: string): Promise<void> {
-  const index = await readIndex()
-  if (!index.conversations.some((conversation) => conversation.id === id)) return
-  index.activeId = id
-  await writeIndex(index)
+export function setActiveConversation(id: string): Promise<void> {
+  return exclusive(async () => {
+    const index = await readIndex()
+    if (!index.conversations.some((conversation) => conversation.id === id)) return
+    index.activeId = id
+    await writeIndex(index)
+  })
 }
 
 /**
  * Supprime une conversation et ses messages. Supprimer la dernière (ou l'active) laisse toujours une
  * conversation utilisable derrière : le Chat ne doit jamais se retrouver sans fil courant.
  */
-export async function deleteConversation(id: string): Promise<void> {
-  const index = await readIndex()
-  index.conversations = index.conversations.filter((conversation) => conversation.id !== id)
-  await rm(entriesPath(id), { force: true })
+export function deleteConversation(id: string): Promise<void> {
+  return exclusive(async () => {
+    // Étape 328 : l'identifiant vient de l'écran. Sans ce contrôle, « ../profile » effaçait le profil (rm de
+    // `<dossier>/../profile.json`) ; seule une conversation réellement listée peut être supprimée.
+    if (typeof id !== 'string' || !CONVERSATION_ID.test(id)) return
+    const index = await readIndex()
+    if (!index.conversations.some((conversation) => conversation.id === id)) return
+    index.conversations = index.conversations.filter((conversation) => conversation.id !== id)
+    await rm(entriesPath(id), { force: true })
 
-  if (!index.conversations.length) index.conversations.push(newConversation())
-  if (index.activeId === id) {
-    const mostRecent = [...index.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
-    index.activeId = mostRecent.id
-  }
-  await writeIndex(index)
+    if (!index.conversations.length) index.conversations.push(newConversation())
+    if (index.activeId === id) {
+      const mostRecent = [...index.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+      index.activeId = mostRecent.id
+    }
+    await writeIndex(index)
+  })
 }
 
-/** Ajoute un échange à la conversation ACTIVE et met à jour son titre/sa date dans l'index. */
-export async function appendConversationEntry(entry: ConversationEntry): Promise<void> {
-  const index = await readIndex()
-  const active = index.conversations.find((conversation) => conversation.id === index.activeId)
-  if (!active) return
+/**
+ * Ajoute un échange à une conversation et met à jour son titre/sa date dans l'index. Étape 328 : `conversationId` est
+ * la conversation où la question a été POSÉE — sans lui, une réponse arrivée après un changement de fil s'écrivait dans
+ * le nouveau fil. Sans identifiant (la voix), la conversation active. Supprimée entre-temps : rien n'est écrit.
+ */
+export function appendConversationEntry(entry: ConversationEntry, conversationId?: string): Promise<void> {
+  return exclusive(async () => {
+    const index = await readIndex()
+    const targetId = conversationId ?? index.activeId
+    const active = index.conversations.find((conversation) => conversation.id === targetId)
+    if (!active) return
 
-  const entries = await readEntries(active.id)
-  entries.push(entry)
-  const trimmed = entries.length > MAX_HISTORY_ENTRIES ? entries.slice(-MAX_HISTORY_ENTRIES) : entries
-  await writeEntries(active.id, trimmed)
+    const entries = await readEntries(active.id)
+    entries.push(entry)
+    const trimmed = entries.length > MAX_HISTORY_ENTRIES ? entries.slice(-MAX_HISTORY_ENTRIES) : entries
+    await writeEntries(active.id, trimmed)
 
-  // Le titre se fige sur le premier message : le renommer à chaque échange ferait danser la liste sous les
-  // yeux de Léo, et le premier message est déjà le meilleur résumé de ce qu'on cherchait dans ce fil.
-  if (active.title === UNTITLED_CONVERSATION) active.title = titleFromMessage(entry.transcript)
-  active.messageCount = trimmed.length
-  active.updatedAt = entry.timestamp
-  await writeIndex(index)
+    // Le titre se fige sur le premier message : le renommer à chaque échange ferait danser la liste sous les
+    // yeux de Léo, et le premier message est déjà le meilleur résumé de ce qu'on cherchait dans ce fil.
+    if (active.title === UNTITLED_CONVERSATION) active.title = titleFromMessage(entry.transcript)
+    active.messageCount = trimmed.length
+    active.updatedAt = entry.timestamp
+    await writeIndex(index)
+  })
 }
 
 /** Échanges de la conversation ACTIVE (contexte du modèle et fil affiché dans le Chat). */
@@ -251,27 +283,29 @@ export async function getAllConversationEntries(limit = 300): Promise<Conversati
 }
 
 /** Efface définitivement TOUTES les conversations (onglet "Historique" du menu Options). */
-export async function clearConversationHistory(): Promise<void> {
-  const dir = conversationsDir()
-  try {
-    for (const name of await readdir(dir)) await rm(join(dir, name), { force: true })
-  } catch {
-    // Dossier pas encore créé : rien à effacer.
-  }
-  // Les copies de secours de conversations abîmées (étape 325) aussi : « tout supprimer » ne laisse aucun message.
-  try {
-    for (const name of await readdir(unreadableDir())) {
-      if (name.startsWith('conversation-') || name.startsWith('conversations-index-')) await rm(join(unreadableDir(), name), { force: true })
+export function clearConversationHistory(): Promise<void> {
+  return exclusive(async () => {
+    const dir = conversationsDir()
+    try {
+      for (const name of await readdir(dir)) await rm(join(dir, name), { force: true })
+    } catch {
+      // Dossier pas encore créé : rien à effacer.
     }
-  } catch {
-    // Aucune copie de secours : rien à effacer.
-  }
-  // L'ancien fichier d'avant l'étape 96 est effacé lui aussi : le garder ferait "revenir" tout l'historique
-  // à la prochaine migration, juste après que Léo a demandé de tout supprimer.
-  await writeFileAtomic(legacyHistoryPath, '[]')
+    // Les copies de secours de conversations abîmées (étape 325) aussi : « tout supprimer » ne laisse aucun message.
+    try {
+      for (const name of await readdir(unreadableDir())) {
+        if (name.startsWith('conversation-') || name.startsWith('conversations-index-')) await rm(join(unreadableDir(), name), { force: true })
+      }
+    } catch {
+      // Aucune copie de secours : rien à effacer.
+    }
+    // L'ancien fichier d'avant l'étape 96 est effacé lui aussi : le garder ferait "revenir" tout l'historique
+    // à la prochaine migration, juste après que Léo a demandé de tout supprimer.
+    await writeFileAtomic(legacyHistoryPath, '[]')
 
-  const fresh = newConversation()
-  await writeIndex({ activeId: fresh.id, conversations: [fresh] })
+    const fresh = newConversation()
+    await writeIndex({ activeId: fresh.id, conversations: [fresh] })
+  })
 }
 
 /** Dossier des conversations, révélé par le bouton "Ouvrir le dossier" (Options → Historique). */

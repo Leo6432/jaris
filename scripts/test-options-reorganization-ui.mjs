@@ -40,6 +40,7 @@ window.__orbClicks = 0
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
+  patchProfile: async () => null,
   listAudioInputDevices: async () => [],
   getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }),
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,

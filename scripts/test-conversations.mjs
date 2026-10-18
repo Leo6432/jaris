@@ -344,3 +344,37 @@ test('coupure pendant une écriture : l’ancien fichier reste intact, et le tem
   assert.equal((await store.getConversationHistory()).map((e) => e.transcript).join(' | '), ['premier', 'deuxième'].join(' | '))
   assert.ok(!(`${file}.tmp` in store.disk))
 })
+
+// Étape 328 : l'identifiant d'une conversation à supprimer vient de l'écran. « ../profile » effaçait le profil.
+test('supprimer avec un identifiant qui n’est pas une conversation ne touche à rien (jamais un chemin)', async () => {
+  const profile = nodePath.join(USER_DATA, 'profile.json')
+  const store = setup({ files: { [profile]: '{"name":"Léo"}' } })
+  await store.appendConversationEntry(entry('garde-moi', 'ok', '2026-09-10T08:00:00.000Z'))
+  for (const id of ['../profile', '..\\profile', 'inconnue', '', '../../Documents/compta']) await store.deleteConversation(id)
+  assert.equal(store.disk[profile], '{"name":"Léo"}', 'le profil ne doit jamais être effacé')
+  assert.equal((await store.getConversationHistory())[0].transcript, 'garde-moi')
+})
+
+// Étape 328 : une réponse arrivée après un changement de fil s'écrivait dans le NOUVEAU fil.
+test('un échange s’écrit dans la conversation où la question a été posée, même si une autre est active', async () => {
+  const store = setup()
+  await store.appendConversationEntry(entry('Recette du tiramisu ?', 'ok', '2026-09-10T08:00:00.000Z'))
+  const asked = (await store.listConversations()).activeId
+  await store.createConversation()
+  await store.appendConversationEntry(entry('Et pour 8 personnes ?', 'Double les doses.', '2026-09-10T08:01:00.000Z'), asked)
+  assert.equal((await store.getConversationHistory()).length, 0, 'le nouveau fil reste vide')
+  assert.equal((await store.getConversationEntries(asked)).length, 2)
+  // Supprimée entre-temps : rien n'est écrit nulle part.
+  await store.deleteConversation(asked)
+  await store.appendConversationEntry(entry('perdue', 'ok', '2026-09-10T08:02:00.000Z'), asked)
+  assert.equal((await store.getConversationHistory()).length, 0)
+})
+
+test('deux échanges enregistrés en même temps sont gardés tous les deux (écritures une à une)', async () => {
+  const store = setup()
+  await Promise.all([
+    store.appendConversationEntry(entry('voix', 'ok', '2026-09-10T08:00:00.000Z')),
+    store.appendConversationEntry(entry('chat', 'ok', '2026-09-10T08:00:01.000Z'))
+  ])
+  assert.deepEqual((await store.getConversationHistory()).map((e) => e.transcript).sort(), ['chat', 'voix'])
+})

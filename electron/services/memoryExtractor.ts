@@ -14,6 +14,8 @@ if (!REMEMBER_TOOL) {
 export interface Exchange {
   transcript: string
   reply: string
+  /** Étape 328 : la conversation où l'échange a eu lieu, pour n'oublier que les siens quand on la supprime. */
+  conversationId?: string
 }
 
 /**
@@ -51,10 +53,20 @@ export function cancelMemoryExtraction(): void {
  * L'utilisateur efface l'historique (ou une conversation) : les échanges encore en attente partent avec lui, et
  * l'extraction en cours n'écrit plus rien. Sans ça, une info dite juste avant l'effacement (extraction arrêtée par la
  * question suivante, échange resté en attente) aurait quand même fini dans la mémoire à la réponse d'après.
+ *
+ * Étape 328 : avec une conversation précise, seuls SES échanges partent. Avant, supprimer une vieille conversation
+ * de la liste jetait aussi ce qui venait d'être dit dans la conversation ouverte (« ma sœur s'appelle Emma » n'était
+ * jamais retenu).
  */
-export function clearPendingMemoryExchanges(): void {
+export function clearPendingMemoryExchanges(conversationId?: string): void {
+  if (conversationId !== undefined) {
+    const belongs = (exchange: Exchange): boolean => exchange.conversationId === conversationId
+    if (!pending.some(belongs)) return
+    pending = pending.filter((exchange) => !belongs(exchange))
+  } else {
+    pending = []
+  }
   clearEpoch += 1
-  pending = []
   current?.controller.abort()
 }
 
@@ -85,8 +97,13 @@ export function exchangesForPrompt(batch: Exchange[]): string {
  * Une seule extraction à la fois : une nouvelle remplace celle qui tourne encore (elle reprend ses échanges),
  * après l'avoir laissée se terminer — une note déjà en cours d'écriture n'est donc jamais écrite deux fois.
  */
-export function extractMemoryFromExchange(transcript: string, reply: string, onLog?: (message: string) => void): Promise<void> {
-  const queued = [...pending, { transcript, reply }]
+export function extractMemoryFromExchange(
+  transcript: string,
+  reply: string,
+  onLog?: (message: string) => void,
+  conversationId?: string
+): Promise<void> {
+  const queued = [...pending, { transcript, reply, conversationId }]
   const dropped = queued.length - MAX_PENDING_EXCHANGES
   if (dropped > 0) {
     // Jamais en silence : un fait dit dans ces échanges ne sera pas retenu (journal de développement seulement).

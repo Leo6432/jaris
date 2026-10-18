@@ -936,6 +936,7 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
+  patchProfile: 'jaris:patch-profile',
   /**
    * Langue de Jaris (Léo : « jaris doit détecter la langue de Windows et traduire jaris, et sinon tu peux changer dans
    * les paramètres »). `languageState` est SYNCHRONE (renderer -> main, au chargement de la page) : l'écran doit

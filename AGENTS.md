@@ -8886,3 +8886,76 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-code-panel-ui.mjs` (œil et chevrons sans texte, `index.html` numéroté, numéros à gauche du code, retour à
   l'aperçu). Vérifié en remettant l'ancienne remise à « Aperçu » et en retirant la relecture : chaque test échoue.
   **Non vérifié en usage réel** : un très gros dépôt (milliers de fichiers) sur la machine de Léo.
+
+- **Étape 328 : le choix des modèles regarde enfin « invente-t-il ? » et « sait-il coder ? », puis 18 bugs d'une
+  relecture complète (Léo : « fait solution 1 et 2 et regle les 18 bug sans agents »).** Avant, l'intelligence
+  (Artificial Analysis) servait telle quelle à TOUS les rôles : le modèle Code était choisi sur un score de culture
+  générale, et un modèle qui invente souvent ses réponses passait devant un modèle prudent. Données relevées sur les
+  fiches Artificial Analysis (données brutes du HTML, `currentModel`, jamais un résumé), hardwareScan.ts :
+  1. **Faible/Moyen/Élevé** : force = intelligence × (100 + AA-Omniscience) / 200 (`conversationStrength`). AA-Omniscience
+     compte +1 par bonne réponse, −1 par réponse INVENTÉE, 0 quand le modèle dit qu'il ne sait pas (−100 à 100) : un
+     modèle qui invente perd jusqu'à la moitié de sa force. 41 modèles relevés.
+  2. **Code** : force = score Terminal-Bench 2.1 (`codeStrength`, 34 modèles). Artificial Analysis ne publie plus
+     d'indice de code par modèle, et SciCode manque pour une quinzaine de petits modèles : Terminal-Bench seul.
+     **Plancher d'une tâche sur 89** (100/89) : sans lui, 0 × n'importe quoi = 0, et sur une petite machine le Code
+     tombait sur K2 Horizon 0.9B (1,1 de score) contre des modèles notés 0.
+  3. Vision garde l'intelligence seule. Un modèle sans valeur publiée pour son rôle passe après les modèles mesurés.
+  Cinq intelligences corrigées au passage (relevé du jour) : mistral-small3.2:24b 7,0 ; granite4.2:30b 12,7 ; K2 3.7B
+  15,6 ; K2 7B 20,6 ; phi4-mini 6,3. **Effet calculé avant/après sur 12 machines types** : rien ne change sur celle de
+  Léo ; Faible passe à granite4.2:8b de 10 à 14 Go de carte ; le Code sans carte graphique avec 32 Go de RAM passe à
+  devstral-small-2:24b. La légende des modèles le dit, dans les 24 langues.
+  **Les 18 bugs, tous corrigés à la main avec un test qui échoue sans le correctif :**
+  - **Réponse du Chat dans la mauvaise conversation** (changer de fil pendant une réponse) : l'échange est enregistré
+    dans la conversation où la question a été posée (`appendConversationEntry(entry, conversationId)`), rien n'est écrit
+    si elle a été supprimée entre-temps, et l'écran n'affiche la réponse que dans ce fil (chatSession.ts, ChatPanel.tsx).
+    Une seconde lecture du disque pendant la première (`ensureLoaded`) ne perd plus le message envoyé.
+  - **Supprimer une conversation acceptait n'importe quel identifiant** : `../profile` effaçait le profil. Identifiant
+    vérifié, et seulement s'il est dans l'index. Les écritures de l'index sont faites une à une (`exclusive`), comme
+    celles des **rappels** : plusieurs rappels en retard au démarrage ne retiraient chacun que le leur de la MÊME liste
+    relue, et revenaient au lancement suivant.
+  - **Options réécrivait tout le profil avec la copie prise à son ouverture** : les modèles changés par « Retester la
+    configuration » entre-temps revenaient à l'ancienne valeur. Nouveau canal `patchProfile` : seuls les champs changés
+    partent, appliqués côté main sur le profil relu, une écriture à la fois (profileStore.ts).
+  - **Un fichier glissé sur une fenêtre remplaçait toute l'interface**, et un lien ouvert depuis une page partait au
+    système quel que soit son protocole (`file:` lançait un programme). Une seule garde pour toutes les fenêtres
+    (`web-contents-created`, navigationGuard.ts) : une fenêtre ne quitte jamais sa page, seuls http/https s'ouvrent.
+  - **La touche + du pavé numérique était retirée à TOUTES les applications**, même décochée dans Options (impossible de
+    taper + dans Excel, ni dans le Chat de Jaris). Réservée seulement si elle est activée, et rendue tant qu'une
+    fenêtre de Jaris a le focus (l'écran gère + et laisse écrire dans un champ). Relue 100 ms après le changement de
+    focus : pendant une perte de focus, Windows peut encore dire la fenêtre active.
+  - **Moteur vocal relancé depuis Options** (micro, mot d'activation) : il écoutait de nouveau hors du mode vocal, et
+    deux relances rapprochées laissaient deux moteurs et deux micros ouverts. Le moteur remplacé est arrêté au moment
+    du remplacement, la pause est reposée avant le démarrage, et un moteur arrêté avant d'avoir démarré ne lance plus
+    son programme (`stopped`, voicePipeline.ts).
+  - **Chemins des applications générées** : « Ouvrir le dossier » et la réouverture acceptaient n'importe quel chemin
+    venu de l'écran. Une seule vérification partagée (`assertGeneratedAppDir`), message rendu neutre dans les 24 langues.
+  - **Code dans une réponse du Chat abîmé** : indentation réduite à une espace, entités et émojis retirés DANS le code.
+    Les blocs ``` et `…` restent tels quels ; dans le texte, seuls les blancs au milieu d'une ligne sont resserrés.
+  - **En anglais, « I'll remember that » relançait le modèle** (nom d'outil « remember » pris pour une action narrée) :
+    en anglais, un nom sans « _ » ne compte que sous sa forme de code. Le français est inchangé.
+  - **Le Cerveau plantait sur certaines notes** : un titre commençant par un caractère interdit ou coupé juste après
+    une espace donnait un fichier dont le nom ne se relisait plus. Nom stable (`sanitizeTitle` rejoue sur lui-même sans
+    rien changer ; « Con » et les noms interdits par Windows reçoivent « _ »), notes relues sous leur nom RÉEL, une note
+    illisible n'empêche plus d'afficher les autres. Cliquer sur son prénom au centre affichait la réponse française du
+    modèle (« Aucune note trouvée… ») ou une autre note qui contenait ce prénom : titre exact, sinon une phrase traduite.
+  - **Applications aux noms accentués introuvables** (« Paramètres » lu « ParamŠtres ») : sortie de Get-StartApps
+    imposée en UTF-8 — vérifié sur le vrai PowerShell de la CI Windows.
+  - **Une entité hors de l'Unicode (« &#99999999; ») faisait échouer toute la lecture d'une page web** ; une page
+    d'erreur HTML de la recherche s'affichait entière, balises comprises : texte court et sans balises pour tous les codes.
+  - **Supprimer une vieille conversation jetait aussi ce qui venait d'être dit dans la conversation ouverte** avant que
+    la mémoire automatique l'ait lu : chaque échange en attente porte sa conversation, seuls les siens partent.
+  **Leçon générale : quand une même règle doit valoir partout (garde de navigation, raccourci, écriture du profil), la
+  poser à UN endroit par où tout passe (`web-contents-created`, `patchProfile`, `assertGeneratedAppDir`) plutôt que
+  fenêtre par fenêtre ou appel par appel — c'est exactement l'appel oublié qui faisait le bug.**
+  **Piège de test revécu** : un test qui cherche `app.whenReady()` ou `globalShortcut.register(` dans main.ts tombe
+  aussi sur les COMMENTAIRES qui citent ces appels — filtrer les lignes de commentaire, ou chercher la forme exacte.
+  Et un test structurel ancien (« getChatHistory() à moins de 300 caractères après visibilitychange ») ne passait que
+  grâce à un AUTRE appel situé plus bas : quelques lignes ajoutées entre les deux l'ont fait échouer sans aucun défaut.
+  Réécrit pour viser la fonction réellement branchée sur l'évènement. **Un motif « à moins de N caractères » mesure
+  une distance dans le fichier, pas un lien entre deux morceaux de code.**
+  Régression : `test-voice-restart.mjs`, `test-main-guards.mjs`, `test-web-page.mjs` (nouveaux) ; `test-conversations`,
+  `test-chat-session-restore`, `test-reminders`, `test-memory-extractor`, `test-data-files`, `test-codegen-recents`,
+  `test-false-completion`, `test-benchmark-scenarios`, `test-app-launcher`, `test-web-activity`,
+  `test-error-boundary-ui`, `test-hardwarescan-single-pool`, `test-hardwarescan-tiebreak`. Chaque garde vérifiée en
+  remettant l'ancien code. **Non vérifié en usage réel** : le raccourci + et la garde de navigation dans la vraie
+  fenêtre Windows de Léo.

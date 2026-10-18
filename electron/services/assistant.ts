@@ -282,6 +282,19 @@ function stripMarkdownForVoice(text: string): string {
  * expliquer sans effacer le sujet de la réponse.
  */
 export function normalizeAssistantText(text: string, userPrompt: string): string {
+  const userUsedEmoji = /\p{Extended_Pictographic}/u.test(userPrompt)
+  // Étape 328 : le code d'une réponse (blocs ``` et `…`) reste tel quel. Avant, son indentation était réduite à une
+  // espace (du Python devenait faux), ses entités HTML décodées et ses émojis retirés : du code recopié depuis le
+  // Chat ne marchait plus. Dans le texte, seuls les blancs AU MILIEU d'une ligne sont resserrés : le retrait en
+  // début de ligne garde les sous-listes.
+  return text
+    .split(/(```[\s\S]*?```|`[^`\n]+`)/)
+    .map((part, index) => (index % 2 === 1 ? part : normalizeProse(part, userUsedEmoji)))
+    .join('')
+    .trim()
+}
+
+function normalizeProse(text: string, userUsedEmoji: boolean): string {
   const decoded = text
     .replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));/gi, (entity, hex: string | undefined, decimal: string | undefined) => {
       const codePoint = Number.parseInt(hex ?? decimal ?? '', hex ? 16 : 10)
@@ -291,12 +304,11 @@ export function normalizeAssistantText(text: string, userPrompt: string): string
     })
     .replace(/&nbsp;/gi, ' ')
 
-  const userUsedEmoji = /\p{Extended_Pictographic}/u.test(userPrompt)
   const withoutUnrequestedEmoji = userUsedEmoji
     ? decoded
     : decoded.replace(/\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?)*/gu, '')
 
-  return withoutUnrequestedEmoji.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').trim()
+  return withoutUnrequestedEmoji.replace(/(\S)[ \t]{2,}/g, '$1 ').replace(/[ \t]+\n/g, '\n')
 }
 
 const MAX_TOOL_ROUNDS = 10
@@ -409,8 +421,23 @@ const TOOL_NAMES = TOOLS.map((tool) => tool.function.name)
  * scripts/test-false-completion.mjs de tester avec une petite liste, sans avoir à mocker tout `tools.ts`
  * (qui importe lui-même appLauncher/computerUse/vision/webSearch/inputControl...) juste pour lire des noms.
  */
-export function findLeakedToolName(text: string, toolNames: readonly string[] = TOOL_NAMES): string | undefined {
-  return toolNames.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
+export function findLeakedToolName(
+  text: string,
+  toolNames: readonly string[] = TOOL_NAMES,
+  english: boolean = currentLanguage() === 'en'
+): string | undefined {
+  return toolNames.find((name) => new RegExp(leakPattern(name, english), 'i').test(text))
+}
+
+/**
+ * Étape 328 : en anglais, un nom d'outil sans « _ » est aussi un mot ordinaire (« remember ») — « I'll remember
+ * that » relançait le modèle comme s'il avait décrit une action sans la faire, et la réponse d'après était confuse.
+ * Ce nom-là ne compte alors que sous sa forme de code : `remember`, remember(…) ou "remember". Les autres langues
+ * gardent la règle d'avant (le mot seul suffit) : « remember » n'y est jamais un mot de la phrase.
+ */
+function leakPattern(name: string, english: boolean): string {
+  if (!english || name.includes('_')) return `\\b${name}\\b`
+  return `(?:\`${name}\`|"${name}"|\\b${name}\\s*\\()`
 }
 
 /**

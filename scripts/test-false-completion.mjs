@@ -89,3 +89,16 @@ test('un second paramètre personnalisé remplace la vraie liste TOOL_NAMES (iso
   assert.equal(findLeakedToolName('j\'ai utilisé mon_outil_de_test', ['mon_outil_de_test']), 'mon_outil_de_test')
   assert.equal(findLeakedToolName('rien à voir ici', ['mon_outil_de_test']), undefined)
 })
+
+test('en anglais, « remember » est un mot ordinaire : seule sa forme de code compte (étape 328)', () => {
+  for (const text of ["Sure, I'll remember that you like jazz.", 'Remember to drink water!']) {
+    assert.equal(findLeakedToolName(text, REAL_TOOL_NAMES, true), undefined, text)
+  }
+  for (const text of ['I saved it with `remember`.', 'remember({"title": "Léo"})', 'I used "remember" for that.']) {
+    assert.equal(findLeakedToolName(text, REAL_TOOL_NAMES, true), 'remember', text)
+  }
+  // Un nom avec « _ » reste trahi par le mot seul, en anglais aussi.
+  assert.equal(findLeakedToolName('I typed it with type_text.', REAL_TOOL_NAMES, true), 'type_text')
+  // En français, rien ne change : le mot seul suffit.
+  assert.equal(findLeakedToolName("C'est noté avec remember.", REAL_TOOL_NAMES, false), 'remember')
+})

@@ -46,7 +46,12 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
 
   const openNote = (title: string): void => {
     setSelectedNote({ title, content: null })
-    void window.jaris.getMemoryNoteContent(title).then((content) => setSelectedNote({ title, content }))
+    // Étape 328 : aucune note à ce titre (le prénom au centre, souvent) ou note illisible : une phrase dans la langue
+    // de Jaris, jamais « chargement… » pour toujours ni la réponse française destinée au modèle.
+    void window.jaris.getMemoryNoteContent(title).then(
+      (content) => setSelectedNote({ title, content: content ?? t('brain.noNote', { title }) }),
+      (err: unknown) => setSelectedNote({ title, content: err instanceof Error ? err.message : String(err) })
+    )
   }
 
   useEffect(() => {

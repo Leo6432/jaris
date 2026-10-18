@@ -268,3 +268,72 @@ test('un profil verrouillé au démarrage ne laisse plus Jaris invisible : rées
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   assert.ok(!/window\.jaris\.getProfile\(\)\.then\(/.test(app), 'App.tsx lit le profil sans gérer un échec (écran vide pour toujours)')
 })
+
+test('patchProfile change seulement les champs donnés, sur le profil relu (étape 328)', async (t) => {
+  const dataRoot = tempDir(t)
+  const { profile } = loadStores(dataRoot)
+  await profile.saveProfile({ name: 'Léo', models: { flash: 'qwen3:1.7b' }, soundEffectsEnabled: true })
+  // Options a été ouvert ici, avec cette copie. Puis « Retester la configuration » change les modèles :
+  await profile.saveProfile({ name: 'Léo', models: { flash: 'ministral-3:3b' }, soundEffectsEnabled: true })
+  // Un réglage d'Options ne doit pas remettre l'ancien modèle.
+  const updated = await profile.patchProfile({ soundEffectsEnabled: false })
+  assert.deepEqual(updated, { name: 'Léo', models: { flash: 'ministral-3:3b' }, soundEffectsEnabled: false })
+  assert.deepEqual(await profile.getProfile(), updated)
+})
+
+test('patchProfile : deux réglages envoyés en même temps sont gardés tous les deux, et rien n’est créé sans profil', async (t) => {
+  const dataRoot = tempDir(t)
+  const { profile } = loadStores(dataRoot)
+  assert.equal(await profile.patchProfile({ soundEffectsEnabled: false }), null)
+  assert.equal(await profile.getProfile(), null, 'un simple réglage ne crée pas de profil')
+  await profile.saveProfile({ name: 'Léo' })
+  await Promise.all([profile.patchProfile({ soundEffectsEnabled: false }), profile.patchProfile({ activationKeyEnabled: false })])
+  assert.deepEqual(await profile.getProfile(), { name: 'Léo', soundEffectsEnabled: false, activationKeyEnabled: false })
+})
+
+test('notes : un titre bizarre ou très long se relit toujours, et le Cerveau ne plante jamais (étape 328)', async (t) => {
+  const dataRoot = tempDir(t)
+  const { memory } = loadStores(dataRoot)
+  const long = `${'Liste des choses importantes à faire pour les vacances '.repeat(2)}`.slice(0, 79) + ' fin'
+  await memory.rememberNote('"  Vacances', 'Départ le 12 août.')
+  await memory.rememberNote(long, 'Réserver le train.')
+  await memory.rememberNote('Con', 'Un nom de fichier interdit sous Windows.')
+  const titles = await memory.listMemoryTitles()
+  for (const title of titles) {
+    assert.equal(title, title.trim(), `aucun nom de note ne commence ni ne finit par une espace : « ${title} »`)
+    assert.doesNotMatch(title, /^(con|prn|aux|nul)$/i)
+  }
+  assert.match(await memory.recallNote('Vacances'), /12 août/)
+  assert.match(await memory.recallNote(titles.find((x) => x.startsWith('Liste'))), /train/)
+  // Le même titre redonne la même note (pas un second fichier à côté).
+  await memory.rememberNote('"  Vacances', 'Retour le 26.')
+  assert.equal((await memory.listMemoryTitles()).length, 3)
+  const graph = await memory.getMemoryGraph()
+  assert.equal(graph.nodes.length, 3)
+})
+
+test('notes : une ancienne note au nom terminé par une espace reste lisible, et une note illisible ne bloque pas le Cerveau', async (t) => {
+  const dataRoot = tempDir(t)
+  const dir = join(dataRoot, 'memory')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'Ancienne note .md'), '# Ancienne note\n\nLien vers [[Voiture]].')
+  writeFileSync(join(dir, 'Voiture.md'), '# Voiture\n\nUne Clio.')
+  const { memory } = loadStores(dataRoot)
+  assert.match(await memory.recallNote('Ancienne note '), /Voiture/)
+  const graph = await memory.getMemoryGraph()
+  assert.deepEqual(graph.links, [{ source: 'Ancienne note ', target: 'Voiture' }])
+  rmSync(join(dir, 'Voiture.md'))
+  mkdirSync(join(dir, 'Voiture.md'))
+  const after = await memory.getMemoryGraph()
+  assert.equal(after.nodes.length, 2, 'une note illisible (ici un dossier) n’empêche pas d’afficher les autres')
+})
+
+test('Cerveau : seule la note au titre exact s’affiche, et une note absente répond null (étape 328)', async (t) => {
+  const dataRoot = tempDir(t)
+  const { memory } = loadStores(dataRoot)
+  await memory.rememberNote('Léo - adresse', '12 rue des Lilas.')
+  assert.equal(await memory.readNoteForDisplay('Léo'), null, 'jamais la note dont le titre CONTIENT le prénom')
+  assert.match(await memory.recallNote('Léo'), /Lilas/, 'le modèle, lui, garde la recherche approchée')
+  await memory.rememberNote('Léo', 'Aime le jazz.')
+  assert.match(await memory.readNoteForDisplay('léo'), /jazz/)
+})

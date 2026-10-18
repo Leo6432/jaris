@@ -26,7 +26,10 @@ function decodeEntities(text: string): string {
   return text.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, code: string) => {
     if (code[0] === '#') {
       const codePoint = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10)
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
+      // Étape 328 : un nombre hors de l'Unicode (« &#99999999; », vu sur des pages réelles) faisait LEVER
+      // String.fromCodePoint : toute la lecture de la page échouait pour un seul caractère. Il reste écrit tel quel.
+      const valid = Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+      return valid ? String.fromCodePoint(codePoint) : match
     }
     return HTML_ENTITIES[code.toLowerCase()] ?? match
   })

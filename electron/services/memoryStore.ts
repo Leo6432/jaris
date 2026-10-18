@@ -6,8 +6,24 @@ import { getDataRoot } from './dataLocation'
 
 const memoryDir = join(getDataRoot(), 'memory')
 
+/** Noms que Windows refuse pour un fichier, quelle que soit l'extension (« Con.md » ne peut pas être créé). */
+const RESERVED_WINDOWS_NAMES = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+
+/**
+ * Le nom de fichier d'une note, toujours le même pour un même titre (relancer la fonction sur son résultat ne le
+ * change plus). Étape 328 : avant, les blancs étaient retirés AVANT les caractères interdits et la coupe à 80 : un titre
+ * comme « "  Vacances » ou un titre long coupé juste après une espace donnait un fichier dont le nom commence ou finit
+ * par une espace. Relu depuis le dossier, ce nom ne retombait plus sur le même fichier, et l'écran du Cerveau
+ * plantait sur une note introuvable.
+ */
 function sanitizeTitle(title: string): string {
-  return title.trim().replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'note'
+  const cleaned = title
+    .replace(/[\\/:*?"<>|\x00-\x1f]/g, '')
+    .trim()
+    .slice(0, 80)
+    .replace(/[\s.]+$/, '')
+  if (!cleaned) return 'note'
+  return RESERVED_WINDOWS_NAMES.test(cleaned) ? `${cleaned}_` : cleaned
 }
 
 function notePath(title: string): string {
@@ -57,13 +73,30 @@ export async function rememberNote(title: string, content: string, replace = fal
   return `Noté dans la mémoire ("${title}").`
 }
 
+/** Le fichier d'une note listée dans le dossier, sous son nom RÉEL (pas recalculé : une ancienne note garde le sien). */
+function listedNotePath(listedTitle: string): string {
+  return join(memoryDir, `${listedTitle}.md`)
+}
+
 /** Relit le contenu d'une note existante, par correspondance exacte ou approximative du titre. */
 export async function recallNote(title: string): Promise<string> {
   const titles = await listMemoryTitles()
   const wanted = title.trim().toLowerCase()
   const match = titles.find((t) => t.toLowerCase() === wanted) ?? titles.find((t) => t.toLowerCase().includes(wanted))
   if (!match) return `Aucune note trouvée pour "${title}".`
-  return readFile(notePath(match), 'utf-8')
+  return readFile(listedNotePath(match), 'utf-8')
+}
+
+/**
+ * Étape 328 : le contenu d'une note pour l'écran du Cerveau — le titre EXACT (à la casse près), null si elle n'existe
+ * pas. recallNote sert le modèle : il accepte un titre approché et répond par une phrase française. Cliquer sur son
+ * propre prénom au centre du Cerveau affichait donc « Aucune note trouvée pour "Léo". » (en français, quelle que soit
+ * la langue choisie), ou pire la première note dont le titre CONTENAIT ce prénom.
+ */
+export async function readNoteForDisplay(title: string): Promise<string | null> {
+  const wanted = title.trim().toLowerCase()
+  const match = (await listMemoryTitles()).find((listed) => listed.toLowerCase() === wanted)
+  return match === undefined ? null : readFile(listedNotePath(match), 'utf-8')
 }
 
 const LINK_PATTERN = /\[\[([^\]]+)\]\]/g
@@ -75,7 +108,13 @@ export async function getMemoryGraph(): Promise<MemoryGraph> {
   const links: MemoryGraphLink[] = []
 
   for (const title of titles) {
-    const content = await readFile(notePath(title), 'utf-8')
+    // Une note illisible (verrouillée un instant, effacée entre-temps) n'empêche jamais d'afficher les autres.
+    let content: string
+    try {
+      content = await readFile(listedNotePath(title), 'utf-8')
+    } catch {
+      continue
+    }
     for (const match of content.matchAll(LINK_PATTERN)) {
       const target = match[1].trim()
       if (target !== title && titleSet.has(target)) links.push({ source: title, target })

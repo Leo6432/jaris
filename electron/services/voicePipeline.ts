@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto'
 import type { JarisEmotion, MicTestDonePayload, SoundCue, VoiceReplyPayload, WakeTestHeardPayload } from '../../shared/ipc'
 import { VoiceClient, listeningUnavailableReason } from './voiceClient'
 import { synthesizeSpeech } from './tts'
-import { appendConversationEntry } from './conversationStore'
+import { appendConversationEntry, getActiveConversationId } from './conversationStore'
 import { converse } from './assistant'
 import { VOICE_CONTEXT_MAX_AGE_MS, clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
@@ -127,6 +127,11 @@ export class VoicePipeline extends EventEmitter {
    * en train d'écrire dans un autre mode.
    */
   private suspended = false
+  /**
+   * Étape 328 : arrêté avant d'avoir démarré (remplacé par un redémarrage pendant que main.ts lisait encore le
+   * profil), il ne doit plus lancer son moteur : sinon un second micro restait ouvert, que plus rien n'arrêtait.
+   */
+  private stopped = false
 
   /**
    * @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env.
@@ -135,6 +140,7 @@ export class VoicePipeline extends EventEmitter {
    * disponibles quoi qu'il arrive, ce drapeau ne concerne QUE l'écoute passive du micro.
    */
   async start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
+    if (this.stopped) return
     this.voice.on('wake', () => {
       if (this.suspended) return
       this.clearIdleTimer()
@@ -177,6 +183,7 @@ export class VoicePipeline extends EventEmitter {
   }
 
   stop(): void {
+    this.stopped = true
     this.clearIdleTimer()
     this.voice.stop()
   }
@@ -404,7 +411,12 @@ export class VoicePipeline extends EventEmitter {
       // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
       // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
       // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
-      void extractMemoryFromExchange(question, reply, (message) => this.emit('log', message))
+      // Étape 328 : rangé sous sa conversation, pour que supprimer une AUTRE conversation ne l'efface pas de la file.
+      const memoryLog = (message: string): void => void this.emit('log', message)
+      void getActiveConversationId().then(
+        (conversationId) => extractMemoryFromExchange(question, reply, memoryLog, conversationId),
+        () => extractMemoryFromExchange(question, reply, memoryLog)
+      )
 
       await this.speak(reply, question, generatedImage)
       break

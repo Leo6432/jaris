@@ -191,7 +191,12 @@ test('le Chat relit son fil en redevenant visible (une question posée depuis le
     'ChatPanel n’écoute pas visibilitychange : sa fenêtre n’est jamais détruite, donc son fil resterait ' +
       'figé sur ce qu’il affichait avant le repli et l’échange fait depuis le widget n’apparaîtrait jamais'
   )
-  assert.match(chatPanelSource, /visibilitychange[\s\S]{0,300}?getChatHistory\(\)/)
+  // Étape 328 : l'ancien motif (« getChatHistory() à moins de 300 caractères après visibilitychange ») ne passait que
+  // grâce à un AUTRE appel situé plus bas : c'est la fonction branchée sur visibilitychange qui doit relire le fil.
+  assert.match(
+    chatPanelSource,
+    /const refresh = \(\) => \{[^}]*getChatHistory\(\)[^}]*\}[\s\S]{0,200}addEventListener\('visibilitychange', refresh\)/
+  )
 })
 
 // Étape 176, Léo : « si je clique sur une autre application il disparaît sans widget… il montre le widget

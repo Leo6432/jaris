@@ -49,14 +49,13 @@ export async function searchWebDetailed(query: string): Promise<{ text: string; 
     // dans search.formats malgré 3 correctifs déjà tentés (v0.3.6/v0.3.7/v0.3.9) et le fichier correct sur le
     // disque : plus de promesse de "réparation automatique" tant que la vraie cause n'est pas confirmée —
     // readSearxngContainerSettings() (dependencyServices.ts) donne enfin un vrai fait à comparer.
-    const bodySnippet =
-      response.status === 403
-        ? (await response.text())
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 300)
-        : await response.text()
+    // Étape 328 : le texte de la page d'erreur, sans balises et raccourci, pour TOUS les codes — un 500 ou un 502
+    // affichait jusqu'ici la page HTML entière, balises comprises, dans le Chat ou lue à voix haute.
+    const bodySnippet = (await response.text())
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 300)
     if (response.status === 403) {
       const containerSettings = await readSearxngContainerSettings()
       throw new Error(

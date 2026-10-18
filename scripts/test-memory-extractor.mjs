@@ -463,7 +463,38 @@ test('Code, Image, Vidéo (écran et téléphone) arrêtent aussi la mémoire ; 
     assert.match(before(start, call), /cancelMemoryExtraction\(\)/, `arrêtée avant ${call} (${start})`)
   }
   assert.match(before('IPC_CHANNELS.clearConversationHistory,', 'await clearConversationHistory()'), /clearPendingMemoryExchanges\(\)/)
-  assert.match(before('IPC_CHANNELS.deleteConversation,', 'await deleteConversation(id)'), /clearPendingMemoryExchanges\(\)/)
+  assert.match(before('IPC_CHANNELS.deleteConversation,', 'await deleteConversation(id)'), /clearPendingMemoryExchanges\(id\)/)
+})
+
+test('supprimer une AUTRE conversation garde ce qui vient d’être dit dans la conversation ouverte (étape 328)', async () => {
+  let answer = hangsUntilAborted
+  const m = load((messages, signal) => answer(messages, signal))
+  const run = m.extractMemoryFromExchange("ma sœur s'appelle Emma", 'Joli prénom !', m.onLog, 'ouverte')
+  await waitFor(() => m.calls.length === 1, 'appel à Ollama')
+  m.clearPendingMemoryExchanges('vieille')
+  assert.equal(m.calls[0].signal.aborted, false, 'rien de la vieille conversation : l’extraction continue')
+  answer = () => remember({ title: 'Léo', content: 'La sœur de Léo s’appelle Emma.' })
+  m.cancelMemoryExtraction()
+  await run
+  await m.extractMemoryFromExchange('Merci !', 'Avec plaisir.', m.onLog, 'ouverte')
+  assert.match(m.calls[1].messages.at(-1).content, /Emma/, 'l’échange de la conversation ouverte est toujours lu')
+})
+
+test('supprimer la conversation d’un échange en attente l’oublie, et seulement lui', async () => {
+  let answer = hangsUntilAborted
+  const m = load((messages, signal) => answer(messages, signal))
+  const first = m.extractMemoryFromExchange("mon code de carte bleue c'est 4821", 'Je ne retiens pas ça.', m.onLog, 'supprimee')
+  await waitFor(() => m.calls.length === 1, 'appel à Ollama')
+  const second = m.extractMemoryFromExchange("ma sœur s'appelle Emma", 'Joli prénom !', m.onLog, 'ouverte')
+  await first
+  await waitFor(() => m.calls.length === 2, 'second appel')
+  m.clearPendingMemoryExchanges('supprimee')
+  await second
+  answer = () => ({ role: 'assistant', content: '' })
+  await m.extractMemoryFromExchange('Merci !', 'Avec plaisir.', m.onLog, 'ouverte')
+  const lastPrompt = m.calls.at(-1).messages.at(-1).content
+  assert.doesNotMatch(lastPrompt, /4821/)
+  assert.match(lastPrompt, /Emma/)
 })
 
 test('une annulation qui remonte sous un autre nom (« Impossible de joindre Ollama ») reste silencieuse', async () => {

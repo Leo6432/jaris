@@ -88,9 +88,12 @@ declare global {
       onLanguageChanged?: (cb: (state: LanguageState) => void) => () => void
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
+      /** Change seulement ces champs, sur le profil relu côté main (étape 328) ; null sans profil. */
+      patchProfile: (change: Partial<Profile>) => Promise<Profile | null>
       openMemoryFolder: () => Promise<void>
       getMemoryGraph: () => Promise<MemoryGraph>
-      getMemoryNoteContent: (title: string) => Promise<string>
+      /** null : aucune note à ce titre exact (étape 328). */
+      getMemoryNoteContent: (title: string) => Promise<string | null>
       previewVoice: (voice: string) => Promise<ArrayBuffer>
       notifyOnboardingFinished: () => void
       openSettings: () => void

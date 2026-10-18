@@ -32,7 +32,8 @@ const GRAPH = {
   links: [{ source: 'Léo', target: 'Guitare' }, { source: 'Léo', target: 'Recette crêpes' }]
 }
 window.jaris = {
-  getMemoryNoteContent: (title) => Promise.resolve('# ' + title + '\\nContenu de la note.'),
+  // Étape 328 : null = aucune note à ce titre exact.
+  getMemoryNoteContent: (title) => Promise.resolve(title === 'Recette crêpes' ? null : '# ' + title + '\\nContenu de la note.'),
   openMemoryFolder: () => {}
 }
 
@@ -139,6 +140,12 @@ test('Cerveau sans WebGL : la liste des notes remplace la vue 3D, et Jaris reste
     const box = await page.$eval('.memory-brain__note', (el) => el.getBoundingClientRect().toJSON())
     assert.ok(box.left >= 0 && box.top >= 0, JSON.stringify(box))
     assert.ok(box.right <= 1100 && box.bottom <= 760, JSON.stringify(box))
+
+    // Une note absente se dit dans la langue de Jaris, jamais « Chargement… » pour toujours (étape 328).
+    await page.click('.memory-brain__note-header button')
+    await page.click('.memory-brain__list-item >> text=Recette crêpes')
+    await page.waitForFunction(() => document.querySelector('.memory-brain__note-content')?.textContent.includes('Pas encore de note'))
+    assert.equal((await page.textContent('.memory-brain__note-content')).trim(), 'Pas encore de note sur « Recette crêpes ».')
 
     await page.click('#close-brain')
     assert.equal(await page.$('.memory-brain'), null)
