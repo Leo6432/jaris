@@ -597,7 +597,7 @@ test('« terminé » vient du vrai résultat de l’agent : une limite atteinte 
   const { readFileSync } = await import('node:fs')
   const source = readFileSync(new URL('../electron/services/githubSession.ts', import.meta.url), 'utf8')
   // Le résultat de l'agent, que le dernier contrôle des scripts préparés peut seulement rendre « non terminé ».
-  assert.match(source, /let limitReached = outcome\.limitReached\n/)
+  assert.match(source, /let limitReached = outcome\.limitReached\r?$/m)
   assert.match(source, /return \{ summary, view: viewOf\(session\), finished: !limitReached \}/)
   assert.doesNotMatch(source, /limitReached = false/)
 })
