@@ -126,6 +126,22 @@ window.jaris = {
     // reason 114 », vérifié ici). Une adresse data: différente à chaque demande, comme le vrai main.
     return Promise.resolve({ entry: 'index.html', url: 'data:text/html,<p>site ' + window.__calls.preview.length + '</p>' })
   },
+  // Étape 327 : la vue « Code » — les fichiers du dépôt, puis le texte de celui qu'on ouvre (version préparée d'abord).
+  githubListFiles: (fullName) => {
+    window.__calls.listFiles = [...(window.__calls.listFiles ?? []), fullName]
+    return Promise.resolve(['README.md', 'index.html', 'logo.png', 'src/app.js', 'src/styles/main.css'])
+  },
+  githubReadFile: (fullName, path) => {
+    window.__calls.read = [...(window.__calls.read ?? []), path]
+    const files = {
+      'README.md': window.__agentDone ? '# Projet\\nBonjour le monde\\n' : '# Projet\\nBonjour le mondee\\n',
+      'index.html': '<h1>Projet</h1>\\n<script src="src/app.js"></script>\\n',
+      'logo.png': null,
+      'src/app.js': 'console.log("ok")\\n',
+      'src/styles/main.css': 'h1 { color: tomato; }\\n'
+    }
+    return Promise.resolve(path in files ? { text: files[path] } : { text: null, missing: true })
+  },
   githubCommit: (fullName, message) => {
     window.__calls.commit.push([fullName, message])
     // Comme le vrai : une fois enregistré, plus rien n'est préparé (rouvrir le dépôt le retrouve propre).
@@ -848,4 +864,97 @@ test('fenêtre étroite : la carte de fin garde sa hauteur et le fil descend jus
     },
     { width: 1000 }
   )
+})
+
+test('« aperçu et code dans code » d’un dépôt : la liste de ses fichiers, la recherche, un onglet par fichier (étape 327)', options, async () => {
+  // Léo, capture d'un autre outil à l'appui : « avoir apercu et code dans code ».
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.waitForSelector('.code-preview iframe.code-panel__preview')
+    // Rien n'est demandé tant que la vue « Code » n'est pas ouverte.
+    assert.equal(await page.evaluate(() => (window.__calls.listFiles ?? []).length), 0)
+
+    await page.click('.code-preview__code-tab')
+    await page.waitForSelector('.code-browser__code')
+    assert.equal(await page.locator('.code-panel__preview').count(), 0)
+    assert.deepEqual(await page.evaluate(() => window.__calls.listFiles), ['leo/projet'])
+    // Comme un explorateur : les dossiers d'abord (repliés), puis les fichiers, chacun par ordre alphabétique.
+    const names = () => page.$$eval('.code-browser__tree .code-browser__name', (rows) => rows.map((row) => row.textContent))
+    assert.deepEqual(await names(), ['src', 'index.html', 'logo.png', 'README.md'])
+    // La page du site s'ouvre d'abord, avec ses numéros de ligne.
+    assert.equal(await page.textContent('.code-browser__tab--active .code-browser__tab-name'), 'index.html')
+    assert.equal(await page.textContent('.code-browser__code'), '<h1>Projet</h1>\n<script src="src/app.js"></script>\n')
+    assert.equal(await page.textContent('.code-browser__gutter'), '1\n2')
+
+    // Un dossier se déplie, un fichier s'ouvre dans un onglet de plus.
+    await page.click('.code-browser__folder:has-text("src")')
+    assert.deepEqual(await names(), ['src', 'styles', 'app.js', 'index.html', 'logo.png', 'README.md'])
+    await page.click('.code-browser__file:has-text("app.js")')
+    await page.waitForFunction(() => document.querySelector('.code-browser__code')?.textContent === 'console.log("ok")\n')
+    assert.deepEqual(await page.$$eval('.code-browser__tab-name', (tabs) => tabs.map((tab) => tab.textContent)), ['index.html', 'app.js'])
+    assert.equal(await page.getAttribute('.code-browser__row--active', 'title'), 'src/app.js')
+
+    // Fermer l'onglet ouvert revient au voisin.
+    await page.click('.code-browser__tab--active .code-browser__tab-close')
+    assert.deepEqual(await page.$$eval('.code-browser__tab-name', (tabs) => tabs.map((tab) => tab.textContent)), ['index.html'])
+    assert.equal(await page.textContent('.code-browser__tab--active .code-browser__tab-name'), 'index.html')
+
+    // La recherche montre les chemins complets, et un fichier trouvé s'ouvre d'un clic, même dans un dossier replié.
+    await page.click('.code-browser__collapse')
+    await page.fill('.code-browser__search-input', 'MAIN')
+    assert.deepEqual(await names(), ['src/styles/main.css'])
+    await page.click('.code-browser__file:has-text("main.css")')
+    await page.waitForFunction(() => document.querySelector('.code-browser__code')?.textContent === 'h1 { color: tomato; }\n')
+    await page.fill('.code-browser__search-input', 'introuvable')
+    assert.equal(await page.textContent('.code-browser__note'), 'Aucun fichier ne correspond.')
+    await page.fill('.code-browser__search-input', '')
+    // Le dossier du fichier ouvert par la recherche est déplié, pour qu'on voie où il est.
+    assert.ok((await names()).includes('main.css'))
+
+    // Une image n'est pas du texte : un message, jamais des caractères illisibles.
+    await page.click('.code-browser__file:has-text("logo.png")')
+    await page.waitForSelector('.code-browser__message')
+    assert.match(await page.textContent('.code-browser__message'), /n'est pas du texte/)
+
+    // Retour à l'aperçu : le site jouable revient.
+    await page.click('.code-preview__preview-tab')
+    await page.waitForSelector('.code-preview iframe.code-panel__preview')
+  })
+})
+
+test('vue « Code » : ce que Jaris vient de changer est relu et signalé, et la vue reste ouverte (étape 327)', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.click('.code-preview__code-tab')
+    await page.waitForSelector('.code-browser__code')
+    await page.click('.code-browser__file:has-text("README.md")')
+    await page.waitForFunction(() => document.querySelector('.code-browser__code')?.textContent.includes('mondee'))
+    assert.equal(await page.locator('.code-browser__badge').count(), 0)
+
+    // Un travail interrompu reste en attente (étape 303) : ses changements sont visibles dans la vue « Code ».
+    await page.evaluate(() => { window.__agentUnfinished = true })
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card')
+    // Le fichier ouvert est relu : il montre la version préparée par Jaris, sans changer de vue ni d'onglet.
+    await page.waitForFunction(() => /monde\n$/.test(document.querySelector('.code-browser__code')?.textContent ?? ''))
+    assert.equal(await page.getAttribute('.code-preview__code-tab', 'aria-pressed'), 'true')
+    assert.equal(await page.textContent('.code-browser__tab--active .code-browser__tab-name'), 'README.md')
+    const badge = await page.evaluate(() => {
+      const row = [...document.querySelectorAll('.code-browser__file')].find((item) => item.title === 'README.md')
+      const mark = row?.querySelector('.code-browser__badge')
+      return mark ? { text: mark.textContent, title: mark.getAttribute('title'), color: getComputedStyle(mark).color, rowColor: getComputedStyle(row).color } : null
+    })
+    assert.equal(badge?.text, 'M')
+    assert.match(badge?.title ?? '', /pas encore enregistré sur GitHub/)
+    // Habillé par le CSS de Jaris : sa propre couleur (ambre pour « modifié »), pas celle du nom du fichier.
+    assert.notEqual(badge?.color, badge?.rowColor)
+
+    // Tout annuler fait disparaître l'onglet « Changements », mais la vue « Code » reste ouverte.
+    await page.click('.changes-card__undo')
+    await page.waitForFunction(() => document.querySelectorAll('.code-preview__changes-tab').length === 0)
+    assert.equal(await page.getAttribute('.code-preview__code-tab', 'aria-pressed'), 'true')
+    await page.waitForFunction(() => document.querySelectorAll('.code-browser__badge').length === 0)
+  })
 })

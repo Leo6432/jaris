@@ -86,9 +86,11 @@ import {
   getGithubStatus,
   githubPreviewEntry,
   listGithubBranches,
+  listGithubFiles,
   listGithubRepos,
   logoutGithub,
   openGithubRepo,
+  readGithubFile,
   readGithubPreviewFile,
   runGithubAgent,
   setGithubDataMoving,
@@ -140,6 +142,7 @@ import {
   type ConversationList,
   type GeneratedApp,
   type GeneratedAppSummary,
+  type RepoFileContent,
   type RepoPreview,
   type JarisEmotion,
   type MemoryGraph,
@@ -1952,6 +1955,11 @@ app.whenReady().then(async () => {
     const entry = githubPreviewEntry(fullName)
     return { entry, url: entry ? createFilesPreview(entry, (path) => readGithubPreviewFile(fullName, path)) : null }
   })
+  // Étape 327 : la vue « Code » d'un dépôt — la liste de ses fichiers, puis le texte de celui qu'on ouvre.
+  ipcMain.handle(IPC_CHANNELS.githubListFiles, (_event, fullName: string): string[] => listGithubFiles(fullName))
+  ipcMain.handle(IPC_CHANNELS.githubReadFile, (_event, fullName: string, path: string): Promise<RepoFileContent> =>
+    readGithubFile(fullName, path)
+  )
   ipcMain.handle(IPC_CHANNELS.githubCommit, (_event, fullName: string, message: string) => commitGithubChanges(fullName, message))
 
   // Mode Image (étape 200, remplace le Montage) : le moteur de dessin de l'étape 173 a sa propre page. Seuls des

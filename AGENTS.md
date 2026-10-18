@@ -8859,3 +8859,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-codegen-progress.mjs` (réflexion jointe pendant la réflexion, jamais pendant l'écriture) et
   `test-code-panel-ui.mjs` (flèche, repliée par défaut, suit le texte, disparaît à l'écriture ; vérifié en coupant la
   transmission : le test échoue).
+
+- **Étape 327 : « Aperçu » et « Code » dans le mode Code (Léo, capture d'un autre outil à l'appui : « avoir apercu
+  et code dans code »).** Dans la barre de la carte, un œil (aperçu) et des chevrons `</>` (code) remplacent les
+  onglets écrits ; « Changements » reste à côté pour un dépôt. La vue « Code » (`CodeBrowser.tsx`, le MÊME composant
+  pour un dépôt et pour une application générée) montre à gauche la liste des fichiers (dossiers d'abord, repliés, avec
+  une recherche par chemin et « Tout replier »), à droite le fichier ouvert : un onglet par fichier, numéros de ligne
+  collés à gauche même en défilant vers la droite. En lecture seule : c'est Jaris qui modifie les fichiers. Les fichiers
+  ajoutés ou modifiés par Jaris et pas encore sur GitHub portent « A » ou « M », comme dans un éditeur. Une image ou un
+  fichier trop lourd affiche une phrase, jamais des caractères illisibles.
+  **Ce qu'on lit** : la version PRÉPARÉE par Jaris d'abord, comme l'aperçu (`listGithubFiles`/`readGithubFile`,
+  githubSession.ts, deux nouveaux canaux). La liste n'est demandée qu'une fois la vue « Code » ouverte, puis à chaque
+  nouvel état du dépôt ; le fichier ouvert est alors relu, sans changer de vue ni d'onglet. Tout annuler fait
+  disparaître l'onglet « Changements » mais laisse la vue « Code » ouverte (l'ancienne remise à « Aperçu » ne vaut
+  plus que pour « Changements »). La liste est rangée sous le dépôt ET la branche qu'elle décrit : celle d'un autre
+  dépôt n'est jamais montrée, même un instant, en passant de l'un à l'autre.
+  **Piège évité avant de tester** : un tableau de fichiers recréé à chaque rendu (`['index.html']` écrit dans le JSX)
+  aurait relancé l'effet qui range les onglets à chaque rendu, donc une boucle sans fin — `useMemo` côté CodePanel, et
+  l'effet rend le MÊME tableau quand rien n'a changé, pour que React s'arrête de lui-même. Les règles CSS de l'ancien
+  bloc de code (`.code-panel__code`) sont retirées, plus aucun usage (grep).
+  **Défaut vu sur capture, pas en relecture** : « Rechercher un fichier » était coupé dans le champ ; raccourci en
+  « Rechercher » dans les 24 langues, la liste autour (« Fichiers ») donne le contexte.
+  Régression : `test-github-session.mjs` (liste et texte suivent les changements préparés, dépôt non ouvert refusé),
+  `test-github-ui.mjs` (rien demandé avant d'ouvrir la vue ; ordre de l'arbre ; dossier déplié ; onglets ouverts et
+  fermés ; recherche ; image ; fichier relu après le travail de Jaris avec son « M » ; vue gardée après « Annuler ») et
+  `test-code-panel-ui.mjs` (œil et chevrons sans texte, `index.html` numéroté, numéros à gauche du code, retour à
+  l'aperçu). Vérifié en remettant l'ancienne remise à « Aperçu » et en retirant la relecture : chaque test échoue.
+  **Non vérifié en usage réel** : un très gros dépôt (milliers de fichiers) sur la machine de Léo.

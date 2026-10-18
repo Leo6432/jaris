@@ -858,8 +858,59 @@ test('une génération terminée finit comme ChatGPT : la durée, puis la carte 
     // Une application générée n'a rien à « annuler » sur GitHub : seul « Afficher le code ».
     assert.deepEqual(card, { title: '1 fichier modifié', file: 'index.html', buttons: ['Afficher le code'] })
     await page.click('.changes-card__show')
-    await page.waitForSelector('.code-panel__code')
-    assert.match(await page.textContent('.code-panel__code'), /Ma liste/)
+    await page.waitForSelector('.code-browser__code')
+    assert.match(await page.textContent('.code-browser__code'), /Ma liste/)
+  })
+})
+
+test('« aperçu et code dans code » : un œil et des chevrons, puis la liste des fichiers et le fichier numéroté (étape 327)', options, async () => {
+  // Léo, capture d'un autre outil à l'appui : « avoir apercu et code dans code ».
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const toggle = await page.evaluate(() =>
+      [...document.querySelectorAll('.code-panel__view-tab--icon')].map((button) => ({
+        label: button.getAttribute('aria-label'),
+        pressed: button.getAttribute('aria-pressed'),
+        icon: button.querySelector('svg') !== null,
+        text: button.textContent.trim()
+      }))
+    )
+    assert.deepEqual(toggle, [
+      { label: 'Aperçu', pressed: 'true', icon: true, text: '' },
+      { label: 'Code', pressed: 'false', icon: true, text: '' }
+    ])
+
+    await page.click('.code-preview__code-tab')
+    await page.waitForSelector('.code-browser__code')
+    assert.equal(await page.locator('.code-panel__preview').count(), 0)
+    assert.equal(await page.getAttribute('.code-preview__code-tab', 'aria-pressed'), 'true')
+    // Une application générée n'a qu'un fichier : il est dans la liste, ouvert dans un onglet, avec ses numéros de ligne.
+    assert.deepEqual(await page.$$eval('.code-browser__file .code-browser__name', (rows) => rows.map((row) => row.textContent)), ['index.html'])
+    assert.equal(await page.textContent('.code-browser__tab--active .code-browser__tab-name'), 'index.html')
+    assert.equal(await page.textContent('.code-browser__code'), APP_HTML)
+    assert.equal(await page.textContent('.code-browser__gutter'), '1')
+
+    // Les numéros restent à leur place, à gauche du code, dans la même carte, sans déborder de la fenêtre.
+    const layout = await page.evaluate(() => {
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+      const gutter = box('.code-browser__gutter')
+      const code = box('.code-browser__code')
+      return {
+        gutterLeftOfCode: gutter.right <= code.left + 1,
+        sameTop: Math.abs(gutter.top - code.top) < 1,
+        inCard: document.querySelector('.code-preview__card').contains(document.querySelector('.code-browser')),
+        mono: getComputedStyle(document.querySelector('.code-browser__code')).fontFamily.includes('Mono'),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+      }
+    })
+    assert.deepEqual(layout, { gutterLeftOfCode: true, sameTop: true, inCard: true, mono: true, overflow: 0 })
+
+    // Le pied « aperçu isolé » ne concerne que l'aperçu.
+    assert.equal(await page.locator('.code-preview__foot').count(), 0)
+    await page.click('.code-preview__preview-tab')
+    await page.waitForSelector('.code-panel__preview')
+    assert.equal(await page.locator('.code-browser').count(), 0)
   })
 })
 

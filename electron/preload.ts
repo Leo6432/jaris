@@ -10,6 +10,7 @@ import {
   type GithubStatus,
   type RepoAgentResult,
   type RepoCommitResult,
+  type RepoFileContent,
   type RepoPreview,
   type RepoView,
   type AppMode,
@@ -227,6 +228,9 @@ const api = {
   githubDiscardChanges: (fullName: string, path?: string): Promise<RepoView> =>
     invoke(IPC_CHANNELS.githubDiscardChanges, fullName, path),
   githubPreview: (fullName: string): Promise<RepoPreview> => invoke(IPC_CHANNELS.githubPreview, fullName),
+  githubListFiles: (fullName: string): Promise<string[]> => invoke(IPC_CHANNELS.githubListFiles, fullName),
+  githubReadFile: (fullName: string, path: string): Promise<RepoFileContent> =>
+    invoke(IPC_CHANNELS.githubReadFile, fullName, path),
   githubCommit: (fullName: string, message: string): Promise<RepoCommitResult> => invoke(IPC_CHANNELS.githubCommit, fullName, message),
   openGeneratedApp: (path?: string): Promise<void> => invoke(IPC_CHANNELS.openGeneratedApp, path),
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => invoke(IPC_CHANNELS.getGeneratedApps),

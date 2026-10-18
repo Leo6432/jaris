@@ -1,6 +1,6 @@
 import { config } from '../config'
 import { chosenThink } from '../../shared/effort'
-import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubLostConnection, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubLostConnection, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoFileContent, RepoView } from '../../shared/ipc'
 import { GenerationStoppedError, createModelStepRunner, describeImageForCode, isAbortError, readModelMaxContext, resolveCodeModel, withImageDescription } from './codeGenerator'
 import {
   GithubClient,
@@ -511,6 +511,17 @@ export async function readGithubPreviewFile(fullName: string, path: string): Pro
     session.previewFiles.set(file.sha, await withClient((github) => github.readBytes(session.snapshot, file)))
   }
   return session.previewFiles.get(file.sha) ?? undefined
+}
+
+/** Étape 327 : les fichiers du dépôt pour la vue « Code », changements préparés compris (un fichier supprimé n'y est plus). */
+export function listGithubFiles(fullName: string): string[] {
+  return listPaths(requireSession(fullName))
+}
+
+/** Étape 327 : le texte d'un fichier pour la vue « Code » — la version préparée par Jaris si elle existe. */
+export async function readGithubFile(fullName: string, path: string): Promise<RepoFileContent> {
+  const text = await currentText(requireSession(fullName), path)
+  return text === undefined ? { text: null, missing: true } : { text }
 }
 
 export function discardGithubChanges(fullName: string, path?: string): RepoView {

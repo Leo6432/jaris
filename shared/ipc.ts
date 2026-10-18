@@ -875,6 +875,17 @@ export interface RepoPreview {
   url: string | null
 }
 
+/**
+ * Étape 327 : un fichier du dépôt pour la vue « Code » (Léo : « avoir aperçu et code dans code »). La version
+ * PRÉPARÉE par Jaris d'abord, comme l'aperçu : on lit ce qui serait enregistré.
+ */
+export interface RepoFileContent {
+  /** Le texte, ou `null` : fichier binaire (image, police…) ou trop lourd pour être affiché. */
+  text: string | null
+  /** Le fichier n'existe plus (supprimé entre la liste et la lecture). */
+  missing?: boolean
+}
+
 /** Un dépôt ouvert dans le mode Code, avec ses changements en attente. */
 export interface RepoView {
   fullName: string
@@ -1064,6 +1075,8 @@ export const IPC_CHANNELS = {
   githubRunAgent: 'jaris:github-run-agent',
   githubDiscardChanges: 'jaris:github-discard-changes',
   githubPreview: 'jaris:github-preview',
+  githubListFiles: 'jaris:github-list-files',
+  githubReadFile: 'jaris:github-read-file',
   githubCommit: 'jaris:github-commit',
   /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
   openGeneratedApp: 'jaris:open-generated-app',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
@@ -12,6 +12,7 @@ import GithubPicker from './GithubPicker'
 import BranchPicker from './BranchPicker'
 import RepoChanges from './RepoChanges'
 import ChangesCard from './ChangesCard'
+import CodeBrowser, { type FileChangeKind } from './CodeBrowser'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
@@ -30,7 +31,7 @@ import {
   type ChatTurn,
   type RecentRepo
 } from '@/lib/codeConversations'
-import type { RepoPreview, RepoView } from '../../shared/ipc'
+import type { RepoFileContent, RepoPreview, RepoView } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { t, tn } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
@@ -265,6 +266,24 @@ function FolderIcon(): JSX.Element {
   )
 }
 
+/** Étape 327 : un œil pour l'aperçu, des chevrons pour le code — l'interrupteur des deux vues, comme l'autre outil de Léo. */
+function EyeIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function CodeIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4.5l-3 15" />
+    </svg>
+  )
+}
+
 /** Deux flèches vers les coins : agrandir. */
 function ExpandIcon(): JSX.Element {
   return (
@@ -312,8 +331,13 @@ export default function CodePanel(): JSX.Element {
    * « Enregistrer sur GitHub » passent dans un onglet à côté.
    */
   const [repoPreview, setRepoPreview] = useState<RepoPreview | null>(null)
-  const [repoTab, setRepoTab] = useState<'preview' | 'changes'>('preview')
+  /** Étape 327 : « code » — la liste des fichiers du dépôt et le fichier ouvert, à côté de l'aperçu. */
+  const [repoTab, setRepoTab] = useState<'preview' | 'code' | 'changes'>('preview')
   const repoPreviewRequest = useRef(0)
+  /** Étape 327 : les fichiers du dépôt pour la vue « Code », relus à chaque nouvel état, rangés sous le dépôt et la
+   *  branche qu'ils décrivent : la liste d'un autre dépôt n'est jamais montrée, même un instant. */
+  const [repoFilesState, setRepoFilesState] = useState<{ key: string; files: string[] } | null>(null)
+  const repoFilesRequest = useRef(0)
   /**
    * Étape 282 (Léo : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ») : la
    * conversation de l'élément ouvert — ses demandes, et ce que Jaris a fait. Gardée en mémoire seulement : elle
@@ -802,10 +826,59 @@ export default function CodePanel(): JSX.Element {
       })
   }, [repo])
 
-  // Plus rien à vérifier (tout annulé) : retour à l'aperçu, l'onglet « Changements » ayant disparu.
+  // Plus rien à vérifier (tout annulé) : retour à l'aperçu, l'onglet « Changements » ayant disparu. La vue « Code »,
+  // elle, reste : elle n'a pas besoin de changements pour exister.
   useEffect(() => {
-    if (!repoHasChanges) setRepoTab('preview')
+    if (!repoHasChanges) setRepoTab((tab) => (tab === 'changes' ? 'preview' : tab))
   }, [repoHasChanges])
+
+  // Étape 327 : la liste des fichiers n'est demandée qu'une fois la vue « Code » ouverte, puis à chaque nouvel état
+  // du dépôt (travail de Jaris, annulation, enregistrement). Une réponse en retard sur une plus récente est ignorée.
+  const repoCodeOpen = repo !== null && !appResult && repoTab === 'code'
+  const repoKey = repo ? `${repo.fullName}@${repo.branch}` : ''
+  const repoFiles = repoFilesState && repoFilesState.key === repoKey ? repoFilesState.files : null
+  useEffect(() => {
+    const request = ++repoFilesRequest.current
+    if (!repo || !repoCodeOpen) return
+    const key = `${repo.fullName}@${repo.branch}`
+    void window.jaris
+      .githubListFiles(repo.fullName)
+      .then((files) => {
+        if (repoFilesRequest.current === request) setRepoFilesState({ key, files })
+      })
+      .catch((err: unknown) => {
+        if (repoFilesRequest.current === request) {
+          setRepoFilesState({ key, files: [] })
+          setError(ipcErrorMessage(err))
+        }
+      })
+  }, [repo, repoCodeOpen])
+
+  /** Ce que Jaris a ajouté ou modifié et qui n'est pas encore sur GitHub : signalé dans la liste des fichiers. */
+  const repoFileChanges = useMemo(() => {
+    const kinds = new Map<string, FileChangeKind>()
+    for (const change of repo?.changes ?? []) if (change.kind !== 'deleted') kinds.set(change.path, change.kind)
+    return kinds
+  }, [repo])
+  /** Le fichier ouvert d'abord : celui que Jaris vient de changer, sinon la page du site, sinon le README. */
+  const repoFirstFile = useMemo(() => {
+    if (!repoFiles || repoFiles.length === 0) return null
+    const changed = repo?.changes.find((change) => change.kind !== 'deleted' && repoFiles.includes(change.path))
+    if (changed) return changed.path
+    if (repoPreview?.entry && repoFiles.includes(repoPreview.entry)) return repoPreview.entry
+    return repoFiles.find((path) => path.toLowerCase() === 'readme.md') ?? repoFiles[0]
+  }, [repoFiles, repo, repoPreview])
+  const readRepoFile = (path: string): Promise<RepoFileContent> =>
+    repo ? window.jaris.githubReadFile(repo.fullName, path) : Promise.resolve({ text: null, missing: true })
+  const appFiles = useMemo(() => ['index.html'], [])
+  const readAppFile = (): Promise<RepoFileContent> => Promise.resolve({ text: appResult?.html ?? null, missing: !appResult })
+
+  /** La vue affichée dans la carte : l'aperçu, le code, ou les changements d'un dépôt. */
+  const cardView = appResult ? view : repo ? repoTab : 'preview'
+  const selectCardView = (next: 'preview' | 'code'): void => {
+    if (appResult) setView(next)
+    else setRepoTab(next)
+  }
   /** Le nom affiché dans la barre de la carte : celui de la liste de gauche, pour qu'on reconnaisse l'élément ouvert. */
   const previewTitle = appResult
     ? (recentApps.find((recent) => recent.path === appResult.path)?.label ?? t('code.yourApp'))
@@ -1056,37 +1129,30 @@ export default function CodePanel(): JSX.Element {
                   </span>
                 )}
                 <div className="code-preview__tools">
-                  {!appResult && repoHasChanges && (
+                  {hasPreview && (
                     <div className="code-panel__view-tabs">
-                      <button
-                        className={`code-panel__view-tab${repoTab === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-                        onClick={() => setRepoTab('preview')}
-                      >
-                        {t('code.preview')}
-                      </button>
-                      <button
-                        className={`code-panel__view-tab code-preview__changes-tab${repoTab === 'changes' ? ' code-panel__view-tab--active' : ''}`}
-                        onClick={() => setRepoTab('changes')}
-                      >
-                        {t('code.tab.changes')}
-                        {repo && repo.changes.length > 0 && <span className="code-preview__count">{repo.changes.length}</span>}
-                      </button>
-                    </div>
-                  )}
-                  {appResult && (
-                    <div className="code-panel__view-tabs">
-                      <button
-                        className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-                        onClick={() => setView('preview')}
-                      >
-                        {t('code.preview')}
-                      </button>
-                      <button
-                        className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
-                        onClick={() => setView('code')}
-                      >
-                        {t('app.mode.code')}
-                      </button>
+                      {(['preview', 'code'] as const).map((choice) => (
+                        <button
+                          key={choice}
+                          className={`code-panel__view-tab code-panel__view-tab--icon code-preview__${choice}-tab${cardView === choice ? ' code-panel__view-tab--active' : ''}`}
+                          onClick={() => selectCardView(choice)}
+                          title={t(choice === 'preview' ? 'code.preview' : 'app.mode.code')}
+                          aria-label={t(choice === 'preview' ? 'code.preview' : 'app.mode.code')}
+                          aria-pressed={cardView === choice}
+                        >
+                          {choice === 'preview' ? <EyeIcon /> : <CodeIcon />}
+                        </button>
+                      ))}
+                      {!appResult && repoHasChanges && (
+                        <button
+                          className={`code-panel__view-tab code-preview__changes-tab${repoTab === 'changes' ? ' code-panel__view-tab--active' : ''}`}
+                          onClick={() => setRepoTab('changes')}
+                          aria-pressed={repoTab === 'changes'}
+                        >
+                          {t('code.tab.changes')}
+                          {repo && repo.changes.length > 0 && <span className="code-preview__count">{repo.changes.length}</span>}
+                        </button>
+                      )}
                     </div>
                   )}
                   {appResult && !generating && (
@@ -1114,16 +1180,35 @@ export default function CodePanel(): JSX.Element {
               </div>
 
               <div className="code-preview__body">
-                {appResult ? (
+                {cardView === 'code' && (appResult || repo) ? (
+                  appResult ? (
+                    <CodeBrowser
+                      key={`app:${appResult.path}`}
+                      files={appFiles}
+                      initialPath="index.html"
+                      load={readAppFile}
+                      version={appResult.html}
+                      emptyMessage=""
+                    />
+                  ) : (
+                    <CodeBrowser
+                      key={`repo:${repoKey}`}
+                      files={repoFiles}
+                      changes={repoFileChanges}
+                      initialPath={repoFirstFile}
+                      load={readRepoFile}
+                      version={repo}
+                      emptyMessage={t('code.browser.empty')}
+                    />
+                  )
+                ) : appResult ? (
                   view === 'preview' ? (
                     // sandbox sans allow-same-origin : le code généré tourne dans une origine opaque, sans accès à Jaris
                     // ni aux fichiers locaux (localStorage y est donc bloqué, d'où le try/catch imposé à la génération).
                     // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic ; l'envoi réel
                     // reste bloqué par la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
                     <iframe className="code-panel__preview" title={t('code.preview.appTitle')} sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
-                  ) : (
-                    <pre className="code-panel__code">{appResult.html}</pre>
-                  )
+                  ) : null
                 ) : repo && !showRepoChanges && repoPreview?.url ? (
                   // Le site du dépôt, avec les mêmes protections qu'une application générée (page isolée, sans accès à
                   // Jaris ni au disque). La clé recharge la page à chaque nouvel état des fichiers.
@@ -1170,7 +1255,7 @@ export default function CodePanel(): JSX.Element {
                   {t('code.preview.isolated')}
                 </p>
               )}
-              {!appResult && repo && !showRepoChanges && repoPreview?.url && repo.changes.length > 0 && (
+              {!appResult && repo && cardView === 'preview' && repoPreview?.url && repo.changes.length > 0 && (
                 <p className="code-preview__foot">
                   {t('code.preview.withChanges')}
                 </p>

@@ -10,6 +10,7 @@ import type {
   GithubStatus,
   RepoAgentResult,
   RepoCommitResult,
+  RepoFileContent,
   RepoPreview,
   RepoView,
   AppVersionStatus,
@@ -188,6 +189,8 @@ declare global {
       githubRunAgent: (fullName: string, request: string, imageBase64?: string) => Promise<RepoAgentResult>
       githubDiscardChanges: (fullName: string, path?: string) => Promise<RepoView>
       githubPreview: (fullName: string) => Promise<RepoPreview>
+      githubListFiles: (fullName: string) => Promise<string[]>
+      githubReadFile: (fullName: string, path: string) => Promise<RepoFileContent>
       githubCommit: (fullName: string, message: string) => Promise<RepoCommitResult>
       openGeneratedApp: (path?: string) => Promise<void>
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>

@@ -614,6 +614,31 @@ test('l’aperçu sert la version PRÉPARÉE par Jaris, sinon celle de GitHub (l
   assert.equal(await session.readGithubPreviewFile('leo/autre', 'index.html'), undefined)
 })
 
+// Étape 327 (Léo : « avoir apercu et code dans code ») : la vue « Code » lit les mêmes fichiers que l'aperçu — ceux qui
+// seraient enregistrés, changements préparés compris.
+test('vue « Code » : la liste et le texte des fichiers suivent les changements préparés par Jaris', async () => {
+  const { session } = setup({
+    token: 't',
+    files: { 'README.md': '# Projet\n', 'src/app.js': 'x\n', 'vieux.js': 'y\n' },
+    replies: [
+      reply(call('write_file', { path: 'index.html', content: '<h1>Snake</h1>' })),
+      reply(call('delete_file', { path: 'vieux.js' })),
+      reply(call('finish', { summary: 'Site créé.' }))
+    ]
+  })
+  await session.openGithubRepo('leo/projet')
+  assert.deepEqual(session.listGithubFiles('leo/projet'), ['README.md', 'src/app.js', 'vieux.js'])
+  assert.deepEqual(await session.readGithubFile('leo/projet', 'src/app.js'), { text: 'x\n' })
+  await session.runGithubAgent('leo/projet', 'Crée le site', { onStatus: () => {} })
+  // Le fichier créé y est, le fichier supprimé n'y est plus, et on lit la version préparée.
+  assert.deepEqual(session.listGithubFiles('leo/projet'), ['index.html', 'README.md', 'src/app.js'].sort())
+  assert.deepEqual(await session.readGithubFile('leo/projet', 'index.html'), { text: '<h1>Snake</h1>' })
+  assert.deepEqual(await session.readGithubFile('leo/projet', 'vieux.js'), { text: null, missing: true })
+  // Un dépôt qui n'est pas ouvert est refusé avec un message, jamais lu au hasard.
+  assert.throws(() => session.listGithubFiles('leo/autre'))
+  await assert.rejects(session.readGithubFile('leo/autre', 'README.md'))
+})
+
 // Étape 304 (Léo : « l'aperçu montre toujours l'ancien site, et pas le nouveau — je viens de confirmer avec Vercel ») :
 // l'aperçu avait déjà lu index.html AVANT le travail ; après l'enregistrement, ce cache le resservait sous le même nom.
 test('après un enregistrement sur GitHub, l’aperçu montre la NOUVELLE version, jamais celle lue avant', async () => {
