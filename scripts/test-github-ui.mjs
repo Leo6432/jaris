@@ -79,7 +79,11 @@ window.jaris = {
     window.__denyLogin = () => reject(new Error("Error invoking remote method 'jaris:github-finish-login': GithubError: Connexion annulée."))
   }),
   githubCancelLogin: () => window.__denyLogin?.(),
-  githubLogout: () => Promise.resolve(),
+  // Pendant un « Déplacer », le vrai main refuse la déconnexion (github.err.dataMoving) : __logoutRefused le simule.
+  githubLogout: () =>
+    window.__logoutRefused
+      ? Promise.reject(new Error("Error invoking remote method 'jaris:github-logout': GithubError: " + window.__logoutRefused))
+      : Promise.resolve(),
   githubListRepos: () => Promise.resolve([
     { fullName: 'leo/projet', private: true, description: 'Mon projet', defaultBranch: 'main', pushedAt: null },
     { fullName: 'leo/site', private: false, description: null, defaultBranch: 'main', pushedAt: null }
@@ -214,6 +218,35 @@ test('connexion : le code à coller s’affiche, puis la liste des dépôts du c
 })
 
 // Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : la raison réelle s'affiche au-dessus du bouton.
+test('« Se déconnecter » refusé (données en cours de déplacement) : le message s’affiche et le panneau reste connecté', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.repo-picker__trigger')
+    await page.click('.github-picker__primary')
+    await page.waitForSelector('.github-picker__code')
+    await page.evaluate(() => window.__approve())
+    await page.waitForSelector('.github-picker__account')
+    const refusal = "Jaris déplace tes données vers un autre dossier : la connexion à GitHub est en pause jusqu'à son redémarrage. Réessaie juste après."
+    await page.evaluate((message) => {
+      window.__logoutRefused = message
+    }, refusal)
+    await page.click('.github-picker__head .github-picker__secondary')
+    // Le refus est dit, sans le préfixe technique d'Electron (« Error invoking remote method… »).
+    await page.waitForSelector('.github-picker__error')
+    assert.equal(await page.textContent('.github-picker__error'), refusal)
+    // Toujours connecté : le compte et la liste des dépôts restent affichés, pas « Se connecter ».
+    assert.match(await page.textContent('.github-picker__account'), /@leo/)
+    assert.equal(await page.locator('.github-picker__primary').count(), 0)
+    assert.ok((await page.locator('.github-picker__repo').count()) > 0)
+    // Une fois le déplacement fini, la déconnexion passe et le message disparaît.
+    await page.evaluate(() => {
+      window.__logoutRefused = null
+    })
+    await page.click('.github-picker__head .github-picker__secondary')
+    await page.waitForSelector('.github-picker__primary')
+    assert.equal(await page.locator('.github-picker__error').count(), 0)
+  })
+})
+
 test('déconnecté par GitHub : la raison s’affiche, habillée, au-dessus de « Se connecter »', options, async () => {
   const connectedAt = new Date(2026, 9, 10, 9, 5).getTime()
   await withPage(

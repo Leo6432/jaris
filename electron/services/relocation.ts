@@ -32,7 +32,8 @@ import { formatBytes } from '../../shared/formatBytes'
  * Tout ou rien : tout ce qui peut échouer « pour une raison extérieure » (place disque, Docker qui contient
  * autre chose, installeur introuvable, copie interrompue) est vérifié ou fait AVANT la moindre modification ;
  * la bascule elle-même se défait entièrement si une étape échoue. Seul l'effacement final des anciens
- * dossiers peut laisser un résidu (fichier verrouillé) — les données, elles, sont déjà toutes à destination.
+ * dossiers peut laisser un résidu (fichier verrouillé) — les données, elles, sont déjà toutes à destination
+ * (un rattrapage de dernière minute qui échouerait laisse l'ancien dossier des données en place, jamais effacé).
  */
 
 const REPO = 'Leo6432/jaris'
@@ -167,10 +168,12 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
 
   try {
     await copyAll(plans, onProgress)
-    // Les petites données (conversations, réglages, jeton GitHub…) EN DERNIER, juste avant la bascule : la copie des
-    // modèles et de Python dure souvent des dizaines de minutes, pendant lesquelles Jaris reste ouvert. Copiées avant,
-    // tout ce qui y était écrit entre-temps (une conversation du Chat, un jeton GitHub renouvelé…) restait dans
-    // l'ancien dossier, effacé à la fin. Même essai, même annulation complète si cette copie échoue.
+    // Les petites données (conversations, réglages, jeton GitHub…) APRÈS les modèles et Python : leur copie dure
+    // souvent des dizaines de minutes, pendant lesquelles Jaris reste ouvert. Copiées avant, tout ce qui y était écrit
+    // entre-temps (une conversation du Chat, un jeton GitHub renouvelé…) restait dans l'ancien dossier, effacé à la
+    // fin. Même essai, même annulation complète si cette copie échoue. Ce qui change encore ensuite (bascule,
+    // désinstallation de Docker en attente d'une autorisation Windows, sa réinstallation) est rattrapé juste avant
+    // d'effacer l'ancien dossier (étape 5).
     await copyDataTo(newRoot, onProgress)
   } catch (err) {
     await discardEverything()
@@ -206,21 +209,13 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     throw new Error(t('move.saveRootFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
 
-  // --- 4. Effacement des anciens emplacements ---
+  // --- 4. Effacement des anciens emplacements (les données, elles, à l'étape 5) ---
   onProgress(t('move.cleaning'))
   const leftovers = await finalizeAll(done)
-  try {
-    await removeOldData(previousRoot, newRoot)
-  } catch {
-    leftovers.push(previousRoot ? join(previousRoot, DATA_SUBDIR) : t('move.oldConversations'))
-  }
   if (previousRoot) {
     for (const sub of [DOWNLOADS_SUBDIR, DOCKER_APP_SUBDIR, DOCKER_DATA_SUBDIR]) {
       await rm(join(previousRoot, sub), { recursive: true, force: true }).catch(() => {})
     }
-    // Le dossier interne de Chromium, encore ouvert, est effacé au prochain démarrage (storageRoot.ts), qui
-    // retire aussi l'ancienne racine une fois vide.
-    await removeIfEmpty(previousRoot)
   }
 
   // Docker ne peut pas être déplacé par jonction : l'installation officielle doit recréer son programme
@@ -234,6 +229,28 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
       dockerReinstalled = false
     }
   }
+
+  // --- 5. Dernières modifications, puis effacement des anciennes données ---
+  // Jaris est resté ouvert depuis la copie des données, et il écrit toujours dans l'ancien dossier jusqu'à sa
+  // relance : une conversation du Chat envoyée pendant que la fenêtre d'autorisation de Windows attendait (Docker),
+  // pendant l'effacement des anciens modèles ou pendant la réinstallation de Docker (plusieurs minutes). Ce qui a été
+  // ajouté ou modifié depuis est recopié juste avant d'effacer, sans rien d'autre entre les deux. La bascule est déjà
+  // faite : si ce rattrapage échoue, rien n'est effacé — l'ancien dossier reste, signalé, plutôt que de perdre ces
+  // dernières modifications.
+  const oldData = previousRoot ? join(previousRoot, DATA_SUBDIR) : t('move.oldConversations')
+  try {
+    await copyDataTo(newRoot, onProgress, { onlyChanged: true })
+    try {
+      await removeOldData(previousRoot, newRoot)
+    } catch {
+      leftovers.push(oldData)
+    }
+  } catch {
+    leftovers.push(oldData)
+  }
+  // Le dossier interne de Chromium, encore ouvert, est effacé au prochain démarrage (storageRoot.ts), qui
+  // retire aussi l'ancienne racine une fois vide.
+  if (previousRoot) await removeIfEmpty(previousRoot)
 
   return { programInstaller, programTarget, dockerUninstalled, dockerReinstalled, leftovers, dataDir: dataDest }
 }

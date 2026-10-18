@@ -385,6 +385,78 @@ const REPAIR_SYSTEM_PROMPT =
   "Réponds UNIQUEMENT avec le fichier complet réparé, dans un bloc ```html. Aucune explication."
 
 /**
+ * Les blocs d'un texte qui vont d'une ouverture à la PREMIÈRE fermeture qui suit, exactement comme
+ * `/ouverture[\s\S]*?fermeture/g` — en temps linéaire. Quand une ouverture n'a aucune fermeture derrière elle,
+ * l'expression relisait toute la fin du texte depuis CHACUNE des ouvertures suivantes : un temps au carré de la taille
+ * (`<!--` répété : 1 s pour 160 000 caractères, processus principal figé). Or aucune ouverture plus loin n'a de
+ * fermeture non plus : la recherche s'arrête là, mêmes blocs trouvés. `ouverture` et `fermeture` doivent avoir le drapeau `g`.
+ * `untilTagEnd` : le contenu ne commence qu'au premier `>` après l'ouverture (`<style …>`), comme `ouverture[^>]*>`.
+ */
+function findBlocks(
+  text: string,
+  open: RegExp,
+  close: RegExp,
+  untilTagEnd = false
+): { start: number; contentStart: number; contentEnd: number; end: number }[] {
+  const blocks: { start: number; contentStart: number; contentEnd: number; end: number }[] = []
+  open.lastIndex = 0
+  for (let found = open.exec(text); found; found = open.exec(text)) {
+    let contentStart = found.index + found[0].length
+    if (untilTagEnd) {
+      const tagEnd = text.indexOf('>', contentStart)
+      // Pas de `>` après cette ouverture : pas après les suivantes non plus.
+      if (tagEnd === -1) break
+      contentStart = tagEnd + 1
+    }
+    close.lastIndex = contentStart
+    const closing = close.exec(text)
+    if (!closing) break
+    const end = closing.index + closing[0].length
+    blocks.push({ start: found.index, contentStart, contentEnd: closing.index, end })
+    open.lastIndex = end
+  }
+  return blocks
+}
+
+/** `text.replace(/ouverture[\s\S]*?fermeture/g, ' ')`, en temps linéaire (voir findBlocks). */
+function removeBlocks(text: string, open: RegExp, close: RegExp): string {
+  let kept = ''
+  let copied = 0
+  for (const block of findBlocks(text, open, close)) {
+    kept += `${text.slice(copied, block.start)} `
+    copied = block.end
+  }
+  return kept + text.slice(copied)
+}
+
+/**
+ * Les règles `sélecteur { déclarations }` d'une feuille de style, exactement comme `/([^{}]+)\{([^}]*)\}/g`, en temps
+ * linéaire. L'expression relisait jusqu'à la prochaine accolade depuis chaque caractère d'un long passage sans règle
+ * complète (du texte sans `{`, ou une `{` jamais refermée) : 10 s pour une feuille de style de 160 000 caractères.
+ */
+function cssRules(css: string): [selector: string, declarations: string][] {
+  const rules: [string, string][] = []
+  const brace = /[{}]/g
+  let at = 0
+  for (;;) {
+    brace.lastIndex = at
+    const found = brace.exec(css)
+    if (!found) break
+    // `}`, ou `{` sans sélecteur avant elle : aucune règle ne commence ici ni avant cette accolade.
+    if (found[0] === '}' || found.index === at) {
+      at = found.index + 1
+      continue
+    }
+    const close = css.indexOf('}', found.index + 1)
+    // `{` jamais refermée : aucune règle ne peut plus se terminer.
+    if (close === -1) break
+    rules.push([css.slice(at, found.index), css.slice(found.index + 1, close)])
+    at = close + 1
+  }
+  return rules
+}
+
+/**
  * Vérification structurelle du fichier produit, avant tout affichage : un petit modèle local se trompe
  * régulièrement de façon *visible mais mécaniquement détectable* — typiquement en laissant le JavaScript
  * dans le <body> au lieu d'une balise <script>, où il s'affiche comme un pavé de texte au milieu de la
@@ -431,10 +503,11 @@ function structuralIssues(html: string): string[] {
   // Texte réellement affiché à l'écran : tout ce qui reste une fois le code (script/style), les
   // commentaires et les balises retirés. Y trouver plusieurs marqueurs de JavaScript signifie que du code
   // a été écrit hors d'une balise <script> et sera donc affiché tel quel au lieu de s'exécuter.
-  const withoutCode = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
+  const withoutCode = removeBlocks(
+    removeBlocks(removeBlocks(html, /<script/gi, /<\/script>/gi), /<style/gi, /<\/style>/gi),
+    /<!--/g,
+    /-->/g
+  )
   // Une balise retirée finit toujours par `>` : après le DERNIER `>`, rien ne peut l'être, le texte reste tel quel. Sans
   // cette coupure, chaque `<lettre` d'une fin jamais fermée relisait toute la fin de la page (la page piégée de
   // scriptSyntax.ts : 0,8 s pour 80 000 caractères, un temps qui grandit au carré de sa taille). Même texte obtenu.
@@ -464,10 +537,14 @@ function structuralIssues(html: string): string[] {
   // ce correctif avant de le considérer terminé plutôt qu'après. Vérifié sur toute règle dont le sélecteur
   // mentionne html/body (pas seulement une règle "body {" isolée : un fichier généré écrit parfois
   // "html, body { ... }" en un seul bloc).
-  const styleContent = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => match[1]).join(' ')
-  const htmlOrBodyDeclarations = [...styleContent.matchAll(/([^{}]+)\{([^}]*)\}/g)]
-    .filter(([, selector]) => /\b(?:html|body)\b/i.test(selector))
-    .map(([, , declarations]) => declarations)
+  // Lus sans expression à retour arrière (findBlocks, cssRules) : `<style` ou une accolade répétés sans fin coûtaient
+  // jusqu'à 10 s pour 160 000 caractères.
+  const styleContent = findBlocks(html, /<style/gi, /<\/style>/gi, true)
+    .map((block) => html.slice(block.contentStart, block.contentEnd))
+    .join(' ')
+  const htmlOrBodyDeclarations = cssRules(styleContent)
+    .filter(([selector]) => /\b(?:html|body)\b/i.test(selector))
+    .map(([, declarations]) => declarations)
     .join(' ')
   const hasFixedViewportHeight = /height\s*:\s*100(?:vh|%)/i.test(htmlOrBodyDeclarations)
   const hasHiddenOverflow = /overflow(?:-y)?\s*:\s*hidden/i.test(htmlOrBodyDeclarations)

@@ -287,21 +287,78 @@ function assertFast(label, run) {
   return result
 }
 
-test('la page piégée (`a<b` répété, jamais fermée) se lit en moins d’une seconde, à 8 000 caractères comme à 80 000', () => {
-  for (const size of [4_000, 8_000, 80_000]) {
+test('la page piégée (`a<b` répété, jamais fermée) se lit en moins d’une seconde, de 8 000 à 160 000 caractères', () => {
+  for (const size of [4_000, 8_000, 80_000, 160_000]) {
     for (const [unit, suffix] of [['a<b', ''], ['a<b"', ''], ["a<b'", ''], ['a<b', '>'], ['a<b"', '>'], ['<script a', '']]) {
       const html = trapPage(unit, size, suffix)
       const scripts = assertFast(`${JSON.stringify(unit)}…${suffix}, ${html.length} caractères`, () => syntax.findInlineScripts(html))
       assert.equal(scripts.length, 0)
     }
   }
-  // Un `>` existe bien en fin de page, mais un guillemet jamais fermé juste avant fait échouer chaque balise : sans la
-  // lecture d'un bloc du nom, le coût redevenait cubique. Il reste au carré de la taille (une balise jamais fermée est
-  // relue jusqu'à son échec) : quelques millisecondes à 8 000 caractères, 0,9 s à 80 000 — contre des heures avant.
-  for (const size of [4_000, 8_000]) {
-    const html = trapPage('a<b', size, ' ">')
-    assert.equal(assertFast(`a<b… ">, ${html.length} caractères`, () => syntax.findInlineScripts(html)).length, 0)
+})
+
+/**
+ * Relecture croisée, deuxième passe : un `>` existe bien en fin de page, mais un guillemet jamais refermé avant lui fait
+ * échouer chaque balise — et chaque `<lettre` relisait toute la suite jusqu'à ce guillemet. Un temps au carré de la
+ * taille : 2 s pour `<b "` répété sur 80 000 caractères, 0,6 s pour une simple apostrophe en fin de texte français. Une
+ * page générée peut faire 150 000 caractères. Désormais chaque guillemet n'est lu qu'une fois (TagEndReader).
+ */
+const filled = (prefix, unit, size, suffix) => prefix + unit.repeat(Math.ceil((size - prefix.length - suffix.length) / unit.length)) + suffix
+
+test('guillemet jamais refermé avant le dernier `>` : moins d’une seconde, jusqu’à 160 000 caractères', () => {
+  const pages = [
+    ['`a<b` puis ` ">`', (size) => filled('<p>', 'a<b', size, ' ">')],
+    ['une apostrophe en fin de texte', (size) => filled('<p>', 'si a <b ', size, "l'x</p>")],
+    ['`<script a` répété', (size) => filled('<p>', '<script a ', size, '">')],
+    ['`</textarea x` répété dans un textarea', (size) => filled('<textarea>', '</textarea x ', size, '">')],
+    ['`<b "` répété', (size) => filled('', '<b "', size, "'>")],
+    ["`<b '` répété", (size) => filled('', "<b '", size, '">')],
+    ['`<script "` répété', (size) => filled('', '<script "', size, "'>")],
+    ['`<svg "` répété dans un svg', (size) => filled('<svg>', '<svg "', size, "'>")],
+    // Un nom de balise sans fin (`<a<a<a…`) : chaque `<lettre` relisait tout le nom (1,3 s pour 80 000).
+    ['`<a` répété, nom sans fin', (size) => filled('<p>', '<a', size, ' ">')],
+    ['`<a"` répété, guillemets dans le nom', (size) => filled('<p>', '<a"', size, " '>")]
+  ]
+  for (const size of [4_000, 8_000, 80_000, 160_000]) {
+    for (const [label, build] of pages) {
+      const html = build(size)
+      assert.equal(assertFast(`${label}, ${html.length} caractères`, () => syntax.findInlineScripts(html)).length, 0, label)
+    }
   }
+  // Toujours la même lecture : un vrai script cassé, avant comme après ces balises, est trouvé.
+  const broken = '<script>function toggleAlarm(false) {}</script>'
+  for (const html of [broken + filled('<p>', '<b "', 160_000, "'>"), filled('<p>', 'si a <b ', 160_000, "l'x</p>") + broken]) {
+    const problems = assertFast(`${html.length} caractères`, () => syntax.findInlineScriptSyntaxErrors(html))
+    assert.deepEqual(problems.map((problem) => problem.message), ["Unexpected token 'false'"])
+  }
+})
+
+test('beaucoup de scripts ou d’imports : moins d’une seconde, et les numéros de ligne restent justes', () => {
+  // Chaque numéro de ligne se recomptait depuis le début du fichier : 1,6 s pour 160 000 caractères de petits
+  // <script>, 3,6 s pour un module de 160 000 caractères fait d'imports.
+  for (const size of [8_000, 160_000]) {
+    const page = filled('', '<script>\n</script>', size, '')
+    const scripts = assertFast(`${page.length} caractères de <script>`, () => syntax.findInlineScripts(page))
+    assert.equal(scripts.at(-1).startLine, scripts.length, 'un script par ligne')
+    const module = filled('', "import 'a'\n", size, '')
+    assert.equal(assertFast(`module de ${module.length} caractères`, () => syntax.checkJavaScriptSyntax(module, 'module')), null)
+  }
+  // Retours à la ligne Windows (\r\n), anciens Mac (\r) et Unix (\n) mélangés : mêmes numéros que le moteur.
+  const mixed = '<p>\r\n</p>\r<script>\nx(\n</script>\n\r\n<script>y(</script>'
+  assert.deepEqual(syntax.findInlineScripts(mixed).map((script) => script.startLine), [3, 7])
+  assert.deepEqual(syntax.findInlineScriptSyntaxErrors(mixed).map((problem) => problem.fileLine), [4, 7])
+  // Erreur sur la ligne d'un import réécrit : jamais signalée ; ligne d'après, toujours signalée au bon endroit.
+  assert.equal(syntax.checkJavaScriptSyntax("import 'a'\r\nimport 'b'\rfunction f(false) {}\n", 'module')?.line, 3)
+})
+
+test('balise mal formée dont le NOM contient un guillemet : même lecture que l’expression d’origine', () => {
+  // `<a"b '…` : le nom le plus long ne permet pas de fermer la balise (l'apostrophe ne se referme jamais) ; comme le
+  // retour arrière de l'expression d'origine, le nom s'arrête alors avant le guillemet, qui ouvre une valeur jusqu'au
+  // `"` suivant. Le `<script>` est donc DANS la balise — le navigateur ne l'exécute pas non plus (pour lui, `'<script`
+  // est un nom d'attribut et la balise finit au premier `>`). Le compiler serait un faux reproche.
+  assert.deepEqual(JSON.parse(JSON.stringify(syntax.findInlineScriptSyntaxErrors(`<a"b '<script>x(</script>">`))), [])
+  // Nom avec guillemet qui se ferme normalement : le script qui suit est bien vérifié.
+  assert.equal(syntax.findInlineScriptSyntaxErrors('<a"b c><script>x(</script>')[0]?.message, 'Unexpected end of input')
 })
 
 test('avec la page piégée, les vrais scripts sont toujours trouvés, avant comme après elle', () => {

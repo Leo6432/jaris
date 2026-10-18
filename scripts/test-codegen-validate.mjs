@@ -137,6 +137,44 @@ lancer?.(donnees)
   )
 })
 
+/**
+ * Relecture croisée, deuxième passe : les autres lectures du fichier gardaient un temps au carré de sa taille quand une
+ * ouverture n'a jamais de fermeture derrière elle — `<!--` répété : 1 s pour 160 000 caractères, `<style` répété : 2,2 s,
+ * une feuille de style sans règle complète : 10 s. Toutes les fenêtres restent figées pendant ce temps. Du plus petit au
+ * plus grand, pour échouer en quelques secondes si un défaut revenait.
+ */
+test('ouvertures jamais refermées (`<script`, `<!--`, `<style`, accolades) : moins d’une seconde, même très grandes', () => {
+  const filled = (prefix, unit, size, suffix) => prefix + unit.repeat(Math.ceil((size - prefix.length - suffix.length) / unit.length)) + suffix
+  const pages = [
+    // [description, page, nombre de défauts attendus : ni <html> ni <body>, plus les <script> non appariés]
+    // `<script<script…` n'est pas une balise <script> pour le comptage (`<script` doit être suivi d'un blanc ou de `>`).
+    ['`<script` répété', (size) => filled('', '<script', size, ''), 2],
+    ['`<!--` répété', (size) => filled('', '<!--', size, ''), 2],
+    ['`<style` répété', (size) => filled('', '<style', size, ''), 2],
+    ['`<style` répété puis `>`', (size) => filled('', '<style', size, '>'), 2],
+    ['feuille de style sans accolade ouvrante', (size) => filled('<style>', 'a ', size, '}</style>'), 2],
+    ['feuille de style à accolade jamais refermée', (size) => filled('<style>a{', 'b', size, '</style>'), 2],
+    ['`<script "` répété', (size) => filled('', '<script "', size, "'>"), 3],
+    ['`<b "` répété', (size) => filled('', '<b "', size, "'>"), 2]
+  ]
+  // 320 000 en plus de 160 000 : `<!--` répété restait juste sous la seconde à 160 000 sur une machine rapide.
+  for (const size of [4_000, 8_000, 160_000, 320_000]) {
+    for (const [label, build, expected] of pages) {
+      const html = build(size)
+      const start = performance.now()
+      const issues = validateGeneratedHtml(html)
+      const elapsed = performance.now() - start
+      assert.ok(elapsed < 1000, `${label}, ${html.length} caractères : ${Math.round(elapsed)} ms`)
+      assert.equal(issues.length, expected, `${label} : ${issues.join(' | ')}`)
+    }
+  }
+  // Toujours les mêmes défauts trouvés, à côté de ces ouvertures sans fin.
+  const fixedHeight = withStyle('body { height: 100vh; overflow: hidden; }') + filled('', '<!--', 160_000, '')
+  assert.ok(validateGeneratedHtml(fixedHeight).some((issue) => /overflow: hidden/.test(issue)))
+  const looseCode = `<html><body><p>document.getElementById('a').addEventListener('click', () => { go() })</p>${filled('', '<style', 160_000, '')}</body></html>`
+  assert.ok(validateGeneratedHtml(looseCode).some((issue) => /directement dans le <body>/.test(issue)), 'code hors <script> toujours vu')
+})
+
 test('la page piégée (`<p>` puis `a<b` répété, jamais fermée) est vérifiée en moins d’une seconde, même très grande', () => {
   // Relecture croisée : 49 s pour 8 000 caractères (scriptSyntax.ts), toutes les fenêtres figées pendant ce temps ; puis,
   // une fois ce défaut corrigé, encore 2,8 s pour 160 000 caractères dans le retrait des balises du texte visible. Du
