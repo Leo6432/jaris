@@ -206,6 +206,37 @@ export function writeMarker(userData: string, root: string, staleElectronDir?: s
 const PARTIAL_COPY_SUFFIX = '.jaris-copie'
 
 /**
+ * Délais entre deux essais quand Windows refuse un instant un renommage (antivirus ou indexeur qui ouvre le fichier
+ * qu'on vient d'écrire) : au plus ~350 ms d'attente, et seulement quand ça échoue. Mêmes valeurs que le store des
+ * conversations du mode Code (codeConversationsStore.ts), pour la même raison.
+ */
+const RENAME_RETRY_DELAYS_MS = [50, 100, 200]
+/** Les refus passagers d'un renommage sous Windows. */
+const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+/** Attente SYNCHRONE : ce module tourne au chargement, avant que l'application soit prête, sans boucle d'évènements. */
+const sleepSync = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+/**
+ * `renameSync` réessayé sur un refus passager. Sans ça, un seul refus d'un antivirus pendant la réunion des
+ * conversations du mode Code faisait abandonner toute la racine D pour la session (bootstrap) : Jaris démarrait sur
+ * C, comme si le disque était débranché. Toute autre erreur, ou un refus qui dure, remonte telle quelle.
+ */
+function renameWithRetriesSync(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(from, to)
+      return
+    } catch (err) {
+      if (!TRANSIENT_RENAME_CODES.has((err as NodeJS.ErrnoException).code ?? '') || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
+      sleepSync(RENAME_RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
+/**
  * Copie `source` vers `dest` (absent) sans JAMAIS laisser `dest` à moitié écrit : la copie se fait sous un nom
  * temporaire voisin, puis prend son vrai nom d'un seul coup (renommage dans le même dossier). Sur un échec en route
  * (fichier verrouillé, disque plein, coupure de courant), `dest` n'existe toujours pas : la tentative suivante repart
@@ -216,7 +247,7 @@ function copyWholeSync(source: string, dest: string): void {
   rmSync(partial, { recursive: true, force: true })
   try {
     cpSync(source, partial, { recursive: true })
-    renameSync(partial, dest)
+    renameWithRetriesSync(partial, dest)
   } catch (err) {
     try {
       rmSync(partial, { recursive: true, force: true })
@@ -303,7 +334,17 @@ function writeWholeFileSync(file: string, content: string): void {
   } finally {
     closeSync(fd)
   }
-  renameSync(partial, file)
+  try {
+    renameWithRetriesSync(partial, file)
+  } catch (err) {
+    // `file` est intact (le renommage n'a pas eu lieu) : on ne laisse pas la copie temporaire traîner à côté.
+    try {
+      rmSync(partial, { force: true })
+    } catch {
+      // réécrite au prochain essai (openSync en écriture)
+    }
+    throw err
+  }
 }
 
 /**

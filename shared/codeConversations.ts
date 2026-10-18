@@ -104,9 +104,14 @@ function turnId(turn: unknown): number | null {
 /**
  * Deux versions d'une même conversation réunies sans rien perdre ni rien doubler : `older` d'abord, puis ce que
  * `newer` ajoute après leur début commun. L'une qui contient déjà l'autre (copie identique, ou suite de la même
- * conversation) l'emporte telle quelle ; déjà réunies une fois (démarrage interrompu juste après la fusion), rien
- * n'est rajouté. Les messages ajoutés sont renumérotés après ceux de `older` : l'écran repère chaque message par son
- * numéro, deux messages au même numéro se mélangeraient. Pure.
+ * conversation) l'emporte telle quelle. Les messages ajoutés sont renumérotés après ceux de `older` : l'écran repère
+ * chaque message par son numéro, deux messages au même numéro se mélangeraient. Pure.
+ *
+ * Déjà réunies une fois, rien n'est recopié : la fin de `older` qui reprend le début de ce que `newer` ajoute (le plus
+ * long recouvrement) n'est pas rajoutée, seule la suite l'est. Ça couvre le démarrage interrompu juste après la fusion
+ * (`newer` entièrement déjà là), ET le cas où Jaris a ensuite tourné sur C (le démarrage abandonne la racine D sur
+ * une erreur) et que la conversation y a continué : D = [d1, r1, c1, c-r1], C = [c1, c-r1, c2, c-r2] donne
+ * [d1, r1, c1, c-r1, c2, c-r2], jamais c1 et c-r1 deux fois.
  */
 export function combineCodeTurns(older: unknown[], newer: unknown[]): unknown[] {
   const a = older.map(turnSignature)
@@ -116,8 +121,11 @@ export function combineCodeTurns(older: unknown[], newer: unknown[]): unknown[] 
   if (common === b.length) return older
   if (common === a.length) return newer
   const rest = b.slice(common)
-  if (rest.length <= a.length && rest.every((signature, index) => signature === a[a.length - rest.length + index])) return older
-  const added = newer.slice(common)
+  // Le recouvrement ne remonte jamais dans le début commun : il est déjà compté.
+  let overlap = Math.min(a.length - common, rest.length)
+  while (overlap > 0 && !rest.slice(0, overlap).every((signature, index) => signature === a[a.length - overlap + index])) overlap--
+  if (overlap === rest.length) return older
+  const added = newer.slice(common + overlap)
   const olderIds = older.map(turnId).filter((id): id is number => id !== null)
   const addedIds = added.map(turnId).filter((id): id is number => id !== null)
   const shift = olderIds.length > 0 && addedIds.length > 0 ? Math.max(0, Math.max(...olderIds) - Math.min(...addedIds) + 1) : 0

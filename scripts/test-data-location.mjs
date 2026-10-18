@@ -601,6 +601,87 @@ test('rebranché, démarrage coupé juste après la fusion (originaux pas encore
   rmSync(root, { recursive: true, force: true })
 })
 
+test('rebranché, fusion écrite puis démarrage abandonné, la conversation continue sur C : le suivant n’en double rien', () => {
+  // Un original de C refuse d'être effacé APRÈS la fusion (antivirus) : le démarrage lève, Jaris tourne sur C, où le
+  // code-conversations.json de C est toujours là, et Léo y continue la même conversation.
+  const realFs = nodeRequire('node:fs')
+  let lockedOriginal = null
+  const setup = setupMerge({
+    fs: {
+      ...realFs,
+      rmSync: (target, ...rest) => {
+        if (target === lockedOriginal) throw Object.assign(new Error('EPERM: fichier ouvert par un antivirus'), { code: 'EPERM' })
+        return realFs.rmSync(target, ...rest)
+      }
+    }
+  })
+  writeFileSync(join(setup.to, CODE_FILE), codeFile({ 'repo:leo/site': codeTurns('corrige le README') }))
+  writeFileSync(join(setup.from, CODE_FILE), codeFile({ 'repo:leo/site': codeTurns('ajoute une page contact') }))
+  writeFileSync(join(setup.from, 'reminders.json'), '[]')
+  lockedOriginal = join(setup.from, 'reminders.json')
+  assert.throws(() => setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to), /EPERM/)
+  assert.equal(JSON.parse(readFileSync(join(setup.to, CODE_FILE), 'utf8')).conversations['repo:leo/site'].length, 4, 'fusion écrite sur D')
+
+  // Session sur C : la conversation y continue, avec le store réel (numérotation de C).
+  const onC = new CodeConversationsStore(join(setup.from, CODE_FILE))
+  const continued = [...onC.load().conversations['repo:leo/site'], ...codeTurns('ajoute un formulaire', 3)]
+  onC.setConversation('repo:leo/site', continued)
+
+  // Démarrage suivant : l'antivirus a lâché le fichier.
+  lockedOriginal = null
+  setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to)
+  const site = new CodeConversationsStore(join(setup.to, CODE_FILE)).load().conversations['repo:leo/site']
+  assert.deepEqual(
+    site.map((turn) => turn.text),
+    ['corrige le README', 'Fait.', 'ajoute une page contact', 'Fait.', 'ajoute un formulaire', 'Fait.'],
+    'des messages déjà réunis ont été recopiés'
+  )
+  assert.equal(new Set(site.map((turn) => turn.id)).size, site.length, 'deux messages au même numéro')
+  assert.ok(!existsSync(join(setup.from, CODE_FILE)), 'l’original de C est effacé une fois réuni')
+  rmSync(setup.root, { recursive: true, force: true })
+})
+
+test('rebranché, un renommage refusé un instant (antivirus) est réessayé : la racine D n’est pas abandonnée pour si peu', () => {
+  const realFs = nodeRequire('node:fs')
+  const refusals = new Map()
+  const setup = setupMerge({
+    fs: {
+      ...realFs,
+      renameSync: (from, to) => {
+        const left = refusals.get(to) ?? 0
+        if (left !== 0) {
+          refusals.set(to, left - 1)
+          throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
+        }
+        return realFs.renameSync(from, to)
+      }
+    }
+  })
+  const fromD = codeFile({ 'repo:leo/site': codeTurns('corrige le README') })
+  writeFileSync(join(setup.to, CODE_FILE), fromD)
+  writeFileSync(join(setup.from, CODE_FILE), codeFile({ 'app:1760000000000-pong': codeTurns('un pong') }))
+  writeFileSync(join(setup.from, 'benchmark-nouveaux-modeles.md'), '# Session sur C')
+  // Réunion des conversations (fichier écrit puis renommé) ET copie d'un fichier absent de D (copie puis renommage) :
+  // chacune refusée deux fois avant de passer.
+  refusals.set(join(setup.to, CODE_FILE), 2)
+  refusals.set(join(setup.to, 'benchmark-nouveaux-modeles.md'), 2)
+  setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to)
+  const merged = new CodeConversationsStore(join(setup.to, CODE_FILE)).load().conversations
+  assert.deepEqual(Object.keys(merged).sort(), ['app:1760000000000-pong', 'repo:leo/site'])
+  assert.equal(readFileSync(join(setup.to, 'benchmark-nouveaux-modeles.md'), 'utf8'), '# Session sur C')
+  assert.deepEqual(readdirSync(setup.to).filter((name) => name.endsWith('.jaris-copie')), [], 'copie temporaire laissée')
+
+  // Un refus qui DURE remonte quand même (le démarrage suivant réessaiera) : rien n'est abîmé, rien ne traîne.
+  writeFileSync(join(setup.to, CODE_FILE), fromD)
+  writeFileSync(join(setup.from, CODE_FILE), codeFile({ 'app:1760000000000-pong': codeTurns('un pong') }))
+  refusals.set(join(setup.to, CODE_FILE), -1)
+  assert.throws(() => setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to), /EPERM/)
+  assert.equal(readFileSync(join(setup.to, CODE_FILE), 'utf8'), fromD)
+  assert.ok(existsSync(join(setup.from, CODE_FILE)), 'l’original de C a été effacé sans être réuni')
+  assert.deepEqual(readdirSync(setup.to).filter((name) => name.endsWith('.jaris-copie')), [], 'copie temporaire laissée')
+  rmSync(setup.root, { recursive: true, force: true })
+})
+
 test('rebranché, un code-conversations.json abîmé n’est jamais perdu : mis de côté, l’autre sert', () => {
   // Celui de D est abîmé : mis de côté (comme le store l'aurait fait), celui de C sert.
   let setup = setupMerge()

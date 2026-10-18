@@ -132,6 +132,25 @@ test('réunir deux versions d’une conversation : ni perte, ni doublon, même r
   assert.deepEqual(combined.map((turn) => turn.id), [1, 2, 3, 4])
   // Déjà réunies (le démarrage a écrit la fusion puis s'est arrêté avant d'effacer l'original) : rien n'est rajouté.
   assert.deepEqual(shared.combineCodeTurns(combined, c), combined)
+  // Déjà réunies, PUIS la conversation a continué sur C (le démarrage avait abandonné D sur une erreur) : seule la
+  // suite est ajoutée, jamais c1 et c-r1 une seconde fois.
+  const cContinued = [...c, ...turns('ajoute un formulaire', 3)]
+  const again = shared.combineCodeTurns(combined, cContinued)
+  assert.deepEqual(
+    again.map((turn) => turn.text),
+    ['corrige le README', 'Fait : corrige le README.', 'ajoute une page contact', 'Fait : ajoute une page contact.', 'ajoute un formulaire', 'Fait : ajoute un formulaire.'],
+    'des messages déjà réunis ont été recopiés'
+  )
+  assert.deepEqual(again.map((turn) => turn.id), [1, 2, 3, 4, 5, 6])
+  // Réunies encore une fois (démarrage rejoué) : rien ne bouge.
+  assert.deepEqual(shared.combineCodeTurns(again, cContinued), again)
+  // Seule la fin de D recouvre ce que C ajoute : un message de C identique à un message du MILIEU de D (même demande
+  // refaite) n'est pas pris pour un doublon.
+  const redo = [...turns('ajoute une page contact', 1), ...turns('corrige le README', 3)]
+  assert.deepEqual(
+    shared.combineCodeTurns(combined, redo).map((turn) => turn.text),
+    [...combined.map((turn) => turn.text), 'corrige le README', 'Fait : corrige le README.']
+  )
 
   const both = shared.combineCodeConversations(
     { repos: [{ fullName: 'leo/site', at: 5 }], conversations: { 'repo:leo/site': d, 'app:1750000000000-snake': turns('un snake') } },
