@@ -270,3 +270,60 @@ test('un `<script>` écrit dans la valeur d’un attribut n’est jamais pris po
   const [problem] = syntax.findInlineScriptSyntaxErrors('<input value="<script>"><p>a</p><script>function toggleAlarm(false) {}</script>')
   assert.equal(problem?.message, "Unexpected token 'false'")
 })
+
+/**
+ * Relecture croisée : `<p>` puis `a<b` répété, sans `>` derrière — 49 s pour 8 000 caractères, dans le processus
+ * principal (toutes les fenêtres figées), parce que le nom d'une balise et ses attributs se partageaient les mêmes
+ * caractères. Les pages sont mesurées de la plus petite à la plus grande : si le défaut revenait, le test échouerait
+ * dès la page de 4 000 caractères (quelques secondes) au lieu d'attendre des heures sur celle de 80 000.
+ */
+const trapPage = (unit, size, suffix = '') => '<p>' + unit.repeat(Math.ceil((size - 3 - suffix.length) / unit.length)) + suffix
+
+function assertFast(label, run) {
+  const start = performance.now()
+  const result = run()
+  const elapsed = performance.now() - start
+  assert.ok(elapsed < 1000, `${label} : ${Math.round(elapsed)} ms (au-delà d'une seconde, Jaris se fige)`)
+  return result
+}
+
+test('la page piégée (`a<b` répété, jamais fermée) se lit en moins d’une seconde, à 8 000 caractères comme à 80 000', () => {
+  for (const size of [4_000, 8_000, 80_000]) {
+    for (const [unit, suffix] of [['a<b', ''], ['a<b"', ''], ["a<b'", ''], ['a<b', '>'], ['a<b"', '>'], ['<script a', '']]) {
+      const html = trapPage(unit, size, suffix)
+      const scripts = assertFast(`${JSON.stringify(unit)}…${suffix}, ${html.length} caractères`, () => syntax.findInlineScripts(html))
+      assert.equal(scripts.length, 0)
+    }
+  }
+  // Un `>` existe bien en fin de page, mais un guillemet jamais fermé juste avant fait échouer chaque balise : sans la
+  // lecture d'un bloc du nom, le coût redevenait cubique. Il reste au carré de la taille (une balise jamais fermée est
+  // relue jusqu'à son échec) : quelques millisecondes à 8 000 caractères, 0,9 s à 80 000 — contre des heures avant.
+  for (const size of [4_000, 8_000]) {
+    const html = trapPage('a<b', size, ' ">')
+    assert.equal(assertFast(`a<b… ">, ${html.length} caractères`, () => syntax.findInlineScripts(html)).length, 0)
+  }
+})
+
+test('avec la page piégée, les vrais scripts sont toujours trouvés, avant comme après elle', () => {
+  const broken = '<script>function toggleAlarm(false) {}</script>'
+  for (const html of [broken + trapPage('a<b', 4_000), trapPage('a<b', 4_000, '>') + broken, broken + trapPage('a<b"', 4_000, '>')]) {
+    const problems = assertFast(`${html.length} caractères`, () => syntax.findInlineScriptSyntaxErrors(html))
+    assert.deepEqual(problems.map((problem) => problem.message), ["Unexpected token 'false'"])
+  }
+  // Un `</script` sans `>` après le dernier `>` de la page ferme quand même le script, comme dans le navigateur : la
+  // lecture s'arrête au dernier `>` pour les BALISES, jamais pour la fin d'un script.
+  assert.equal(syntax.findInlineScriptSyntaxErrors('<script>function toggleAlarm(false) {}</script ')[0]?.message, "Unexpected token 'false'")
+})
+
+test('module : de très longues suites d’espaces après `import a` ou `export default function` se lisent vite', () => {
+  // Deux `\s*` collés (`\s*,?\s*`), puis `\s*\*?` suivi d'un regard en avant `\s*\(` : un coût au carré du nombre
+  // d'espaces (2,3 s pour 80 000), pour un simple script de page.
+  for (const size of [8_000, 80_000]) {
+    for (const code of [`import a${' '.repeat(size)}x`, `import a${'\n'.repeat(size)}x`, `export default function${' '.repeat(size)}x`]) {
+      assertFast(`${JSON.stringify(code.slice(0, 24))}… (${code.length} caractères)`, () => syntax.checkJavaScriptSyntax(code, 'module'))
+    }
+  }
+  // Rien ne change dans ce qui est reconnu : imports et `export default function` restent neutralisés.
+  assert.equal(syntax.checkJavaScriptSyntax("import a , { b } from 'x'\nimport c ,\n  * as d from 'y'\nexport default function   * gen () { yield 1 }\n", 'module'), null)
+  assert.equal(syntax.checkJavaScriptSyntax('export default function\n(false) {}\n', 'module')?.message, "Unexpected token 'false'")
+})

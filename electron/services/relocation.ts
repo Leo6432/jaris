@@ -88,6 +88,8 @@ export interface RelocationResult {
   dockerUninstalled: boolean
   dockerReinstalled: boolean
   leftovers: string[]
+  /** Le nouveau dossier des données (conversations, réglages…), pour y écrire ce qui a été gardé en mémoire pendant le déplacement. */
+  dataDir: string
 }
 
 function formatGb(bytes: number): string {
@@ -164,8 +166,12 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   }
 
   try {
-    await copyDataTo(newRoot, onProgress)
     await copyAll(plans, onProgress)
+    // Les petites données (conversations, réglages, jeton GitHub…) EN DERNIER, juste avant la bascule : la copie des
+    // modèles et de Python dure souvent des dizaines de minutes, pendant lesquelles Jaris reste ouvert. Copiées avant,
+    // tout ce qui y était écrit entre-temps (une conversation du Chat, un jeton GitHub renouvelé…) restait dans
+    // l'ancien dossier, effacé à la fin. Même essai, même annulation complète si cette copie échoue.
+    await copyDataTo(newRoot, onProgress)
   } catch (err) {
     await discardEverything()
     throw new Error(t('move.copyFailed', { error: err instanceof Error ? err.message : String(err) }))
@@ -229,7 +235,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     }
   }
 
-  return { programInstaller, programTarget, dockerUninstalled, dockerReinstalled, leftovers }
+  return { programInstaller, programTarget, dockerUninstalled, dockerReinstalled, leftovers, dataDir: dataDest }
 }
 
 let reconciling: Promise<void> | null = null

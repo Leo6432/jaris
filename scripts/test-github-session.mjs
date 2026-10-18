@@ -493,6 +493,49 @@ test('connexion à une application à jetons qui expirent : le renouvellement es
   assert.equal(state.refreshToken, 'ghr_x')
 })
 
+// Relecture croisée : pendant un « Déplacer » (copie de dizaines de minutes), un jeton qui expirait était renouvelé et
+// écrit dans l'ANCIEN dossier, déjà copié. Chez GitHub un jeton de renouvellement ne sert qu'une fois : le nouveau
+// dossier gardait un jeton expiré avec un jeton de renouvellement consommé — déconnecté après la relance.
+test('pendant un déplacement des données : aucun renouvellement, rien d’effacé, et un message clair', async () => {
+  const { session, state } = expiring()
+  session.setGithubDataMoving(true)
+  await assert.rejects(session.listGithubRepos(), /déplace tes données/)
+  assert.equal(state.refreshCalls, 0, 'jeton de renouvellement consommé pendant le déplacement')
+  assert.deepEqual([state.token, state.refreshToken, state.cleared], ['gho_vieux', 'ghr_0', 0])
+  assert.equal(state.record.rejectedAt, null, 'refus noté dans l’ancien dossier pendant le déplacement')
+  // L'état de connexion se lit toujours, sans rien écrire ni effacer.
+  assert.equal((await session.getGithubStatus()).connected, true)
+  assert.equal(state.refreshCalls, 0)
+  // Connexion et déconnexion écriraient dans l'ancien dossier : refusées, clairement.
+  await assert.rejects(session.startGithubLogin(), /déplace tes données/)
+  await assert.rejects(session.logoutGithub(), /déplace tes données/)
+  assert.equal(state.token, 'gho_vieux')
+
+  // Déplacement annulé : tout reprend comme avant.
+  session.setGithubDataMoving(false)
+  assert.equal((await session.listGithubRepos()).length, 1)
+  assert.equal(state.refreshCalls, 1)
+  assert.equal(state.token, 'gho_1')
+})
+
+test('code validé sur github.com pendant qu’un déplacement commence : le jeton n’est pas écrit dans l’ancien dossier', async () => {
+  const { session, state } = setup()
+  await session.startGithubLogin()
+  session.setGithubDataMoving(true)
+  await assert.rejects(session.finishGithubLogin(), /déplace tes données/)
+  assert.deepEqual([state.token, state.record], [null, null])
+})
+
+test('pendant un déplacement : un jeton encore valable, même proche de l’échéance, sert tel quel', async () => {
+  const { session, state } = setup({ token: 'gho_a' })
+  // Expire dans 2 minutes : d'habitude renouvelé AVANT de s'en servir (marge de 5 minutes).
+  Object.assign(state, { refreshToken: 'ghr_a', expiresAt: Date.now() + 2 * 60_000 })
+  session.setGithubDataMoving(true)
+  assert.equal((await session.listGithubRepos()).length, 1)
+  assert.equal(state.refreshCalls, 0)
+  assert.equal(state.token, 'gho_a')
+})
+
 test('se déconnecter soi-même efface la trace ; jamais connecté : rien à expliquer', async () => {
   const { session, state } = setup()
   assert.equal((await session.getGithubStatus()).lost, null)

@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris werkt al aan deze repository.",
   "github.err.busyUndo": "Wacht tot het lopende werk klaar is (of stop het) voordat je iets ongedaan maakt.",
   "github.err.busySave": "Wacht tot het lopende werk klaar is voordat je opslaat.",
+  "github.err.dataMoving": "Jaris verplaatst je gegevens naar een andere map: de verbinding met GitHub is gepauzeerd tot Jaris opnieuw start. Probeer het daarna meteen opnieuw.",
   "github.defaultCommit": "Wijzigingen voorbereid met Jaris",
   "main.noPipeline": "Het luisteren is niet gestart op de pc: de transcriptie is niet beschikbaar.",
   "main.chooseModelFirst": "Kies eerst een model: bij Auto wisselt het per vraag.",

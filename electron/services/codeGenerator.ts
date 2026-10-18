@@ -431,11 +431,15 @@ function structuralIssues(html: string): string[] {
   // Texte réellement affiché à l'écran : tout ce qui reste une fois le code (script/style), les
   // commentaires et les balises retirés. Y trouver plusieurs marqueurs de JavaScript signifie que du code
   // a été écrit hors d'une balise <script> et sera donc affiché tel quel au lieu de s'exécuter.
-  const visibleText = html
+  const withoutCode = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
+  // Une balise retirée finit toujours par `>` : après le DERNIER `>`, rien ne peut l'être, le texte reste tel quel. Sans
+  // cette coupure, chaque `<lettre` d'une fin jamais fermée relisait toute la fin de la page (la page piégée de
+  // scriptSyntax.ts : 0,8 s pour 80 000 caractères, un temps qui grandit au carré de sa taille). Même texte obtenu.
+  const lastTagEnd = withoutCode.lastIndexOf('>') + 1
+  const visibleText = withoutCode.slice(0, lastTagEnd).replace(/<[^>]+>/g, ' ') + withoutCode.slice(lastTagEnd)
 
   const jsSignals = [
     /document\.(addEventListener|querySelector|getElementById)/,

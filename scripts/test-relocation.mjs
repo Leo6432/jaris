@@ -123,6 +123,59 @@ test('succès : conversations, modèles et programme Ollama partent TOUS, et Jar
   rmSync(t.base, { recursive: true, force: true })
 })
 
+/**
+ * Relecture croisée : les petites données étaient copiées AVANT la longue copie des modèles et de Python (souvent des
+ * dizaines de minutes, Jaris restant ouvert). Tout ce qui était écrit dans l'ancien dossier pendant ce temps — une
+ * conversation du mode Code, un jeton GitHub renouvelé — restait derrière, puis était effacé avec lui.
+ */
+const isDataCopyMessage = (message) => message.includes('conversations et réglages')
+
+test('les conversations et réglages sont copiés APRÈS les modèles : ce qui est écrit pendant la longue copie part aussi', async () => {
+  const t = setup()
+  const newRoot = join(t.base, 'D', 'Jaris')
+  const messages = []
+  let wroteDuringCopy = false
+  await t.relocation.relocateEverything(newRoot, {
+    onProgress: (message) => {
+      messages.push(message)
+      // Pendant la copie des modèles, Léo continue de se servir de Jaris.
+      if (!wroteDuringCopy && message.startsWith('Copie de') && !isDataCopyMessage(message)) {
+        wroteDuringCopy = true
+        writeFileSync(join(t.userData, 'code-conversations.json'), '{"version":1,"repos":[],"conversations":{}}')
+        writeFileSync(join(t.userData, 'profile.json'), '{"name":"Léo","voix":"M3"}')
+      }
+    },
+    startDocker: async () => {},
+    installDocker: async () => true
+  })
+  assert.ok(wroteDuringCopy, 'la copie des modèles n’a pas été vue')
+  const lastHeavyCopy = messages.findLastIndex((message) => message.startsWith('Copie de') && !isDataCopyMessage(message))
+  const firstDataCopy = messages.findIndex(isDataCopyMessage)
+  assert.ok(firstDataCopy > lastHeavyCopy, `ordre des copies : ${messages.join(' | ')}`)
+  assert.equal(readFileSync(join(newRoot, 'jaris-data', 'code-conversations.json'), 'utf8'), '{"version":1,"repos":[],"conversations":{}}')
+  assert.equal(readFileSync(join(newRoot, 'jaris-data', 'profile.json'), 'utf8'), '{"name":"Léo","voix":"M3"}')
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('la copie des conversations échoue APRÈS celle des modèles : tout ou rien, rien n’est laissé derrière', async () => {
+  const t = setup()
+  const newRoot = join(t.base, 'D', 'Jaris')
+  await assert.rejects(
+    t.relocation.relocateEverything(newRoot, {
+      onProgress: (message) => {
+        // Un fichier à la place du dossier des données : sa copie, la dernière, échoue.
+        const dest = join(newRoot, 'jaris-data')
+        if (message.startsWith('Copie de') && !isDataCopyMessage(message) && !existsSync(dest)) writeFileSync(dest, 'bloque')
+      },
+      startDocker: async () => {},
+      installDocker: async () => true
+    }),
+    /copie/i
+  )
+  assertUntouched(t, newRoot)
+  rmSync(t.base, { recursive: true, force: true })
+})
+
 test('Docker contient autre chose : refus AVANT d’avoir touché à quoi que ce soit', async () => {
   const t = setup({ dockerPlan: new Error("Docker Desktop contient d'autres projets") })
   const newRoot = join(t.base, 'D', 'Jaris')

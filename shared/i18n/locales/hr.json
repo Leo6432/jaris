@@ -980,6 +980,7 @@
   "github.err.busy": "Jaris već radi na ovom repozitoriju.",
   "github.err.busyUndo": "Prije odbacivanja pričekaj kraj trenutačnog posla (ili ga zaustavi).",
   "github.err.busySave": "Prije spremanja pričekaj kraj trenutačnog posla.",
+  "github.err.dataMoving": "Jaris premješta tvoje podatke u drugu mapu: veza s GitHubom pauzirana je dok se Jaris ponovno ne pokrene. Pokušaj ponovno odmah nakon toga.",
   "github.defaultCommit": "Promjene pripremljene s Jarisom",
   "main.noPipeline": "Slušanje nije pokrenuto na računalu: transkripcija nije dostupna.",
   "main.chooseModelFirst": "Najprije odaberi model: u načinu Auto mijenja se ovisno o pitanju.",

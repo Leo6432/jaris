@@ -959,6 +959,7 @@
   "github.err.busy": "O Jaris já está trabalhando neste repositório.",
   "github.err.busyUndo": "Espere o trabalho em andamento terminar (ou interrompa-o) antes de desfazer.",
   "github.err.busySave": "Espere o trabalho em andamento terminar antes de salvar.",
+  "github.err.dataMoving": "O Jaris está movendo seus dados para outra pasta: a conexão com o GitHub fica em pausa até ele reiniciar. Tente de novo logo depois.",
   "github.defaultCommit": "Alterações preparadas com o Jaris",
   "main.noPipeline": "A escuta não está ativa no PC: a transcrição não está disponível.",
   "main.chooseModelFirst": "Escolha um modelo primeiro: no Auto, ele muda conforme a pergunta.",

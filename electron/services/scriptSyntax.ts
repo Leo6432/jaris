@@ -165,9 +165,11 @@ function neutralizeModuleSyntax(code: string): { code: string; touchedLines: Set
 
   // import.meta n'existe que dans un module : un identifiant le remplace sans rien changer à la syntaxe autour.
   rewrite(/\bimport\s*\.\s*meta\b/g, (match) => keepLines(match, '_jarisImportMeta'))
-  // Déclarations d'import statiques (jamais l'import dynamique `import(…)`, valide partout).
+  // Déclarations d'import statiques (jamais l'import dynamique `import(…)`, valide partout). `\s*(?:,\s*)?` plutôt que
+  // `\s*,?\s*` (même texte reconnu) : deux `\s*` collés se partageaient les mêmes espaces, et une longue suite
+  // d'espaces derrière `import a` coûtait un temps qui grandit au carré de sa longueur (2,3 s pour 80 000).
   rewrite(
-    /^[ \t]*import(?=[\s{*'"])\s*(?:[\w$]+\s*,?\s*)?(?:\*\s*as\s+[\w$]+\s*|\{[^{}]*\}\s*)?(?:from\s*)?(["'])[^"'\r\n]*\1[ \t]*(?:(?:with|assert)\s*\{[^{}]*\}[ \t]*)?;?/gm,
+    /^[ \t]*import(?=[\s{*'"])\s*(?:[\w$]+\s*(?:,\s*)?)?(?:\*\s*as\s+[\w$]+\s*|\{[^{}]*\}\s*)?(?:from\s*)?(["'])[^"'\r\n]*\1[ \t]*(?:(?:with|assert)\s*\{[^{}]*\}[ \t]*)?;?/gm,
     (match) => keepLines(match, ';')
   )
   // export { a, b as c } [from '…'] ; export * [as ns] from '…'
@@ -177,8 +179,10 @@ function neutralizeModuleSyntax(code: string): { code: string; touchedLines: Set
   )
   // export default function () / function* () / async function () / class {…} / class extends : déclaration
   // anonyme, qui n'a de sens que dans un module — un nom la rend valide ailleurs, sans rien changer d'autre.
+  // Les espaces après `function` sont lus d'un bloc (`(?=(\s*))\3`, même capture qu'avant) : sinon, quand le
+  // regard en avant `\s*\(` échoue, le moteur réessayait chaque longueur — coût au carré du nombre d'espaces.
   rewrite(
-    /^([ \t]*)export\s+default\s+((?:async\s+)?function\b\s*\*?)(?=\s*\()/gm,
+    /^([ \t]*)export\s+default\s+((?:async\s+)?function\b(?=(\s*))\3\*?)(?=\s*\()/gm,
     (match, indent, keyword) => keepLines(match, `${indent}${(keyword ?? '').replace(/\s+/g, ' ')} _jarisDefault`),
     false
   )
@@ -238,6 +242,23 @@ const RAW_TEXT_ELEMENTS = new Set(['textarea', 'title', 'style', 'xmp', 'iframe'
 const NESTED_INERT_ELEMENTS = new Set(['template', 'svg', 'math'])
 const TAG_ATTRIBUTES = `(?:[^>"']|"[^"]*"|'[^']*')*`
 
+/**
+ * Une balise ordinaire lue d'un bloc : `<`, une lettre, le reste de son nom, puis ses attributs. Le nom est lu en
+ * entier, sans jamais être rendu caractère par caractère (lecture « atomique » : un regard en avant qui capture le
+ * nom, puis la même chose relue par `\N`, l'écriture JavaScript d'un groupe atomique). Avant, `[^\s/>]*` (le nom) et
+ * TAG_ATTRIBUTES acceptaient les mêmes caractères : sur une balise jamais fermée, le moteur essayait TOUTES les
+ * façons de partager le texte entre les deux, puis recommençait au `<` suivant — un coût cubique, mesuré à 49 s pour
+ * 8 000 caractères (`<p>` puis `a<b` répété), dans le processus principal, toutes les fenêtres figées.
+ *
+ * Même lecture qu'avant pour toute balise dont le nom ne contient pas de guillemet (toutes les vraies balises) : pour
+ * une telle balise, rendre une partie du nom aux attributs ne pouvait jamais faire réussir ce qui échouait (ni changer
+ * où la balise finit). Seule une balise mal formée dont le NOM contient un guillemet (`<a"b '…`) et dont la lecture
+ * entière échoue peut être lue autrement : l'ancien motif finissait par relire ce `"` comme le début d'une valeur, il
+ * reste maintenant dans le nom, comme dans le navigateur. Comparé à l'ancien motif sur 400 000 pages aléatoires
+ * (balises, guillemets, `<script>` dans des attributs, zones inertes) : mêmes scripts trouvés partout.
+ */
+const ordinaryTag = (group: number): string => `<[a-z](?=([^\\s/>]*))\\${group}${TAG_ATTRIBUTES}>`
+
 /** Fin d'une zone inerte ouverte juste avant `from` (index après sa balise fermante), `-1` si elle ne se ferme jamais. */
 function inertZoneEnd(html: string, name: string, from: number): number {
   if (RAW_TEXT_ELEMENTS.has(name)) {
@@ -269,12 +290,17 @@ export function findInlineScripts(html: string): InlineScript[] {
   // Toute autre balise est lue d'un bloc, attributs compris : un `<script>` écrit DANS la valeur d'un attribut
   // (`<input value="<script>…">`, `<iframe srcdoc="…">`) n'est jamais pris pour un vrai script.
   const scanner = new RegExp(
-    `<!--|<(script|${[...RAW_TEXT_ELEMENTS, ...NESTED_INERT_ELEMENTS].join('|')})(?=[\\s/>])(${TAG_ATTRIBUTES})>|<[a-z][^\\s/>]*${TAG_ATTRIBUTES}>`,
+    `<!--|<(script|${[...RAW_TEXT_ELEMENTS, ...NESTED_INERT_ELEMENTS].join('|')})(?=[\\s/>])(${TAG_ATTRIBUTES})>|${ordinaryTag(3)}`,
     'gi'
   )
+  // Toute balise lue ici finit par `>` : rien ne peut être trouvé après le DERNIER `>` de la page (un `<!--` placé
+  // après lui n'a pas de `-->` derrière, ce qui arrêtait déjà la lecture). Ne lire que jusque-là donne exactement
+  // les mêmes scripts, et évite de relire jusqu'à la fin de la page, pour rien, à chaque `<lettre` d'une fin jamais
+  // fermée (le cas de la page piégée).
+  const scannable = html.slice(0, html.lastIndexOf('>') + 1)
   const closer = /<\/script[\s/>]/gi
   let index = 0
-  for (let match = scanner.exec(html); match; match = scanner.exec(html)) {
+  for (let match = scanner.exec(scannable); match; match = scanner.exec(scannable)) {
     if (match[0] === '<!--') {
       const end = html.indexOf('-->', match.index + 4)
       if (end === -1) break
@@ -287,7 +313,8 @@ export function findInlineScripts(html: string): InlineScript[] {
     if (name !== 'script') {
       // <svg …/> ou <math …/> : élément vide, rien à sauter.
       if ((name === 'svg' || name === 'math') && match[0].endsWith('/>')) continue
-      const end = inertZoneEnd(html, name, contentStart)
+      // Sa balise fermante finit elle aussi par `>` : chercher dans `scannable` donne la même fin.
+      const end = inertZoneEnd(scannable, name, contentStart)
       // Jamais refermée : pour le navigateur, tout le reste de la page en fait partie.
       if (end === -1) break
       scanner.lastIndex = end

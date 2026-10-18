@@ -255,3 +255,44 @@ test('une conversation trop longue garde ses 200 derniers messages', (t) => {
   assert.equal(kept.length, shared.MAX_CODE_TURNS)
   assert.equal(kept[0].text, 'm50')
 })
+
+/**
+ * « Déplacer » : la copie dure souvent des dizaines de minutes et l'écran du mode Code reste utilisable. Écrit dans
+ * l'ancien dossier (copié, puis effacé à la fin), un changement fait pendant ce temps était perdu.
+ */
+test('pendant un déplacement, rien n’est écrit ; à la fin, tout part dans le NOUVEAU dossier', (t) => {
+  const oldFile = join(tempDir(t), 'code-conversations.json')
+  const newFile = join(tempDir(t), 'jaris-data', 'code-conversations.json')
+  const store = new (loadStore())(oldFile)
+  store.setConversation('app:C:/apps/snake', turns('avant le déplacement'))
+  const before = readFileSync(oldFile, 'utf-8')
+
+  store.holdWrites()
+  store.setConversation('repo:leo/projet', turns('pendant la copie'))
+  store.setRepos([{ fullName: 'leo/projet', at: 9 }])
+  assert.equal(readFileSync(oldFile, 'utf-8'), before, 'écrit dans l’ancien dossier pendant le déplacement')
+  // L'écran voit tout de suite son changement (rechargement de la fenêtre compris).
+  assert.equal(store.load().conversations['repo:leo/projet'][0].text, 'pendant la copie')
+  // La reprise de l'ancien stockage doit être SUR le disque avant que l'écran l'efface : refusée, retentée plus tard.
+  assert.throws(() => store.importLegacy({ repos: [], conversations: { 'repo:leo/site': turns('le site') } }), /déplacement/)
+
+  store.releaseWrites(newFile)
+  const moved = new (loadStore())(newFile).load()
+  assert.deepEqual(Object.keys(moved.conversations).sort(), ['app:C:/apps/snake', 'repo:leo/projet'])
+  assert.deepEqual(moved.repos, [{ fullName: 'leo/projet', at: 9 }])
+  assert.equal(readFileSync(oldFile, 'utf-8'), before, 'l’ancien fichier n’est jamais retouché')
+  // Après la bascule, les écritures vont dans le nouveau dossier.
+  store.setConversation('app:C:/apps/pong', turns('après'))
+  assert.equal(new (loadStore())(newFile).load().conversations['app:C:/apps/pong'][0].text, 'après')
+  assert.equal(readFileSync(oldFile, 'utf-8'), before)
+})
+
+test('déplacement annulé : ce qui a été fait pendant la copie repart dans le fichier d’origine', (t) => {
+  const file = join(tempDir(t), 'code-conversations.json')
+  const store = new (loadStore())(file)
+  store.holdWrites()
+  store.setConversation('repo:leo/projet', turns('pendant la copie'))
+  assert.equal(existsSync(file), false)
+  store.releaseWrites()
+  assert.equal(new (loadStore())(file).load().conversations['repo:leo/projet'][0].text, 'pendant la copie')
+})

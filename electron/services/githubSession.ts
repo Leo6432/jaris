@@ -67,6 +67,21 @@ const RENEW_MARGIN_MS = 5 * 60_000
 /** Un seul renouvellement à la fois : chaque jeton de renouvellement ne sert qu'une fois chez GitHub. */
 let renewing: Promise<GithubClient | null> | null = null
 
+/**
+ * « Déplacer » en cours (Options, main.ts) : rien de ce qui touche à la connexion GitHub n'est écrit sur le disque —
+ * ni jeton renouvelé, ni connexion, ni déconnexion. Le jeton vit dans le dossier des données, copié vers le nouveau
+ * dossier puis effacé : un jeton renouvelé pendant la copie partirait dans l'ancien dossier, et comme chez GitHub un
+ * jeton de renouvellement ne sert qu'une fois (étape 311), le nouveau dossier garderait un jeton expiré avec un jeton
+ * de renouvellement déjà consommé — déconnecté au redémarrage. Lire un dépôt reste possible avec le jeton actuel.
+ */
+let dataMoving = false
+
+export function setGithubDataMoving(moving: boolean): void {
+  dataMoving = moving
+}
+
+const dataMovingError = (): GithubError => new GithubError(0, t('github.err.dataMoving'))
+
 async function getClient(): Promise<GithubClient | null> {
   if (!client) {
     const stored = await readGithubToken()
@@ -76,7 +91,8 @@ async function getClient(): Promise<GithubClient | null> {
     client = new GithubClient(stored.token)
   }
   // Jeton qui expire bientôt : renouvelé avant de s'en servir. Un réseau coupé n'y change rien (on tente avec l'actuel).
-  if (tokenSet?.refreshToken && tokenSet.expiresAt !== null && Date.now() >= tokenSet.expiresAt - RENEW_MARGIN_MS) {
+  // Pendant un déplacement des données, jamais : on tente avec l'actuel, renouvelé après le redémarrage.
+  if (!dataMoving && tokenSet?.refreshToken && tokenSet.expiresAt !== null && Date.now() >= tokenSet.expiresAt - RENEW_MARGIN_MS) {
     try {
       return (await renewToken()) ?? client
     } catch {
@@ -154,6 +170,8 @@ async function withClient<T>(action: (github: GithubClient) => Promise<T>): Prom
     // Étape 311 : jeton déjà remplacé par une autre demande partie en même temps — on refait avec le nouveau, sans
     // relancer de renouvellement (le jeton de renouvellement ne sert qu'une fois).
     if (client && client !== github) return await action(client)
+    // Pendant un déplacement des données : ni renouvellement ni effacement (voir dataMoving), on le dit simplement.
+    if (dataMoving) throw dataMovingError()
     // Jeton expiré (application à jetons de 8 h) : renouvelé, puis la demande est refaite.
     const renewed = await renewToken()
     if (renewed) return await action(renewed)
@@ -179,7 +197,7 @@ export async function getGithubStatus(): Promise<GithubStatus> {
       // Même chemin que toute autre demande : un jeton expiré est renouvelé ici aussi, jamais effacé d'emblée.
       login = await withClient((client) => client.viewer())
       const record = await readConnectionRecord()
-      if (record && record.login !== login) await writeConnectionRecord({ ...record, login })
+      if (record && record.login !== login && !dataMoving) await writeConnectionRecord({ ...record, login })
     } catch (err) {
       if (isAuthError(err)) {
         // Jeton toujours là : GitHub n'a pas pu confirmer (réseau) — encore connecté, le nom viendra plus tard.
@@ -195,6 +213,7 @@ export async function getGithubStatus(): Promise<GithubStatus> {
 
 export async function startGithubLogin(): Promise<GithubDeviceCode> {
   if (!clientId()) throw new GithubError(0, t('github.err.notConfigured'))
+  if (dataMoving) throw dataMovingError()
   pendingLogin?.controller.abort()
   const device = await requestDeviceCode(clientId())
   pendingLogin = { device, controller: new AbortController() }
@@ -207,6 +226,8 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
   if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
     const next = await pollDeviceTokenSet(clientId(), pending.device, { signal: pending.controller.signal })
+    // Code validé pendant qu'un déplacement commençait : le jeton partirait dans l'ancien dossier, effacé à la fin.
+    if (dataMoving) throw dataMovingError()
     const previous = await readConnectionRecord()
     const encrypted = await saveGithubToken(next)
     await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
@@ -230,6 +251,8 @@ export function cancelGithubLogin(): void {
 }
 
 export async function logoutGithub(): Promise<void> {
+  // Effacé de l'ancien dossier seulement, le jeton déjà copié reviendrait connecté au redémarrage : refusé, clairement.
+  if (dataMoving) throw dataMovingError()
   cancelGithubLogin()
   await forget()
 }

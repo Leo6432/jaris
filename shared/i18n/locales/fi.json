@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris työskentelee jo tämän tietovaraston parissa.",
   "github.err.busyUndo": "Odota käynnissä olevan työn loppumista (tai pysäytä se) ennen perumista.",
   "github.err.busySave": "Odota käynnissä olevan työn loppumista ennen tallentamista.",
+  "github.err.dataMoving": "Jaris siirtää tietojasi toiseen kansioon: GitHub-yhteys on tauolla, kunnes Jaris käynnistyy uudelleen. Yritä uudelleen heti sen jälkeen.",
   "github.defaultCommit": "Jarisin kanssa valmistellut muutokset",
   "main.noPipeline": "Kuuntelu ei ole käynnissä tietokoneella: puheentunnistus ei ole käytettävissä.",
   "main.chooseModelFirst": "Valitse ensin malli: Auto-tilassa se vaihtuu kysymyksen mukaan.",

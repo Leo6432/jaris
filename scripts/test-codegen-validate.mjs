@@ -136,3 +136,18 @@ lancer?.(donnees)
     `faux positif : du JavaScript valide signalé comme cassé (${issues.join(' | ')})`
   )
 })
+
+test('la page piégée (`<p>` puis `a<b` répété, jamais fermée) est vérifiée en moins d’une seconde, même très grande', () => {
+  // Relecture croisée : 49 s pour 8 000 caractères (scriptSyntax.ts), toutes les fenêtres figées pendant ce temps ; puis,
+  // une fois ce défaut corrigé, encore 2,8 s pour 160 000 caractères dans le retrait des balises du texte visible. Du
+  // plus petit au plus grand : si un défaut revenait, l'échec arriverait en quelques secondes, pas en quelques heures.
+  for (const size of [4_000, 8_000, 160_000]) {
+    const html = '<p>' + 'a<b'.repeat(Math.ceil((size - 3) / 3))
+    const start = performance.now()
+    const issues = validateGeneratedHtml(html)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < 1000, `${html.length} caractères : ${Math.round(elapsed)} ms`)
+    // Toujours la même lecture : ni <html> ni <body>, et pas d'erreur de script inventée.
+    assert.equal(issues.length, 2, issues.join(' | '))
+  }
+})

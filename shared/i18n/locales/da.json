@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris arbejder allerede i dette repository.",
   "github.err.busyUndo": "Vent, til det igangværende arbejde er færdigt (eller stop det), før du fortryder.",
   "github.err.busySave": "Vent, til det igangværende arbejde er færdigt, før du gemmer.",
+  "github.err.dataMoving": "Jaris flytter dine data til en anden mappe: forbindelsen til GitHub er sat på pause, indtil Jaris genstarter. Prøv igen lige bagefter.",
   "github.defaultCommit": "Ændringer forberedt med Jaris",
   "main.noPipeline": "Lytningen kører ikke på pc'en: transskription er ikke tilgængelig.",
   "main.chooseModelFirst": "Vælg først en model: i Auto skifter den efter spørgsmålet.",

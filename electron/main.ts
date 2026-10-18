@@ -91,6 +91,7 @@ import {
   openGithubRepo,
   readGithubPreviewFile,
   runGithubAgent,
+  setGithubDataMoving,
   startGithubLogin
 } from './services/githubSession'
 import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
@@ -1529,6 +1530,15 @@ app.whenReady().then(async () => {
     await stopModelTest()
     await phoneAccess?.disable().catch(() => {})
 
+    // Pendant la copie (souvent des dizaines de minutes), le mode Code reste utilisable. Tout ce qu'il écrirait dans
+    // l'ancien dossier des données serait perdu — déjà copié ou sur le point de l'être, ce dossier est effacé à la fin :
+    // - le jeton GitHub n'est ni renouvelé ni effacé (un jeton de renouvellement ne sert qu'une fois chez GitHub :
+    //   renouvelé ici, le nouveau dossier garderait un jeton de renouvellement déjà consommé, donc déconnecté) ;
+    // - les conversations du mode Code restent en mémoire, puis partent dans le NOUVEAU dossier à la fin.
+    const codeStore = codeConversations()
+    setGithubDataMoving(true)
+    codeStore.holdWrites()
+
     // Étape 143, Léo : « ça doit tout déplacer, jamais une partie » — programme, conversations, Ollama,
     // Python, voix, Docker : tout ou rien (relocation.ts).
     try {
@@ -1539,6 +1549,13 @@ app.whenReady().then(async () => {
         },
         installDocker: (root) => installDockerDesktop(log, root)
       })
+      // Le jeton GitHub reste en pause jusqu'à la fermeture, qui suit : rien ne doit plus écrire dans l'ancien dossier.
+      try {
+        codeStore.releaseWrites(join(outcome.dataDir, CODE_CONVERSATIONS_FILE))
+      } catch (err) {
+        // Gardé en mémoire : réécrit à la fermeture (flush), dans le nouveau dossier.
+        console.error('[code] Conversations du mode Code non écrites dans le nouveau dossier :', err)
+      }
       quitting = true
       if (outcome.programInstaller) {
         // Le programme lui-même ne peut pas se déplacer pendant qu'il tourne : son installeur le réinstalle
@@ -1572,6 +1589,13 @@ app.whenReady().then(async () => {
         ...notes
       ].join(' ') }
     } catch (err) {
+      // Déplacement annulé, l'ancien dossier est intact : tout y repart.
+      setGithubDataMoving(false)
+      try {
+        codeStore.releaseWrites()
+      } catch (releaseErr) {
+        console.error('[code] Conversations du mode Code non écrites après l’annulation du déplacement :', releaseErr)
+      }
       log(t('main.move.restartingServices'))
       void ensureOllamaRunning(log)
       await startVoicePipeline()

@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris is already working on this repository.",
   "github.err.busyUndo": "Wait for the current work to finish (or stop it) before undoing.",
   "github.err.busySave": "Wait for the current work to finish before saving.",
+  "github.err.dataMoving": "Jaris is moving your data to another folder: the GitHub connection is paused until it restarts. Try again right after.",
   "github.defaultCommit": "Changes prepared with Jaris",
   "main.noPipeline": "Listening isn't running on the PC: transcription isn't available.",
   "main.chooseModelFirst": "Choose a model first: in Auto, it changes depending on the question.",

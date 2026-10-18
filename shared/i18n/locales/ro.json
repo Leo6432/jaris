@@ -980,6 +980,7 @@
   "github.err.busy": "Jaris lucrează deja pe acest depozit.",
   "github.err.busyUndo": "Așteaptă sfârșitul lucrului în curs (sau oprește-l) înainte de a anula.",
   "github.err.busySave": "Așteaptă sfârșitul lucrului în curs înainte de a salva.",
+  "github.err.dataMoving": "Jaris îți mută datele într-un alt dosar: conexiunea la GitHub este în pauză până la repornire. Încearcă din nou imediat după.",
   "github.defaultCommit": "Modificări pregătite cu Jaris",
   "main.noPipeline": "Ascultarea nu este pornită pe PC: transcrierea nu este disponibilă.",
   "main.chooseModelFirst": "Alege mai întâi un model: în Auto, se schimbă după întrebare.",

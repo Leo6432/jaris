@@ -980,6 +980,7 @@
   "github.err.busy": "Jaris jau strādā ar šo repozitoriju.",
   "github.err.busyUndo": "Pirms atsaukšanas pagaidi, kamēr pašreizējais darbs beidzas (vai aptur to).",
   "github.err.busySave": "Pirms saglabāšanas pagaidi, kamēr pašreizējais darbs beidzas.",
+  "github.err.dataMoving": "Jaris pārvieto tavus datus uz citu mapi: GitHub savienojums ir apturēts līdz tā restartēšanai. Mēģini vēlreiz uzreiz pēc tam.",
   "github.defaultCommit": "Ar Jaris sagatavotas izmaiņas",
   "main.noPipeline": "Klausīšanās datorā nav palaista: atšifrēšana nav pieejama.",
   "main.chooseModelFirst": "Vispirms izvēlies modeli: režīmā Automātiski tas mainās atkarībā no jautājuma.",
