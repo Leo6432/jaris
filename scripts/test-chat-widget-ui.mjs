@@ -204,6 +204,33 @@ test('une recherche affiche un état simple, jamais les journaux techniques des 
   })
 })
 
+// Étape 325 : même défaut que le Chat — « Jaris réfléchit… » restait figé pendant une longue attente du modèle. Vraies
+// attentes bornées (pas de page.clock, étape 126) : la réponse simulée arrive au bout de 16 s.
+test('pendant une longue attente, le widget donne aussi le temps écoulé, à côté de l’étape en cours (étape 325)', options, async () => {
+  const seconds = (text) => Number(text.match(/(\d+) s$/)?.[1])
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.evaluate(() => { window.__sendDelay = 16_000 })
+    await page.fill('.chat-widget__input', 'raconte-moi une longue histoire')
+    await page.click('.chat-widget__send')
+    await page.evaluate(() => window.__emitLog('Outil appelé : search_web({"query":"histoire"})'))
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('Recherche sur internet'))
+    await page.waitForTimeout(1_500)
+    assert.equal(await page.locator('.chat-widget__elapsed').count(), 0, 'une durée s’affiche dès les premières secondes')
+
+    await page.waitForSelector('.chat-widget__elapsed', { timeout: 15_000 })
+    const first = await page.textContent('.chat-widget__elapsed')
+    assert.match(await page.textContent('.chat-widget__reply'), /^Recherche sur internet… · 1[0-4] s$/)
+    await page.waitForTimeout(2_200)
+    const second = await page.textContent('.chat-widget__elapsed')
+    assert.ok(seconds(second) > seconds(first), `la durée n’avance pas : « ${first} » puis « ${second} »`)
+
+    // La réponse arrive : la durée disparaît avec l'attente.
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'), null, { timeout: 10_000 })
+    assert.equal(await page.locator('.chat-widget__elapsed').count(), 0, 'la durée reste après la réponse')
+  })
+})
+
 test('après un repli souris, le prochain + rouvre une simple barre sans ancienne réponse', options, async () => {
   await withWidget(async (page) => {
     await page.fill('.chat-widget__input', 'bonjour')
