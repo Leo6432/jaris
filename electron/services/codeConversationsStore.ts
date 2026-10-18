@@ -4,9 +4,11 @@ import {
   CODE_CONVERSATIONS_ASIDE_DIR,
   MAX_CODE_REPOS,
   MAX_CODE_TURNS,
+  codeConversationsAsideName,
   isCodeConversationKey,
   isCodeRepoEntry,
   mergeCodeConversations,
+  normalizeCodeConversationKey,
   sanitizeCodeConversations,
   type CodeConversationsData
 } from '../../shared/codeConversations'
@@ -40,8 +42,7 @@ export class CodeConversationsUnreadableError extends Error {
  * pouvoir suivre les données lors d'un « Déplacer » (voir CODE_CONVERSATIONS_ASIDE_DIR).
  */
 export function asidePathFor(filePath: string, now: number): string {
-  const stamp = new Date(now).toISOString().replace(/[:.]/g, '-')
-  return join(dirname(filePath), CODE_CONVERSATIONS_ASIDE_DIR, `code-conversations-${stamp}.json`)
+  return join(dirname(filePath), CODE_CONVERSATIONS_ASIDE_DIR, codeConversationsAsideName(now))
 }
 
 interface StoreOptions {
@@ -92,10 +93,14 @@ export class CodeConversationsStore {
     return { repos: [...data.repos], conversations: { ...data.conversations } }
   }
 
-  /** `null` ou une liste vide : la conversation est retirée du fichier. */
-  setConversation(key: unknown, turns: unknown): void {
-    if (!isCodeConversationKey(key)) throw new Error(`Clé de conversation du mode Code refusée : ${String(key).slice(0, 80)}`)
+  /**
+   * `null` ou une liste vide : la conversation est retirée du fichier. Une ancienne clé « app:<chemin absolu> » est
+   * rangée sous son nom de dossier, comme à la lecture (sinon elle redeviendrait orpheline au prochain « Déplacer »).
+   */
+  setConversation(rawKey: unknown, turns: unknown): void {
+    if (!isCodeConversationKey(rawKey)) throw new Error(`Clé de conversation du mode Code refusée : ${String(rawKey).slice(0, 80)}`)
     if (turns !== null && !Array.isArray(turns)) throw new Error('Conversation du mode Code refusée : ce n’est pas une liste de messages.')
+    const key = normalizeCodeConversationKey(rawKey)
     const data = this.current()
     const conversations = { ...data.conversations }
     if (turns === null || turns.length === 0) {

@@ -137,7 +137,8 @@ test('reprise dès l’ouverture de Jaris, sur l’Agent vocal, sans jamais ouvr
     await page.waitForFunction(() => window.__calls.imports.length === 1, null, { timeout: 5000 })
     const sent = await page.evaluate(() => window.__calls.imports[0])
     assert.deepEqual(sent.repos, [{ fullName: 'leo/projet', at: 5 }])
-    assert.deepEqual(Object.keys(sent.conversations), ['app:C:/apps/snake'])
+    // Sous le nom du dossier de l'application, plus jamais son chemin (qui change à chaque « Déplacer »).
+    assert.deepEqual(Object.keys(sent.conversations), ['app:snake'])
     // Écriture confirmée par le main : l'ancien stockage est retiré (et lui seul : les autres réglages restent).
     await page.waitForFunction(() => !localStorage.getItem('jaris.codeRepos'), null, { timeout: 5000 })
     assert.deepEqual(await legacyKeys(page), [])

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import * as realFs from 'node:fs'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { join } from 'node:path'
@@ -100,7 +100,8 @@ test('reprise : affichée tout de suite, écrite dans le fichier, PUIS retirée 
   assert.equal(screen.loadConversation('app:C:/apps/snake')[0].text, 'un snake')
   assert.equal(screen.loadConversation('repo:leo/projet')[0].text, 'corrige le README')
   assert.equal(main.calls.imports.length, 1, 'la reprise n’est pas envoyée au main')
-  assert.deepEqual(Object.keys(main.calls.imports[0].conversations).sort(), ['app:C:/apps/snake', 'repo:leo/projet'])
+  // L'ancienne clé « app:<chemin> » part au main sous le nom du dossier : c'est ce que l'écran demandera ensuite.
+  assert.deepEqual(Object.keys(main.calls.imports[0].conversations).sort(), ['app:snake', 'repo:leo/projet'])
 
   // Tant que le main n'a pas confirmé l'écriture, rien ne quitte le stockage de la fenêtre.
   await flush()
@@ -244,26 +245,46 @@ test('de bout en bout avec le vrai fichier : reprise, puis « Déplacer » (nouv
   })
 
   // Premier lancement de la nouvelle version, sur l'Agent vocal : l'ancien stockage passe dans le fichier dès
-  // l'ouverture (App.tsx), sans que l'écran Code ait été ouvert.
-  const oldFile = join(root, 'C', 'jaris-data', shared.CODE_CONVERSATIONS_FILE)
-  const storage = new FakeStorage(legacyEntries())
+  // l'ouverture (App.tsx), sans que l'écran Code ait été ouvert. L'ancienne version rangeait chaque application sous
+  // son chemin ABSOLU, tel que Windows l'écrit.
+  const oldData = join(root, 'C', 'Users', 'leo', 'AppData', 'Roaming', 'Jaris')
+  const newData = join(root, 'D', 'Jaris-data', 'jaris-data')
+  // Le dossier d'une application, tel que codeGenerator.ts le crée : <données>/generated-apps/<horodatage>-<nom>.
+  const appPath = (dataRoot, folder) => join(dataRoot, 'generated-apps', folder)
+  const oldFile = join(oldData, shared.CODE_CONVERSATIONS_FILE)
+  const storage = new FakeStorage({
+    ...legacyEntries(),
+    'jaris.codeConversation.app:C:\\Users\\leo\\AppData\\Roaming\\Jaris\\generated-apps\\1750000000000-tetris': JSON.stringify(turns('un tetris'))
+  })
   install({ storage, jaris: bridgeFor(new Store(oldFile)) })
   assert.equal(await loadScreen().migrateLegacyCodeConversations(), true)
   assert.deepEqual([...storage.map.keys()].sort(), ['jaris.codeChatWidth', 'jaris.codeConversation.app:C:/apps/abime'])
   const screen = loadScreen()
-  screen.saveConversation('app:C:/apps/pong', turns('un pong'))
+  // Une application créée avant le déplacement : CodePanel range sa conversation sous appConversationKey(result.path).
+  screen.saveConversation(screen.appConversationKey(appPath(oldData, '1760000000000-pong')), turns('un pong'))
   await flush()
 
-  // « Déplacer » : les données sont copiées ailleurs, le dossier de Chromium (et son localStorage) repart de zéro.
-  const newFile = join(root, 'D', 'jaris-data', shared.CODE_CONVERSATIONS_FILE)
+  // « Déplacer » : les données sont copiées ailleurs (le fichier ET les dossiers des applications, qui changent donc de
+  // chemin), le dossier de Chromium (et son localStorage) repart de zéro.
+  const newFile = join(newData, shared.CODE_CONVERSATIONS_FILE)
   mkdirSync(path.dirname(newFile), { recursive: true })
   copyFileSync(oldFile, newFile)
   install({ storage: new FakeStorage(), jaris: bridgeFor(new Store(newFile)) })
   const moved = loadScreen()
   assert.deepEqual(moved.loadRecentRepos(), [{ fullName: 'leo/projet', at: 5 }])
-  assert.equal(moved.loadConversation('app:C:/apps/snake')[0].text, 'un snake')
+  // L'écran demande chaque conversation par le NOUVEAU chemin de l'application (listGeneratedApps lit le nouveau
+  // dossier) : elle doit toujours s'afficher.
+  assert.equal(moved.loadConversation(moved.appConversationKey(appPath(newData, '1760000000000-pong')))[0]?.text, 'un pong')
+  assert.equal(moved.loadConversation(moved.appConversationKey(appPath(newData, 'snake')))[0]?.text, 'un snake')
+  assert.equal(moved.loadConversation(moved.appConversationKey(appPath(newData, '1750000000000-tetris')))[0]?.text, 'un tetris')
   assert.equal(moved.loadConversation('repo:leo/projet')[0].text, 'corrige le README')
-  assert.equal(moved.loadConversation('app:C:/apps/pong')[0].text, 'un pong')
+  // Plus aucun chemin dans le fichier : un prochain « Déplacer » ne peut plus rendre une conversation orpheline.
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(newFile, 'utf-8')).conversations).sort(), [
+    'app:1750000000000-tetris',
+    'app:1760000000000-pong',
+    'app:snake',
+    'repo:leo/projet'
+  ])
 
   // Retirer un dépôt de la liste l'efface aussi du fichier (et sa conversation avec).
   moved.forgetRepo('leo/projet')

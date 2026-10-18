@@ -2,13 +2,21 @@ import type { CodeActivity } from '../../shared/ipc'
 import {
   MAX_CODE_REPOS,
   MAX_CODE_TURNS,
+  addCodeConversation,
   isCodeConversationKey,
   isCodeRepoEntry,
   mergeCodeConversations,
+  normalizeCodeConversationKey,
   sanitizeCodeConversations,
   type CodeConversationsData,
   type CodeRepoEntry
 } from '../../shared/codeConversations'
+
+/**
+ * Clé d'une application : le NOM de son dossier, jamais son chemin (qui change à chaque « Déplacer ») — voir
+ * shared/codeConversations.ts. Les anciennes clés « app:<chemin> » sont converties à la lecture.
+ */
+export { appConversationKey } from '../../shared/codeConversations'
 
 /**
  * Les conversations du mode Code (étape 288, Léo : « c'est bizarre, je suis dans le chat en train de parler et je
@@ -62,7 +70,6 @@ export type RecentRepo = CodeRepoEntry
 const LEGACY_REPOS_KEY = 'jaris.codeRepos'
 const LEGACY_TURNS_PREFIX = 'jaris.codeConversation.'
 
-export const appConversationKey = (path: string): string => `app:${path}`
 export const repoConversationKey = (fullName: string): string => `repo:${fullName}`
 
 const isTurns = (value: unknown): value is ChatTurn[] =>
@@ -126,7 +133,8 @@ export function readLegacyCodeConversations(
     }
     const key = name.slice(LEGACY_TURNS_PREFIX.length)
     if (!isCodeConversationKey(key) || !isTurns(value) || value.length === 0) continue
-    data.conversations[key] = value.slice(-MAX_CODE_TURNS)
+    // Rangée sous la clé actuelle (nom du dossier) : l'écran ne demande plus jamais « app:<chemin> ».
+    addCodeConversation(data.conversations, key, value)
     keys.push(name)
   }
   return keys.length > 0 ? { data, keys } : null
@@ -224,11 +232,12 @@ function send(write: (bridge: Bridge) => Promise<void>): void {
   write(bridge).catch((err: unknown) => console.error('[code] Conversation du mode Code non enregistrée :', err))
 }
 
-export function loadConversation(key: string): ChatTurn[] {
-  return ensureStore().conversations.get(key) ?? []
+export function loadConversation(rawKey: string): ChatTurn[] {
+  return ensureStore().conversations.get(normalizeCodeConversationKey(rawKey)) ?? []
 }
 
-export function saveConversation(key: string, turns: ChatTurn[]): void {
+export function saveConversation(rawKey: string, turns: ChatTurn[]): void {
+  const key = normalizeCodeConversationKey(rawKey)
   const current = ensureStore()
   // Rouvrir une conversation la renvoie ici telle quelle (même liste) : rien de neuf, rien à réécrire sur le disque.
   if (current.conversations.get(key) === turns) return
@@ -238,7 +247,8 @@ export function saveConversation(key: string, turns: ChatTurn[]): void {
   send((bridge) => bridge.saveCodeConversation(key, kept.length > 0 ? kept : null))
 }
 
-export function forgetConversation(key: string): void {
+export function forgetConversation(rawKey: string): void {
+  const key = normalizeCodeConversationKey(rawKey)
   ensureStore().conversations.delete(key)
   send((bridge) => bridge.saveCodeConversation(key, null))
 }

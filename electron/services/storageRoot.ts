@@ -1,7 +1,28 @@
 import { app } from 'electron'
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
+import {
+  closeSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
-import { dirname, join, resolve, win32 } from 'path'
+import { dirname, extname, join, resolve, win32 } from 'path'
+import {
+  CODE_CONVERSATIONS_ASIDE_DIR,
+  CODE_CONVERSATIONS_FILE,
+  codeConversationsAsideName,
+  combineCodeConversations,
+  sanitizeCodeConversations,
+  type CodeConversationsData
+} from '../../shared/codeConversations'
 
 /**
  * Étape 143, Léo : « si il choisit dès l'installation le D tout est dans le D, ou si il veut changer dans les
@@ -40,6 +61,16 @@ export const AUTO_ROOT_NAME = 'Jaris-data'
 export const PHONE_TUNNEL_DIR = 'phone-tunnel'
 
 /**
+ * Les trois fichiers du bouton « Tester les modèles sans score » (benchmarkRunner.ts et scripts/benchmark-models.mjs) :
+ * résultats, traces brutes, registre des modèles téléchargés par le test.
+ */
+const MODEL_TEST_ENTRIES = [
+  'benchmark-nouveaux-modeles.md',
+  'benchmark-nouveaux-modeles.traces.jsonl',
+  'benchmark-nouveaux-modeles.md.telecharges.json'
+]
+
+/**
  * Ce que Jaris écrit lui-même dans son dossier de données, et RIEN d'autre : jamais les fichiers internes de
  * Chromium qui partageaient autrefois le même dossier. `generated-videos` reste après le retrait du Montage
  * (étape 200) : ce sont les vidéos de Léo, elles suivent ses données comme avant. `language.json` (étape 293) aussi :
@@ -74,12 +105,10 @@ export const OWNED_ENTRIES = [
   'github-connection.json',
   'github-token.bin',
   'phone-devices.json',
-  'code-conversations.json',
+  CODE_CONVERSATIONS_FILE,
   // Copies de secours d'un code-conversations.json illisible (codeConversationsStore.ts) : jamais perdues non plus.
-  'code-conversations-illisibles',
-  'benchmark-nouveaux-modeles.md',
-  'benchmark-nouveaux-modeles.traces.jsonl',
-  'benchmark-nouveaux-modeles.md.telecharges.json',
+  CODE_CONVERSATIONS_ASIDE_DIR,
+  ...MODEL_TEST_ENTRIES,
   'duel-pilotes',
   PHONE_TUNNEL_DIR
 ]
@@ -93,17 +122,22 @@ export const OWNED_ENTRIES = [
 export const LEGACY_ELECTRON_ENTRIES = ['github-token.bin', PHONE_TUNNEL_DIR]
 
 /**
- * Entrées liées à une CLÉ ou à une IDENTITÉ, jamais écrasées quand le démarrage rapatrie le dossier par défaut vers
- * une racine qui les a déjà (moveOwnedEntriesSync) :
+ * Entrées jamais écrasées quand le démarrage rapatrie le dossier par défaut vers une racine qui les a déjà
+ * (moveOwnedEntriesSync) :
  * - le jeton GitHub ne se relit qu'avec la clé de chiffrement du dossier de Chromium de SA racine
  *   (CHROMIUM_KEY_FILE), et sa trace (`github-connection.json`) décrit CE jeton ;
- * - l'identité Tailscale du téléphone et la liste des téléphones appairés à CETTE identité vont ensemble.
+ * - l'identité Tailscale du téléphone et la liste des téléphones appairés à CETTE identité vont ensemble ;
+ * - les fichiers du bouton de test des modèles (MODEL_TEST_ENTRIES) : des jours de traces de test, que les quelques
+ *   lignes d'une session lancée sur C ne doivent pas remplacer.
  * Cas réel : racine sur D, Jaris démarré disque débranché (il tourne alors sur C), reconnexion à GitHub sur C, disque
  * rebranché. Écrasé, le bon jeton de D était remplacé par celui de C, chiffré avec une autre clé : illisible, Léo
  * était déconnecté de GitHub (et l'identité du téléphone remplacée par une neuve). La copie restée sur C est effacée
  * avec le reste du dossier par défaut (cleanupStaleChromiumData).
+ *
+ * Les conversations du mode Code et leurs copies de secours ne sont pas dans cette liste : elles sont RÉUNIES avec
+ * celles déjà à destination (mergeCodeConversationsFileSync, copyKeepingBothSync), jamais l'un par-dessus l'autre.
  */
-export const KEPT_AT_DESTINATION_ENTRIES = [...LEGACY_ELECTRON_ENTRIES, 'github-connection.json', 'phone-devices.json']
+export const KEPT_AT_DESTINATION_ENTRIES = [...LEGACY_ELECTRON_ENTRIES, 'github-connection.json', 'phone-devices.json', ...MODEL_TEST_ENTRIES]
 
 /**
  * Fichier de Chromium qui garde la clé de chiffrement de Windows (`os_crypt.encrypted_key`, protégée par DPAPI) :
@@ -172,6 +206,37 @@ export function writeMarker(userData: string, root: string, staleElectronDir?: s
 const PARTIAL_COPY_SUFFIX = '.jaris-copie'
 
 /**
+ * Délais entre deux essais quand Windows refuse un instant un renommage (antivirus ou indexeur qui ouvre le fichier
+ * qu'on vient d'écrire) : au plus ~350 ms d'attente, et seulement quand ça échoue. Mêmes valeurs que le store des
+ * conversations du mode Code (codeConversationsStore.ts), pour la même raison.
+ */
+const RENAME_RETRY_DELAYS_MS = [50, 100, 200]
+/** Les refus passagers d'un renommage sous Windows. */
+const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+/** Attente SYNCHRONE : ce module tourne au chargement, avant que l'application soit prête, sans boucle d'évènements. */
+const sleepSync = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+/**
+ * `renameSync` réessayé sur un refus passager. Sans ça, un seul refus d'un antivirus pendant la réunion des
+ * conversations du mode Code faisait abandonner toute la racine D pour la session (bootstrap) : Jaris démarrait sur
+ * C, comme si le disque était débranché. Toute autre erreur, ou un refus qui dure, remonte telle quelle.
+ */
+function renameWithRetriesSync(from: string, to: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(from, to)
+      return
+    } catch (err) {
+      if (!TRANSIENT_RENAME_CODES.has((err as NodeJS.ErrnoException).code ?? '') || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
+      sleepSync(RENAME_RETRY_DELAYS_MS[attempt])
+    }
+  }
+}
+
+/**
  * Copie `source` vers `dest` (absent) sans JAMAIS laisser `dest` à moitié écrit : la copie se fait sous un nom
  * temporaire voisin, puis prend son vrai nom d'un seul coup (renommage dans le même dossier). Sur un échec en route
  * (fichier verrouillé, disque plein, coupure de courant), `dest` n'existe toujours pas : la tentative suivante repart
@@ -182,7 +247,7 @@ function copyWholeSync(source: string, dest: string): void {
   rmSync(partial, { recursive: true, force: true })
   try {
     cpSync(source, partial, { recursive: true })
-    renameSync(partial, dest)
+    renameWithRetriesSync(partial, dest)
   } catch (err) {
     try {
       rmSync(partial, { recursive: true, force: true })
@@ -194,12 +259,129 @@ function copyWholeSync(source: string, dest: string): void {
 }
 
 /**
+ * Mêmes octets. Une lecture refusée (fichier verrouillé un instant) fait lever : le démarrage suivant réessaie, plutôt
+ * que de prendre deux fichiers identiques pour différents et d'en garder une copie de trop.
+ */
+const sameContentSync = (a: string, b: string): boolean => readFileSync(a).equals(readFileSync(b))
+
+/**
+ * Range `file` dans le dossier `dir` sous le nom `name` sans jamais rien y écraser : un nom pris par un autre contenu
+ * passe à `base-2.ext`, `base-3.ext`… ; si l'un de ces fichiers a déjà exactement ce contenu (démarrage interrompu puis
+ * repris), rien n'est ajouté. `true` quand une copie a été écrite.
+ */
+function copyWithoutOverwriteSync(file: string, dir: string, name: string): boolean {
+  const extension = extname(name)
+  const base = name.slice(0, name.length - extension.length)
+  for (let index = 1; ; index++) {
+    const candidate = join(dir, index === 1 ? name : `${base}-${index}${extension}`)
+    if (!existsSync(candidate)) {
+      copyWholeSync(file, candidate)
+      return true
+    }
+    if (sameContentSync(file, candidate)) return false
+  }
+}
+
+/**
+ * Copie le contenu du dossier `source` dans `dest` sans jamais rien y écraser : un fichier identique déjà présent est
+ * sauté, un fichier différent du même nom est gardé à côté sous un nom libre (`…-2.json`). Pour les copies de secours
+ * datées (CODE_CONVERSATIONS_ASIDE_DIR) : la seule trace d'un fichier abîmé ne doit jamais en remplacer une autre.
+ * Chaque fichier arrive d'un seul tenant (copyWholeSync) : un démarrage interrompu reprend sans rien doubler.
+ */
+function copyKeepingBothSync(source: string, dest: string): void {
+  mkdirSync(dest, { recursive: true })
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const from = join(source, entry.name)
+    if (entry.isDirectory()) copyKeepingBothSync(from, join(dest, entry.name))
+    else copyWithoutOverwriteSync(from, dest, entry.name)
+  }
+}
+
+/**
+ * Garde une copie de `file` parmi les copies de secours datées (CODE_CONVERSATIONS_ASIDE_DIR) du dossier `dataDir` —
+ * sauf si une copie identique y est déjà (démarrage interrompu puis repris : rien n'est doublé).
+ */
+function keepAsideSync(file: string, dataDir: string): void {
+  const dir = join(dataDir, CODE_CONVERSATIONS_ASIDE_DIR)
+  mkdirSync(dir, { recursive: true })
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isFile() && sameContentSync(file, join(dir, entry.name))) return
+  }
+  copyWithoutOverwriteSync(file, dir, codeConversationsAsideName(Date.now()))
+}
+
+/**
+ * Le contenu d'un `code-conversations.json`, ou `null` s'il est abîmé (pas du JSON, ou pas une liste de conversations).
+ * Un fichier qui ne peut pas être LU (verrouillé par un antivirus…) fait lever : rien n'est touché, et le démarrage
+ * suivant réessaie — un fichier n'est jamais mis de côté pour un simple refus passager.
+ */
+function readCodeConversationsSync(file: string): CodeConversationsData | null {
+  const raw = readFileSync(file, 'utf-8')
+  try {
+    return sanitizeCodeConversations(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+/** Écrit `file` d'un seul tenant : contenu forcé sur le disque sous un nom voisin, puis remplacement d'un seul geste. */
+function writeWholeFileSync(file: string, content: string): void {
+  const partial = `${file}${PARTIAL_COPY_SUFFIX}`
+  const fd = openSync(partial, 'w')
+  try {
+    writeFileSync(fd, content, 'utf-8')
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  try {
+    renameWithRetriesSync(partial, file)
+  } catch (err) {
+    // `file` est intact (le renommage n'a pas eu lieu) : on ne laisse pas la copie temporaire traîner à côté.
+    try {
+      rmSync(partial, { force: true })
+    } catch {
+      // réécrite au prochain essai (openSync en écriture)
+    }
+    throw err
+  }
+}
+
+/**
+ * `code-conversations.json` déjà présent à destination : les deux sont RÉUNIS (combineCodeConversations), jamais l'un
+ * par-dessus l'autre. Cas réel : racine sur D, Jaris démarré disque débranché (il tourne alors sur C), une session du
+ * mode Code y crée son propre fichier, disque rebranché : recopié avec `force`, le fichier de C remplaçait celui de D,
+ * et tout l'historique du mode Code était perdu. Celui de destination passe d'abord : il est d'avant la session sur C.
+ *
+ * Un fichier abîmé n'est jamais écrasé ni jeté : il rejoint les copies de secours datées (CODE_CONVERSATIONS_ASIDE_DIR),
+ * là où le store l'aurait mis lui-même au premier accès, et l'autre fichier sert. Chaque étape peut être rejouée par
+ * un démarrage interrompu en route sans rien perdre ni doubler.
+ */
+function mergeCodeConversationsFileSync(source: string, dest: string): void {
+  const older = readCodeConversationsSync(dest)
+  const newer = readCodeConversationsSync(source)
+  if (older && newer) {
+    writeWholeFileSync(dest, JSON.stringify({ version: 1, ...combineCodeConversations(older, newer) }))
+  } else if (newer) {
+    // Celui de destination est abîmé : gardé de côté, puis remplacé (d'un seul tenant) par celui de C.
+    keepAsideSync(dest, dirname(dest))
+    rmSync(dest, { force: true })
+    copyWholeSync(source, dest)
+  } else {
+    // Celui de C est abîmé (ou les deux) : gardé de côté, celui de destination reste tel quel.
+    keepAsideSync(source, dirname(dest))
+  }
+}
+
+/**
  * Copie les données de Jaris de `from` vers `to` puis efface les originaux — dans CET ordre, et chaque
  * original n'est effacé qu'une fois TOUTES les copies réussies : une erreur en route laisse les originaux
  * intacts (l'exception remonte). Une source absente est simplement sautée (installation neuve).
  *
  * Une entrée de KEPT_AT_DESTINATION_ENTRIES déjà présente dans `to` n'est jamais écrasée : l'original est laissé
  * (effacé ensuite avec le reste du dossier par défaut), et elle n'est copiée, d'un seul tenant, que si `to` ne l'a pas.
+ * Les conversations du mode Code et leurs copies de secours déjà présentes dans `to` sont réunies avec celles de
+ * `from`, sans rien perdre ni d'un côté ni de l'autre.
  */
 export function moveOwnedEntriesSync(from: string, to: string): void {
   if (from === to) return
@@ -212,6 +394,10 @@ export function moveOwnedEntriesSync(from: string, to: string): void {
     if (KEPT_AT_DESTINATION_ENTRIES.includes(entry)) {
       if (existsSync(dest)) continue
       copyWholeSync(source, dest)
+    } else if (entry === CODE_CONVERSATIONS_FILE && existsSync(dest)) {
+      mergeCodeConversationsFileSync(source, dest)
+    } else if (entry === CODE_CONVERSATIONS_ASIDE_DIR && existsSync(dest)) {
+      copyKeepingBothSync(source, dest)
     } else {
       cpSync(source, dest, { recursive: true, force: true })
     }
