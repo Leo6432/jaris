@@ -4,7 +4,7 @@ import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
 import ModelPullBar from './ModelPullBar'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
-import { t, tn } from '@/lib/i18n'
+import { formatDecimal, t, tn } from '@/lib/i18n'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -101,7 +101,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
           <>
             <p>
               {t('setup.gpu', { gpu: result.gpuName ?? t('setup.gpu.none') })}
-              {result.vramGb !== null ? ` (${t('picks.vram', { gb: result.vramGb })})` : ''}
+              {result.vramGb !== null ? ` (${t('picks.vram', { gb: formatDecimal(result.vramGb) })})` : ''}
             </p>
             <ul className="capacity-scan__models">
               <li>{t('common.labelValue', { label: t('role.flash'), value: formatModelName(result.models.flash) })}</li>

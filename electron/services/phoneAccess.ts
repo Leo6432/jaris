@@ -1,6 +1,6 @@
 import type { ConverseRestrictions } from './assistant'
 import { t, type MessageKey } from '../../shared/i18n'
-import { imageStepFromLog } from '../../shared/imageGallery'
+import { engineStepFromLine, engineStepLine } from '../../shared/imageGallery'
 
 /**
  * Ce que Jaris peut faire quand le message vient du téléphone (étape 214). Choix de Léo : « tout sauf le
@@ -59,11 +59,12 @@ const TOOL_STATUS: Record<string, MessageKey> = {
 export function phoneStatusFromLog(line: string): string | null {
   const tool = line.match(/^Outil appelé : ([a-z_]+)\(/)
   if (tool) return t(TOOL_STATUS[tool[1]] ?? 'phone.status.working')
-  // Étape 293 : « Dessin : 2/4 » (le mot suit la langue, voir imageGenerator) ; l'ancienne forme reste reconnue.
-  const step = imageStepFromLog(line)
-  if (step && (line.startsWith(`${t('engine.step.image')} :`) || /^Dessin : étape/.test(line))) {
-    return t('common.labelValue', { label: t('engine.step.image'), value: `${step.step}/${step.total}` })
-  }
+  // « Dessin : 2/4 », « Drawing: 2/4 » : reconnue par la fonction qui fabrique aussi la ligne (shared/imageGallery),
+  // donc avec la ponctuation de la langue courante. Seul le dessin passe par ici : une vidéo n'est jamais demandée
+  // dans la conversation (aucun outil), et l'onglet Vidéo du téléphone affiche ses lignes telles quelles
+  // (phoneServer.ts, job.status).
+  const step = engineStepFromLine(line, 'engine.step.image')
+  if (step) return engineStepLine('engine.step.image', step.step, step.total)
   if (/^Modèle (choisi|choisi à la main) :/.test(line)) return t('phone.status.thinking')
   return null
 }

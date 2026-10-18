@@ -1,4 +1,4 @@
-import { currentLocale, t } from './i18n'
+import { formatDecimal, t } from './i18n'
 /**
  * Taille de fichier lisible ("98 Mo", "1,5 Go"), en français (virgule décimale, "o" pour octets).
  *
@@ -10,8 +10,7 @@ import { currentLocale, t } from './i18n'
 export function formatBytes(bytes: number): string {
   // Étape 293 : les unités suivent la langue (« Go » en français, « GB » en anglais, « ГБ » en russe) et la virgule
   // décimale aussi (Intl) : « 1,5 Go », « 1.5 GB ».
-  const decimal = (value: number): string =>
-    new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)
+  const decimal = (value: number): string => formatDecimal(value, 1)
   if (!Number.isFinite(bytes) || bytes < 0) return t('unit.b', { value: 0 })
   const go = bytes / 1024 ** 3
   if (go >= 1) return t('unit.gb', { value: decimal(go) })

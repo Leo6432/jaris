@@ -1768,7 +1768,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.transcribeDictation, async (_event, bytes: Uint8Array): Promise<string> => {
     const wav = Buffer.from(bytes)
     if (wav.length > MAX_VOICE_BYTES) throw new Error(t('main.dictationTooLong'))
-    if (!isExpectedWav(wav)) throw new Error('Enregistrement illisible.')
+    if (!isExpectedWav(wav)) throw new Error(t('main.dictationUnreadable'))
     return (await transcribeWav(wav)).trim()
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
@@ -1845,7 +1845,7 @@ app.whenReady().then(async () => {
       await writeFile(withPngExtension(target), bytes)
       return { saved: true }
     } catch (err) {
-      return { saved: false, error: `Impossible d'enregistrer l'image : ${err instanceof Error ? err.message : String(err)}` }
+      return { saved: false, error: t('main.saveImageFailed', { error: err instanceof Error ? err.message : String(err) }) }
     }
   })
   ipcMain.handle(IPC_CHANNELS.pickImageFile, async (): Promise<PickedImageFile | null> => {

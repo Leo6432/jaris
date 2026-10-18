@@ -2,7 +2,7 @@ import { config } from '../config'
 import { parseModelThinking, type ModelThinking, type ThinkValue } from '../../shared/effort'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { importHuggingFaceModel } from './huggingFaceImport'
-import { t } from '../../shared/i18n'
+import { formatDecimal, t } from '../../shared/i18n'
 import type { ModelPullProgress } from '../../shared/ipc'
 
 export interface OllamaToolCall {
@@ -514,7 +514,7 @@ export class ModelTooLargeError extends Error {
   readonly budgetGb: number
 
   constructor(model: string, requiredGb: number, budgetGb: number) {
-    super(t('ollama.tooLarge', { model, required: requiredGb.toFixed(1), budget: budgetGb.toFixed(1) }))
+    super(t('ollama.tooLarge', { model, required: formatDecimal(requiredGb, 1), budget: formatDecimal(budgetGb, 1) }))
     this.name = 'ModelTooLargeError'
     this.model = model
     this.requiredGb = requiredGb
@@ -533,7 +533,7 @@ export class DiskFullError extends Error {
   readonly freeDiskGb: number
 
   constructor(model: string, requiredGb: number, freeDiskGb: number) {
-    super(t('ollama.diskFull', { model, required: requiredGb.toFixed(1), free: freeDiskGb.toFixed(1) }))
+    super(t('ollama.diskFull', { model, required: formatDecimal(requiredGb, 1), free: formatDecimal(freeDiskGb, 1) }))
     this.name = 'DiskFullError'
     this.model = model
     this.requiredGb = requiredGb
@@ -615,7 +615,12 @@ export async function pullModelIfMissing(
       if (importErr instanceof ModelTooLargeError || importErr instanceof DiskFullError) throw importErr
       // Les deux voies ont échoué : on remonte l'erreur d'ORIGINE (celle d'Ollama, que runQuickSetup sait
       // reconnaître pour retomber sur le modèle suivant), complétée de la raison du second échec.
-      throw new Error(`${err instanceof Error ? err.message : String(err)} ; import direct aussi impossible : ${importErr instanceof Error ? importErr.message : String(importErr)}`)
+      throw new Error(
+        t('ollama.importAlsoFailed', {
+          error: err instanceof Error ? err.message : String(err),
+          importError: importErr instanceof Error ? importErr.message : String(importErr)
+        })
+      )
     }
   } finally {
     // Fin de ce téléchargement, réussi ou non : la barre de progression disparaît (sinon elle resterait affichée,

@@ -1,17 +1,18 @@
 import { readFile, rm } from 'fs/promises'
 import { config } from '../config'
+import { currentLanguage, t } from '../../shared/i18n'
 import { getProfile } from './profileStore'
 import { ttsClient } from './ttsClient'
-
-const PREVIEW_TEXT = 'Bonjour, je suis Jaris, votre assistant vocal. Comment puis-je vous aider aujourd\'hui ?'
 
 /**
  * En français, le "s" final de "Jaris" est normalement muet ("Jari"). "Jarisse" se prononce
  * correctement ("Jariss"), sur le modèle de "Suisse" — uniquement pour la synthèse vocale, le texte
- * affiché à l'écran garde la vraie orthographe.
+ * affiché à l'écran garde la vraie orthographe. En FRANÇAIS seulement : la phrase est lue avec la prononciation
+ * de la langue de Jaris (ttsClient envoie `lang`), et ailleurs le « s » final se prononce déjà — « Jarisse » y
+ * ajouterait une syllabe (« Ja-ris-se » en allemand ou en italien).
  */
 function toSpeechText(text: string): string {
-  return sanitizeForSpeech(text.replace(/\bJaris\b/gi, 'Jarisse'))
+  return sanitizeForSpeech(currentLanguage() === 'fr' ? text.replace(/\bJaris\b/gi, 'Jarisse') : text)
 }
 
 /**
@@ -49,8 +50,12 @@ export async function synthesizeSpeech(text: string): Promise<Buffer> {
   return readAndCleanup(path)
 }
 
-/** Synthétise une phrase d'exemple fixe avec `voice`, pour comparer les voix avant d'en choisir une. */
+/**
+ * Synthétise une phrase d'exemple avec `voice`, pour comparer les voix avant d'en choisir une. La phrase vient du
+ * catalogue, dans la langue de Jaris : elle était écrite en dur en français jusqu'à la version 0.34.31, si bien
+ * qu'un Allemand entendait une phrase française lue avec la prononciation allemande (la langue envoyée à la voix).
+ */
 export async function previewVoice(voice: string): Promise<Buffer> {
-  const path = await ttsClient.synthesize(toSpeechText(PREVIEW_TEXT), voice)
+  const path = await ttsClient.synthesize(toSpeechText(t('options.voice.previewSentence')), voice)
   return readAndCleanup(path)
 }

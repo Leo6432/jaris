@@ -38,7 +38,7 @@ const e = (model, tool, ai, aiSpeed, demands = null) => ({
 })
 
 const picks = {
-  gpuName: 'NVIDIA GeForce RTX 3070', vramGb: 8, ramGb: 32,
+  gpuName: 'NVIDIA GeForce RTX 3070', vramGb: window.__vramGb ?? 8, ramGb: 32,
   flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '62/78', 10.8, null, '26/48'),
   medium: e('qwen3.5:4b', '74/78', 13.1, 22, '38/48'),
   large: e('qwen3.8:27b', '77/78', 33.7, 46, '45/48'),
@@ -77,7 +77,7 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined, lang = 'fr') {
+async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined, lang = 'fr', vramGb = undefined) {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
@@ -89,7 +89,8 @@ async function withPreview(run, width = 760, installCheck = undefined, pilot = u
     const injected =
       (installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`) +
       (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`) +
-      (lang === 'fr' ? '' : `<script>window.__lang = ${JSON.stringify({ code: lang, messages }).replace(/</g, '\\u003c')}</script>`)
+      (lang === 'fr' ? '' : `<script>window.__lang = ${JSON.stringify({ code: lang, messages }).replace(/</g, '\\u003c')}</script>`) +
+      (vramGb === undefined ? '' : `<script>window.__vramGb = ${JSON.stringify(vramGb)}</script>`)
     await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
@@ -124,6 +125,36 @@ test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec lib
       ['Code', 'qwen2.5-coder:14b', '—', '—']
     ])
   })
+})
+
+// Jusqu'à la version 0.34.31, l'Intelligence s'écrivait à la française dans toutes les langues (locale figée
+// 'fr-FR' : « Intelligence 13,1 » en anglais) et une VRAM avec décimale gardait le point de JavaScript (« 7.8 Go »
+// en français). Les deux suivent maintenant la langue de Jaris.
+test('les nombres suivent la langue : « 13.1 » et « 7.8 GB » en anglais, « 7,8 Go » en français', options, async () => {
+  const intelligence = (page) =>
+    page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => trs.map((tr) => tr.querySelectorAll('td')[3]?.textContent?.trim()))
+  const hardware = (page) => page.$eval('.capacity-scan__tier-hardware', (el) => el.textContent?.trim())
+  await withPreview(
+    async (page) => {
+      assert.deepEqual(JSON.parse(JSON.stringify(await intelligence(page))), ['Intelligence 10.8', 'Intelligence 13.1', 'Intelligence 33.7', 'Intelligence 7.0', '—'])
+      assert.equal(await hardware(page), 'NVIDIA GeForce RTX 3070 · 7.8 GB of VRAM · 32 GB of RAM')
+    },
+    760,
+    undefined,
+    undefined,
+    'en',
+    7.8
+  )
+  await withPreview(
+    async (page) => {
+      assert.equal(await hardware(page), 'NVIDIA GeForce RTX 3070 · 7,8 Go de VRAM · 32 Go de RAM')
+    },
+    760,
+    undefined,
+    undefined,
+    'fr',
+    7.8
+  )
 })
 
 test('la légende dit que ces chiffres ne prédisent pas la vitesse sur la machine', options, async () => {

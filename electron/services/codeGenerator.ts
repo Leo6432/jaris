@@ -10,7 +10,7 @@ import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, Genera
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
 import { findInlineScriptSyntaxErrors, type InlineScriptProblem } from './scriptSyntax'
-import { t } from '../../shared/i18n'
+import { formatDecimal, t } from '../../shared/i18n'
 
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
@@ -644,10 +644,10 @@ function extractHtml(raw: string): string | null {
  */
 function describeDownloadFailure(err: unknown): Error | null {
   if (err instanceof ModelTooLargeError) {
-    return new Error(t('codegen.tooLarge', { model: err.model, required: err.requiredGb.toFixed(1), budget: err.budgetGb.toFixed(1) }))
+    return new Error(t('codegen.tooLarge', { model: err.model, required: formatDecimal(err.requiredGb, 1), budget: formatDecimal(err.budgetGb, 1) }))
   }
   if (err instanceof DiskFullError) {
-    return new Error(t('codegen.diskFull', { model: err.model, required: err.requiredGb.toFixed(1), free: err.freeDiskGb.toFixed(1) }))
+    return new Error(t('codegen.diskFull', { model: err.model, required: formatDecimal(err.requiredGb, 1), free: formatDecimal(err.freeDiskGb, 1) }))
   }
   return null
 }

@@ -1,4 +1,4 @@
-import { t, type MessageKey } from './i18n'
+import { formatDecimal, t, type MessageKey } from './i18n'
 /**
  * Le modèle vidéo de Jaris (étape 203, Léo : « ajoute vidéo : Wan 2.2-TI2V-5B »). Module pur, partagé par le main
  * (refus avant tout téléchargement) et l'écran, testé sans Electron.
@@ -99,7 +99,7 @@ export function availableVideoQualities(vramGb: number | null, ramGb: number): V
   const lightest = VIDEO_QUALITIES[0]
   if (vramGb === null) return { qualities: [], reason: t('hw.noGpu', { need: lightest.vramLabel }) }
   if (vramGb < lightest.minVramGb) {
-    return { qualities: [], reason: t('hw.gpuTooSmall', { have: vramGb, need: lightest.vramLabel }) }
+    return { qualities: [], reason: t('hw.gpuTooSmall', { have: formatDecimal(vramGb), need: lightest.vramLabel }) }
   }
   if (ramGb < lightest.minRamGb) return { qualities: [], reason: t('hw.notEnoughRam', { have: Math.round(ramGb), need: lightest.ramLabel }) }
   return { qualities: VIDEO_QUALITIES.filter((q) => vramGb >= q.minVramGb && ramGb >= q.minRamGb).map((q) => q.id), reason: null }

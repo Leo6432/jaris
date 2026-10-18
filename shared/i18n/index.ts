@@ -71,6 +71,20 @@ export function currentLocale(): string {
   return state.locale
 }
 
+/**
+ * Un nombre à virgule écrit à la façon de la langue de Jaris : « 13,1 » en français ou en allemand, « 13.1 » en
+ * anglais. Jamais `String(x)` ni `toFixed()`, qui écrivent toujours un point (« 5.8 Go » en français), ni une locale
+ * figée (`'fr-FR'`), qui écrirait une virgule dans toutes les langues. `fractionDigits` fixe le nombre de décimales
+ * (« 8,0 ») ; sans lui, une décimale au plus et pas de zéro inutile (« 8 », « 7,8 »).
+ */
+export function formatDecimal(value: number, fractionDigits?: number): string {
+  const digits =
+    fractionDigits === undefined
+      ? { maximumFractionDigits: 1 }
+      : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }
+  return new Intl.NumberFormat(state.locale, digits).format(value)
+}
+
 export function subscribeLanguage(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
