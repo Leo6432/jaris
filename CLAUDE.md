@@ -8827,3 +8827,60 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - `test-memory-extractor`, `test-script-syntax`, `test-codegen-validate` ;
   - `test-setup-screens-ui`, `test-ollama-pull-progress`, `test-onboarding-finish*` ;
   - `test-reminders`, `test-ipc-error`, `test-github-ui`.
+
+- **Étape 325 : les 9 points « restent à faire » de l'étape 324 (Léo : « règle tout et les choses à encore faire »).**
+  1. **Écritures d'un seul tenant** (`atomicFile.ts`, extrait de codeConversationsStore.ts au lieu d'être recopié) :
+     profil, conversations du Chat (fils ET index), rappels, langue, notes. Écriture dans un `.tmp` voisin, fsync, puis
+     renommage réessayé (~350 ms en synchrone, ~3 s en asynchrone : avant, ces fichiers s'écrivaient sur place, et un
+     antivirus un peu lent ne faisait rien échouer). Un fichier abîmé est rangé dans `fichiers-illisibles/` (dans
+     OWNED_ENTRIES) AVANT tout fichier neuf. Un fichier verrouillé lève `DataFileUnreadableError` (« un autre programme
+     l'utilise ») au lieu d'être lu comme vide ; toute autre panne (disque plein…) garde son vrai message. Un index des
+     conversations perdu est reconstruit depuis les fils présents.
+     **Piège attrapé par la relecture, à retenir** : `getProfile()` ne levait jamais d'erreur ; il peut maintenant, et
+     le démarrage l'appelait sans garde dans `whenReady` → exception avant toute fenêtre, Jaris invisible (icône
+     comprise, qui ne fait rien). `readProfileAtStartup` réessaie ~10 s puis montre l'erreur et quitte (jamais l'écran
+     de premier lancement, dont le premier enregistrement écraserait le vrai profil) ; App.tsx réessaie toutes les 2 s.
+     **Leçon générale : quand une fonction qui ne levait jamais se met à lever, chercher TOUS ses appelants, surtout ceux
+     du démarrage — un `await` sans garde dans `whenReady` arrête l'application en silence.**
+  2. **Disque rebranché : une règle par format** (`REBRANCH_RULES`, storageRoot.ts, synchrone ; un test exige une règle
+     pour chaque entrée d'OWNED_ENTRIES). Profil et langue : D gagne. Conversations : union des fils, un même fil réuni
+     par l'identifiant de ses échanges, index réuni (fil actif de D). Rappels : union par identifiant. Notes : réunies
+     bloc par bloc (titre à une casse près ignoré). Images, vidéos, applis : on garde les deux (`-2` si contenu
+     différent). Journal : seule la partie de C absente de D est ajoutée — recouvrement en lignes entières calculé par
+     KMP (linéaire), une ligne vide seule ne compte pas ; sans ça, une fusion interrompue puis une session continuée sur
+     C recopiait le début du journal de C.
+  3. **« Déplacer » : un fichier supprimé pendant le déplacement ne revient plus.** La première copie retient ce qu'elle
+     CRÉE (filtre de `cp`, appelé avant chaque élément), avec taille et date ; le rattrapage efface seulement ces
+     fichiers, s'ils ont disparu de la source ET sont inchangés à destination, puis les dossiers devenus vides. Rien
+     de ce qui existait déjà à destination n'est touché ; un échec garde l'ancien dossier (tout ou rien, étape 143).
+  4. **« Combien font 12 fois 7 ? » ne force plus une recherche web** (`isPureCalculation`, assistant.ts, et sa copie
+     dans benchmark-scenarios.mjs). Une phrase n'est un calcul que si chaque mot est un nombre, une opération ou un mot
+     de liaison ; « combien coûtent 2 kg de pommes ? » reste une question. Vérifié : aucune des demandes du test des
+     modèles ne change de classement, donc les scores restent valables. Non corrigé : la consigne système cite toujours
+     « combien » parmi ce qui exige search_web (la changer modifierait les conditions de tous les scores).
+  5. **L'attente se voit.** Mode Code : « Écrit index.html » n'est plus annoncé avant le premier fragment reçu ; avant,
+     les phases « Charge le modèle… / Prépare sa réponse… » de l'étape 291 ne s'affichaient jamais pour une nouvelle
+     application. La durée compte depuis le début de l'appel (`elapsedMs`), pas depuis le dernier fragment (qui
+     repartait de zéro à chaque bout de réflexion). Chat et widget Chat : la durée s'affiche à partir de 10 s.
+  6. **« Parler à Jaris », l'orbe et « + » disent pourquoi rien ne se passe** quand l'écoute n'est pas prête
+     (chargement, échec, arrêt : raison relayée telle quelle, canal `wakeAvailability`) ou quand le clic est désactivé
+     dans Options → Voix. Le widget vocal ne se déplie plus pour rien.
+  7. **Widget Chat sans pavé numérique** : cliquer sur le petit indicateur ouvre la barre (canal `openChatWidget`, même
+     chemin que « + »), au lieu de la grande fenêtre.
+  8. **Traductions** : la phrase d'aperçu des voix vient du catalogue (« Jarisse » seulement en français) ;
+     l'avancement d'un dessin s'affiche enfin sur le téléphone hors français (la ligne était fabriquée « Drawing: 2/4 »
+     mais cherchée avec « Drawing : ») — fabrication et lecture viennent maintenant d'une seule source ;
+     `formatDecimal` (langue courante) pour les scores, tailles et mémoires vidéo.
+  **Coût des agents (Léo : « 3 M de tokens pour 9 petits points »).** La plus grosse dépense vient de CLAUDE.md (~900
+  Ko), chargé en entier par chaque agent. Léo veut garder CLAUDE.md tel quel : pour des correctifs petits et précis,
+  les faire soi-même, sans workflow. Garder les agents et la relecture adverse pour ce qui touche aux données ou à
+  l'architecture — c'est là qu'ils ont trouvé de vrais défauts (démarrage invisible, journal dupliqué). Une limite
+  d'utilisation a coupé deux agents en route : leur travail non commité a été sauvé en patch (`git add -A` dans la
+  copie, puis `git diff --cached --binary`) et repris par l'agent suivant, rien n'a été refait.
+  **Vérifié** : npm test (1707 tests), tests modifiés sur une copie en fins de ligne Windows, et le vrai Jaris (sous
+  Xvfb) : démarrage normal, et avec la voix en panne, l'écran vocal dit pourquoi. **Non vérifié ici** : Windows réel
+  (antivirus, notifications, focus du widget), et un vrai rebranchement de disque.
+  Régression : `test-data-files`, `test-data-location`, `test-conversations`, `test-relocation`,
+  `test-knowledge-question`, `test-assistant-history`, `test-format-codegen-progress`, `test-chat-conversations-ui`,
+  `test-chat-widget-ui`, `test-widget-mode`, `test-voice-listening-status`, `test-engine-step-language`,
+  `test-locale-numbers`, `test-tts-preview-language`.
