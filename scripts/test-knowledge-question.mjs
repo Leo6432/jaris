@@ -34,7 +34,7 @@ const modules = {
 }
 const exports = {}
 vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports } })
-const { looksLikeKnowledgeQuestion } = exports
+const { looksLikeKnowledgeQuestion, isPureCalculation } = exports
 
 test('reproduit le cas réel rapporté par Léo : "Qui a créé ChatGPT ?"', () => {
   assert.ok(looksLikeKnowledgeQuestion('Qui a créé ChatGPT ?'))
@@ -80,4 +80,71 @@ for (const prompt of [
 
 test('une vraie question factuelle contenant « ça va » reste recherchée', () => {
   assert.ok(looksLikeKnowledgeQuestion("Pourquoi ça va mal dans l'économie ?"))
+})
+
+// Bêta de l'étape 324 : « Combien font 12 fois 7 ? » passait pour une question de connaissance. Le modèle répondait 84,
+// puis la relance le forçait à chercher sur internet, et une recherche en échec (SearXNG absent) remplaçait la bonne
+// réponse par « Échec de l'outil ». Un calcul seul ne demande aucune donnée du monde : jamais de relance.
+for (const prompt of [
+  'Combien font 12 fois 7 ?',
+  'combien fait 12 fois 7 ?',
+  '12 fois 7 ?',
+  'C’est quoi 12 fois 7 ?',
+  "Qu'est-ce que 12 multiplié par 7 ?",
+  'Combien font douze fois sept ?',
+  'Combien font dix-sept plus vingt-cinq ?',
+  'Calcule 12,5 fois 3 ?',
+  'Combien font 144 divisé par 12 ?',
+  '144 sur 12 ?',
+  'Combien font 100 moins 37 ?',
+  'Combien font 15 % de 80 ?',
+  'Combien font 15 pour cent de 80 ?',
+  'Combien fait la racine carrée de 144 ?',
+  'Quel est le carré de 12 ?',
+  '7 au carré ?',
+  '2 puissance 10 ?',
+  'Combien font 3 et 4 ?',
+  'Jaris, combien font 12 fois 7, s’il te plaît ?',
+  'Dis-moi combien font 12 fois 7',
+  '12*7 ?',
+  '12x7=?',
+  '12 × 7 ?',
+  '(12 + 3) × 2 ?',
+  '84 ÷ 7 ?',
+  '2^10 ?',
+  '12 − 7 ?',
+  '1 000 + 2,5 ?'
+]) {
+  test(`un simple calcul n'est jamais une question de connaissance : ${JSON.stringify(prompt)}`, () => {
+    assert.ok(isPureCalculation(prompt), 'reconnu comme un calcul')
+    assert.ok(!looksLikeKnowledgeQuestion(prompt), 'aucune relance vers internet')
+  })
+}
+
+// Dès qu'une donnée du monde est en jeu (prix, population, taux, monnaie, unité, lieu), la recherche reste exigée.
+for (const prompt of [
+  'Combien coûtent 2 kg de pommes ?',
+  "Combien d'habitants à Paris ?",
+  'Combien y a-t-il d’habitants en France en 2026 ?',
+  '15 % de TVA sur 80 € en France ?',
+  'Combien font 100 dollars en euros ?',
+  'Combien vaut un bitcoin ?',
+  'Combien coûte un iPhone 15 ?',
+  'Combien de secondes dans une heure ?',
+  'Combien font 2 + 2 dans la série Lost ?',
+  'Qui a gagné 3 à 1 hier soir ?',
+  '1789 et 1815 ?',
+  'Cherche combien font 12 fois 7',
+  'Combien pèse la tour Eiffel ?'
+]) {
+  test(`une donnée du monde reste une question de connaissance : ${JSON.stringify(prompt)}`, () => {
+    assert.ok(!isPureCalculation(prompt), 'pas un simple calcul')
+    assert.ok(looksLikeKnowledgeQuestion(prompt), 'la recherche reste exigée')
+  })
+}
+
+test('un nombre seul, ou une opération sans nombre, n’est pas un calcul', () => {
+  for (const prompt of ['12 ?', '12,5', 'Combien ?', 'Combien vaut x ?', 'plus ou moins ?', '']) {
+    assert.ok(!isPureCalculation(prompt), JSON.stringify(prompt))
+  }
 })
