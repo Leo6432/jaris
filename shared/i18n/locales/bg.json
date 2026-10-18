@@ -676,6 +676,8 @@
   "code.live.write": "Пише",
   "code.live.edit": "Променя",
   "code.live.review": "Преглежда",
+  "code.thinking.show": "Покажи разсъжденията му",
+  "code.thinking.hide": "Скрий разсъжденията му",
   "code.stall.started": "нищо не е получено от модела от {duration}",
   "code.stall.start": "все още нищо след {duration}",
   "code.live.lines_one": "{count} ред",

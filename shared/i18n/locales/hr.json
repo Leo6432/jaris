@@ -693,6 +693,8 @@
   "code.live.write": "Piše",
   "code.live.edit": "Mijenja",
   "code.live.review": "Pregledava",
+  "code.thinking.show": "Prikaži njegovo razmišljanje",
+  "code.thinking.hide": "Sakrij njegovo razmišljanje",
   "code.stall.started": "od modela ništa nije stiglo već {duration}",
   "code.stall.start": "još uvijek ništa nakon {duration}",
   "code.live.lines_one": "{count} redak",

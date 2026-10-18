@@ -693,6 +693,8 @@
   "code.live.write": "Rašo",
   "code.live.edit": "Keičia",
   "code.live.review": "Peržiūri",
+  "code.thinking.show": "Rodyti jo samprotavimą",
+  "code.thinking.hide": "Slėpti jo samprotavimą",
   "code.stall.started": "nieko negauta iš modelio jau {duration}",
   "code.stall.start": "vis dar nieko po {duration}",
   "code.live.lines_one": "{count} eilutė",

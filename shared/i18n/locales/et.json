@@ -676,6 +676,8 @@
   "code.live.write": "Kirjutab",
   "code.live.edit": "Muudab",
   "code.live.review": "Vaatab üle",
+  "code.thinking.show": "Näita tema arutluskäiku",
+  "code.thinking.hide": "Peida tema arutluskäik",
   "code.stall.started": "mudelilt pole {duration} jooksul midagi tulnud",
   "code.stall.start": "ikka veel mitte midagi pärast {duration}",
   "code.live.lines_one": "{count} rida",

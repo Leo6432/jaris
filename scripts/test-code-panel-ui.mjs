@@ -766,6 +766,38 @@ test('avant son premier mot, la ligne dit que le modèle se charge ou réfléchi
   })
 })
 
+// Étape 326 (Léo : 35 min de « Réfléchit… » sans rien voir bouger, avec un gros modèle en réflexion « Extra ») : une
+// petite flèche à côté de « Réfléchit… » déplie ce que le modèle pense, au fil de l'eau, comme Claude ou ChatGPT.
+test('pendant qu’il réfléchit, une flèche montre sa réflexion en direct, repliée par défaut (étape 326)', options, async () => {
+  const step = { label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true, idleMs: 1_000 }
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 5_000, phase: 'thinking', thinkingText: 'Le joueur contrôle un serpent' }), step)
+    assert.equal(await page.$$eval('.code-chat__thinking-toggle', (nodes) => nodes.length), 1, 'pas de flèche pour voir sa réflexion')
+    assert.equal(await page.$$eval('.code-chat__thinking', (nodes) => nodes.length), 0, 'la réflexion doit être repliée par défaut')
+    assert.equal(await liveText(page), 'Réfléchit…', 'la flèche ne change pas le texte de la ligne')
+    const toggle = await page.$eval('.code-chat__thinking-toggle', (node) => {
+      const style = getComputedStyle(node)
+      return { cursor: style.cursor, border: style.borderTopStyle, expanded: node.getAttribute('aria-expanded') }
+    })
+    assert.deepEqual(toggle, { cursor: 'pointer', border: 'none', expanded: 'false' }, 'la flèche doit être habillée par le CSS de Jaris')
+
+    await page.click('.code-chat__thinking-toggle')
+    await page.waitForSelector('.code-chat__thinking')
+    assert.equal(await page.$eval('.code-chat__thinking', (node) => node.textContent), 'Le joueur contrôle un serpent')
+    // Elle suit ce qu'il pense, au fil de l'eau.
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 6_000, phase: 'thinking', thinkingText: 'Le joueur contrôle un serpent en 3D.' }), step)
+    await page.waitForFunction(() => document.querySelector('.code-chat__thinking')?.textContent.endsWith('en 3D.'))
+    const box = await page.$eval('.code-chat__thinking', (node) => ({ maxHeight: getComputedStyle(node).maxHeight, overflow: getComputedStyle(node).overflowY }))
+    assert.deepEqual(box, { maxHeight: '220px', overflow: 'auto' })
+
+    // Dès qu'il écrit, plus de réflexion : la ligne dit le fichier en cours.
+    await page.evaluate((s) => window.__emitProgress({ ...s, thinking: false, charsWritten: 80, elapsedMs: 8_000, phase: 'writing' }), step)
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 2 }))
+    await page.waitForFunction(() => !document.querySelector('.code-chat__thinking') && !document.querySelector('.code-chat__thinking-toggle'))
+  })
+})
+
 test('aperçu agrandi : la barre de la carte dit aussi depuis combien de temps le modèle se charge (étape 325)', options, async () => {
   await withPage(async (page) => {
     await page.click('.workspace__item')

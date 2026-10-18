@@ -693,6 +693,8 @@
   "code.live.write": "Píše",
   "code.live.edit": "Upravuje",
   "code.live.review": "Kontroluje",
+  "code.thinking.show": "Zobraziť jeho uvažovanie",
+  "code.thinking.hide": "Skryť jeho uvažovanie",
   "code.stall.started": "od modelu nič neprišlo už {duration}",
   "code.stall.start": "stále nič po {duration}",
   "code.live.lines_one": "{count} riadok",

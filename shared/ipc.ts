@@ -796,6 +796,11 @@ export interface CodeGenProgress {
    * deux phases muettes, normales, qui peuvent durer longtemps. Ensuite il réfléchit (`thinking`) ou écrit (`writing`).
    */
   phase: 'loading' | 'reading' | 'thinking' | 'writing'
+  /**
+   * Étape 326 (Léo : 35 min de « Réfléchit… » sans rien voir bouger) : la fin de ce que le modèle pense, reçue au fil
+   * de l'eau, pendant qu'il réfléchit seulement — l'écran la montre sous une petite flèche, comme Claude ou ChatGPT.
+   */
+  thinkingText?: string
 }
 
 /**

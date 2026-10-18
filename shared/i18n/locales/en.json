@@ -676,6 +676,8 @@
   "code.live.write": "Writing",
   "code.live.edit": "Editing",
   "code.live.review": "Reviewing",
+  "code.thinking.show": "Show its thinking",
+  "code.thinking.hide": "Hide its thinking",
   "code.stall.started": "nothing received from the model for {duration}",
   "code.stall.start": "still nothing after {duration}",
   "code.live.lines_one": "{count} line",

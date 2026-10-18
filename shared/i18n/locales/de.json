@@ -676,6 +676,8 @@
   "code.live.write": "Schreibt",
   "code.live.edit": "Ändert",
   "code.live.review": "Prüft",
+  "code.thinking.show": "Seine Überlegungen anzeigen",
+  "code.thinking.hide": "Seine Überlegungen ausblenden",
   "code.stall.started": "seit {duration} nichts vom Modell erhalten",
   "code.stall.start": "nach {duration} immer noch nichts",
   "code.live.lines_one": "{count} Zeile",

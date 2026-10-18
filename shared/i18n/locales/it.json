@@ -676,6 +676,8 @@
   "code.live.write": "Scrive",
   "code.live.edit": "Modifica",
   "code.live.review": "Rilegge",
+  "code.thinking.show": "Mostra il suo ragionamento",
+  "code.thinking.hide": "Nascondi il suo ragionamento",
   "code.stall.started": "niente ricevuto dal modello da {duration}",
   "code.stall.start": "ancora niente dopo {duration}",
   "code.live.lines_one": "{count} riga",

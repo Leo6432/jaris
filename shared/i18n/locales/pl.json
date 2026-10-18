@@ -710,6 +710,8 @@
   "code.live.write": "Pisze",
   "code.live.edit": "Zmienia",
   "code.live.review": "Sprawdza",
+  "code.thinking.show": "Pokaż jego rozumowanie",
+  "code.thinking.hide": "Ukryj jego rozumowanie",
   "code.stall.started": "nic nie przyszło od modelu od {duration}",
   "code.stall.start": "nadal nic po {duration}",
   "code.live.lines_one": "{count} wiersz",

@@ -676,6 +676,8 @@
   "code.live.write": "Ír",
   "code.live.edit": "Módosít",
   "code.live.review": "Átnéz",
+  "code.thinking.show": "Gondolatmenet megjelenítése",
+  "code.thinking.hide": "Gondolatmenet elrejtése",
   "code.stall.started": "{duration} óta semmi sem érkezett a modelltől",
   "code.stall.start": "{duration} után még mindig semmi",
   "code.live.lines_one": "{count} sor",

@@ -710,6 +710,8 @@
   "code.live.write": "Пишет",
   "code.live.edit": "Изменяет",
   "code.live.review": "Проверяет",
+  "code.thinking.show": "Показать его рассуждения",
+  "code.thinking.hide": "Скрыть его рассуждения",
   "code.stall.started": "от модели ничего не поступало уже {duration}",
   "code.stall.start": "всё ещё ничего через {duration}",
   "code.live.lines_one": "{count} строка",

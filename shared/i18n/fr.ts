@@ -686,6 +686,8 @@ export const fr = {
   "code.live.write": "Écrit",
   "code.live.edit": "Modifie",
   "code.live.review": "Relit",
+  "code.thinking.show": "Voir sa réflexion",
+  "code.thinking.hide": "Masquer sa réflexion",
   "code.stall.started": "rien reçu du modèle depuis {duration}",
   "code.stall.start": "toujours rien après {duration}",
   "code.live.lines_one": "{count} ligne",

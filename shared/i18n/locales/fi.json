@@ -676,6 +676,8 @@
   "code.live.write": "Kirjoittaa",
   "code.live.edit": "Muokkaa",
   "code.live.review": "Tarkistaa",
+  "code.thinking.show": "Näytä sen päättely",
+  "code.thinking.hide": "Piilota sen päättely",
   "code.stall.started": "mallilta ei ole tullut mitään {duration}",
   "code.stall.start": "ei vieläkään mitään, kulunut {duration}",
   "code.live.lines_one": "{count} rivi",

@@ -676,6 +676,8 @@
   "code.live.write": "Skriver",
   "code.live.edit": "Ändrar",
   "code.live.review": "Granskar",
+  "code.thinking.show": "Visa dess resonemang",
+  "code.thinking.hide": "Dölj dess resonemang",
   "code.stall.started": "inget mottaget från modellen på {duration}",
   "code.stall.start": "fortfarande inget efter {duration}",
   "code.live.lines_one": "{count} rad",

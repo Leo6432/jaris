@@ -92,6 +92,8 @@ function isContextFullError(error: unknown): boolean {
 const PROGRESS_HEARTBEAT_MS = 1000
 /** Fréquence maximale des messages d'avancement déclenchés par les fragments reçus du modèle. */
 const PROGRESS_THROTTLE_MS = 200
+/** Ce que l'écran garde de la réflexion en cours : la fin seulement (elle peut faire des dizaines de milliers de mots). */
+export const THINKING_TAIL_CHARS = 4000
 
 /**
  * Un abandon volontaire (bouton "Arrêter"), reconnu SANS `instanceof Error` : `fetch` rejette avec une
@@ -189,6 +191,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
     const currentStep = steps.index
     let charsWritten = 0
     let thinking = true
+    let thoughts = ''
     let lastActivity = Date.now()
     // Étape 325 : début de l'appel, pour dire depuis combien de temps le modèle se charge, lit ou réfléchit.
     let startedAt = lastActivity
@@ -228,7 +231,8 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         thinking,
         idleMs: now - lastActivity,
         elapsedMs: now - startedAt,
-        phase
+        phase,
+        ...(phase === 'thinking' && thoughts ? { thinkingText: thoughts } : {})
       })
     }
     emit()
@@ -262,9 +266,10 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         },
         // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
         // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
-        () => {
+        (delta) => {
           const changed = phase !== 'writing' && phase !== 'thinking'
           if (phase !== 'writing') phase = 'thinking'
+          thoughts = (thoughts + delta).slice(-THINKING_TAIL_CHARS)
           lastActivity = Date.now()
           emit(!changed)
         }
@@ -285,6 +290,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
         charsWritten = 0
         thinking = true
+        thoughts = ''
         phase = 'reading'
         lastActivity = Date.now()
         startedAt = lastActivity

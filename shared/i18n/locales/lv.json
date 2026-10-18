@@ -693,6 +693,8 @@
   "code.live.write": "Raksta",
   "code.live.edit": "Maina",
   "code.live.review": "Pārskata",
+  "code.thinking.show": "Rādīt tā spriešanu",
+  "code.thinking.hide": "Paslēpt tā spriešanu",
   "code.stall.started": "no modeļa nekas nav saņemts jau {duration}",
   "code.stall.start": "joprojām nekā pēc {duration}",
   "code.live.lines_zero": "{count} rindas",

@@ -676,6 +676,8 @@
   "code.live.write": "Γράφει",
   "code.live.edit": "Τροποποιεί",
   "code.live.review": "Ελέγχει",
+  "code.thinking.show": "Δες τη σκέψη του",
+  "code.thinking.hide": "Απόκρυψη της σκέψης του",
   "code.stall.started": "τίποτα από το μοντέλο εδώ και {duration}",
   "code.stall.start": "ακόμα τίποτα μετά από {duration}",
   "code.live.lines_one": "{count} γραμμή",

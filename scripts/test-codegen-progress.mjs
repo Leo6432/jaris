@@ -206,3 +206,15 @@ test('Ollama ne dit pas si le modèle est chargé : on n’annonce rien de faux,
   assert.equal(app.progress.some((p) => p.phase === 'loading'), false)
   assert.equal(app.progress[0].phase, 'reading')
 })
+
+test('étape 326 : pendant qu’il réfléchit, ce qu’il pense part avec l’avancement ; plus rien une fois qu’il écrit', async () => {
+  const app = setup([VALID_HTML, VALID_HTML])
+  await run(app, 'une liste de courses')
+  const thinking = app.progress.filter((p) => p.stepIndex === 1 && p.phase === 'thinking')
+  assert.ok(thinking.length > 0)
+  assert.ok(thinking.every((p) => p.thinkingText === 'réflexion…'), 'la réflexion reçue doit accompagner l’avancement')
+  assert.ok(
+    app.progress.filter((p) => p.phase !== 'thinking').every((p) => p.thinkingText === undefined),
+    'la réflexion ne doit plus s’afficher une fois que le modèle écrit (ou avant qu’il commence)'
+  )
+})

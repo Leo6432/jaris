@@ -693,6 +693,8 @@
   "code.live.write": "Scrie",
   "code.live.edit": "Modifică",
   "code.live.review": "Recitește",
+  "code.thinking.show": "Vezi raționamentul",
+  "code.thinking.hide": "Ascunde raționamentul",
   "code.stall.started": "nimic primit de la model de {duration}",
   "code.stall.start": "tot nimic după {duration}",
   "code.live.lines_one": "{count} linie",

@@ -676,6 +676,8 @@
   "code.live.write": "Skriver",
   "code.live.edit": "Ændrer",
   "code.live.review": "Gennemgår",
+  "code.thinking.show": "Vis dens overvejelser",
+  "code.thinking.hide": "Skjul dens overvejelser",
   "code.stall.started": "intet modtaget fra modellen i {duration}",
   "code.stall.start": "stadig intet efter {duration}",
   "code.live.lines_one": "{count} linje",

@@ -8845,3 +8845,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-knowledge-question`, `test-assistant-history`, `test-format-codegen-progress`, `test-chat-conversations-ui`,
   `test-chat-widget-ui`, `test-widget-mode`, `test-voice-listening-status`, `test-engine-step-language`,
   `test-locale-numbers`, `test-tts-preview-language`.
+
+- **Étape 326 : voir la réflexion du modèle en direct dans le mode Code (Léo, capture à l'appui : 35 min de
+  « Réfléchit… » sur un jeu 3D façon Slither.io, puis annulé).** Pas un blocage, très probablement : réflexion
+  « Extra » (choisie dans le sélecteur, « Code Extra ») + qwen3.8:27b, trop gros pour sa carte de 8 Go et en partie
+  dans la RAM (quelques mots par seconde). Le défaut était de ne RIEN montrer : « Réfléchit… » sans durée (ajoutée à
+  l'étape 325) ni signe que ça avance. Choix de Léo (question à choix) : voir la réflexion, comme Claude ou ChatGPT.
+  `CodeGenProgress.thinkingText` porte la fin de la réflexion reçue (4 000 caractères au plus, `THINKING_TAIL_CHARS`),
+  seulement pendant la phase « réfléchit » ; une petite flèche à côté de « Réfléchit… » la déplie (repliée par défaut,
+  boîte de 220 px qui reste collée en bas sauf si on remonte relire). Elle disparaît dès que le modèle écrit. Mode Code
+  seulement (nouvelle application comme dépôt GitHub). Le texte est hors de la zone `aria-live` : un lecteur d'écran ne
+  doit pas la lire mot à mot. Conseil donné à Léo : « Moyen » pour ce genre de demande avec ce modèle.
+  Régression : `test-codegen-progress.mjs` (réflexion jointe pendant la réflexion, jamais pendant l'écriture) et
+  `test-code-panel-ui.mjs` (flèche, repliée par défaut, suit le texte, disparaît à l'écriture ; vérifié en coupant la
+  transmission : le test échoue).

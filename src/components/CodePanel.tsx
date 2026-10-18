@@ -111,11 +111,89 @@ function ActivityRow({ activity, readPaths }: { activity: CodeActivity; readPath
   )
 }
 
-/** La ligne « en direct » (étape 288) : même allure qu'une action terminée, avec un point qui pulse. */
-function LiveLine({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.Element {
+function ThinkingChevron({ open }: { open: boolean }): JSX.Element {
   return (
-    <div className="code-chat__live code-chat__activity" role="status" aria-live="polite">
-      <span className="code-chat__live-dot" aria-hidden="true" />
+    <svg
+      className={`web-activity__chevron${open ? ' web-activity__chevron--open' : ''}`}
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
+
+/**
+ * Étape 326 (Léo : 35 min de « Réfléchit… » avec un gros modèle en réflexion « Extra », sans rien voir bouger) : ce que
+ * le modèle pense, au fil de l'eau, sous une petite flèche — comme Claude ou ChatGPT. Replié par défaut ; on voit qu'il
+ * avance sans avoir à lire. Collé en bas pendant qu'il arrive, sauf si l'on remonte pour relire.
+ */
+function ThinkingText({ text }: { text: string }): JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const stuck = useRef(true)
+  useEffect(() => {
+    const node = ref.current
+    if (node && stuck.current) node.scrollTop = node.scrollHeight
+  }, [text])
+  return (
+    <div
+      ref={ref}
+      className="code-chat__thinking"
+      onScroll={(event) => {
+        const node = event.currentTarget
+        stuck.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24
+      }}
+    >
+      {text}
+    </div>
+  )
+}
+
+/** La ligne « en direct » (étape 288) : même allure qu'une action terminée, avec un point qui pulse. */
+function LiveLine({
+  text,
+  thinking,
+  showThinking,
+  onToggleThinking
+}: {
+  text: ReturnType<typeof formatCodeLive>
+  thinking?: string
+  showThinking: boolean
+  onToggleThinking: () => void
+}): JSX.Element {
+  return (
+    <>
+      <div className="code-chat__live code-chat__activity" role="status" aria-live="polite">
+        <span className="code-chat__live-dot" aria-hidden="true" />
+        <LiveLineBody text={text} />
+        {thinking && (
+          <button
+            type="button"
+            className="code-chat__thinking-toggle"
+            aria-expanded={showThinking}
+            onClick={onToggleThinking}
+            title={showThinking ? t('code.thinking.hide') : t('code.thinking.show')}
+            aria-label={showThinking ? t('code.thinking.hide') : t('code.thinking.show')}
+          >
+            <ThinkingChevron open={showThinking} />
+          </button>
+        )}
+      </div>
+      {thinking && showThinking && <ThinkingText text={thinking} />}
+    </>
+  )
+}
+
+function LiveLineBody({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.Element {
+  return (
+    <>
       <span className="code-chat__activity-verb">{text.action}</span>
       {text.path && (
         <span className="code-chat__activity-path" title={text.path}>
@@ -125,7 +203,7 @@ function LiveLine({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.El
       {text.lines && <span className="code-chat__activity-stats repo-change__added">{text.lines}</span>}
       {text.elapsed && <span className="code-chat__live-elapsed">· {text.elapsed}</span>}
       {text.stall && <span className="code-chat__live-stall">· {text.stall}</span>}
-    </div>
+    </>
   )
 }
 
@@ -220,6 +298,8 @@ export default function CodePanel(): JSX.Element {
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   /** Avancement en direct de l'étape en cours (étape 99) — `null` avant le premier appel au modèle. */
   const [progress, setProgress] = useState<CodeGenProgress | null>(null)
+  // Étape 326 : la réflexion en direct reste dépliée d'une étape à l'autre si on l'a ouverte.
+  const [showThinking, setShowThinking] = useState(false)
   /** Étape 288 : le fichier que Jaris écrit en ce moment, ligne par ligne (`null` : il n'écrit pas de fichier). */
   const [live, setLive] = useState<CodeLiveWrite | null>(null)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
@@ -866,7 +946,14 @@ export default function CodePanel(): JSX.Element {
               {/* Étape 288 (Léo : « enlève ça [le bandeau Étape · caractères · Arrêter], on peut arrêter comme dans le
                   Chat, mais mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : une seule ligne,
                   à la suite de la conversation, qui dit ce que Jaris fait. L'arrêt passe par le bouton du champ. */}
-              {generating && <LiveLine text={formatCodeLive(live, progress)} />}
+              {generating && (
+                <LiveLine
+                  text={formatCodeLive(live, progress)}
+                  thinking={live ? undefined : progress?.thinkingText}
+                  showThinking={showThinking}
+                  onToggleThinking={() => setShowThinking((open) => !open)}
+                />
+              )}
 
               {error && <p className="code-panel__error">{error}</p>}
               {error && githubDisconnected && (

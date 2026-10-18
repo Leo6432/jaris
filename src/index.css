@@ -7659,6 +7659,42 @@ select {
   color: var(--hud-text-faint);
 }
 
+/* Étape 326 : la réflexion en direct, sous une petite flèche (comme les recherches web du Chat, même chevron). */
+.code-chat__thinking-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--hud-text-dim);
+  background: transparent;
+  cursor: pointer;
+}
+
+.code-chat__thinking-toggle:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.code-chat__thinking {
+  flex: 0 0 auto;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 2px 0 0 14px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--jv-frame);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--hud-text-faint);
+}
+
 @keyframes code-chat-live-pulse {
   0%,
   100% {

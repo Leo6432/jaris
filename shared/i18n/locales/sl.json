@@ -710,6 +710,8 @@
   "code.live.write": "Piše",
   "code.live.edit": "Spreminja",
   "code.live.review": "Pregleduje",
+  "code.thinking.show": "Pokaži njegovo razmišljanje",
+  "code.thinking.hide": "Skrij njegovo razmišljanje",
   "code.stall.started": "od modela ni nič prišlo že {duration}",
   "code.stall.start": "še vedno nič po {duration}",
   "code.live.lines_one": "{count} vrstica",

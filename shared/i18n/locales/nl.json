@@ -676,6 +676,8 @@
   "code.live.write": "Schrijft",
   "code.live.edit": "Wijzigt",
   "code.live.review": "Leest na",
+  "code.thinking.show": "Bekijk zijn redenering",
+  "code.thinking.hide": "Verberg zijn redenering",
   "code.stall.started": "al {duration} niets van het model ontvangen",
   "code.stall.start": "nog steeds niets na {duration}",
   "code.live.lines_one": "{count} regel",
