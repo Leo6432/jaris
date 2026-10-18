@@ -8632,3 +8632,159 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
     voisines fausses restent fausses ; les nouvelles assertions échouent avec l'ancien juge ;
   - `scripts/test-hardwarescan-single-pool.mjs` et `scripts/test-benchmark-cases.mjs` : mécanisme « À remesurer »
     sur une copie remplie.
+
+- **Bêta de Jaris par Claude, puis correction des bugs graves et du premier lancement (étape 324, Léo : « tu vas
+  tester jaris », puis « fait tout bug grave et bug premier lancement »).** Méthode du test, à réutiliser :
+  - le VRAI Jaris est lancé sous Xvfb (`electron . --no-sandbox --remote-debugging-port=… --inspect=…`), avec HOME
+    dans le scratchpad pour un profil neuf ;
+  - l'écran est piloté par `chromium.connectOverCDP` (Playwright global) ;
+  - le processus principal est piloté par le protocole de l'inspecteur Node (`Runtime.evaluate` avec
+    `process.mainModule.require('electron')`), pour simuler une réduction de fenêtre ou un `app.quit()` ;
+  - un VRAI Ollama 0.40.5 tourne sur un port isolé (`OLLAMA_HOST=http://127.0.0.1:11500`), depuis l'archive Linux
+    sans les bibliothèques GPU, avec qwen3.5:0.8b.
+
+  Dix défauts corrigés, tous avec un test qui échoue sans le correctif (vérifié en remettant chaque défaut) :
+  1. **« Déplacer » perdait des données.** Seules les entrées de `OWNED_ENTRIES` étaient copiées, puis l'ancien
+     dossier était effacé en entier au démarrage suivant (`cleanupStaleChromiumData`). Ne suivaient pas :
+     - le jeton GitHub et l'identité Tailscale, rangés dans le dossier de CHROMIUM, qui change de place à chaque
+       déplacement ;
+     - les téléphones appairés ;
+     - les résultats des tests de modèles ;
+     - la liste du mode Code (localStorage de Chromium).
+
+     Tout vit maintenant dans `getDataRoot()` et figure dans la liste. Une installation qui a encore ces fichiers
+     dans le dossier de Chromium les y retrouve au démarrage (`adoptLegacyEntriesSync`). La copie se fait sous un
+     nom temporaire puis par renommage, jamais par-dessus une donnée déjà rangée. **Piège trouvé en lisant le code
+     d'Electron/Chromium, pas en testant :** `safeStorage` chiffre avec une clé rangée dans « Local State »
+     (`os_crypt.encrypted_key`) du dossier de Chromium. Un dossier neuf crée une NOUVELLE clé, et le jeton copié
+     devient illisible : la clé est donc recopiée (`carryChromiumKeySync`). Le test de `test-data-location.mjs` lit
+     l'ARBRE du code d'electron/ et shared/ : tout nouveau `join(getDataRoot(), 'nom')` absent de la liste le fait
+     échouer. Pendant un « Déplacer », l'accès téléphone et un test de modèles sont arrêtés ET attendus, car un
+     fichier ouvert ne s'efface pas sous Windows.
+  2. **Liste du mode Code hors du localStorage.** Elle est dans le fichier `code-conversations.json`, tenu par le
+     main (IPC), avec une écriture atomique (.tmp + fsync + renommage, réessayé si Windows refuse un instant). Un
+     fichier abîmé est mis de côté dans `code-conversations-illisibles/` (aussi dans la liste), jamais remplacé par
+     une liste vide. **Piège :** la reprise de l'ancien localStorage doit se faire au montage d'App, pas de l'écran
+     Code. KeepAlive ne monte un écran qu'à sa première visite, et Jaris s'ouvre sur l'Agent vocal. « Déplacer »
+     attend la fin de cette reprise.
+  3. **Mémoire automatique.**
+     - `Boolean("false")` vaut vrai : `replace: "false"` effaçait la note. `toolFlag`, déjà là pour les outils,
+       n'avait pas été repris ici.
+     - Vu en vrai : la réponse de Jaris elle-même était enregistrée sous « Conversation ». Le code refuse maintenant
+       un échange sans aucun mot de l'utilisateur, une salutation, ou une question à laquelle Jaris a répondu. Un
+       titre qui désigne l'échange ne jette jamais un vrai fait : la note est gardée sous le prénom, sans `replace`.
+       Attention aux doubles sens : « chat » et « entretien » sont de vrais sujets.
+     - Vu en vrai aussi : l'extraction occupait Ollama, et la question suivante attendait environ 1 minute.
+       Désormais, une nouvelle demande l'annule (voix, Chat, téléphone, Code, Image ou Vidéo), et l'échange reste en
+       file (12 au plus).
+  4. **Mode Code : JavaScript cassé livré comme terminé** (vu en vrai : `function toggleAlarm(false) {`). Chaque
+     script exécuté par le navigateur est compilé sans être exécuté (`new vm.Script`, scriptSyntax.ts). Un module
+     est rendu compilable sans changer les numéros de ligne. Une erreur déclenche la réparation, puis prévient
+     l'utilisateur si elle reste. Dans un dépôt GitHub, un fichier préparé qui ne compile pas empêche « terminé »,
+     donc l'envoi automatique. **Règle du contrôle : jamais de faux reproche** (il tourne sur chaque génération).
+     Sont ignorés : gabarits serveur, JSX, Flow, `<script>` dans un textarea, un template, un svg ou un attribut.
+  5. **Rappel lointain** : setTimeout ramène tout délai au-delà de 24,8 jours à 1 ms, donc « rappelle-moi dans un
+     mois » sonnait tout de suite. Le délai est découpé en tranches.
+  6. **« Error invoking remote method 'jaris:…': Error: »** devant une trentaine de messages d'erreur : retiré à la
+     source, dans le preload. Tous les appels passent par la fonction `invoke`, et un test interdit
+     `ipcRenderer.invoke` direct.
+  7. **Écran « Configuration de Jaris » illisible** (vu en vrai, à toutes les tailles) : une colonne de 440 px pour
+     un tableau de ~550 px, et des noms de modèles écrasés à 10 px (« q… »). Le tableau se réorganise sur deux
+     lignes par rôle. Une colonne prend la largeur de son plus long libellé (testé en allemand et en hongrois :
+     « Bildschirmsteuerung »).
+  8. **Erreur d'installation illisible en thème clair** : contraste mesuré à 1,86:1, maintenant 6,15:1.
+  9. **Fin de configuration : la fenêtre disparaissait**, il ne restait que la pastille. C'était le choix de
+     l'étape 19, resté en place alors que l'étape 295 l'avait remplacé pour le démarrage. La fenêtre reste ouverte
+     sur l'accueil. Le widget est créé caché (il porte aussi le lecteur audio des réponses parlées). Pas de délai de
+     grâce ici : aucune fenêtre ne passe le premier plan à une autre.
+  10. **Téléchargement des modèles** : vraie barre et vraie taille (« 2,0 Go sur 3,1 Go »), aussi dans
+     Options → Retester. **Piège vérifié dans le code d'Ollama :** il télécharge les fichiers d'un modèle un par un
+     sans les annoncer, et le total grandit en route. Le pourcentage affiché ne recule donc jamais et reste sous 100
+     jusqu'à la fin (« fichier suivant… »). Le résumé final a sa ligne Vidéo.
+
+  **Deuxième série, après une relecture croisée de l'ensemble fusionné** (cinq constats confirmés par des
+  sceptiques) :
+  - **La clé d'une conversation d'application était son chemin ABSOLU** (`app:C:\…\generated-apps\…`). Après un
+    « Déplacer », le fichier suivait, mais aucune clé ne correspondait plus : chaque conversation disparaissait de
+    l'écran. La clé devient `app:<nom du dossier>` (unique : horodaté à la milliseconde, `appConversationKey` dans
+    shared/codeConversations.ts). Les anciennes clés, Windows ou POSIX, sont converties à la lecture. Deux anciennes
+    clés du même dossier sont réunies sans perte. **Vérifié aussi dans le vrai Jaris** : une conversation rangée
+    sous `app:C:\Users\leo\…\generated-apps\…-snake` s'affiche pour l'application installée ailleurs.
+  - **Disque D débranché puis rebranché** : la session faite sur C recopiait ses fichiers PAR-DESSUS ceux de D
+    (`cpSync(force)`). code-conversations.json est maintenant RÉUNI (`combineCodeConversations` : D d'abord, et le
+    plus long recouvrement en fin de D, pour qu'un second rebranchement ne recopie rien deux fois). Les trois
+    fichiers du test des modèles rejoignent `KEPT_AT_DESTINATION_ENTRIES`. Les copies de secours ne s'écrasent
+    jamais. Le renommage est réessayé sur EPERM/EBUSY/EACCES, car un antivirus peut le refuser un instant.
+  - **« Déplacer » copiait les petites données AVANT des dizaines de minutes de copie des modèles.** Tout ce qui
+    était écrit pendant ce temps restait dans l'ancien dossier, puis était effacé. Pire : un jeton GitHub renouvelé
+    dans l'ancien dossier laissait, après la relance, un jeton de renouvellement déjà consommé, donc une déconnexion
+    (étape 311). Maintenant :
+    - les données sont copiées APRÈS les modèles, dans le même « tout ou rien » ;
+    - un rattrapage (fichiers ajoutés ou modifiés seulement) a lieu juste avant l'effacement final, après la
+      réinstallation de Docker, dont la fenêtre d'autorisation peut rester ouverte des minutes ;
+    - pendant le déplacement, le jeton GitHub n'est jamais renouvelé, et la connexion comme la déconnexion sont
+      refusées avec un message affiché ;
+    - les écritures du mode Code sont gardées en mémoire, puis écrites dans le nouveau dossier, ou dans l'ancien si
+      le déplacement est annulé.
+  - **Expressions régulières au coût cubique ou au carré** dans scriptSyntax.ts et la validation du HTML (mesuré :
+    49 s pour 8 000 caractères piégés, 10 s pour des règles CSS sans accolade fermante, toutes les fenêtres figées).
+    Elles sont remplacées par des lectures linéaires, comparées à l'expression D'ORIGINE sur des centaines de
+    milliers d'entrées aléatoires, sans aucun écart.
+  **Leçon générale : un état rangé sous un CHEMIN ABSOLU (clé, identifiant, référence) casse au premier
+  déplacement des données — ranger sous un nom relatif à la racine des données, et convertir les anciennes clés à la
+  lecture.** Et pour une expression régulière lancée à chaque position d'un texte : supprimer le découpage ambigu ne
+  règle que le coût cubique ; un guillemet ou une ouverture jamais refermés la laissent au carré. Il faut chronométrer
+  à la taille réelle maximale (150 000 caractères et plus), pas à 8 000.
+
+  **Organisation** : chaque correctif a été fait par un agent, dans sa propre copie (git worktree), relu par deux
+  relecteurs adverses, réparé, puis fusionné. L'ensemble a ensuite été relu sous quatre angles, et chaque constat
+  vérifié par un sceptique. Les relecteurs ont trouvé de VRAIS défauts dans chaque premier jet :
+  - un jeton chiffré écrasé au démarrage ;
+  - la reprise du localStorage jamais faite sans visite de l'écran Code ;
+  - de vrais faits refusés à cause d'un titre « Chat » ;
+  - des faux reproches sur les gabarits Jinja ;
+  - des messages doublés au second rebranchement ;
+  - une déconnexion GitHub refusée sans aucun message.
+
+  **Leçon générale : un correctif de données (migration, copie, effacement) se fait relire par quelqu'un dont le
+  rôle est de le casser — chacun des premiers jets ici perdait encore des données dans un cas.** Le répertoire
+  `.claude/worktrees/` des agents est exclu localement (`.git/info/exclude`), jamais commité. **Deux correctifs
+  fusionnés sans conflit peuvent quand même se contredire** : le test de l'un écrivait une clé `app:C:/…` que
+  l'autre convertit désormais. Toujours relancer TOUTE la suite après une fusion, pas seulement les tests de chaque
+  branche.
+
+  **Tests rendus fiables** :
+  - `test-code-panel-ui.mjs` lisait l'écran juste après un évènement simulé, avant le rendu de React (3 échecs sur 4
+    sur une machine chargée, y compris sur la base). Chaque évènement simulé attend maintenant deux images ;
+  - le test du rappel lointain attend l'écriture du fichier en vrai temps, plus un nombre de tours fixe ;
+  - la CI Windows (fichiers en CRLF) refusait un motif `…limitReached\n/` : `\r?$` avec le drapeau `m`. Ces tests
+    navigateur sont ignorés par la CI Windows (Playwright absent) : les lancer ici avant de pousser. Vérifié aussi
+    sur une copie CRLF (`git -c core.autocrlf=true worktree add`).
+
+  **Restent à faire, constatés pendant la bêta ou la relecture** :
+  - le mode Code affiche « Écrit index.html » figé, sans compteur, pendant le chargement du modèle (l'étape 291 ne
+    s'applique pas à une nouvelle application) ;
+  - « Jaris réfléchit… » s'affiche sans durée dans le Chat ;
+  - « Parler à Jaris » ne fait rien quand la voix est en panne ;
+  - le widget Chat ne s'ouvre qu'avec le « + » du pavé numérique ;
+  - une question de calcul (« 12 fois 7 ») force une recherche web, et si elle échoue, l'échec remplace la bonne
+    réponse ;
+  - des textes écrits en dur ne sont pas traduits : aperçu d'une voix, avancement du dessin sur le téléphone hors
+    français, scores « 13,1 » ;
+  - les écritures du profil et de l'index des conversations ne sont pas atomiques ;
+  - au rebranchement d'un disque, profile.json, conversations/ du Chat, rappels, mémoire et language.json sont encore
+    recopiés par-dessus ceux de D (l'index du Chat de C peut cacher les fils de D) : il faut une fusion propre à
+    chaque format ;
+  - un fichier SUPPRIMÉ de l'ancien dossier pendant un « Déplacer » reste dans la copie.
+
+  **Non vérifiable ici (pas de Windows)** : le chiffrement DPAPI réel après un vrai « Déplacer », les fichiers
+  verrouillés par l'antivirus, et le premier plan de la fenêtre à la fin de la configuration. **Vérifié en vrai sous
+  Xvfb** : les écrans de premier lancement, la barre de téléchargement, la fenêtre ouverte après la configuration, la
+  mémoire avec qwen3.5:0.8b (aucune note absurde, question suivante sans attente), et la conversation d'une
+  application retrouvée sous une ancienne clé.
+
+  Régression : `npm test` (1586 tests), dont :
+  - `test-data-location`, `test-code-conversations-*`, `test-code-conversation-keys`, `test-relocation` ;
+  - `test-memory-extractor`, `test-script-syntax`, `test-codegen-validate` ;
+  - `test-setup-screens-ui`, `test-ollama-pull-progress`, `test-onboarding-finish*` ;
+  - `test-reminders`, `test-ipc-error`, `test-github-ui`.
