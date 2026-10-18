@@ -324,6 +324,8 @@ test('les versions de test connues de Jaris sont celles des scripts', async () =
   assert.equal(Number(scenarios.match(/export const SCENARIO_TEST_VERSION = (\d+)/)[1]), scan.SCENARIO_TEST_VERSION)
   assert.equal(Number(vision.match(/export const VISION_TEST_VERSION = (\d+)/)[1]), scan.VISION_TEST_VERSION)
   assert.equal(Number(code.match(/export const CODE_TEST_VERSION = (\d+)/)[1]), scan.CODE_TEST_VERSION)
+  const cases = readFileSync(new URL('./benchmark-cases.mjs', import.meta.url), 'utf8')
+  assert.equal(Number(cases.match(/export const CONVERSATION_TEST_VERSION = (\d+)/)[1]), scan.CONVERSATION_TEST_VERSION)
 })
 
 // Étape 244, Léo : « je vois pas tester les modèles avec la dernière version ». Les modèles des demandes arrêtées par
@@ -364,4 +366,30 @@ test('modèles à tester : « model not found » reste à faire même après un 
   assert.ok(campaign.todo.code.has(tiny))
   assert.ok(campaign.code.has('qwen2.5-coder:7b') && !campaign.todo.code.has('qwen2.5-coder:7b'))
   assert.ok(scan.getUnscoredModels(campaign).includes(tiny), 'la 0.9B est de nouveau proposée au test')
+})
+
+// Étape 322, Léo : « ça change pas mon pc et ton pc pour les scores tu es sûr ? », puis « oui » pour retester K2
+// Horizon 3.7B, mesuré sur le PC de Claude. Section « À remesurer » : le bouton le propose comme s'il n'avait aucun
+// score, Jaris garde ses scores pour choisir en attendant, et une fois TOUT passé, le bouton ne le propose plus,
+// 78 questions comprises (avant, seules les demandes, la vision et le code étaient suivies dans le fichier du test).
+// Étape 323 : la 3.7B est remesurée et la section du vrai fichier est vide ; elle y est remise pour ce test.
+test('modèle à remesurer : proposé au test, toujours choisi en attendant, plus proposé une fois tout passé', async () => {
+  const k2 = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
+  const scores = REAL_SCORES.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
+  assert.notEqual(scores, REAL_SCORES, 'section « À remesurer » introuvable dans le vrai fichier')
+  const scan = setup({ vramMib: 6 * 1024, ramGb: 16, scores })
+  scan.setOllamaVersionSource(() => '0.40.5')
+  assert.ok(scan.parseModelsToRemeasure().has(k2))
+  assert.match(REAL_SCORES, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m, 'ses scores restent dans le fichier')
+  assert.deepEqual([...scan.getUnscoredModels()], [k2], 'seul modèle proposé')
+  const { models } = await scan.pickBestModelsFromBenchmark()
+  assert.equal(models.flash, k2, 'toujours choisi en attendant (carte de 6 Go)')
+  const lines = [{ type: 'campagne', versions: { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
+  for (let index = 0; index < 26; index++) for (let pass = 1; pass <= 3; pass++) lines.push({ type: 'question', model: k2, index, pass, ok: true })
+  for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) lines.push({ type: 'demande', model: k2, id: `d${i % 24}`, pass: i < 24 ? 1 : 2, ok: true, turns: [], calls: [] })
+  for (const id of ['compteur', 'addition', 'convertisseur', 'liste-taches', 'formulaire-contact']) lines.push({ type: 'code', model: k2, id, ok: true })
+  const traces = (rows) => rows.map((l) => JSON.stringify(l)).join('\n')
+  assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))], [], 'tout passé : plus proposé')
+  const withoutQuestions = lines.filter((l) => l.type !== 'question')
+  assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(withoutQuestions)))], [k2], 'les 78 questions manquent encore')
 })

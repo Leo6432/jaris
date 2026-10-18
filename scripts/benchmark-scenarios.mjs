@@ -813,7 +813,10 @@ export const SCENARIOS = [
       // Étape 246 : la demande ne dit pas À QUI écrire. « Dans quelle conversation veux-tu que j'écrive ? » est une
       // vraie question, pas une fausse réussite — sauf si la réponse prétend faire autre chose en même temps
       // (« je suis en train de regarder l'écran » sans l'avoir regardé, qwen3.6:35b).
-      const asksWhere = /\?/.test(ctx.turns.at(-1)?.reply ?? '') && /\b(canal|salon|serveur|conversation|discussion|destinataire|a qui|pseudo|ou souhaites|ou veux)\b/.test(reply)
+      // Étape 323 : une demande sans point d'interrogation compte aussi (« Tu pourras me dire à qui tu veux écrire (ton nom
+      // de serveur ou un nom d'utilisateur) », K2 Horizon 3.7B, 17/10/2026).
+      const asks = /\?/.test(ctx.turns.at(-1)?.reply ?? '') || /\b(?:dis moi|tu (?:peux|pourras|pourrais) me dire|indique moi|precise moi)\b/.test(reply)
+      const asksWhere = asks && /\b(canal|salon|serveur|conversation|discussion|destinataire|a qui|pseudo|ou souhaites|ou veux)\b/.test(reply)
       const claimsAction = /je suis en train de|(?:j ai|c est) (?:bien )?(?:ecrit|envoye|tape|poste)|a ete (?:ecrit|envoye|poste)/.test(reply)
       if (asksWhere && !claimsAction) return null
       return 'la saisie a échoué mais la réponse ne le dit pas (fausse réussite)'
@@ -911,7 +914,11 @@ export const SCENARIOS = [
       if (!pattern.test(reply)) return `le prix trouvé (${price}) n’est pas dans la réponse`
       // Relecture du 05/10/2026 : « le gazole coûte 1,689 € le litre pour le SP95-E10 » était compté juste — le prix
       // du gazole est attribué à l'autre carburant. Parler du SP95 n'est juste qu'avec SON prix (1,799 €).
-      return /sp\s?95|e10/i.test(reply) && !/1[,.]799/.test(reply) ? 'attribue le prix du gazole au SP95-E10' : null
+      // Étape 323 : dans la MÊME phrase que le prix trouvé. « Le gazole coûte 1,742 €/L. Veux-tu vérifier le SP95-E10 ? »
+      // (K2 Horizon 3.7B, 17/10/2026) donnait le bon prix au bon carburant et proposait juste l'autre ensuite.
+      const sentences = reply.split(/(?<=[.!?])\s+/)
+      const misattributed = sentences.some((s) => pattern.test(s) && /sp\s?95|e10/i.test(s) && !/1[,.]799/.test(s))
+      return misattributed ? 'attribue le prix du gazole au SP95-E10' : null
     }
   },
   {

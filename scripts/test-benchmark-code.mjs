@@ -114,7 +114,18 @@ const APPS = {
       '<form id="f"><input name="nom" placeholder="Nom"><input type="email" name="email"><textarea name="message"></textarea><button type="submit">Envoyer</button></form><p id="ok"></p>',
       "f.addEventListener('submit',e=>{e.preventDefault();ok.textContent='Merci, votre message a bien été envoyé.'})"
     ),
+    // Étape 321 : le formulaire de K2 Horizon 7B (17/10/2026) — « Envoi en cours… », puis la confirmation 1,5 s plus
+    // tard. Léo la voit ; lu 0,25 s après le clic, il était compté faux.
+    goodDelayed: page(
+      '<form id="f"><input name="nom" placeholder="Nom"><input type="email" name="email"><textarea name="message"></textarea><button id="b" type="submit">Envoyer</button></form><p id="ok"></p>',
+      "f.addEventListener('submit',e=>{e.preventDefault();b.textContent='Envoi en cours…';setTimeout(()=>{b.textContent='Envoyer';ok.textContent='Votre message a bien été envoyé.'},1500)})"
+    ),
     bad: [
+      [
+        'confirmation au bout de 8 s : l’attente reste bornée',
+        page('<input placeholder="Nom"><input type="email"><textarea></textarea><button id="b">Envoyer</button><p id="ok"></p>', "b.onclick=()=>setTimeout(()=>{ok.textContent='Merci !'},8000)"),
+        /aucun message de confirmation/
+      ],
       [
         'confirmation par alerte (invisible dans l’aperçu de Jaris)',
         page('<input placeholder="Nom"><input type="email"><textarea></textarea><button id="b">Envoyer</button>', "b.onclick=()=>alert('Message envoyé !')"),
@@ -146,7 +157,7 @@ for (const testCase of CODE_TEST_CASES) {
   test(`« ${testCase.id} » : l’application juste passe, les cassées échouent avec leur raison`, options, async () => {
     const { page: browserPage, close } = await openBrowser(browserPath)
     try {
-      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2', 'goodBareText', 'goodFields']) {
+      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2', 'goodBareText', 'goodFields', 'goodDelayed']) {
         if (APPS[testCase.id][variant]) assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id][variant]), null, variant)
       }
     } finally {

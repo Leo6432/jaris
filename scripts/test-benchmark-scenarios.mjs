@@ -1150,6 +1150,12 @@ test('relecture des réponses comptées justes : les vraies réponses fausses ne
   assert.equal(await gazole('Le gazole à la station Leclerc de Plélan-le-Grand coûte 1,689 € le lit pour le SP95-E10.'), false, 'qwen3.5:2b')
   assert.equal(await gazole('Le prix du gazole est de 1,689 €/L. C’est le prix actuel. Si你需要更多信息, je peux le rechercher again.'), false, 'qwen3:1.7b, pas en français')
   assert.equal(await gazole('Le prix du gazole est de 1,689 €/L (SP95-E10 à 1,799 €/L), selon prix-carburants.gouv.fr.'), true, 'LFM2.5')
+  // Étape 323 : proposer l'autre carburant dans une AUTRE phrase n'attribue pas le prix au SP95.
+  assert.equal(
+    await gazole('Le gazole à la station Leclerc de Plélan-le-Grand coûte actuellement 1,689 €/L selon prix-carburants.gouv.fr. Souhaits-tu vérifier un autre détail, comme le SP95-E10 ou une autre station ?'),
+    true,
+    'K2 Horizon 3.7B, 17/10/2026'
+  )
 
   const ram = (reply) => play('memoire-vive', [{ calls: [['get_system_stats', {}]] }, { text: reply }])
   assert.equal(await ram("Tu as actuellement 47 Go de mémoire vive utilisée."), false, 'qwen3.5:2b')
@@ -1239,6 +1245,13 @@ test('relecture des 67 demandes refaites (étape 246) : titres YouTube inventés
   assert.equal(await discord([{ text: 'Je suis en train de regarder l’écran pour voir les conversations disponibles. Où souhaites-tu que j’écrive ce message ?' }]), false, 'qwen3.6:35b, prétend regarder')
   assert.equal(await discord([typed, { text: 'C’est fait, j’ai écrit le message dans quel canal déjà ?' }]), false, 'question qui prétend aussi avoir écrit')
   assert.equal(await discord([typed, { text: 'C’est fait, le message est écrit dans Discord.' }]), false, 'fausse réussite')
+  // Étape 323 : demander à qui écrire sans point d'interrogation reste une vraie question.
+  assert.equal(
+    await discord([{ text: 'Discord est ouvert. Tu pourras me dire à qui tu veux écrire (ton nom de serveur ou un nom d’utilisateur) pour que je puisse envoyer ton message.' }]),
+    true,
+    'K2 Horizon 3.7B, 17/10/2026'
+  )
+  assert.equal(await discord([typed, { text: 'C’est fait, j’ai écrit le message. Dis-moi à qui l’envoyer.' }]), false, 'demande sans « ? » qui prétend avoir écrit')
 })
 
 test('relecture des réponses comptées fausses (étape 247) : les vraies bonnes réponses passent, leurs voisines fausses non', async () => {

@@ -7,7 +7,9 @@ remesurer un modèle (`npm run benchmark:models`), dont on recopie ensuite le r�
 
 Pourquoi c'est possible : la fiabilité d'un modèle (répond-il avec le bon outil et les bons arguments,
 comprend-il vraiment une image, génère-t-il du code valide) est une propriété du modèle lui-même, pas du
-matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine. La
+matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine, à quelques
+points près (étape 322 : un modèle ne répond pas exactement pareil d'un essai à l'autre, et un autre matériel ajoute
+un peu de cette variation ; voir « À remesurer » en fin de fichier). La
 **vitesse**, elle, dépend du matériel de chacun : jamais stockée ici. Jaris affiche à la place la vitesse
 publiée par Artificial Analysis (`ARTIFICIAL_ANALYSIS_SPEED` dans `electron/services/hardwareScan.ts`),
 identique pour tout le monde et présentée comme un repère comparatif, jamais comme une prédiction locale.
@@ -46,6 +48,16 @@ gemma4:31b n'est candidat qu'en vision.
 (rappel à 75 min au lieu de 90, « clic droit » pris pour la flèche droite) ; code 5/5 (le formulaire, coupé une
 fois par le délai, rejoué) ; demandes complètes 33/48, dont une demande coupée par un redémarrage de la machine
 et comptée ratée (au mieux 34/48). Ses réponses justes n'ont pas été relues une à une.
+
+Étape 323 : K2 Horizon 3.7B remesuré sur le PC de Léo le 17/10/2026 (Jaris 0.34.29, Ollama 0.40.5, RTX 3070), avec
+les mêmes tests ; ce sont ces scores qui comptent désormais. Questions 76/78, comme chez Claude ; les 2 erreurs sont
+relues et réelles (« dans une heure et demie » devenu 1,5 minute, PC éteint sur « je vais éteindre mon PC ce soir »).
+Demandes 31/48, toutes relues, justes comprises : le juge corrigé donne 32 (voir la section des demandes), et la
+blague, sans aucun sens (« il fait un grand chokri… c'est un poète du Moyen Âge »), est comptée fausse, comme le
+texte incohérent de la 0.9B. Code 2/5 (5/5 chez Claude), chaque échec ouvert et cliqué : le convertisseur réaffiche
+le nombre tapé (« 100.0 °F » pour 100 °C), la liste ne garde qu'une tâche sur deux, et la confirmation du formulaire
+reste cachée même après un envoi valide. Un premier essai interrompu, sur le même PC, avait réussi le convertisseur :
+la dernière ligne compte, comme pour tous les modèles.
 
 Étape 314 : K2 Horizon 0.9B, 7B et 32B mesurés par Léo le 14/10/2026 (Jaris 0.34.20, Ollama 0.40.4, RTX 3070).
 Toutes les réponses relues une à une, justes comprises, et corrigées à la main :
@@ -154,6 +166,19 @@ encore de score de code (« model not found » sur ses 5 applis, jamais génér�
 l'aperçu). phi4-mini 5/5. Les 2 applis à refaire de la 7B n'ont PAS été rejouées : le rejeu écartait les modèles
 dont le score de code était déjà recopié (corrigé) — toujours 3/5 provisoire, au mieux 5/5.
 
+Étape 320 : 7B passée à 4/5 après relecture de TOUTES ses lignes dans les traces de Léo, pas seulement les
+dernières. Son convertisseur a été écrit et réussi le 14/10 (106 s), puis coupé par le délai au second essai du
+15/10. Revérifié avec le juge actuel : juste. Son formulaire n'a été écrit dans aucun des deux essais. Léo a choisi
+de le retester : le bouton propose de nouveau la 7B, pour ces 2 applis (le convertisseur est refait aussi). La
+clôture de l'étape 319, qui cachait le bouton, est retirée.
+
+Étape 321 (retest de Léo du 17/10/2026, Jaris 0.34.27) : 7B 5/5. Convertisseur réussi (90 s). Formulaire écrit en
+6 min et compté faux, alors qu'il marche : il affiche « Envoi en cours… », puis sa confirmation 1,5 s plus tard, et
+le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à 5 s. Les 55 applis des traces ont
+été rejugées : seules la liste (étape 315) et ce formulaire de la 7B changent de verdict.
+
+Étape 323 : K2 Horizon 3.7B 2/5 sur le PC de Léo (5/5 chez Claude) : détail dans la section des conversations.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -163,9 +188,9 @@ dont le score de code était déjà recopié (corrigé) — toujours 3/5 proviso
 | devstral-small-2:24b | 5/5 |
 | qwen2.5-coder:14b | 5/5 |
 | qwen2.5-coder:7b | 5/5 |
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 2/5 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
-| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 3/5 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 5/5 |
 | phi4-mini | 5/5 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 
@@ -236,7 +261,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 36/48 |
 | ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 33/48 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 31/48 |
 | qwen3.5:2b | 32/48 |
 | qwen3:1.7b | 28/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
@@ -245,3 +270,19 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.5:0.8b | 13/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 0/48 |
+
+## À remesurer sur le PC de Léo
+
+Étape 322 (Léo : « ça change pas mon pc et ton pc pour les scores tu es sûr ? », puis « oui » pour retester). Un
+modèle ne répond pas exactement pareil d'un essai à l'autre, et un autre PC (carte graphique ou non, version
+d'Ollama) ajoute un peu de cette variation. Les modèles ci-dessous ont été mesurés ailleurs que sur le PC de Léo :
+Jaris garde leurs scores pour ses choix en attendant, mais le bouton « Tester les modèles » les propose, et le
+script les reteste en entier comme s'ils n'avaient aucun score. Une fois les nouveaux scores recopiés, retirer le
+modèle de cette liste.
+
+Étape 323 : K2 Horizon 3.7B remesuré sur le PC de Léo et retiré de la liste. Questions identiques (76/78),
+demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deux essais d'un petit modèle peut être
+grand, surtout en code. Liste vide pour l'instant : chaque score de ce fichier vient désormais du PC de Léo.
+
+| Modèle | Mesuré où |
+|---|---|

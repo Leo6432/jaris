@@ -8512,3 +8512,162 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - la machine de Léo identique, modèle par modèle.
   Chaque test a été vérifié en remettant l'ancien repli, l'ancienne règle de Rapide et mon premier jet. **Non
   vérifiable ici :** la vitesse réelle de ces choix sur une machine sans carte.
+
+- **« Je comprends rien du tout, j'ai fait les tests de phi-4-mini et K2 Horizon, je t'ai donné les résultats,
+  pourquoi il a encore le bouton ? » (Léo, étape 319, Jaris 0.34.26).** Vérifié sur ses vraies traces (pas
+  supposé) : le bouton ne proposait plus qu'un seul modèle, K2 Horizon 7B, pour 2 applis de code jamais vraiment
+  testées. Elles avaient dépassé le délai de 20 min. Au rejeu, le script avait déjà supprimé le modèle (« model
+  not found »). Ensuite, le rejeu suivant les a sautées. Ce sont trois défauts du script, tous corrigés. La règle
+  de l'étape 244 (« un cas à refaire l'est même quand le score est recopié ») les gardait donc à faire pour
+  toujours. Les refaire coûterait jusqu'à 2 h par appli (délai du rejeu), et la simulation à 5/5 ne change aucun
+  choix de modèle sur 12 machines types : le 3/5 devient définitif. Nouvelle liste `CLOSED_TODO`
+  (hardwareScan.ts) : des cas restés à refaire mais clos. Elle ne vaut que si un score est recopié. Le script, lui,
+  ne rejoue que les modèles que le bouton lui passe (`JARIS_ONLY_MODELS`), donc rien n'est à changer de son côté.
+  Vérifié sur les vraies traces de Léo : le bouton ne propose plus rien, et l'écran affiche « tous les modèles
+  ont un score » à la place.
+  **Leçon générale : pour Léo, « j'ai fait les tests » veut dire « c'est fini ».** Un bouton qui reste après ça
+  doit avoir une raison qu'il comprend, ou disparaître. Avant de lui demander de relancer un test, calculer ce
+  qu'il changerait. Un test long qui ne peut rien changer ne doit pas lui être proposé, et l'expliquer dans des
+  termes de script (« rejeu », « cas à refaire ») ne fait que l'embrouiller.
+  Régression : `scripts/test-hardwarescan-single-pool.mjs`, qui couvre trois cas :
+  - les vraies dernières lignes de la 7B ne font plus proposer le test ;
+  - un autre modèle dans le même état reste proposé ;
+  - sans score recopié, la 7B redevient à tester.
+  Le test échoue quand on vide `CLOSED_TODO`.
+  **Piège CRLF revenu (déjà vu à l'étape 316), premier échec de la CI de la 0.34.26 :** le test cherchait la ligne
+  du 3/5 avec `\n`, mais sous Windows le fichier des scores se lit avec `\r\n`. Ce n'est pas le code qui était en
+  cause. Un test qui cherche ou retire une ligne précise d'un fichier du dépôt doit l'écrire `\r?\n` ; il est
+  vérifié ici avec le fichier converti en `\r\n`, mutation comprise.
+
+- **« Tu m'as dit que K2 7B a eu un bug sur 2 des 5 applis de code. Je t'ai pas donné les historiques, que tu
+  vérifies toi-même ? Sinon on peut retester » (Léo, étape 320, Jaris 0.34.27).** Il avait raison : je n'avais lu
+  que la DERNIÈRE ligne de chaque appli dans ses traces. En relisant toutes les lignes, la 7B a passé le test de code
+  deux fois, le 14/10 et le 15/10. Le 14/10, son convertisseur a été écrit en 106 s et réussi. Il est revérifié
+  ici avec le juge actuel : juste. Au second essai, il a été coupé par le délai. Le formulaire n'a été écrit dans
+  aucun des deux essais. Score corrigé : 4/5 au lieu de 3/5 (compteur, addition, liste de tâches du 15/10,
+  convertisseur du 14/10 ; un délai dépassé n'est pas un verdict, donc le dernier VERDICT du convertisseur reste
+  celui du 14/10). Léo a choisi de retester (question à choix simple). La clôture de l'étape 319 (`CLOSED_TODO`),
+  qui cachait le bouton, est entièrement retirée plutôt que laissée vide. Le bouton propose de nouveau la 7B, pour
+  ces 2 applis : la dernière ligne du convertisseur est un « model not found », donc il est refait aussi.
+  **Répétition à sec avant de publier, avec le VRAI script et les VRAIES traces de Léo** (faux Ollama 0.40.5, 7B
+  absente du disque), lancée avec les mêmes réglages que le bouton :
+  - la 7B est retéléchargée ;
+  - exactement les 2 applis sont rejouées, avec le délai du rejeu (120 min) ;
+  - la 7B est supprimée après ;
+  - rien d'autre n'est testé ;
+  - sur les traces qui en sortent, le bouton ne propose plus rien.
+  Ce rejeu avait été empêché trois fois de suite par trois défauts différents. Il est maintenant couvert d'un seul
+  tenant. Limite connue, signalée à Léo : une appli qui dépasse encore 2 h reste « à refaire » (règle du 05/10 :
+  « dès qu'il n'a pas eu le temps, on refait »).
+  **Leçon générale : avant d'affirmer qu'un cas n'a « jamais été testé », lire TOUTES ses lignes dans les traces,
+  pas seulement la dernière.** Le dernier essai peut avoir été coupé alors qu'un essai précédent, dans les mêmes
+  conditions (même version de test, même juge), avait donné un vrai verdict. **Et une question à choix simple
+  avant de cacher un test vaut mieux qu'une décision prise à la place de Léo :** à l'étape 319, j'avais clos le cas
+  moi-même, en l'écrivant comme « rendu définitif par Léo » alors qu'il n'avait rien décidé.
+  Régression : `scripts/test-benchmark-cases.mjs`, qui vérifie trois points :
+  - la 7B est retéléchargée une seule fois ;
+  - seules les 2 applis coupées sont rejouées ;
+  - la 7B est supprimée après.
+  Ce test échoue avec l'ancienne règle « model not found » (aucun rejeu).
+
+- **« Et là ? ça met 2 cas refaits » (Léo, étape 321, Jaris 0.34.28, retest de K2 Horizon 7B du 17/10).** Le rejeu
+  préparé à l'étape 320 a marché du premier coup chez lui : 7B retéléchargée, exactement les 2 applis refaites, puis
+  supprimée. Résultats : convertisseur réussi (90 s), formulaire compté faux (« aucun message de confirmation »).
+  **Le formulaire marchait, le juge lisait trop tôt.** Ouvert et cliqué ici : il affiche « Envoi en cours… », puis
+  « Votre message a bien été envoyé » 1,5 s plus tard, sans erreur JavaScript. Le juge lisait la page 0,25 s après
+  le clic (`page.click` puis `pageText`). Une personne devant l'écran voit la confirmation. Corrigé :
+  `waitForPageText` relit la page toutes les 0,25 s, jusqu'à 5 s (`CONFIRMATION_WAIT_MS`). L'attente reste
+  bornée : une confirmation au bout de 8 s est toujours fausse. Seul le formulaire attend, parce qu'un faux
+  « envoi » en cours est un motif courant et légitime ; un compteur ou une addition doivent répondre tout de suite.
+  Les 55 applis des traces de Léo ont été rejugées. Seuls deux verdicts changent, tous deux de la 7B : la liste
+  (déjà connue, étape 315) et ce formulaire. Aucun autre modèle n'est touché. La 7B passe à 5/5, sans changer aucun
+  choix de modèle (simulé sur 12 machines types). Avec ces traces, le bouton ne propose plus rien.
+  **Leçon générale, deuxième fois sur le même modèle (étape 315 : liste dans des champs) : un verdict « faux » sur
+  un modèle dont le reste est juste mérite d'ouvrir l'appli et de cliquer soi-même avant de recopier le score.** Le
+  juge lit l'écran comme une machine, à un instant précis et d'une seule façon. Une appli correcte qui s'en écarte
+  un peu (texte dans un champ, confirmation différée) passe pour cassée.
+  Régression : `scripts/test-benchmark-code.mjs`. La fixture `goodDelayed` (confirmation à 1,5 s) doit passer, et
+  une confirmation à 8 s doit échouer. La première échoue avec `CONFIRMATION_WAIT_MS = 0`.
+
+- **« Tous les modèles ont passé le même test ? » puis « ça change pas mon PC et ton PC pour les scores, tu es sûr ? »
+  et « oui » pour retester (Léo, étape 322, Jaris 0.34.29).**
+  1. **Mêmes tests : vérifié en rejugeant, pas de mémoire.**
+     - Code : les 60 applis des 12 modèles sont notées par le même juge, le juge actuel.
+     - Vision : les 11 scores recopiés sont identiques au juge actuel.
+     - 78 questions : le juge n'a pas changé depuis le 03/10 (`git log -L` sur `isCorrectAnswer`), avant tous ces
+       scores.
+     - Demandes complètes : avec le seul juge automatique, 13 modèles bougeraient de 1 à 5 points. C'est vrai même
+       avec le juge DE L'ÉPOQUE, extrait de Git, sur les lignes de l'époque. L'écart vient donc des relectures à la
+       main (justes comprises), gardées seulement dans les totaux. Simulé : aucun choix ne change sur 14 machines
+       types. **Leçon générale : une correction manuelle gardée seulement dans un total ne se rejoue pas.** Quand on
+       relit un verdict à la main, soit on corrige le juge pour tout le monde, soit on accepte que le total ne se
+       reproduise plus par programme, et on le sait.
+  2. **Le PC compte un peu.** Le test ne fixe pas la température (seules les demandes ont une graine), donc un
+     modèle ne répond pas pareil d'un essai à l'autre. Même sur le PC de Léo : la liste de K2 7B a raté le 14/10 et
+     réussi le 15/10. Un autre matériel (processeur seul, Ollama 0.40.4-rc1) ajoute un peu de cette variation. Seul
+     concerné : K2 Horizon 3.7B, mesuré sur le PC de Claude. Simulé : 3 points de moins aux questions, 4 aux
+     demandes et 1 en code suffisent pour que les cartes de 5 à 6 Go passent à qwen3.5:4b. La machine de Léo ne
+     change pas. L'en-tête de verified-tool-scores.md affirmait qu'un score « reste valable sur n'importe quelle
+     machine » : nuancé.
+  3. **Section « À remesurer » (verified-tool-scores.md)**, lue des deux côtés :
+     - `parseModelsToRemeasure` (hardwareScan.ts) fait proposer le modèle par le bouton comme s'il n'avait aucun
+       score ;
+     - `readVerifiedModels` (benchmark-models.mjs) le fait retester en entier ;
+     - les choix de modèles gardent ses scores en attendant, sans changement sur 14 machines types.
+     Une fois les nouveaux scores recopiés, retirer le modèle de la section.
+  4. **Les 78 questions sont maintenant suivies dans le fichier du test** (`CampaignCompletion.conversation`, lignes
+     `question` de la version de test 6). Avant, un modèle sans score de conversation restait proposé juste après
+     avoir TOUT passé, jusqu'à ce que ses scores soient recopiés : le bouton qui reste, exactement la confusion de
+     l'étape 319. Les questions ne sont jamais rejouées, donc jamais « à refaire ». `CONVERSATION_TEST_VERSION`
+     rejoint les copies de versions vérifiées par test.
+  **Répétition à sec** avec le VRAI script, les VRAIES traces de Léo et les mêmes réglages que le bouton. Ma machine
+  de test a dû être ajustée : une fausse carte de 8 Go (`nvidia-smi` simulé) et une marge disque à 0, parce que
+  son disque est presque plein. La 3.7B est téléchargée, passe 78 questions, 48 demandes et 5 applis, puis elle est
+  supprimée. Ensuite, le bouton ne propose plus rien. **Piège de mon propre test, attrapé en le lançant :**
+  `runScript` teste par défaut le palier « Rapide », où la 3.7B n'est pas candidate (elle est en « Médium ») ;
+  0 question posée, et ce n'était pas le correctif qui était en cause.
+  Régression : `scripts/test-hardwarescan-single-pool.mjs` couvre trois points :
+  - le bouton propose la 3.7B seule ;
+  - elle reste choisie sur 6 Go ;
+  - une fois tout passé, elle n'est plus proposée, et elle l'est encore si seules les questions manquent.
+  `scripts/test-benchmark-cases.mjs` vérifie qu'avec le vrai fichier de scores, le script repose les 78 questions.
+  `scripts/test-hardwarescan-min-ollama.mjs` repart sans la section, car il porte sur la version d'Ollama. Trois
+  mutations vérifiées : sans retrait côté script, sans lecture de la section côté Jaris, sans suivi des questions ;
+  chacune fait échouer son test pour la bonne raison.
+
+- **Retest de K2 Horizon 3.7B sur le PC de Léo (étape 323, Jaris 0.34.30, résultats du 17/10/2026).** Le parcours
+  de l'étape 322 a marché du premier coup : la 3.7B a été téléchargée, testée en entier, puis supprimée. Comparé à
+  la mesure faite sur mon PC :
+  - questions : 76/78 des deux côtés ;
+  - demandes : 31/48 au lieu de 33 ;
+  - code : 2/5 au lieu de 5/5.
+  **Chaque échec de code a été ouvert et cliqué ici, et ils sont réels :**
+  - le convertisseur réaffiche le nombre tapé (« 100.0 °F » pour 100 °C) ;
+  - la liste ne garde qu'une tâche sur deux ;
+  - la confirmation du formulaire reste cachée, `display: none`, même après un envoi valide.
+  Un premier essai interrompu, sur le même PC, avait réussi le convertisseur : la dernière ligne compte, comme pour
+  tous. Choix de Jaris : rien ne change sur la machine de Léo ; sur les cartes de 5 à 6 Go, Code passe de la 3.7B à
+  qwen3.5:4b, la conversation reste à la 3.7B. **La crainte de Léo était donc fondée :** l'écart entre deux essais
+  d'un petit modèle peut être grand, surtout en code. « Un score mesuré une fois vaut partout » était trop
+  optimiste.
+  **Deux erreurs du juge des demandes, trouvées en relisant les 48 réponses une par une, et corrigées pour tout le
+  monde :**
+  1. **Gazole** : toute réponse qui mentionnait le SP95 sans son prix était comptée « prix attribué au SP95 », même
+     quand le bon prix était donné au gazole et que le SP95 n'était que proposé dans une phrase suivante. Le contrôle
+     se fait maintenant phrase par phrase. L'erreur de départ (« 1,689 € le litre pour le SP95-E10 », dans la même
+     phrase) reste fausse.
+  2. **Échec partiel (Discord)** : demander à qui écrire est accepté depuis l'étape 246, mais seulement avec un
+     « ? ». « Tu pourras me dire à qui tu veux écrire… » (sans « ? ») est maintenant reconnu. Une telle demande qui
+     prétend aussi avoir écrit reste fausse.
+  Rejugé sur les 1 680 demandes de tous les modèles : seuls ces 2 verdicts de la 3.7B changent. Les juges sont plus
+  justes, sans toucher aux scores des autres modèles. Ma relecture ajoute un faux : la blague sans aucun sens (même
+  règle que le texte incohérent de la 0.9B). **Leçon générale, deuxième confirmation après l'étape 321 : un verdict
+  « faux » doit se vérifier contre ce que l'outil a VRAIMENT renvoyé (ici le résultat de recherche : la réponse
+  donnait le bon prix au bon carburant), pas seulement contre le texte de la réponse.**
+  La section « À remesurer » est vide mais gardée, avec son mécanisme. Les tests qui s'appuyaient sur son contenu
+  réel la remplissent dans une copie, avec une contre-épreuve : sans la ligne, le modèle n'est pas retesté.
+  Régression :
+  - `scripts/test-benchmark-scenarios.mjs` : les vraies réponses de la 3.7B (gazole et Discord) sont justes, leurs
+    voisines fausses restent fausses ; les nouvelles assertions échouent avec l'ancien juge ;
+  - `scripts/test-hardwarescan-single-pool.mjs` et `scripts/test-benchmark-cases.mjs` : mécanisme « À remesurer »
+    sur une copie remplie.
