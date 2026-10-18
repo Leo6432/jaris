@@ -255,3 +255,16 @@ test('les magasins de données n’écrivent plus jamais directement par-dessus 
   const code = readFileSync(new URL('../electron/services/codeConversationsStore.ts', import.meta.url), 'utf8')
   assert.ok(code.includes('writeFileAtomicSync('), 'le mode Code partage la même écriture (atomicFile.ts), sans la recopier')
 })
+
+test('un profil verrouillé au démarrage ne laisse plus Jaris invisible : réessayé, puis expliqué, jamais l’écran de premier lancement', () => {
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  const decision = main.indexOf('onboardingDone = Boolean(profile?.capacityScanDone)')
+  assert.ok(decision > 0)
+  const before = main.slice(main.lastIndexOf('const profile = ', decision), decision)
+  assert.match(before, /^const profile = await readProfileAtStartup\(\)/, 'le démarrage lit encore le profil sans garde (une exception l’arrête avant toute fenêtre)')
+  assert.match(main, /async function readProfileAtStartup[\s\S]*?dialog\.showErrorBox[\s\S]*?quitting = true[\s\S]*?app\.quit\(\)/)
+  // Les autres lectures du démarrage ne laissent pas de promesse rejetée sans gestion.
+  assert.ok(!/void getProfile\(\)\.then\(/.test(main), 'une lecture du profil sans .catch')
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+  assert.ok(!/window\.jaris\.getProfile\(\)\.then\(/.test(app), 'App.tsx lit le profil sans gérer un échec (écran vide pour toujours)')
+})

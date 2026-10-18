@@ -958,6 +958,49 @@ test('rebranché, un fichier abîmé d’un côté n’est jamais perdu, et un d
   rmSync(root, { recursive: true, force: true })
 })
 
+test('rebranché : rappels et journal valides des deux côtés, un démarrage rejoué ne double rien ; titre de note à une casse près', () => {
+  const { root, from, to, storageRoot } = setupMerge()
+  writeFileSync(join(to, 'reminders.json'), JSON.stringify([reminder('rappel-d', 'arroser'), reminder('commun', 'pain')], null, 2))
+  writeFileSync(join(to, 'journal-demandes.txt'), '\n===== 01/10 — voix =====\nDemande : quelle heure\n')
+  mkdirSync(join(to, 'memory'), { recursive: true })
+  writeFileSync(join(to, 'memory', 'Adresse.md'), '# Adresse\n\n_01/10/2026 10:00:00_\n12 rue des Lilas')
+  const putBackOriginals = () => {
+    writeFileSync(join(from, 'reminders.json'), JSON.stringify([reminder('commun', 'pain'), reminder('rappel-c', 'appeler maman')], null, 2))
+    writeFileSync(join(from, 'journal-demandes.txt'), '\n===== 02/10 — chat =====\nDemande : la météo\n')
+    mkdirSync(join(from, 'memory'), { recursive: true })
+    writeFileSync(join(from, 'memory', 'adresse.md'), '# adresse\n\n_02/10/2026 09:00:00_\ncode 4521')
+  }
+  putBackOriginals()
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.deepEqual(JSON.parse(readFileSync(join(to, 'reminders.json'), 'utf8')).map((r) => r.id), ['rappel-d', 'commun', 'rappel-c'])
+  assert.equal(
+    readFileSync(join(to, 'memory', 'Adresse.md'), 'utf8'),
+    '# Adresse\n\n_01/10/2026 10:00:00_\n12 rue des Lilas\n\n_02/10/2026 09:00:00_\ncode 4521',
+    'le titre de C (« # adresse ») ne doit pas apparaître au milieu de la note'
+  )
+  const once = snapshot(to)
+  putBackOriginals()
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.deepEqual(snapshot(to), once, 'un démarrage rejoué a doublé un rappel ou une partie du journal')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('rebranché, fusion du journal puis démarrage abandonné et session continuée sur C : le début du journal de C n’est pas recopié', () => {
+  const { root, from, to, storageRoot } = setupMerge()
+  const d = '\n===== 01/10 — voix =====\nDemande : quelle heure\n'
+  const c1 = '\n===== 02/10 — chat =====\nDemande : la météo\n'
+  const c2 = '\n===== 03/10 — chat =====\nDemande : un minuteur\n'
+  writeFileSync(join(to, 'journal-demandes.txt'), d)
+  writeFileSync(join(from, 'journal-demandes.txt'), c1)
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.equal(readFileSync(join(to, 'journal-demandes.txt'), 'utf8'), d + c1)
+  // Démarrage abandonné avant l'effacement de C, puis une demande de plus sur C.
+  writeFileSync(join(from, 'journal-demandes.txt'), c1 + c2)
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.equal(readFileSync(join(to, 'journal-demandes.txt'), 'utf8'), d + c1 + c2, 'le début du journal de C a été recopié deux fois')
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('chaque donnée emportée par « Déplacer » a sa règle au rebranchement du disque (étape 325)', () => {
   const { userData, root } = setupUserData()
   const { storageRoot } = loadStorage(userData)

@@ -213,7 +213,7 @@ export default function App(): JSX.Element {
   /** Bouton « Parler à Jaris » et clic sur le logo de l'Agent vocal : une des 3 façons d'activer Jaris
    *  (Options → Voix, étape 81), relue à la volée comme le « + » plus bas. */
   const wakeFromClick = (): void => {
-    void window.jaris.getProfile().then((profile) => {
+    void window.jaris.getProfile().catch(() => null).then((profile) => {
       if (profile?.activationOrbClickEnabled === false) {
         // Étape 325 : plus de clic sans effet ni explication — on dit où le réactiver.
         setWakeNotice({ kind: 'clickOff', text: t('app.voice.clickOff') })
@@ -298,10 +298,27 @@ export default function App(): JSX.Element {
   }, [appMode])
 
   useEffect(() => {
-    window.jaris.getProfile().then((profile) => {
-      setProfileName(profile?.name ?? null)
-      setCapacityScanDone(profile?.capacityScanDone ?? false)
-    })
+    // Étape 325 : un profil momentanément verrouillé (antivirus) fait échouer la lecture au lieu de passer pour
+    // « aucun profil » : on réessaie, plutôt que de laisser l'écran vide pour toujours.
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = (): void => {
+      window.jaris
+        .getProfile()
+        .then((profile) => {
+          if (cancelled) return
+          setProfileName(profile?.name ?? null)
+          setCapacityScanDone(profile?.capacityScanDone ?? false)
+        })
+        .catch(() => {
+          if (!cancelled) timer = setTimeout(load, 2000)
+        })
+    }
+    load()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   // Ce que la machine a déjà (Python, Ollama) : relu à chaque démarrage plutôt qu'enregistré dans le
@@ -349,7 +366,7 @@ export default function App(): JSX.Element {
           // de réglages sont deux fenêtres/process renderer séparés (voir App.tsx en tête de fichier), donc
           // un changement de haut-parleur fait depuis Options (fenêtre réglages) n'apparaîtrait jamais ici
           // sans le relire. Peu fréquent (une seule fois par réponse parlée), le coût est négligeable.
-          void window.jaris.getProfile().then((profile) => {
+          void window.jaris.getProfile().catch(() => null).then((profile) => {
             const sinkId = profile?.audioOutputDeviceId
             const setSinkId = (el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId
             const applySink = sinkId && setSinkId ? setSinkId.call(el, sinkId) : Promise.resolve()
@@ -417,7 +434,7 @@ export default function App(): JSX.Element {
         // Relit le profil à chaque pression plutôt que de garder un état React à synchroniser (voir
         // playSoundCueIfEnabled, soundDesign.ts, même pattern) : Options → Activation (étape 81) permet de
         // décocher cette touche si Léo préfère les deux autres façons d'activer Jaris.
-        void window.jaris.getProfile().then((profile) => {
+        void window.jaris.getProfile().catch(() => null).then((profile) => {
           if (profile?.activationKeyEnabled === false) return
           window.jaris.triggerWake()
         })

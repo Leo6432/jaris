@@ -33,6 +33,12 @@ export const TEMPORARY_SUFFIX = '.tmp'
 export const RENAME_RETRY_DELAYS_MS = [50, 100, 200]
 /** Lecture : un peu plus de patience (~1,5 s), parce qu'abandonner une lecture fait échouer l'action en cours. */
 const READ_RETRY_DELAYS_MS = [50, 100, 200, 400, 800]
+/**
+ * Renommage en version ASYNCHRONE (profil, conversations, rappels, langue, notes) : rien n'est bloqué pendant l'attente,
+ * on peut donc patienter ~3 s. Avant l'étape 325 ces fichiers étaient écrits sur place, et un antivirus qui tient le
+ * fichier un peu plus longtemps ne faisait pas échouer l'enregistrement : ~350 ms seulement serait un échec nouveau.
+ */
+export const ASYNC_RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1600]
 
 /** Les refus passagers de Windows (fichier tenu ouvert un instant par un autre programme). */
 export const TRANSIENT_FS_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
@@ -116,12 +122,12 @@ async function writeNow(file: string, content: string): Promise<void> {
       await rename(temporary, file)
       return
     } catch (err) {
-      if (!isTransientFsError(err) || attempt >= RENAME_RETRY_DELAYS_MS.length) {
+      if (!isTransientFsError(err) || attempt >= ASYNC_RENAME_RETRY_DELAYS_MS.length) {
         // `file` est intact (le remplacement n'a pas eu lieu) : le temporaire ne traîne pas à côté.
         await rm(temporary, { force: true }).catch(() => {})
         throw err
       }
-      await sleep(RENAME_RETRY_DELAYS_MS[attempt])
+      await sleep(ASYNC_RENAME_RETRY_DELAYS_MS[attempt])
     }
   }
 }
@@ -153,14 +159,19 @@ export class DataFileUnreadableError extends Error {
   }
 }
 
-/** Le contenu de `file`, `null` s'il n'existe pas. Un refus passager est réessayé ; s'il dure, DataFileUnreadableError. */
+/**
+ * Le contenu de `file`, `null` s'il n'existe pas. Un refus passager est réessayé ; s'il dure, DataFileUnreadableError.
+ * Toute autre erreur (disque plein, dossier à la place du fichier…) remonte TELLE QUELLE : le message « un autre
+ * programme l'utilise, réessaie » serait faux et enverrait sur une fausse piste.
+ */
 export async function readFileWithRetries(file: string): Promise<string | null> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await readFile(file, 'utf-8')
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
-      if (!isTransientFsError(err) || attempt >= READ_RETRY_DELAYS_MS.length) throw new DataFileUnreadableError(file, err)
+      if (!isTransientFsError(err)) throw err
+      if (attempt >= READ_RETRY_DELAYS_MS.length) throw new DataFileUnreadableError(file, err)
       await sleep(READ_RETRY_DELAYS_MS[attempt])
     }
   }
@@ -223,13 +234,14 @@ export async function setAsideDamagedFile(file: string, asideDir: string, label:
           return candidate
         } catch (err) {
           if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
-          if (!isTransientFsError(err) || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
-          await sleep(RENAME_RETRY_DELAYS_MS[attempt])
+          if (!isTransientFsError(err) || attempt >= ASYNC_RENAME_RETRY_DELAYS_MS.length) throw err
+          await sleep(ASYNC_RENAME_RETRY_DELAYS_MS[attempt])
         }
       }
     }
   } catch (err) {
-    throw err instanceof DataFileUnreadableError ? err : new DataFileUnreadableError(file, err)
+    // Seul un refus passager qui dure devient « fichier occupé » ; un disque plein ou une autre panne garde son vrai message.
+    throw err instanceof DataFileUnreadableError || !isTransientFsError(err) ? err : new DataFileUnreadableError(file, err)
   }
 }
 

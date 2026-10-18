@@ -530,10 +530,14 @@ function noteBlocks(text: string): string[] {
  */
 export function mergeNoteText(older: string, newer: string): string {
   if (older === newer) return older
-  const seen = new Set(noteBlocks(older))
+  const olderBlocks = noteBlocks(older)
+  const seen = new Set(olderBlocks)
+  // Même note, titre à une casse près (« # Adresse » / « # adresse », le cas visé sous Windows) : le titre de C n'est
+  // pas recopié au milieu de la note.
+  const olderTitle = olderBlocks[0]?.startsWith('# ') ? olderBlocks[0].toLowerCase() : null
   const extra: string[] = []
   for (const block of noteBlocks(newer)) {
-    if (seen.has(block)) continue
+    if (seen.has(block) || (olderTitle !== null && block.startsWith('# ') && block.toLowerCase() === olderTitle)) continue
     seen.add(block)
     extra.push(block)
   }
@@ -583,7 +587,30 @@ function appendJournalSync(source: string, dest: string): void {
     return
   }
   if (!newer || older.includes(newer)) return
-  writeWholeFileSync(dest, `${older}${older.endsWith('\n') || newer.startsWith('\n') ? '' : '\n'}${newer}`)
+  // Fusion interrompue en route puis session continuée sur C : le début du journal de C est déjà à la fin de celui de
+  // D. Seule la suite est ajoutée, sinon ce début serait recopié une seconde fois.
+  const rest = newer.slice(journalOverlap(older, newer))
+  if (!rest) return
+  writeWholeFileSync(dest, `${older}${older.endsWith('\n') || rest.startsWith('\n') ? '' : '\n'}${rest}`)
+}
+
+/**
+ * Longueur du plus long début de `newer` qui termine `older`, en lignes entières (KMP : linéaire, le journal peut faire
+ * 512 Ko). Un recouvrement qui ne s'arrête pas sur une fin de ligne, ou fait de lignes vides seulement, ne compte pas.
+ */
+export function journalOverlap(older: string, newer: string): number {
+  const text = `${newer}\u0000${older}`
+  const fail = new Int32Array(text.length)
+  for (let i = 1, k = 0; i < text.length; i++) {
+    while (k > 0 && text[i] !== text[k]) k = fail[k - 1]
+    if (text[i] === text[k]) k++
+    fail[i] = k
+  }
+  for (let k = fail[text.length - 1]; k > 0; k = fail[k - 1]) {
+    // Une ligne vide en commun ne prouve rien : seul un vrai bout de journal déjà présent compte.
+    if (newer[k - 1] === '\n' && newer.slice(0, k).trim() !== '') return k
+  }
+  return 0
 }
 
 /**

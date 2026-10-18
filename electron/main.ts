@@ -2157,10 +2157,12 @@ app.whenReady().then(async () => {
         // quand Jaris n'a pas le focus) — sans ce même contrôle ici, décocher "touche +" dans Options
         // n'avait aucun effet dès que la fenêtre de Jaris n'était pas la fenêtre active (signalé par Léo :
         // "je desactive le plus je fait plus sa sactive").
-        void getProfile().then((profile) => {
-          if (profile?.activationKeyEnabled === false) return
-          triggerVisibleWake()
-        })
+        void getProfile()
+          .catch(() => null)
+          .then((profile) => {
+            if (profile?.activationKeyEnabled === false) return
+            triggerVisibleWake()
+          })
       })
       if (registered) {
         console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)
@@ -2181,7 +2183,12 @@ app.whenReady().then(async () => {
 
   // Après la première configuration, l'écran de démarrage puis la fenêtre de Jaris (étapes 294-295) ; le widget
   // prend le relais quand on la réduit ou qu'on passe sur une autre application. L'onboarding au premier lancement.
-  const profile = await getProfile()
+  // Étape 325 : la lecture du profil peut maintenant échouer (fichier tenu par un antivirus, voir atomicFile.ts) au
+  // lieu d'être prise pour « aucun profil ». Sans garde, l'exception arrêtait le démarrage avant toute fenêtre : Jaris
+  // restait invisible, icône comprise. On réessaie quelques secondes ; si ça dure, Jaris le dit et se ferme proprement
+  // — jamais l'écran de premier lancement, dont le premier enregistrement écraserait le vrai profil.
+  const profile = await readProfileAtStartup()
+  if (profile === undefined) return
   onboardingDone = Boolean(profile?.capacityScanDone)
   // Étape 165 : lancé par Windows à l'ouverture de session (Options → Général), Jaris s'affiche en grand au
   // lieu de démarrer discrètement — « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran ».
@@ -2214,10 +2221,32 @@ app.whenReady().then(async () => {
   // démarrage ne doit jamais rester bloqué, et le message habituel dira ce qui manque).
   startup.track('listening', startVoicePipeline().then(() => lastSetupStatus.ready))
   // Étape 214 : accès téléphone relancé au démarrage s'il était activé (sans ouvrir le navigateur tout seul).
-  void getProfile().then((profile) => {
-    if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, t('phone.log', { message: String(err) })))
-  })
+  void getProfile()
+    .then((profile) => {
+      if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, t('phone.log', { message: String(err) })))
+    })
+    .catch(() => {})
 })
+
+/**
+ * Profil lu au démarrage (étape 325) : réessayé ~10 s quand il est verrouillé. `undefined` = toujours illisible :
+ * l'erreur a été montrée et Jaris se ferme (rien n'est écrit).
+ */
+async function readProfileAtStartup(): Promise<Profile | null | undefined> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      return await getProfile()
+    } catch (err) {
+      lastError = err
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+  }
+  dialog.showErrorBox('Jaris', lastError instanceof Error ? lastError.message : String(lastError))
+  quitting = true
+  app.quit()
+  return undefined
+}
 
 // Se déclenche une seule fois quel que soit le chemin de sortie (Quitter dans la barre système,
 // window-all-closed...), avant que les fenêtres ne se ferment : le bon endroit pour arrêter proprement ce
