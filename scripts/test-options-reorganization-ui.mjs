@@ -114,9 +114,9 @@ const overrides = {
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
-      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8 },
-      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null },
-      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0 },
+      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5 },
+      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4 }
     ]
   })
 }
@@ -407,8 +407,16 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     assert.equal(rows[0][5], '33/48', `score de demandes attendu : ${rows[0][5]}`)
     assert.equal(rows[1][5], '—', `pas de score de demandes : ${rows[1][5]}`)
     assert.equal(rows[0][6], '4,8', `Intelligence Index attendu (4,8, avec sa décimale) : ${rows[0][6]}`)
+    // Étape 329 (Léo : « il y a pas écrit le score Terminal-Bench ») : les deux mesures qui comptent dans le choix
+    // depuis l'étape 328 ont leur colonne. Un 0 % publié s'écrit « 0 % », jamais « — » (ce n'est pas une absence).
+    const spaces = (text) => text.replace(/[\u00a0\u202f]/g, ' ')
+    assert.equal(rows[0][7], '-64', `Omniscience attendue : ${rows[0][7]}`)
+    assert.equal(spaces(rows[0][8]), '0 %', `Terminal-Bench publié à 0 % : ${rows[0][8]}`)
+    assert.equal(spaces(rows[2][8]), '43,4 %', `Terminal-Bench attendu : ${rows[2][8]}`)
+    // qwen3:1.7b n'a pas de champ terminalBench du tout (réponse d'une version plus ancienne) : « — », jamais « undefined ».
+    assert.equal(rows[1][8], '—', `pas de Terminal-Bench publié : ${rows[1][8]}`)
     // "Vitesse (Artificial Analysis)" : "—" quand Artificial Analysis n'a pas publié de mesure fiable.
-    assert.equal(rows[0][7], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][7]}`)
+    assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
     assert.equal(rows[1][6], 'Non publié', `absence de score officiel attendue : ${rows[1][6]}`)
@@ -423,17 +431,21 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
 // Léo, captures à l'appui : « essaye de mettre en gros pour pas faire défiler, et il y a un bug ». La page
 // restait bloquée à 880 px même sur un grand écran, ce qui obligeait à faire défiler le tableau de côté ; et
 // pendant ce défilement, le fond arrondi de la carte s'arrêtait au milieu des colonnes, parce que c'était
-// le conteneur, et non la carte, qui défilait. Mesuré avec 24 vrais noms de modèles, pas trois lignes courtes.
+// le conteneur, et non la carte, qui défilait. Mesuré avec 26 vrais noms de modèles, pas trois lignes courtes —
+// dont les deux plus longs (nemotron-3.5-lightning:30b, K2 Horizon 0.9B), et des valeurs d'Omniscience et de
+// Terminal-Bench aussi larges que les vraies (étape 329 : deux colonnes de plus doivent tenir à 1000 px).
 const LONG_OVERVIEW = [
   'qwen3.5:0.8b', 'MiniCPM5-2B (Q4_K_M)', 'LFM2.5-2.6B (Q4_K_M)', 'G9v3-3B', 'qwen3:1.7b', 'granite4.1:3b',
   'granite4.2:3b', 'Nanbeige4.1-3B (Q4_K_M)', 'qwen3.5:2b', 'ministral-3:3b', 'qwen3-vl:2b', 'qwen3.5:4b',
   'qwen2.5-coder:7b', 'Ling-3.0-tiny (Q4_K_M)', 'qwen3-vl:4b', 'granite4.2:8b', 'granite4.1:8b', 'ministral-3:8b',
-  'GLM-4.6V-Flash (Q4_K_M)', 'qwen3.5:9b', 'gemma4:12b', 'qwen3-vl:8b', 'qwen2.5-coder:14b', 'ministral-3:14b'
+  'GLM-4.6V-Flash (Q4_K_M)', 'qwen3.5:9b', 'gemma4:12b', 'qwen3-vl:8b', 'qwen2.5-coder:14b', 'ministral-3:14b',
+  'nemotron-3.5-lightning:30b', 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
 ].map((model, i) => ({
   model, vramGb: Math.round((1 + i * 0.4) * 10) / 10, category: i < 11 ? 'Rapide' : 'Moyen',
   readsImages: /vl|gemma|ministral|GLM/.test(model), usedIn: model === 'granite4.2:8b' ? ['Faible', 'Moyen'] : [],
   toolCalling: `${50 + i}/78`, demands: /vl|coder|GLM/.test(model) ? null : `${20 + i}/48`, intelligence: null,
-  artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null
+  artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null,
+  omniscience: i % 7 === 0 ? null : -77.5 + i * 2.3, terminalBench: i % 6 === 0 ? null : 10 + i * 2.9
 }))
 
 async function measureModelsTable(page, width, height) {
@@ -612,14 +624,14 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
 // rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
 // taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
 // précisément la distinction qui manquait pour attraper le problème avant livraison.
-test('une barre "Trier par" VISIBLE propose les 5 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
+test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Intelligence', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Intelligence', 'Omniscience', 'Terminal-Bench', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.
@@ -673,6 +685,13 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     assert.equal((await models())[0], 'qwen3:1.7b')
     await page.locator('.options-menu__sort-button', { hasText: 'Demandes complètes' }).first().click()
     assert.equal((await models())[0], 'ministral-3:3b', 'le seul modèle avec un score de demandes doit passer en tête')
+
+    // Étape 329 : Omniscience et Terminal-Bench se trient du meilleur au moins bon au premier clic ; une mesure
+    // absente finit en dernier, mais un 0 % publié reste une vraie valeur (avant l'absence).
+    await page.locator('.options-menu__sort-button', { hasText: 'Omniscience' }).first().click()
+    assert.deepEqual(await models(), ['gemma4:31b', 'ministral-3:3b', 'qwen3:1.7b'], 'Omniscience : la plus haute en tête')
+    await page.locator('.options-menu__sort-button', { hasText: 'Terminal-Bench' }).first().click()
+    assert.deepEqual(await models(), ['gemma4:31b', 'ministral-3:3b', 'qwen3:1.7b'], 'Terminal-Bench : 43,4 %, puis 0 %, puis rien de publié')
   })
 })
 
@@ -740,7 +759,7 @@ async function imageRow(page, pick) {
 test('Modèles : une ligne « Image » avec le seul modèle d’image quand la machine le fait tourner', options, async () => {
   await withOptions(async (page) => {
     const row = await imageRow(page)
-    assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', ''])
+    assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
   })
 })
@@ -765,7 +784,7 @@ async function videoRow(page, pick, ramGb) {
 test('Modèles : une ligne « Vidéo » avec le modèle vidéo et sa meilleure qualité, et la RAM arrondie', options, async () => {
   await withOptions(async (page) => {
     const row = await videoRow(page, null, 63.161624908447266)
-    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B · qualité Moyen', '—', '—', ''])
+    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B · qualité Moyen', '—', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.")
     assert.ok(row.afterImage, 'la ligne Vidéo suit la ligne Image')
     assert.match(row.hardware, /63 Go de RAM/)

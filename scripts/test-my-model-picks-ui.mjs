@@ -54,6 +54,24 @@ const picks = {
   installCheck: '__installCheck' in window ? window.__installCheck : { notInstalled: [], otherInstalled: [] },
   pilot: window.__pilot
 }
+// Étape 329, Léo : « il y a pas écrit le score Terminal-Bench, et ça utilise combien de pourcentage ». Chaque rôle
+// avec les mesures qui comptent pour lui et le calcul de sa note (noteBreakdown, hardwareScan.ts) — valeurs réelles
+// de la machine de Léo (8 Go de VRAM, 32 Go de RAM) pour Faible, Élevé et Code.
+const note = (base, omni, tools, chain, demands, estimated, total) => ({ base, omniscienceShare: omni, toolsShare: tools, chain, demandsShare: demands, demandsEstimated: estimated, total })
+if (window.__scenario === 'calc') {
+  const q = Math.pow(77 / 78, 5)
+  const k = Math.pow(76 / 78, 5)
+  picks.flash = { ...e('granite4.2:8b', '78/78', 11.1, 62, '47/48'), omniscience: -17.2, terminalBench: 18.4, note: note({ kind: 'intelligence', value: 11.1 }, 0.414, 1, 5, 47 / 48, false, 11.1 * 0.414 * (47 / 48)) }
+  // Pas encore passé aux demandes complètes : la part est estimée sur les questions, et l'écran le dit.
+  picks.medium = { ...e('hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', '76/78', 20.6, null, null), omniscience: -16.6, terminalBench: 44.2, note: note({ kind: 'intelligence', value: 20.6 }, 0.417, k, 5, 76 / 78, true, 20.6 * 0.417 * k * (76 / 78)) }
+  picks.large = { ...e('qwen3.8:27b', '77/78', 33.7, 46, '47/48'), omniscience: -10, terminalBench: 79.8, note: note({ kind: 'intelligence', value: 33.7 }, 0.45, q, 5, 47 / 48, false, 33.7 * 0.45 * q * (47 / 48)) }
+  // Jamais testé : pas de note, jamais un zéro.
+  picks.vision = { ...e('qwen3-vl:4b', null, 7, 109), omniscience: -68.4, terminalBench: null, note: note({ kind: 'intelligence', value: 7 }, null, null, 1, null, false, null) }
+  picks.code = window.__codeFloor
+    ? { ...e('qwen3.5:0.8b', '3/5', 6, null), omniscience: -54.5, terminalBench: 0, note: note({ kind: 'terminalBench', value: 100 / 89 }, null, Math.pow(0.6, 5), 5, null, false, (100 / 89) * Math.pow(0.6, 5)) }
+    : { ...e('qwen3.8:27b', '77/78', 33.7, 46), omniscience: -10, terminalBench: 79.8, note: note({ kind: 'terminalBench', value: 79.8 }, null, q, 5, null, false, 79.8 * q) }
+  picks.upgrades = {}
+}
 window.__deleted = []
 
 const root = createRoot(document.getElementById('root'))
@@ -77,7 +95,7 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined, lang = 'fr', vramGb = undefined) {
+async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined, lang = 'fr', vramGb = undefined, scenario = undefined) {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
@@ -90,7 +108,8 @@ async function withPreview(run, width = 760, installCheck = undefined, pilot = u
       (installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`) +
       (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`) +
       (lang === 'fr' ? '' : `<script>window.__lang = ${JSON.stringify({ code: lang, messages }).replace(/</g, '\\u003c')}</script>`) +
-      (vramGb === undefined ? '' : `<script>window.__vramGb = ${JSON.stringify(vramGb)}</script>`)
+      (vramGb === undefined ? '' : `<script>window.__vramGb = ${JSON.stringify(vramGb)}</script>`) +
+      (scenario === undefined ? '' : `<script>window.__scenario = 'calc'; window.__codeFloor = ${scenario === 'floor'}</script>`)
     await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
@@ -338,5 +357,99 @@ test('carte sur deux lignes par rôle : aucun « — » orphelin, les valeurs pu
       )
       assert.deepEqual(JSON.parse(JSON.stringify(code)), [['Code', 'qwen2.5-coder:14b', 'Code 5/5']])
     }, width)
+  }
+})
+
+// Étape 329, Léo : « il y a pas écrit le score Terminal-Bench, et ça utilise combien de pourcentage, Artificial
+// Analysis combien, appel d'outils… ». Chaque rôle affiche la mesure qui compte pour LUI, et « Voir le calcul »
+// détaille sa note facteur par facteur.
+const spaces = (text) => text.replace(/[\u00a0\u202f]/g, ' ')
+const roleCells = (page) =>
+  page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => trs.slice(0, 5).map((tr) => [...tr.querySelectorAll('td')].slice(3, 5).map((td) => td.textContent?.trim())))
+const calcLines = (page) => page.$$eval('.capacity-scan__tier-calc', (trs) => trs.map((tr) => tr.textContent?.trim() ?? ''))
+const calcButton = (page) => page.$eval('.capacity-scan__calc-toggle', (el) => ({ text: el.textContent?.trim(), expanded: el.getAttribute('aria-expanded'), cursor: getComputedStyle(el).cursor }))
+
+test('Code affiche Terminal-Bench (pas l’intelligence, qui ne compte plus pour lui) ; Faible, Moyen, Élevé leur Omniscience', options, async () => {
+  await withPreview(
+    async (page) => {
+      assert.deepEqual(JSON.parse(JSON.stringify((await roleCells(page)).map((row) => row.map(spaces)))), [
+        ['Intelligence 11,1', 'Omniscience -17,2'],
+        ['Intelligence 20,6', 'Omniscience -16,6'],
+        ['Intelligence 33,7', 'Omniscience -10'],
+        // Vision et Code : l'Omniscience ne compte pas dans leur note, jamais affichée.
+        ['Intelligence 7,0', '—'],
+        ['Terminal-Bench 79,8 %', '—']
+      ])
+      const titles = await page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => [trs[4].querySelectorAll('td')[3].title, trs[0].querySelectorAll('td')[4].title])
+      assert.match(titles[0], /Terminal-Bench 2\.1/, 'l’infobulle dit ce que mesure Terminal-Bench')
+      assert.match(titles[1], /AA-Omniscience/, 'l’infobulle dit ce que mesure l’Omniscience')
+    },
+    760, undefined, undefined, 'fr', undefined, 'calc'
+  )
+})
+
+test('« Voir le calcul » : caché par défaut, puis la note de chaque rôle facteur par facteur, en pourcentages', options, async () => {
+  await withPreview(
+    async (page) => {
+      assert.equal((await calcLines(page)).length, 0, 'le calcul ne doit pas encombrer la carte par défaut')
+      assert.deepEqual(await calcButton(page), { text: 'Voir le calcul des notes', expanded: 'false', cursor: 'pointer' })
+      await page.click('.capacity-scan__calc-toggle')
+      assert.deepEqual((await calcLines(page)).map(spaces), [
+        'Note 4,5 = Intelligence 11,1 × 41,4 % (Omniscience -17,2) × 100 % (Questions 78/78) × 97,9 % (Demandes 47/48)',
+        'Note 7,4 = Intelligence 20,6 × 41,7 % (Omniscience -16,6) × 87,8 % (Questions 76/78) × 97,4 % (Demandes : pas encore testé, estimé sur les questions)',
+        'Note 13,9 = Intelligence 33,7 × 45 % (Omniscience -10) × 93,8 % (Questions 77/78) × 97,9 % (Demandes 47/48)',
+        "Pas de note : ce modèle n'a pas encore été testé par Jaris.",
+        'Note 74,8 = Terminal-Bench 79,8 % × 93,8 % (Questions 77/78)'
+      ])
+      // Chaque calcul est juste sous la ligne de SON rôle.
+      const under = await page.$$eval('.capacity-scan__tier-calc', (trs) => trs.map((tr) => tr.previousElementSibling?.querySelector('.capacity-scan__tier-slot')?.textContent))
+      assert.deepEqual(JSON.parse(JSON.stringify(under)), ['Faible', 'Moyen', 'Élevé', 'Vision', 'Code'])
+      const hint = spaces(await page.$eval('.capacity-scan__calc-hint', (el) => el.textContent ?? ''))
+      assert.match(hint, /100 % = rien perdu/)
+      // Une explication, pas une alerte : pas la couleur or des lignes « meilleur choix ».
+      const [calcColor, hintColor] = await page.evaluate(() => [getComputedStyle(document.querySelector('.capacity-scan__tier-calc td:last-child')).color, getComputedStyle(document.querySelector('.capacity-scan__calc-hint')).color])
+      assert.equal(calcColor, hintColor)
+      assert.deepEqual(await calcButton(page), { text: 'Masquer le calcul', expanded: 'true', cursor: 'pointer' })
+      await page.click('.capacity-scan__calc-toggle')
+      assert.equal((await calcLines(page)).length, 0, 'un second clic referme le calcul')
+    },
+    760, undefined, undefined, 'fr', undefined, 'calc'
+  )
+})
+
+test('Terminal-Bench sous le plancher d’une tâche sur 89 : le calcul le dit au lieu d’un chiffre qui ne colle pas', options, async () => {
+  await withPreview(
+    async (page) => {
+      await page.click('.capacity-scan__calc-toggle')
+      const lines = (await calcLines(page)).map(spaces)
+      assert.equal(lines[4], 'Note 0,1 = Terminal-Bench 1,1 % (minimum : 1 tâche sur 89) × 7,8 % (Code 3/5)')
+      assert.equal(spaces((await roleCells(page))[4][0]), 'Terminal-Bench 0 %', 'la mesure publiée reste affichée telle quelle')
+    },
+    760, undefined, undefined, 'fr', undefined, 'floor'
+  )
+})
+
+test('le calcul suit la langue (« 45% », « Score ») et ne déborde jamais, même à 420 px', options, async () => {
+  await withPreview(
+    async (page) => {
+      await page.click('.capacity-scan__calc-toggle')
+      assert.equal((await calcLines(page))[2], 'Score 13.9 = Intelligence 33.7 × 45% (Omniscience -10) × 93.8% (Questions 77/78) × 97.9% (Requests 47/48)')
+    },
+    760, undefined, undefined, 'en', undefined, 'calc'
+  )
+  for (const width of [560, 420]) {
+    await withPreview(
+      async (page) => {
+        await page.click('.capacity-scan__calc-toggle')
+        const [card, table, page_] = await page.evaluate(() => [
+          document.querySelector('.capacity-scan__tier').clientWidth,
+          document.querySelector('.capacity-scan__tier-table').scrollWidth,
+          document.documentElement.scrollWidth > document.documentElement.clientWidth
+        ])
+        assert.ok(table <= card, `à ${width} px, le tableau avec le calcul (${table} px) dépasse de la carte (${card} px)`)
+        assert.equal(page_, false, `à ${width} px, la page défile de côté`)
+      },
+      width, undefined, undefined, 'fr', undefined, 'calc'
+    )
   }
 })

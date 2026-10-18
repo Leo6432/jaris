@@ -3,7 +3,7 @@ import { currentLanguage, setLanguage, subscribeLanguage } from '../../shared/i1
 import type { LanguageCode } from '../../shared/i18n/languages'
 import type { LanguageState } from '../../shared/ipc'
 
-export { currentLocale, formatDecimal, t, tn } from '../../shared/i18n'
+export { currentLocale, formatDecimal, formatPercent, t, tn } from '../../shared/i18n'
 
 function apply(state: LanguageState): void {
   setLanguage(state.code, state.messages)

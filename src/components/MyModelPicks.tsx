@@ -4,7 +4,7 @@ import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
-import { formatDecimal, t } from '@/lib/i18n'
+import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 
 interface MyModelPicksProps {
@@ -45,6 +45,69 @@ function formatIntelligence(entry: ModelOverviewEntry): string {
   return entry.artificialAnalysisIndex === null ? '—' : t('picks.intelligence', { value: formatIntelligenceIndex(entry.artificialAnalysisIndex) })
 }
 
+/** « Terminal-Bench 79,8 % » : part des 89 tâches de code réussies (étape 329). */
+function formatTerminalBench(value: number): string {
+  return t('picks.terminalBench', { value: formatPercent(value / 100) })
+}
+
+/**
+ * Étape 329, Léo : « il y a pas écrit le score Terminal-Bench ». Chaque rôle affiche la mesure qui compte VRAIMENT
+ * pour lui (étape 328) : Terminal-Bench pour Code — l'intelligence générale n'y compte plus, l'afficher à sa place
+ * montrait un chiffre sans effet et cachait le bon —, l'intelligence pour les autres rôles.
+ */
+function formatMeasure(entry: ModelOverviewEntry, role: string): { text: string; empty: boolean; title: string } {
+  if (role === 'code') {
+    const value = entry.terminalBench ?? null
+    return { text: value === null ? '—' : formatTerminalBench(value), empty: value === null, title: t('picks.terminalBench.title') }
+  }
+  return { text: formatIntelligence(entry), empty: entry.artificialAnalysisIndex === null, title: 'Artificial Analysis Intelligence Index v4.3.2' }
+}
+
+/** « Omniscience -10 » : ne compte que pour Faible, Moyen et Élevé, affiché seulement là (étape 329). */
+function formatOmniscience(entry: ModelOverviewEntry, role: string): string | null {
+  const value = entry.omniscience ?? null
+  if (!CONVERSATION_ROLES.has(role) || value === null) return null
+  return t('picks.omniscience', { value: formatDecimal(value) })
+}
+
+/**
+ * Étape 329, Léo : « ça utilise combien de pourcentage, Artificial Analysis combien, appel d'outils… ». La note du
+ * modèle pour ce rôle, facteur par facteur : sa mesure de départ × chaque part qu'il garde. Les chiffres viennent du
+ * calcul qui a choisi le modèle (noteBreakdown, hardwareScan.ts), jamais refaits ici.
+ */
+export function formatNoteCalc(entry: ModelOverviewEntry): string | null {
+  const note = entry.note
+  if (!note) return null
+  if (note.toolsShare === null) return t('picks.calc.untested')
+  if (note.total === null || note.base === null) return t('picks.calc.unpublished')
+  const base = note.base
+  const parts = [
+    base.kind === 'terminalBench'
+      ? base.value > (entry.terminalBench ?? 0)
+        ? t('picks.calc.floor', { value: formatTerminalBench(base.value) })
+        : formatTerminalBench(base.value)
+      : t('picks.intelligence', { value: formatIntelligenceIndex(base.value) })
+  ]
+  if (note.omniscienceShare !== null && entry.omniscience != null) {
+    parts.push(t('picks.calc.omniscience', { percent: formatPercent(note.omniscienceShare), value: formatDecimal(entry.omniscience) }))
+  }
+  parts.push(
+    t('picks.calc.tools', {
+      percent: formatPercent(note.toolsShare),
+      test: scoreTestLabel(entry.toolCalling) ?? t('models.sort.tools'),
+      score: entry.toolCalling ?? ''
+    })
+  )
+  if (note.demandsShare !== null) {
+    parts.push(
+      note.demandsEstimated
+        ? t('picks.calc.demandsEstimated', { percent: formatPercent(note.demandsShare) })
+        : t('picks.calc.demands', { percent: formatPercent(note.demandsShare), score: entry.demands ?? '' })
+    )
+  }
+  return t('picks.calc.line', { note: formatDecimal(note.total, 1), parts: parts.join(' × ') })
+}
+
 /** "RTX 3070 · 8 Go de VRAM · 32 Go de RAM" — seulement ce qui a vraiment été détecté, jamais inventé. */
 export function formatHardware(picks: MyModelPicksData): string {
   const parts = [picks.gpuName ?? t('picks.noGpu')]
@@ -67,6 +130,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
   const [confirming, setConfirming] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showCalc, setShowCalc] = useState(false)
   const check = beforeInstall ? undefined : picks.installCheck
   const remove = async (model: string): Promise<void> => {
     if (!onDeleteUnused) return
@@ -94,6 +158,9 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
               const entry = picks[key]
               const upgrade = picks.upgrades[key]
               const missing = check?.notInstalled.includes(key) ?? false
+              const measure = formatMeasure(entry, key)
+              const omniscience = formatOmniscience(entry, key)
+              const calc = showCalc ? formatNoteCalc(entry) : null
               return (
                 <Fragment key={key}>
                   <tr>
@@ -109,11 +176,12 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                     >
                       {formatSpeed(entry)}
                     </td>
-                    <td
-                      className={`capacity-scan__tier-intelligence${entry.artificialAnalysisIndex === null ? EMPTY : ''}`}
-                      title="Artificial Analysis Intelligence Index v4.3.2"
-                    >
-                      {formatIntelligence(entry)}
+                    <td className={`capacity-scan__tier-intelligence${measure.empty ? EMPTY : ''}`} title={measure.title}>
+                      {measure.text}
+                    </td>
+                    {/* Étape 329 : « n'invente pas » (AA-Omniscience), qui pèse sur Faible, Moyen et Élevé. */}
+                    <td className={`capacity-scan__tier-omniscience${omniscience === null ? EMPTY : ''}`} title={t('picks.omniscience.title')}>
+                      {omniscience ?? '—'}
                     </td>
                     {/* Étape 243, Léo : « il y a seulement les questions visibles et pas le score de demandes ». Les
                         demandes comptent pour Faible, Moyen et Élevé seulement : elles ne s'affichent que là. */}
@@ -122,19 +190,25 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                       {CONVERSATION_ROLES.has(key) && <ReliabilityBadge value={entry.demands ?? null} label={t('options.score.requests')} />}
                     </td>
                   </tr>
+                  {calc && (
+                    <tr className="capacity-scan__tier-upgrade capacity-scan__tier-calc">
+                      <td />
+                      <td colSpan={5}>{calc}</td>
+                    </tr>
+                  )}
                   {/* Étape 138 : la ligne ci-dessus est le modèle RÉELLEMENT utilisé. Quand le meilleur choix
                       est un autre, on le dit ici avec la raison — plus jamais un modèle affiché mais pas utilisé. */}
                   {/* Étape 140 : vérifié auprès d'Ollama — un modèle affiché mais absent du disque est signalé. */}
                   {missing && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>{t('picks.notInstalled')}</td>
+                      <td colSpan={5}>{t('picks.notInstalled')}</td>
                     </tr>
                   )}
                   {upgrade && (
                     <tr className="capacity-scan__tier-upgrade">
                       <td />
-                      <td colSpan={4}>
+                      <td colSpan={5}>
                         {upgrade.blockedReason
                           ? t('picks.upgrade.blocked', { model: formatModelName(upgrade.model), reason: upgrade.blockedReason })
                           : t('picks.upgrade.available', { model: formatModelName(upgrade.model) })}
@@ -154,18 +228,19 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   <td className="capacity-scan__tier-model">{picks.image.model ?? t('picks.noModel')}</td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.image.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>{t('picks.image.notCapable', { reason: picks.image.reason ?? '' })}</td>
+                    <td colSpan={5}>{t('picks.image.notCapable', { reason: picks.image.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.image.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: 5 })}</td>
+                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: 5 })}</td>
                     </tr>
                   )
                 )}
@@ -181,18 +256,19 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   </td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.video.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>{t('picks.video.notCapable', { reason: picks.video.reason ?? '' })}</td>
+                    <td colSpan={5}>{t('picks.video.notCapable', { reason: picks.video.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.video.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>{t('picks.video.notInstalled')}</td>
+                      <td colSpan={5}>{t('picks.video.notInstalled')}</td>
                     </tr>
                   )
                 )}
@@ -207,18 +283,19 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : t('picks.noModel')}</td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.pilot.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>{t('picks.pilot.notCapable', { reason: picks.pilot.reason ?? '' })}</td>
+                    <td colSpan={5}>{t('picks.pilot.notCapable', { reason: picks.pilot.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.pilot.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: 6 })}</td>
+                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: 6 })}</td>
                     </tr>
                   )
                 )}
@@ -226,6 +303,12 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
             )}
           </tbody>
         </table>
+        {/* Étape 329 : le calcul n'est montré qu'à la demande — cinq lignes de chiffres de plus, toujours affichées,
+            noieraient la carte. Le bouton est visible (leçon de l'étape 129 : ce qui ne se voit pas n'existe pas). */}
+        {showCalc && <p className="capacity-scan__calc-hint">{t('picks.calc.hint', { full: formatPercent(1) })}</p>}
+        <button type="button" className="options-menu__action capacity-scan__calc-toggle" aria-expanded={showCalc} onClick={() => setShowCalc((open) => !open)}>
+          {showCalc ? t('picks.calc.hide') : t('picks.calc.show')}
+        </button>
       </div>
       {/* Étape 140, Léo : "je veut etre sur que les model visbile sont réel et pas un autre model". */}
       {beforeInstall ? null : !check ? (

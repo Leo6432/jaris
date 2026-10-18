@@ -9,6 +9,7 @@ import type {
   CapacityScanResult,
   ContextLengthOptions,
   ModelCategory,
+  ModelNoteBreakdown,
   ModelOverviewEntry,
   ModelOverviewResult,
   ModelRole,
@@ -1385,7 +1386,7 @@ export const TOOL_CHAIN_LENGTH = 5
  * - Conversation (Faible, Moyen, Élevé) : l'Intelligence Index × la part « n'invente pas » d'AA-Omniscience,
  *   ramenée de -100..100 à 0..1. Même poids que l'intelligence : un modèle deux fois plus sûr de ne pas inventer
  *   vaut autant qu'un modèle deux fois plus intelligent. Choix de Léo (« n'invente pas », étape 328).
- * - Code : Terminal-Bench 2.1 (voir ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21), plus l'intelligence générale.
+ * - Code : Terminal-Bench 2.1 seul (voir ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21), jamais l'intelligence générale.
  */
 export function intelligenceStrength(model: string): number | null {
   return ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
@@ -1411,6 +1412,72 @@ export function codeStrength(model: string): number | null {
   return score === undefined ? null : Math.max(score, TERMINAL_BENCH_ONE_TASK)
 }
 const VISION_CHAIN_LENGTH = 1
+
+/** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
+function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'omniscience' | 'terminalBench'> {
+  return {
+    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
+    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null,
+    omniscience: ARTIFICIAL_ANALYSIS_OMNISCIENCE[model] ?? null,
+    terminalBench: ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model] ?? null
+  }
+}
+
+/**
+ * Note d'un modèle pour un rôle : force × (taux de réussite)^chain × part des demandes complètes. LA formule qui
+ * choisit les modèles (noteOf, computeModelPicks) ET celle qu'affiche « Voir le calcul » (noteBreakdown, étape 329) :
+ * une seule définition, pour que l'écran ne puisse jamais montrer un autre calcul que celui réellement fait.
+ */
+function modelNote(strength: number | null, toolCalling: string | null, chain: number, demands?: number): number | null {
+  if (strength === null) return null
+  return strength * Math.pow(Math.max(0, parseToolScore(toolCalling)), chain) * (demands ?? 1)
+}
+
+/**
+ * Part « demandes complètes » (étape 241) : le score du test ACTUEL, sinon estimée sur le taux du test d'outils —
+ * jamais 1, qui avantagerait un modèle pas encore passé aux demandes sur ceux qui l'ont été.
+ */
+function demandsFactor(demandScore: string | null, toolCalling: string | null): { value: number; estimated: boolean } {
+  // Seulement un score du test ACTUEL (sur SCENARIO_TEST_TOTAL), comme currentDemandScore : un ancien score ne compte pas.
+  const rate = demandScore?.endsWith(`/${SCENARIO_TEST_TOTAL}`) ? parseToolScore(demandScore) : -1
+  return rate >= 0 ? { value: rate, estimated: false } : { value: Math.max(0, parseToolScore(toolCalling)), estimated: true }
+}
+
+/** Rôle au sens de la note : Faible, Moyen et Élevé partagent la même formule (« conversation »). */
+export type NoteRole = 'conversation' | 'vision' | 'code'
+
+/**
+ * Étape 329, Léo (« ça utilise combien de pourcentage, Artificial Analysis combien, appel d'outils… ») : la note
+ * d'un modèle pour un rôle, facteur par facteur. `total` vient de modelNote, la formule du choix : jamais recalculé
+ * à part. `toolCalling` est le score qui compte pour ce rôle (test de code, sinon de conversation, pour Code).
+ */
+export function noteBreakdown(model: string, role: NoteRole, toolCalling: string | null, demandScore: string | null): ModelNoteBreakdown {
+  const chain = role === 'vision' ? VISION_CHAIN_LENGTH : TOOL_CHAIN_LENGTH
+  const strength = role === 'conversation' ? conversationStrength(model) : role === 'code' ? codeStrength(model) : intelligenceStrength(model)
+  const intelligence = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
+  const omniscience = ARTIFICIAL_ANALYSIS_OMNISCIENCE[model]
+  const code = codeStrength(model)
+  const base: ModelNoteBreakdown['base'] =
+    role === 'code'
+      ? code === null
+        ? null
+        : { kind: 'terminalBench', value: code }
+      : intelligence === undefined
+        ? null
+        : { kind: 'intelligence', value: intelligence }
+  const rate = parseToolScore(toolCalling)
+  const demands = role === 'conversation' ? demandsFactor(demandScore, toolCalling) : null
+  return {
+    base,
+    omniscienceShare: role === 'conversation' && omniscience !== undefined ? (100 + omniscience) / 200 : null,
+    toolsShare: rate >= 0 ? Math.pow(rate, chain) : null,
+    chain,
+    demandsShare: demands?.value ?? null,
+    demandsEstimated: demands?.estimated ?? false,
+    // Un modèle jamais testé n'est pas noté (pickRole l'écarte) : pas de note plutôt qu'un zéro.
+    total: rate >= 0 ? modelNote(strength, toolCalling, chain, demands?.value) : null
+  }
+}
 
 const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
 const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
@@ -1504,8 +1571,7 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
       ...scoreOf(c.model),
       demands: currentDemandScore(verifiedToolScores, c.model),
       intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
-      artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model] ?? null,
-      artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? null
+      ...publishedScores(c.model)
     }))
 
   return { vramGb, entries, codeModel: picks.code.model }
@@ -1592,8 +1658,7 @@ function computeModelPicks(
     toolCalling: result?.toolCalling ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
-    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
+    ...publishedScores(model)
   })
 
   /**
@@ -1601,17 +1666,6 @@ function computeModelPicks(
    * conversation seulement. Absent pour Vision et Code, dont le test mesure autre chose.
    */
   type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number; strength: number | null }
-
-  /**
-   * Étape 241, Léo (« oui » à faire compter les demandes complètes, « tu les fusionnes ? ») : réussite aux
-   * demandes complètes du test ACTUEL, `null` sans score sur ce total. Un score d'un ancien test ne compte pas.
-   */
-  const demandRate = (model: string): number | null => {
-    const score = verifiedToolScores.scenarios.get(model)
-    if (!score?.endsWith(`/${SCENARIO_TEST_TOTAL}`)) return null
-    const rate = parseToolScore(score)
-    return rate >= 0 ? rate : null
-  }
 
   /**
    * Le plus intelligent d'abord, à fiabilité égale : Intelligence Index d'Artificial Analysis quand les DEUX
@@ -1695,10 +1749,7 @@ function computeModelPicks(
    * Étape 328 : « intelligence » est la FORCE du modèle pour ce rôle (`strength`, voir strengthFor) — plus
    * seulement l'Intelligence Index : il intègre « n'invente pas » en conversation, et Terminal-Bench 2.1 en Code.
    */
-  const noteOf = (c: Scored, chain: number): number | null => {
-    if (c.strength === null) return null
-    return c.strength * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain) * (c.demands ?? 1)
-  }
+  const noteOf = (c: Scored, chain: number): number | null => modelNote(c.strength, c.result.toolCalling, chain, c.demands)
 
   /** Meilleure note d'abord ; un modèle sans note passe après ; `null` si la note ne départage pas. */
   const bestNoteFirstOrNull = (a: Scored, b: Scored, chain: number): number | null => {
@@ -1777,7 +1828,7 @@ function computeModelPicks(
       .filter((c) => c.vramGb <= budgetOf(c))
       .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c), strength: strengthOf(c.model) }))
       .filter((c): c is Scored => c.result?.toolCalling != null)
-      .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
+      .map((c) => (withDemands ? { ...c, demands: demandsFactor(currentDemandScore(verifiedToolScores, c.model), c.result.toolCalling).value } : c))
 
     // Repli : aucun modèle testé ne tient (ex. pas de carte graphique du tout). Le plus gros modèle qui tient,
     // sinon le plus petit — parmi ceux qui ont un score pour ce rôle quand il y en a, pour ne jamais tomber
@@ -1788,7 +1839,7 @@ function computeModelPicks(
       if (known.length) {
         const ranked = known
           .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) as LocalBenchmarkEntry, strength: strengthOf(c.model) }))
-          .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
+          .map((c) => (withDemands ? { ...c, demands: demandsFactor(currentDemandScore(verifiedToolScores, c.model), c.result.toolCalling).value } : c))
         const best = bestOfLightest(ranked, chain)[0]
         return entryOf(best.model, best.vramGb, best.result)
       }
@@ -1896,11 +1947,15 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
     vision: ['vision'],
     code: ['code', 'conversation']
   }
+  // Étape 329 : la note affichée est celle du rôle (Faible, Moyen et Élevé : même formule).
+  const noteRole: Record<ModelRole, NoteRole> = { flash: 'conversation', medium: 'conversation', large: 'conversation', vision: 'vision', code: 'code' }
   const upgrades: MyModelPicks['upgrades'] = {}
   const entries = {} as Record<ModelRole, ModelOverviewEntry>
   for (const role of Object.keys(inUse) as ModelRole[]) {
     const model = inUse[role]
-    entries[role] = model === ideal[role].model ? ideal[role] : entryForModel(model, tierOf[role], verifiedToolScores)
+    const entry = model === ideal[role].model ? ideal[role] : entryForModel(model, tierOf[role], verifiedToolScores)
+    const demandScore = noteRole[role] === 'conversation' ? currentDemandScore(verifiedToolScores, model) : null
+    entries[role] = { ...entry, note: noteBreakdown(model, noteRole[role], entry.toolCalling, demandScore) }
     if (model !== ideal[role].model) {
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
@@ -1957,7 +2012,6 @@ function entryForModel(
     toolCalling: tiers.map((t) => verifiedToolScores[t].get(model)).find(Boolean) ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
-    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
+    ...publishedScores(model)
   }
 }

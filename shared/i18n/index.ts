@@ -85,6 +85,14 @@ export function formatDecimal(value: number, fractionDigits?: number): string {
   return new Intl.NumberFormat(state.locale, digits).format(value)
 }
 
+/**
+ * Un pourcentage écrit à la façon de la langue (étape 329) : « 45 % » en français, « 45% » en anglais, « %45 » en
+ * turc. `share` va de 0 à 1 ; une décimale au plus, pour qu'une part de 99,6 % ne s'affiche pas « 100 % ».
+ */
+export function formatPercent(share: number): string {
+  return new Intl.NumberFormat(state.locale, { style: 'percent', maximumFractionDigits: 1 }).format(share)
+}
+
 export function subscribeLanguage(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

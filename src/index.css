@@ -860,9 +860,11 @@ body.body--splash {
   font-size: 12px;
 }
 
+/* 8 px de côté (et non plus 10) : avec Omniscience et Terminal-Bench (étape 329), dix colonnes doivent encore tenir
+   sans défiler de côté dans une fenêtre de 1000 px (étape 305). */
 .options-menu__model-overview th,
 .options-menu__model-overview td {
-  padding: 6px 10px;
+  padding: 6px 8px;
   text-align: left;
   border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.06);
 }
@@ -1699,9 +1701,28 @@ body.body--splash {
 }
 
 .capacity-scan__tier-intelligence,
+.capacity-scan__tier-omniscience,
 .capacity-scan__tier-speed {
   padding-right: 10px !important;
   color: var(--hud-text-faint);
+}
+
+/* Étape 329 : le calcul de la note sous chaque rôle (« Voir le calcul »). Même mise en page que la ligne du meilleur
+   modèle juste au-dessus (.capacity-scan__tier-upgrade : une phrase qui passe à la ligne), mais pas en or : ce n'est
+   pas une alerte, c'est une explication. */
+.capacity-scan__tier-calc td {
+  color: var(--hud-text-soft);
+}
+
+.capacity-scan__calc-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--hud-text-soft);
+}
+
+.capacity-scan__calc-toggle {
+  margin-top: 8px;
 }
 
 /* Étape 243 : deux scores nommés côte à côte (« Questions 77/78 », « Demandes 45/48 »), qui passent à la ligne
@@ -5881,7 +5902,7 @@ select {
   max-width: 880px;
 }
 
-/* « Tous les modèles » est un TABLEAU de 8 colonnes, pas une colonne de réglages : la limite de 880 px
+/* « Tous les modèles » est un TABLEAU de 10 colonnes, pas une colonne de réglages : la limite de 880 px
    ci-dessus le forçait à défiler de côté même sur un écran de 1920 px (Léo : « mettre en gros pour pas
    faire défiler »). Deux classes : plus spécifique que la règle générale, quel que soit l'ordre. */
 .options-page--models .options-page__content > * {

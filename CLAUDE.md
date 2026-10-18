@@ -8998,3 +8998,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-error-boundary-ui`, `test-hardwarescan-single-pool`, `test-hardwarescan-tiebreak`. Chaque garde vérifiée en
   remettant l'ancien code. **Non vérifié en usage réel** : le raccourci + et la garde de navigation dans la vraie
   fenêtre Windows de Léo.
+
+- **Étape 329, Léo (v0.34.35) : « il y a pas écrit le score Terminal-Bench, et ça utilise combien de pourcentage,
+  Artificial Analysis combien, appel d'outils… ».** Les deux mesures branchées à l'étape 328 comptaient dans le choix
+  sans être affichées nulle part. Pire, la ligne Code montrait l'intelligence générale, un chiffre qui ne comptait
+  plus pour elle, à la place du score de code. Corrigé :
+  - **« Modèles utilisés sur ta machine »** : chaque rôle affiche la mesure qui compte pour lui, Terminal-Bench pour
+    Code, Intelligence + Omniscience pour Faible, Moyen et Élevé. « Voir le calcul des notes » (fermé par défaut)
+    détaille la note de chaque rôle : mesure de départ × la part que garde chaque mesure, en pourcentages, par
+    exemple « Note 13,9 = Intelligence 33,7 × 45 % (Omniscience -10) × 93,8 % (Questions 77/78) × 97,9 %
+    (Demandes 47/48) ». Une note manquante le dit (« pas encore testé », « pas publié »), jamais un zéro.
+  - **« Tous les modèles »** : colonnes Omniscience et Terminal-Bench, triables comme les autres.
+  - **Une seule formule** : `modelNote` (hardwareScan.ts) sert au choix (`noteOf`) ET au calcul affiché
+    (`noteBreakdown`, joint par `getMyModelPicks`). Les tests vérifient que le produit des parts affichées fait la
+    note, et qu'aucun modèle qui tient sur la carte n'a une note affichée plus haute que le gagnant d'Élevé. Le choix
+    reste inchangé sur 15 machines types (comparé avant/après).
+  - Réponse donnée à Léo : il n'y a pas de poids fixe en pourcentage, chaque mesure MULTIPLIE la note. L'exemple vient
+    des vrais chiffres de sa machine.
+  - **Piège de mise en page** : deux colonnes de plus faisaient défiler le tableau à 1000 px (918 > 898). Les marges
+    des cellules passent de 10 à 8 px. Le test utilise maintenant des données réalistes : les deux plus longs vrais
+    noms, et des valeurs dans les nouvelles colonnes.
+  - **Piège de test** : un test lisait la Vitesse en colonne 7, et passait par hasard après l'ajout des colonnes,
+    puisqu'on y lisait « — » partout. **Un test qui lit une colonne par son NUMÉRO doit être revu dès qu'une colonne
+    s'ajoute avant elle.**
+  - **Leçon générale : quand un critère entre dans un calcul de choix, il doit aussi apparaître là où l'utilisateur
+    regarde ce choix.** Sinon, l'écran montre des chiffres qui ne décident de rien et cache ceux qui décident.
+  Régression : `test-model-note.mjs` (nouveau), `test-my-model-picks-ui.mjs` et `test-options-reorganization-ui.mjs`.
+  Chaque garde a été vérifiée en remettant son défaut : 9 mutations, toutes attrapées. **Non vérifié en usage réel**
+  sur la machine de Léo.

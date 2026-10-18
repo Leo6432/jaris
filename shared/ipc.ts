@@ -474,6 +474,39 @@ export interface ModelOverviewEntry {
    * encore publié de mesure de vitesse fiable pour ce modèle exact.
    */
   artificialAnalysisSpeed: number | null
+  /**
+   * Étape 329, Léo (« il y a pas écrit le score Terminal-Bench ») : AA-Omniscience publié par Artificial Analysis,
+   * de -100 (invente souvent) à 100 (sait tout), 0 = dit « je ne sais pas » plutôt que d'inventer. Compte dans la
+   * note de Faible, Moyen et Élevé depuis l'étape 328. `null` si rien n'est publié pour ce modèle exact.
+   */
+  omniscience: number | null
+  /** Étape 329 : Terminal-Bench 2.1 (% des 89 tâches de code réussies), la mesure du rôle Code. `null` sans mesure. */
+  terminalBench: number | null
+  /**
+   * Étape 329, Léo (« ça utilise combien de pourcentage ») : le calcul de la note de ce modèle pour le rôle où il
+   * est affiché, facteur par facteur. Seulement dans « Modèles utilisés sur ta machine » (une note n'a de sens que
+   * pour UN rôle) ; absent ailleurs.
+   */
+  note?: ModelNoteBreakdown | null
+}
+
+/**
+ * Étape 329 : la note d'un modèle pour un rôle = `base` × chaque part (0 à 1), exactement le calcul qui choisit les
+ * modèles (noteOf, hardwareScan.ts). Une part est ce qu'une mesure GARDE de la note : 1 = rien perdu.
+ */
+export interface ModelNoteBreakdown {
+  /** Mesure de départ : Intelligence Index (Faible, Moyen, Élevé, Vision) ou Terminal-Bench 2.1 (Code). */
+  base: { kind: 'intelligence' | 'terminalBench'; value: number } | null
+  /** Part gardée selon AA-Omniscience : (100 + Omniscience) / 200. Faible, Moyen et Élevé seulement. */
+  omniscienceShare: number | null
+  /** Part gardée selon le test d'appel d'outils : taux de réussite puissance `chain` (actions d'affilée). */
+  toolsShare: number | null
+  chain: number
+  /** Part gardée selon les demandes complètes (Faible, Moyen, Élevé) ; estimée sur le test d'outils sans score. */
+  demandsShare: number | null
+  demandsEstimated: boolean
+  /** Le produit ; `null` si une mesure manque (le modèle passe alors après ceux qui ont une note). */
+  total: number | null
 }
 
 /**

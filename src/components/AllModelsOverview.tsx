@@ -6,7 +6,7 @@ import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
-import { formatDecimal, t } from '@/lib/i18n'
+import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -56,7 +56,12 @@ const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash
  * "Intelligence" ferait remonter en tête tous les modèles jamais évalués par Artificial Analysis, l'inverse
  * de ce qu'on cherche à voir.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'artificialAnalysisIndex' | 'artificialAnalysisSpeed'
+/**
+ * Étape 329, Léo (« il y a pas écrit le score Terminal-Bench ») : les deux mesures d'Artificial Analysis qui
+ * comptent dans le choix depuis l'étape 328 ont leur colonne — Omniscience (« n'invente pas », Faible/Moyen/Élevé)
+ * et Terminal-Bench 2.1 (Code) —, triables comme les autres, du meilleur au moins bon au premier clic.
+ */
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'artificialAnalysisIndex' | 'omniscience' | 'terminalBench' | 'artificialAnalysisSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -66,6 +71,8 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   toolCalling: 'desc',
   demands: 'desc',
   artificialAnalysisIndex: 'desc',
+  omniscience: 'desc',
+  terminalBench: 'desc',
   artificialAnalysisSpeed: 'desc'
 }
 
@@ -74,6 +81,8 @@ const SORT_LABELS: Record<SortKey, MessageKey> = {
   toolCalling: 'models.sort.tools',
   demands: 'models.sort.demands',
   artificialAnalysisIndex: 'models.sort.intelligence',
+  omniscience: 'models.sort.omniscience',
+  terminalBench: 'models.sort.terminalBench',
   artificialAnalysisSpeed: 'models.sort.speed'
 }
 
@@ -84,10 +93,12 @@ const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
   toolCalling: 'models.sort.tools',
   demands: 'options.score.requests',
   artificialAnalysisIndex: 'models.chip.intelligence',
+  omniscience: 'models.chip.omniscience',
+  terminalBench: 'models.chip.terminalBench',
   artificialAnalysisSpeed: 'models.chip.speed'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'artificialAnalysisIndex', 'omniscience', 'terminalBench', 'artificialAnalysisSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -104,7 +115,8 @@ function toolScoreValue(toolCalling: string | null): number | null {
 function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'toolCalling') return toolScoreValue(entry.toolCalling)
   if (key === 'demands') return toolScoreValue(entry.demands ?? null)
-  return entry[key]
+  // `?? null` : une mesure absente (y compris d'une réponse plus ancienne sans ce champ) reste toujours en fin de liste.
+  return entry[key] ?? null
 }
 
 function sortEntries(entries: ModelOverviewEntry[], sort: SortState): ModelOverviewEntry[] {
@@ -281,6 +293,13 @@ export default function AllModelsOverview(): JSX.Element {
                               <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
                                 <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
                               </th>
+                              {/* Étape 329 : les deux mesures qui comptent dans le choix depuis l'étape 328. */}
+                              <th className="options-menu__col-num" title={t('picks.omniscience.title')}>
+                                <SortButton sortKey="omniscience" sort={sort} onSort={toggleSort} />
+                              </th>
+                              <th className="options-menu__col-num" title={t('picks.terminalBench.title')}>
+                                <SortButton sortKey="terminalBench" sort={sort} onSort={toggleSort} />
+                              </th>
                               <th className="options-menu__col-num" title={t('models.col.speed.title')}>
                                 <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
                               </th>
@@ -305,6 +324,8 @@ export default function AllModelsOverview(): JSX.Element {
                                   <ReliabilityBadge value={entry.demands ?? null} />
                                 </td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? t('models.notPublished') : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
+                                <td className="options-menu__col-num">{entry.omniscience == null ? '—' : formatDecimal(entry.omniscience)}</td>
+                                <td className="options-menu__col-num">{entry.terminalBench == null ? '—' : formatPercent(entry.terminalBench / 100)}</td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
                               </tr>
                             ))}
