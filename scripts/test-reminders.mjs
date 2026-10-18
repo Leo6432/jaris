@@ -55,7 +55,7 @@ test('tous les rappels passent par fireReminder (notification Windows + voix), r
   assert.match(main, /pipeline\.on\('reminder', fireReminder\)/)
 })
 
-test('un rappel dans un mois attend vraiment un mois (étape 319 : setTimeout ramenait plus de 24,8 jours à 1 ms)', async (t) => {
+test('un rappel dans un mois attend vraiment un mois (étape 324 : setTimeout ramenait plus de 24,8 jours à 1 ms)', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-rappels-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
@@ -73,9 +73,11 @@ test('un rappel dans un mois attend vraiment un mois (étape 319 : setTimeout ra
   assert.deepEqual(fired, [], 'toujours rien à 29 jours')
   t.mock.timers.tick(DAY)
   assert.deepEqual(fired, ['réarmé payer le loyer'], 'sonne une seule fois, à 30 jours')
-  // L'effacement du fichier est asynchrone (vraie écriture disque, hors horloge simulée) : on lui laisse le temps.
+  // L'effacement du fichier est asynchrone (vraie écriture disque, hors horloge simulée) : on lui laisse jusqu'à 5 s
+  // de VRAI temps (performance.now n'est pas simulé). Un nombre de tours fixe échouait sur une machine chargée.
   let stored = null
-  for (let i = 0; i < 200; i++) {
+  const deadline = performance.now() + 5000
+  while (performance.now() < deadline) {
     try {
       stored = JSON.parse(readFileSync(join(dir, 'reminders.json'), 'utf8'))
       if (!stored.length) break

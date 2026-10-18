@@ -142,7 +142,7 @@ test('les conversations et réglages sont copiés APRÈS les modèles : ce qui e
     onProgress: (message) => {
       messages.push(message)
       // Pendant la copie des modèles, Léo continue de se servir de Jaris.
-      if (!wroteDuringCopy && message.startsWith('Copie de') && !isDataCopyMessage(message)) {
+      if (!wroteDuringCopy && message.startsWith('Copie') && !isDataCopyMessage(message)) {
         wroteDuringCopy = true
         writeFileSync(join(t.userData, 'code-conversations.json'), '{"version":1,"repos":[],"conversations":{}}')
         writeFileSync(join(t.userData, 'profile.json'), '{"name":"Léo","voix":"M3"}')
@@ -152,7 +152,7 @@ test('les conversations et réglages sont copiés APRÈS les modèles : ce qui e
     installDocker: async () => true
   })
   assert.ok(wroteDuringCopy, 'la copie des modèles n’a pas été vue')
-  const lastHeavyCopy = messages.findLastIndex((message) => message.startsWith('Copie de') && !isDataCopyMessage(message))
+  const lastHeavyCopy = messages.findLastIndex((message) => message.startsWith('Copie') && !isDataCopyMessage(message))
   const firstDataCopy = messages.findIndex(isDataCopyMessage)
   assert.ok(firstDataCopy > lastHeavyCopy, `ordre des copies : ${messages.join(' | ')}`)
   assert.equal(readFileSync(join(newRoot, 'jaris-data', 'code-conversations.json'), 'utf8'), '{"version":1,"repos":[],"conversations":{}}')
@@ -168,7 +168,7 @@ test('la copie des conversations échoue APRÈS celle des modèles : tout ou rie
       onProgress: (message) => {
         // Un fichier à la place du dossier des données : sa copie, la dernière, échoue.
         const dest = join(newRoot, 'jaris-data')
-        if (message.startsWith('Copie de') && !isDataCopyMessage(message) && !existsSync(dest)) writeFileSync(dest, 'bloque')
+        if (message.startsWith('Copie') && !isDataCopyMessage(message) && !existsSync(dest)) writeFileSync(dest, 'bloque')
       },
       startDocker: async () => {},
       installDocker: async () => true

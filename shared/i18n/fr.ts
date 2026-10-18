@@ -1131,7 +1131,7 @@ export const fr = {
   "move.reconciled": "Tout est rangé dans {dir}.",
   "move.reconcileFailed": "Rangement dans {dir} impossible pour l'instant ({error}) : rien n'a changé.",
   "move.mklinkFailed": "mklink a échoué (code {code})",
-  "move.copying": "Copie de {what}…",
+  "move.copying": "Copie : {what}…",
   "move.copyingData": "Copie de tes conversations et réglages ({entry})…",
   "move.dockerNotResponding": "Docker Desktop ne répond pas : impossible de vérifier ce qu'il contient avant de le déplacer. Ouvre Docker Desktop (ou redémarre le PC), puis relance « Déplacer ». Rien n'a été déplacé.",
   "move.dockerHasOtherProjects": "Docker Desktop contient d'autres projets que la recherche web de Jaris. Le déplacer oblige à le désinstaller, ce qui les effacerait : rien n'a été déplacé. Si tu n'en as plus besoin, supprime-les dans Docker Desktop puis relance « Déplacer ».",

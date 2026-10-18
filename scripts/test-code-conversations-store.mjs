@@ -264,7 +264,7 @@ test('pendant un déplacement, rien n’est écrit ; à la fin, tout part dans l
   const oldFile = join(tempDir(t), 'code-conversations.json')
   const newFile = join(tempDir(t), 'jaris-data', 'code-conversations.json')
   const store = new (loadStore())(oldFile)
-  store.setConversation('app:C:/apps/snake', turns('avant le déplacement'))
+  store.setConversation('app:snake', turns('avant le déplacement'))
   const before = readFileSync(oldFile, 'utf-8')
 
   store.holdWrites()
@@ -278,12 +278,12 @@ test('pendant un déplacement, rien n’est écrit ; à la fin, tout part dans l
 
   store.releaseWrites(newFile)
   const moved = new (loadStore())(newFile).load()
-  assert.deepEqual(Object.keys(moved.conversations).sort(), ['app:C:/apps/snake', 'repo:leo/projet'])
+  assert.deepEqual(Object.keys(moved.conversations).sort(), ['app:snake', 'repo:leo/projet'])
   assert.deepEqual(moved.repos, [{ fullName: 'leo/projet', at: 9 }])
   assert.equal(readFileSync(oldFile, 'utf-8'), before, 'l’ancien fichier n’est jamais retouché')
   // Après la bascule, les écritures vont dans le nouveau dossier.
-  store.setConversation('app:C:/apps/pong', turns('après'))
-  assert.equal(new (loadStore())(newFile).load().conversations['app:C:/apps/pong'][0].text, 'après')
+  store.setConversation('app:pong', turns('après'))
+  assert.equal(new (loadStore())(newFile).load().conversations['app:pong'][0].text, 'après')
   assert.equal(readFileSync(oldFile, 'utf-8'), before)
 })
 

@@ -4,7 +4,7 @@ import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
 
 /**
- * Étape 319 : une trentaine d'écrans affichaient « Error invoking remote method 'jaris:…': Error: » devant le vrai
+ * Étape 324 : une trentaine d'écrans affichaient « Error invoking remote method 'jaris:…': Error: » devant le vrai
  * message, en anglais, parce que seuls quelques-uns retiraient ce préfixe ajouté par Electron. Il est maintenant
  * retiré à la source, dans le preload, pour TOUS les appels.
  */

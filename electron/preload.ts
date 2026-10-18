@@ -71,7 +71,7 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
 }
 
 /**
- * Étape 319 : Electron fait précéder toute erreur levée dans le main de « Error invoking remote method 'jaris:…':
+ * Étape 324 : Electron fait précéder toute erreur levée dans le main de « Error invoking remote method 'jaris:…':
  * Error: », en anglais et technique. Une trentaine d'écrans affichaient ce préfixe devant le vrai message (installation
  * du dessin, d'une vidéo, essai d'une voix…), parce que seuls quelques-uns le retiraient. Il est retiré ICI, une fois
  * pour tous les appels : chaque écran reçoit directement le message écrit pour Léo.

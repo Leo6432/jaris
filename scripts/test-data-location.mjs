@@ -1019,7 +1019,7 @@ test('effacement des anciennes données : une entrée bloquée n’empêche pas 
   rmSync(root, { recursive: true, force: true })
 })
 
-test('les copies de secours d’un code-conversations.json illisible suivent aussi « Déplacer » (étape 319)', () => {
+test('les copies de secours d’un code-conversations.json illisible suivent aussi « Déplacer » (étape 324)', () => {
   // Rangées à côté du fichier (codeConversationsStore.ts), pas via join(getDataRoot(), …) : le balayage ci-dessus ne
   // peut pas les voir. Sans cette entrée, un « Déplacer » depuis un ancien jaris-data effaçait la seule copie.
   const { userData, root } = setupUserData()

@@ -1121,7 +1121,7 @@
   "move.reconciled": "Tutto è sistemato in {dir}.",
   "move.reconcileFailed": "Sistemazione in {dir} impossibile per ora ({error}): non è cambiato nulla.",
   "move.mklinkFailed": "mklink non riuscito (codice {code})",
-  "move.copying": "Copia di {what}…",
+  "move.copying": "Copia: {what}…",
   "move.copyingData": "Copia delle tue conversazioni e impostazioni ({entry})…",
   "move.dockerNotResponding": "Docker Desktop non risponde: impossibile verificare cosa contiene prima di spostarlo. Apri Docker Desktop (o riavvia il PC), poi riavvia «Sposta». Non è stato spostato nulla.",
   "move.dockerHasOtherProjects": "Docker Desktop contiene altri progetti oltre alla ricerca web di Jaris. Spostarlo obbliga a disinstallarlo, il che li cancellerebbe: non è stato spostato nulla. Se non ti servono più, eliminali in Docker Desktop poi riavvia «Sposta».",

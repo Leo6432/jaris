@@ -31,7 +31,7 @@ try {
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const entryPath = join(projectRoot, 'tmp-code-panel-entry.tsx')
 
-/** Attend deux images : le temps que React affiche ce qu'un bloc d'évènements simulés a changé (étape 319). */
+/** Attend deux images : le temps que React affiche ce qu'un bloc d'évènements simulés a changé (étape 324). */
 const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))
 
 const APP_HTML = '<!DOCTYPE html><html><body><h1>Ma liste</h1></body></html>'
@@ -67,7 +67,7 @@ window.jaris = {
     window.__status = cb
     return () => {}
   },
-  // Étape 319 : React n'affiche un changement qu'au rendu suivant. Les tests lisaient l'écran juste après l'évènement
+  // Étape 324 : React n'affiche un changement qu'au rendu suivant. Les tests lisaient l'écran juste après l'évènement
   // et échouaient sur une machine chargée (« Prépare sa réponse… » au lieu de « Écrit index.html +20 lignes »), sans
   // défaut de Jaris. Chaque évènement simulé rend une promesse résolue deux images plus tard, que page.evaluate attend.
   // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
