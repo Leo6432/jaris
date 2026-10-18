@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Sammutetaan.",
   "shutdown.commandCode": "Sammutuskomento epäonnistui (koodi {code}).",
   "conv.untitled": "Uusi keskustelu",
+  "data.fileBusy": "Jaris ei voinut lukea tiedostoa ”{file}” ({detail}): ehkä jokin toinen ohjelma, usein virustorjunta, käyttää sitä. Mitään ei muutettu; yritä hetken päästä uudelleen.",
   "input.typeFailed": "Tekstin kirjoittaminen epäonnistui: {error}",
   "input.keyFailed": "Näppäimen painallus epäonnistui: {error}",
   "input.mediaFailed": "Medianäppäimen toiminto epäonnistui: {error}",

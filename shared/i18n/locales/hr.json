@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Isključivanje u tijeku.",
   "shutdown.commandCode": "Naredba za isključivanje nije uspjela (kod {code}).",
   "conv.untitled": "Novi razgovor",
+  "data.fileBusy": "Jaris nije mogao pročitati „{file}” ({detail}): možda ga koristi drugi program, često antivirusni. Ništa nije promijenjeno; pokušaj ponovno za trenutak.",
   "input.typeFailed": "Unos teksta nije uspio: {error}",
   "input.keyFailed": "Pritisak tipke nije uspio: {error}",
   "input.mediaFailed": "Multimedijska radnja nije uspjela: {error}",

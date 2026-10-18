@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { UNREADABLE_DATA_DIR, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 export interface Reminder {
@@ -12,22 +12,25 @@ export interface Reminder {
 type ReminderFireHandler = (message: string) => void
 
 const storePath = join(getDataRoot(), 'reminders.json')
+/** Où une liste de rappels abîmée est rangée avant d'être remplacée (atomicFile.ts) : elle suit « Déplacer ». */
+const unreadableDir = join(getDataRoot(), UNREADABLE_DATA_DIR)
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 /** Plus long délai qu'un setTimeout respecte (2^31-1 ms, 24,8 jours) ; au-delà, Node le ramène à 1 ms. */
 const MAX_TIMER_MS = 2 ** 31 - 1
 
+/**
+ * Étape 325 : avant, toute erreur de lecture rendait une liste VIDE, et le rappel suivant réécrivait le fichier avec
+ * ce seul rappel — tous les autres étaient perdus. Abîmé, le fichier est rangé de côté ; momentanément illisible,
+ * l'action échoue (DataFileUnreadableError) sans rien réécrire.
+ */
 async function readReminders(): Promise<Reminder[]> {
-  try {
-    const raw = await readFile(storePath, 'utf-8')
-    return JSON.parse(raw) as Reminder[]
-  } catch {
-    return []
-  }
+  const read = await readJsonDataFile(storePath, (value) => (Array.isArray(value) ? (value as Reminder[]) : null), unreadableDir, 'reminders')
+  return read.status === 'ok' ? read.value : []
 }
 
+/** D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne liste intacte. */
 async function writeReminders(reminders: Reminder[]): Promise<void> {
-  await mkdir(dirname(storePath), { recursive: true })
-  await writeFile(storePath, JSON.stringify(reminders, null, 2), 'utf-8')
+  await writeFileAtomic(storePath, JSON.stringify(reminders, null, 2))
 }
 
 async function removeReminder(id: string): Promise<void> {
@@ -49,7 +52,8 @@ function arm(reminder: Reminder, onFire: ReminderFireHandler): void {
   }
   const timer = setTimeout(() => {
     timers.delete(reminder.id)
-    void removeReminder(reminder.id)
+    // Fichier verrouillé un instant : le rappel sonne quand même ; resté dans le fichier, il sera retiré plus tard.
+    removeReminder(reminder.id).catch((err) => console.error('[jaris] Rappel non retiré de la liste :', err))
     onFire(reminder.message)
   }, delayMs)
   timers.set(reminder.id, timer)
@@ -77,6 +81,13 @@ export async function scheduleReminder(message: string, delayMinutes: number, on
 
 /** À appeler au démarrage : réarme les rappels persistés (ceux déjà en retard se déclenchent immédiatement). */
 export async function restoreReminders(onFire: ReminderFireHandler): Promise<void> {
-  const reminders = await readReminders()
+  let reminders: Reminder[]
+  try {
+    reminders = await readReminders()
+  } catch (err) {
+    // Liste illisible pour l'instant : rien n'est réécrit, les rappels restent sur le disque pour le prochain lancement.
+    console.error('[jaris] Rappels non réarmés :', err)
+    return
+  }
   reminders.forEach((reminder) => arm(reminder, onFire))
 }

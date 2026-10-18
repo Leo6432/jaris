@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Išjungiama.",
   "shutdown.commandCode": "Išjungimo komanda nepavyko (kodas {code}).",
   "conv.untitled": "Naujas pokalbis",
+  "data.fileBusy": "Jaris nepavyko perskaityti „{file}“ ({detail}): galbūt jį naudoja kita programa, dažnai antivirusinė. Niekas nebuvo pakeista; pabandyk dar kartą po akimirkos.",
   "input.typeFailed": "Nepavyko įvesti teksto: {error}",
   "input.keyFailed": "Nepavyko paspausti klavišo: {error}",
   "input.mediaFailed": "Daugialypės terpės veiksmas nepavyko: {error}",

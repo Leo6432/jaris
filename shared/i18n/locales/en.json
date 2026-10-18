@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Shutting down.",
   "shutdown.commandCode": "Shutdown command failed (code {code}).",
   "conv.untitled": "New conversation",
+  "data.fileBusy": "Jaris couldn't read “{file}” ({detail}): another program, often an antivirus, may be using it. Nothing was changed; try again in a moment.",
   "input.typeFailed": "Failed to type the text: {error}",
   "input.keyFailed": "Failed to press the key: {error}",
   "input.mediaFailed": "Failed to perform the media action: {error}",

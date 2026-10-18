@@ -15,6 +15,9 @@ import { loadTsModule } from './load-ts-module.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
 const sharedCodeConversations = loadTsModule('shared/codeConversations.ts')
+const sharedConversationsData = loadTsModule('shared/conversationsData.ts')
+/** Le vrai module des écritures d'un seul tenant (atomicFile.ts), sur le `fs` donné. */
+const loadAtomicFile = (fs) => loadTsModule('electron/services/atomicFile.ts', { fs, 'fs/promises': fsPromises, path: nodePath })
 
 /**
  * Étape 143 : une racine de stockage UNIQUE (storageRoot.ts) pour tout ce que Jaris écrit. Ce fichier vérifie
@@ -74,6 +77,10 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
     electron: { app },
     // Les conversations du mode Code sont RÉUNIES au démarrage (disque rebranché), avec le vrai module partagé.
     '../../shared/codeConversations': sharedCodeConversations,
+    // Les conversations du Chat aussi (étape 325), avec le vrai format partagé.
+    '../../shared/conversationsData': sharedConversationsData,
+    // Écritures d'un seul tenant : avec le MÊME `fs` que storageRoot, pour qu'un `fs` qui échoue à la demande y passe aussi.
+    './atomicFile': loadAtomicFile(storageModules.fs ?? nodeRequire('node:fs')),
     ...storageModules
   })
   const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
@@ -315,7 +322,8 @@ const GITHUB_REFRESH = 'ghr_renouvellement_de_leo'
 const CodeConversationsStore = loadTsModule('electron/services/codeConversationsStore.ts', {
   fs: nodeRequire('node:fs'),
   path: nodePath,
-  '../../shared/codeConversations': sharedCodeConversations
+  '../../shared/codeConversations': sharedCodeConversations,
+  './atomicFile': loadAtomicFile(nodeRequire('node:fs'))
 }).CodeConversationsStore
 const codeTurns = (text, first = 1) => [
   { id: first, kind: 'user', text },
@@ -733,6 +741,239 @@ test('rebranché, code-conversations.json de D verrouillé un instant : rien n�
   assert.equal(readFileSync(join(setup.from, CODE_FILE), 'utf8'), fromC, 'l’original de C a été effacé sans être réuni')
   assert.ok(!existsSync(join(setup.to, ASIDE_DIR)), 'un simple refus passager ne met rien de côté')
   rmSync(setup.root, { recursive: true, force: true })
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// Étape 325 : au rebranchement, les données de C étaient recopiées avec `force` PAR-DESSUS celles de D — le vrai profil
+// (choix des modèles compris), l'index des conversations (qui cachait alors tous les fils de D), les rappels, une note
+// du même titre, la langue, le journal… Chaque donnée suit maintenant une règle propre à son format (REBRANCH_RULES).
+// ---------------------------------------------------------------------------------------------------------
+
+/** Les vrais magasins de données de Jaris pour CETTE exécution (profil, conversations, mémoire), sur le vrai disque. */
+function dataStores(jaris) {
+  const common = { path: nodePath, 'fs/promises': fsPromises, './atomicFile': loadAtomicFile(nodeRequire('node:fs')), './dataLocation': jaris.dataLocation }
+  return {
+    profile: loadTsModule('electron/services/profileStore.ts', common),
+    conversations: loadTsModule('electron/services/conversationStore.ts', {
+      ...common,
+      crypto: nodeRequire('node:crypto'),
+      '../../shared/conversationsData': sharedConversationsData
+    }),
+    memory: loadTsModule('electron/services/memoryStore.ts', common)
+  }
+}
+
+const exchange = (transcript, timestamp) => ({ id: randomUUID(), timestamp, transcript, reply: `Réponse à « ${transcript} »` })
+const reminder = (id, message) => ({ id, message, fireAt: '2026-12-01T10:00:00.000Z' })
+const occurrences = (text, part) => text.split(part).length - 1
+const D_MODELS = { flash: 'qwen3:1.7b', medium: 'granite4.2:8b', large: 'qwen3.8:27b' }
+
+/** Ce que les vrais magasins relisent sur D après le rebranchement. */
+async function readBack(jaris) {
+  const stores = dataStores(jaris)
+  const { conversations, activeId } = await stores.conversations.listConversations()
+  return {
+    profile: await stores.profile.getProfile(),
+    language: JSON.parse(readFileSync(join(jaris.dataRoot, 'language.json'), 'utf8')).setting,
+    titles: conversations.map((conversation) => conversation.title).sort(),
+    activeId,
+    transcripts: (await stores.conversations.getAllConversationEntries()).map((entry) => entry.transcript),
+    reminders: JSON.parse(readFileSync(join(jaris.dataRoot, 'reminders.json'), 'utf8')).map((r) => r.id),
+    adresse: await stores.memory.recallNote('Adresse'),
+    notes: (await stores.memory.listMemoryTitles()).sort(),
+    journal: readFileSync(join(jaris.dataRoot, 'journal-demandes.txt'), 'utf8')
+  }
+}
+
+test('disque débranché puis rebranché, deux fois : profil, langue, conversations, rappels, mémoire, journal et images réunis par format', async () => {
+  const { userData, root } = setupUserData()
+  const newRoot = join(root, 'D', 'Jaris')
+  await moveData(startJaris(userData), null, newRoot)
+
+  // Sur D : la vraie vie de Léo, écrite par les vrais magasins.
+  const onD = startJaris(userData)
+  await onD.storageRoot.cleanupStaleChromiumData()
+  assert.equal(onD.dataRoot, join(newRoot, 'jaris-data'))
+  const d = dataStores(onD)
+  await d.profile.saveProfile({ name: 'Léo', capacityScanDone: true, models: D_MODELS })
+  writeFileSync(join(onD.dataRoot, 'language.json'), JSON.stringify({ setting: 'de' }, null, 2))
+  await d.conversations.appendConversationEntry(exchange('question posée sur D', '2026-10-01T10:00:00.000Z'))
+  const activeOnD = await d.conversations.getActiveConversationId()
+  writeFileSync(join(onD.dataRoot, 'reminders.json'), JSON.stringify([reminder('rappel-d', 'arroser les plantes')], null, 2))
+  await d.memory.rememberNote('Adresse', '12 rue des Lilas')
+  writeFileSync(join(onD.dataRoot, 'journal-demandes.txt'), '\n===== 01/10 — voix =====\nDemande : quelle heure\n')
+  mkdirSync(join(onD.dataRoot, 'generated-images'), { recursive: true })
+  writeFileSync(join(onD.dataRoot, 'generated-images', 'un-chat.png'), 'image de D')
+
+  // Disque débranché : Jaris tourne sur C, où Léo refait le premier lancement et continue sa vie.
+  const unplugged = `${newRoot}-debranche`
+  renameSync(newRoot, unplugged)
+  const onC = startJaris(userData)
+  assert.equal(onC.dataRoot, userData)
+  const c = dataStores(onC)
+  assert.equal(await c.profile.getProfile(), null, 'disque absent : écran de premier lancement sur C')
+  await c.profile.saveProfile({ name: 'Léo' })
+  writeFileSync(join(userData, 'language.json'), JSON.stringify({ setting: 'fr' }, null, 2))
+  await c.conversations.appendConversationEntry(exchange('question posée sur C', '2026-10-02T10:00:00.000Z'))
+  writeFileSync(join(userData, 'reminders.json'), JSON.stringify([reminder('rappel-c', 'sortir le chien')], null, 2))
+  await c.memory.rememberNote('Adresse', 'code de la porte : 4521')
+  await c.memory.rememberNote('Voiture', 'Clio grise')
+  writeFileSync(join(userData, 'journal-demandes.txt'), '\n===== 02/10 — chat =====\nDemande : la météo\n')
+  mkdirSync(join(userData, 'generated-images'), { recursive: true })
+  writeFileSync(join(userData, 'generated-images', 'un-chat.png'), 'image de C') // même nom, autre image
+  writeFileSync(join(userData, 'generated-images', 'un-chien.png'), 'chien')
+
+  // Rebranché.
+  renameSync(unplugged, newRoot)
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  const first = await readBack(after)
+  assert.deepEqual(first.profile, { name: 'Léo', capacityScanDone: true, models: D_MODELS }, 'le vrai profil de D (choix des modèles) a été écrasé')
+  assert.equal(first.language, 'de', 'la langue choisie sur D a été écrasée')
+  assert.deepEqual(first.titles, ['question posée sur C', 'question posée sur D'], 'des conversations ont été cachées ou perdues')
+  assert.equal(first.activeId, activeOnD, 'la conversation active reste celle de D')
+  assert.deepEqual(first.reminders, ['rappel-d', 'rappel-c'])
+  assert.equal(occurrences(first.adresse, '12 rue des Lilas'), 1, 'l’entrée de D de la note Adresse est perdue ou doublée')
+  assert.equal(occurrences(first.adresse, 'code de la porte : 4521'), 1, 'l’entrée de C de la note Adresse est perdue ou doublée')
+  assert.ok(first.adresse.indexOf('12 rue des Lilas') < first.adresse.indexOf('code de la porte'), 'les ajouts de C viennent après ceux de D')
+  assert.deepEqual(first.notes, ['Adresse', 'Voiture'])
+  assert.equal(occurrences(first.journal, 'Demande : quelle heure'), 1)
+  assert.equal(occurrences(first.journal, 'Demande : la météo'), 1)
+  const images = join(after.dataRoot, 'generated-images')
+  assert.deepEqual(readdirSync(images).sort(), ['un-chat-2.png', 'un-chat.png', 'un-chien.png'])
+  assert.equal(readFileSync(join(images, 'un-chat.png'), 'utf8'), 'image de D')
+  assert.equal(readFileSync(join(images, 'un-chat-2.png'), 'utf8'), 'image de C')
+  assert.deepEqual(readdirSync(userData), ['storage-location.json'], 'les copies laissées sur C sont effacées')
+
+  // Second débranchement : une nouvelle session sur C (repartie de zéro), puis rebranché. Rien n'est doublé.
+  renameSync(newRoot, unplugged)
+  const onC2 = startJaris(userData)
+  const c2 = dataStores(onC2)
+  await c2.profile.saveProfile({ name: 'Léo', models: { flash: 'qwen3.5:0.8b' } })
+  await c2.conversations.appendConversationEntry(exchange('deuxième session sur C', '2026-10-05T10:00:00.000Z'))
+  writeFileSync(join(userData, 'reminders.json'), JSON.stringify([reminder('rappel-c2', 'payer le loyer')], null, 2))
+  await c2.memory.rememberNote('Adresse', 'interphone : 12')
+  writeFileSync(join(userData, 'journal-demandes.txt'), '\n===== 05/10 — voix =====\nDemande : un minuteur\n')
+  renameSync(unplugged, newRoot)
+  const again = startJaris(userData)
+  await again.storageRoot.cleanupStaleChromiumData()
+  const second = await readBack(again)
+  assert.deepEqual(second.profile.models, D_MODELS)
+  assert.deepEqual(second.titles, ['deuxième session sur C', 'question posée sur C', 'question posée sur D'])
+  assert.equal(second.activeId, activeOnD)
+  assert.deepEqual(second.transcripts, ['question posée sur D', 'question posée sur C', 'deuxième session sur C'], 'un échange a été doublé ou perdu')
+  assert.deepEqual(second.reminders, ['rappel-d', 'rappel-c', 'rappel-c2'])
+  for (const fact of ['12 rue des Lilas', 'code de la porte : 4521', 'interphone : 12']) {
+    assert.equal(occurrences(second.adresse, fact), 1, `« ${fact} » perdu ou doublé dans la note Adresse`)
+  }
+  for (const request of ['quelle heure', 'la météo', 'un minuteur']) {
+    assert.equal(occurrences(second.journal, `Demande : ${request}`), 1, `« ${request} » perdu ou doublé dans le journal`)
+  }
+  rmSync(root, { recursive: true, force: true })
+})
+
+/** Tous les fichiers d'un dossier, `chemin relatif → contenu`, pour vérifier qu'un démarrage rejoué n'a rien changé. */
+function snapshot(dir) {
+  const files = {}
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = join(current, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else files[nodePath.relative(dir, full)] = readFileSync(full, 'utf8')
+    }
+  }
+  walk(dir)
+  return files
+}
+
+test('rebranché, un fichier abîmé d’un côté n’est jamais perdu, et un démarrage rejoué ne double rien', () => {
+  const { root, from, to, storageRoot } = setupMerge()
+  const asideOf = (dir) => (existsSync(join(dir, 'fichiers-illisibles')) ? Object.values(snapshot(join(dir, 'fichiers-illisibles'))) : [])
+  // Profil : celui de D est abîmé (coupure sous une ancienne version), celui de C sert, celui de D est gardé de côté.
+  const damagedProfile = '{"name":"Léo","models":{"fla'
+  writeFileSync(join(to, 'profile.json'), damagedProfile)
+  // Rappels : ceux de C sont abîmés, ceux de D restent, ceux de C sont gardés de côté.
+  writeFileSync(join(to, 'reminders.json'), JSON.stringify([reminder('rappel-d', 'arroser')], null, 2))
+  const damagedReminders = '[{"id":"rappel-c","mess'
+  // Conversations : l'index de D est abîmé ; le fil A, présent des deux côtés, a été continué sur C (démarrage
+  // abandonné après une première réunion) ; le fil B n'existe que sur C.
+  const a1 = exchange('fil A, sur D', '2026-10-01T10:00:00.000Z')
+  const a2 = exchange('fil A, continué sur C', '2026-10-02T10:00:00.000Z')
+  const b1 = exchange('fil B, sur C', '2026-10-03T10:00:00.000Z')
+  mkdirSync(join(to, 'conversations'), { recursive: true })
+  writeFileSync(join(to, 'conversations', 'fil-a.json'), JSON.stringify([a1], null, 2))
+  const damagedIndex = '{"activeId":"fil-a","conversations":[{"id":"fil-a","tit'
+  writeFileSync(join(to, 'conversations', 'index.json'), damagedIndex)
+  // Mémoire : la note Adresse de D et celle de C ne diffèrent que par la casse du nom (Windows : le même fichier).
+  mkdirSync(join(to, 'memory'), { recursive: true })
+  writeFileSync(join(to, 'memory', 'Adresse.md'), '# Adresse\n\n_01/10/2026 10:00:00_\n12 rue des Lilas')
+  const putBackOriginals = () => {
+    writeFileSync(join(from, 'profile.json'), '{"name":"Léo"}')
+    writeFileSync(join(from, 'reminders.json'), damagedReminders)
+    mkdirSync(join(from, 'conversations'), { recursive: true })
+    writeFileSync(join(from, 'conversations', 'fil-a.json'), JSON.stringify([a1, a2], null, 2))
+    writeFileSync(join(from, 'conversations', 'fil-b.json'), JSON.stringify([b1], null, 2))
+    writeFileSync(
+      join(from, 'conversations', 'index.json'),
+      JSON.stringify({
+        activeId: 'fil-b',
+        conversations: [
+          { id: 'fil-a', title: 'fil A, sur D', createdAt: a1.timestamp, updatedAt: a2.timestamp, messageCount: 2 },
+          { id: 'fil-b', title: 'fil B, sur C', createdAt: b1.timestamp, updatedAt: b1.timestamp, messageCount: 1 },
+          { id: 'vide', title: 'Nouvelle conversation', createdAt: b1.timestamp, updatedAt: b1.timestamp, messageCount: 0 }
+        ]
+      })
+    )
+    mkdirSync(join(from, 'memory'), { recursive: true })
+    writeFileSync(join(from, 'memory', 'adresse.md'), '# Adresse\n\n_02/10/2026 09:00:00_\ncode de la porte : 4521')
+  }
+  putBackOriginals()
+
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.equal(readFileSync(join(to, 'profile.json'), 'utf8'), '{"name":"Léo"}', 'le profil de D, abîmé, est remplacé par celui de C')
+  assert.deepEqual(JSON.parse(readFileSync(join(to, 'reminders.json'), 'utf8')).map((r) => r.id), ['rappel-d'])
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(to, 'conversations', 'fil-a.json'), 'utf8')).map((e) => e.transcript),
+    ['fil A, sur D', 'fil A, continué sur C'],
+    'le même fil des deux côtés doit être réuni sans doublon'
+  )
+  const index = JSON.parse(readFileSync(join(to, 'conversations', 'index.json'), 'utf8'))
+  assert.deepEqual(index.conversations.map((c) => [c.id, c.messageCount]), [['fil-a', 2], ['fil-b', 1]], 'un fil caché, ou la conversation vide de C ajoutée')
+  assert.equal(index.activeId, 'fil-b', 'l’index de D étant abîmé, la conversation active de C reprend')
+  assert.deepEqual(readdirSync(join(to, 'memory')), ['Adresse.md'], 'une même note (casse différente) en deux exemplaires')
+  const adresse = readFileSync(join(to, 'memory', 'Adresse.md'), 'utf8')
+  assert.equal(adresse, '# Adresse\n\n_01/10/2026 10:00:00_\n12 rue des Lilas\n\n_02/10/2026 09:00:00_\ncode de la porte : 4521')
+  // Chaque côté abîmé est gardé, une seule fois.
+  assert.deepEqual(asideOf(to).sort(), [damagedIndex, damagedProfile, damagedReminders].sort())
+  for (const name of readdirSync(join(to, 'fichiers-illisibles'))) {
+    assert.match(name, /^(profile|reminders|conversations-index)-\d{4}-\d{2}-\d{2}T[\d-]+Z\.json$/)
+  }
+
+  // Démarrage coupé entre la réunion et l'effacement des originaux : ils sont encore sur C au démarrage suivant.
+  const once = snapshot(to)
+  putBackOriginals()
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5) // une autre milliseconde : un autre nom daté
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.deepEqual(snapshot(to), once, 'un démarrage rejoué a doublé ou changé quelque chose')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('chaque donnée emportée par « Déplacer » a sa règle au rebranchement du disque (étape 325)', () => {
+  const { userData, root } = setupUserData()
+  const { storageRoot } = loadStorage(userData)
+  rmSync(root, { recursive: true, force: true })
+  for (const entry of storageRoot.OWNED_ENTRIES) {
+    assert.ok(storageRoot.REBRANCH_RULES[entry], `« ${entry} » n’a pas de règle au rebranchement (REBRANCH_RULES) : choisir la sienne`)
+  }
+  const rules = storageRoot.REBRANCH_RULES
+  assert.equal(rules['profile.json'], 'destination-wins')
+  assert.equal(rules['language.json'], 'destination-wins')
+  assert.equal(rules.conversations, 'merge-conversations')
+  assert.equal(rules['reminders.json'], 'merge-reminders')
+  assert.equal(rules.memory, 'merge-memory')
+  assert.equal(rules['journal-demandes.txt'], 'append-journal')
+  for (const entry of storageRoot.KEPT_AT_DESTINATION_ENTRIES) assert.equal(rules[entry], 'keep-destination')
+  assert.ok(storageRoot.OWNED_ENTRIES.includes('fichiers-illisibles'), 'les copies de secours des magasins suivent « Déplacer »')
 })
 
 test('mise à jour après une session disque débranché : le jeton du dossier de Chromium de la racine passe avant celui de C', async () => {

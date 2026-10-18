@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Bezig met afsluiten.",
   "shutdown.commandCode": "Opdracht voor afsluiten mislukt (code {code}).",
   "conv.untitled": "Nieuw gesprek",
+  "data.fileBusy": "Jaris kon “{file}” niet lezen ({detail}): misschien gebruikt een ander programma het bestand, vaak een antivirusprogramma. Er is niets gewijzigd; probeer het zo opnieuw.",
   "input.typeFailed": "Typen van de tekst mislukt: {error}",
   "input.keyFailed": "Indrukken van de toets mislukt: {error}",
   "input.mediaFailed": "Media-actie mislukt: {error}",

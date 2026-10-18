@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Apagando.",
   "shutdown.commandCode": "Error del comando de apagado (código {code}).",
   "conv.untitled": "Nueva conversación",
+  "data.fileBusy": "Jaris no ha podido leer «{file}» ({detail}): quizá otro programa, a menudo un antivirus, lo está usando. No se ha cambiado nada; vuelve a intentarlo en un momento.",
   "input.typeFailed": "Error al escribir el texto: {error}",
   "input.keyFailed": "Error al pulsar la tecla: {error}",
   "input.mediaFailed": "Error en la acción multimedia: {error}",

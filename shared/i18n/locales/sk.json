@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Prebieha vypínanie.",
   "shutdown.commandCode": "Príkaz na vypnutie zlyhal (kód {code}).",
   "conv.untitled": "Nová konverzácia",
+  "data.fileBusy": "Jaris nemohol prečítať „{file}“ ({detail}): možno ho používa iný program, často antivírus. Nič nebolo zmenené; skús to o chvíľu znova.",
   "input.typeFailed": "Zadanie textu zlyhalo: {error}",
   "input.keyFailed": "Stlačenie klávesu zlyhalo: {error}",
   "input.mediaFailed": "Multimediálna akcia zlyhala: {error}",

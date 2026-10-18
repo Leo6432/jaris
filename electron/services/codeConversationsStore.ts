@@ -1,5 +1,6 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, renameSync } from 'fs'
 import { dirname, join } from 'path'
+import { RENAME_RETRY_DELAYS_MS as RETRY_DELAYS_MS, sleepSync, writeFileAtomicSync } from './atomicFile'
 import {
   CODE_CONVERSATIONS_ASIDE_DIR,
   MAX_CODE_REPOS,
@@ -15,18 +16,11 @@ import {
 
 const empty = (): CodeConversationsData => ({ repos: [], conversations: {} })
 
-/**
- * Délais entre deux essais quand Windows refuse un instant l'accès au fichier (antivirus ou indexeur qui l'ouvre juste
- * après une écriture) : au plus ~350 ms d'attente, et seulement quand ça échoue.
+/*
+ * Attente et délais entre deux essais (refus passager de Windows : antivirus ou indexeur qui ouvre le fichier juste
+ * après une écriture) : partagés avec les autres fichiers de données (atomicFile.ts). Attente SYNCHRONE : le
+ * processus principal répond à une lecture synchrone de l'écran ; courte, et rare.
  */
-const RETRY_DELAYS_MS = [50, 100, 200]
-/** Les refus passagers d'un renommage sous Windows (fichier tenu ouvert un instant par un autre programme). */
-const TRANSIENT_RENAME = new Set(['EPERM', 'EACCES', 'EBUSY'])
-
-/** Attente SYNCHRONE (le processus principal répond à une lecture synchrone de l'écran) : courte, et rare. */
-const sleepSync = (ms: number): void => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-}
 
 /** Le fichier existe mais n'a pas pu être lu : rien ne doit l'écraser, on réessaiera au prochain accès. */
 export class CodeConversationsUnreadableError extends Error {
@@ -219,25 +213,11 @@ export class CodeConversationsStore {
     this.dirty = false
   }
 
+  /**
+   * Temporaire `code-conversations.json.tmp` forcé sur le disque AVANT le remplacement (sinon, après une coupure, le
+   * renommage peut être là sans le contenu), puis remplacement réessayé sur un refus passager (atomicFile.ts).
+   */
   private write(next: CodeConversationsData): void {
-    mkdirSync(dirname(this.filePath), { recursive: true })
-    const temporary = `${this.filePath}.tmp`
-    const fd = openSync(temporary, 'w')
-    try {
-      writeFileSync(fd, JSON.stringify({ version: 1, ...next }), 'utf-8')
-      // Forcé sur le disque AVANT le remplacement : sinon, après une coupure, le renommage peut être là sans le contenu.
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
-    }
-    for (let attempt = 0; ; attempt++) {
-      try {
-        renameSync(temporary, this.filePath)
-        return
-      } catch (err) {
-        if (!TRANSIENT_RENAME.has((err as NodeJS.ErrnoException).code ?? '') || attempt >= RETRY_DELAYS_MS.length) throw err
-        this.sleep(RETRY_DELAYS_MS[attempt])
-      }
-    }
+    writeFileAtomicSync(this.filePath, JSON.stringify({ version: 1, ...next }), { sleep: this.sleep })
   }
 }

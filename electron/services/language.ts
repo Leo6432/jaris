@@ -1,9 +1,9 @@
 import { app } from 'electron'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { registerCatalogs, setLanguage } from '../../shared/i18n'
 import { LANGUAGES, isLanguageSetting, matchSystemLanguage, resolveLanguage, type LanguageCode, type LanguageSetting } from '../../shared/i18n/languages'
 import type { LanguageState } from '../../shared/ipc'
+import { UNREADABLE_DATA_DIR, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 import { localeMessages } from './locales'
 
@@ -49,9 +49,17 @@ export function languageState(): LanguageState {
 
 /** Au démarrage, AVANT la première fenêtre et le menu de la barre système : tout naît dans la bonne langue. */
 export async function loadLanguageSetting(): Promise<LanguageCode> {
+  // Étape 325 : un fichier abîmé est rangé de côté (fichiers-illisibles) avant de repartir sur la langue de Windows,
+  // jamais remplacé en silence au prochain choix. Momentanément illisible : langue de Windows pour cette fois, sans
+  // rien réécrire.
   try {
-    const saved = JSON.parse(await readFile(settingPath(), 'utf-8')) as { setting?: unknown }
-    return apply(isLanguageSetting(saved.setting) ? saved.setting : 'auto')
+    const read = await readJsonDataFile(
+      settingPath(),
+      (value) => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as { setting?: unknown }) : null),
+      join(getDataRoot(), UNREADABLE_DATA_DIR),
+      'language'
+    )
+    return apply(read.status === 'ok' && isLanguageSetting(read.value.setting) ? read.value.setting : 'auto')
   } catch {
     return apply('auto')
   }
@@ -60,7 +68,7 @@ export async function loadLanguageSetting(): Promise<LanguageCode> {
 export async function saveLanguageSetting(next: LanguageSetting): Promise<LanguageState> {
   if (!isLanguageSetting(next)) throw new Error(`Langue inconnue : ${String(next)}`)
   apply(next)
-  await mkdir(dirname(settingPath()), { recursive: true })
-  await writeFile(settingPath(), JSON.stringify({ setting: next }, null, 2), 'utf-8')
+  // D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancien choix intact.
+  await writeFileAtomic(settingPath(), JSON.stringify({ setting: next }, null, 2))
   return languageState()
 }

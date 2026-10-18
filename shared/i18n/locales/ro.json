@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Oprire în curs.",
   "shutdown.commandCode": "Comanda de oprire a eșuat (cod {code}).",
   "conv.untitled": "Conversație nouă",
+  "data.fileBusy": "Jaris nu a putut citi „{file}” ({detail}): poate îl folosește alt program, adesea un antivirus. Nu s-a modificat nimic; încearcă din nou peste o clipă.",
   "input.typeFailed": "Introducerea textului a eșuat: {error}",
   "input.keyFailed": "Apăsarea tastei a eșuat: {error}",
   "input.mediaFailed": "Acțiunea multimedia a eșuat: {error}",

@@ -17,7 +17,8 @@ const shared = loadTsModule('shared/codeConversations.ts')
 const Store = loadTsModule('electron/services/codeConversationsStore.ts', {
   fs: realFs,
   path,
-  '../../shared/codeConversations': shared
+  '../../shared/codeConversations': shared,
+  './atomicFile': loadTsModule('electron/services/atomicFile.ts', { fs: realFs, 'fs/promises': realFs.promises, path })
 }).CodeConversationsStore
 
 /** Un module neuf à chaque fois : comme un écran qui s'ouvre (sa copie en mémoire repart de zéro). */

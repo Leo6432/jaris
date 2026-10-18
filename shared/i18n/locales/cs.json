@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Probíhá vypínání.",
   "shutdown.commandCode": "Příkaz k vypnutí selhal (kód {code}).",
   "conv.untitled": "Nová konverzace",
+  "data.fileBusy": "Jaris nemohl přečíst „{file}“ ({detail}): možná ho používá jiný program, často antivirus. Nic nebylo změněno; zkus to za chvíli znovu.",
   "input.typeFailed": "Zadání textu selhalo: {error}",
   "input.keyFailed": "Stisk klávesy selhal: {error}",
   "input.mediaFailed": "Multimediální akce selhala: {error}",

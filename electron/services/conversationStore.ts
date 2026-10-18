@@ -1,9 +1,23 @@
 import { randomUUID } from 'crypto'
-import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { readdir, rm } from 'fs/promises'
+import { join } from 'path'
 import type { ConversationEntry, ConversationSummary } from '../../shared/ipc'
+import {
+  UNTITLED_CONVERSATION,
+  conversationIdFromFileName,
+  mergeConversationsIndex,
+  parseConversationEntries,
+  parseConversationsIndex,
+  titleFromMessage,
+  type ConversationsIndex
+} from '../../shared/conversationsData'
+import { UNREADABLE_DATA_DIR, isTemporaryDataName, readFileWithRetries, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 import { t } from '../../shared/i18n'
+
+// Le format sur le disque est partagé avec la racine de stockage, qui réunit les conversations de deux disques au
+// démarrage (shared/conversationsData.ts) : le titre et le marqueur « sans titre » viennent de là.
+export { UNTITLED_CONVERSATION, titleFromMessage }
 
 /**
  * Jaris n'avait qu'UNE seule conversation continue, à dessein depuis l'étape 47 (voix et chat unifiés).
@@ -30,6 +44,14 @@ function entriesPath(id: string): string {
 }
 
 /**
+ * Étape 325 : un fichier de conversation (ou l'index) abîmé n'est plus jamais remplacé en silence par un fichier neuf :
+ * il est d'abord rangé ici sous un nom daté (atomicFile.ts), et suit « Déplacer » avec le reste.
+ */
+function unreadableDir(): string {
+  return join(getDataRoot(), UNREADABLE_DATA_DIR)
+}
+
+/**
  * Chaque échange réécrit tout le fichier de SA conversation (pas un flux d'ajout) : sans plafond, un fichier
  * grossirait indéfiniment avec l'usage, rendant chaque échange de plus en plus lent à journaliser. Le
  * plafond est maintenant PAR conversation — avant, il était global, donc discuter dans un nouveau fil aurait
@@ -38,45 +60,19 @@ function entriesPath(id: string): string {
 const MAX_HISTORY_ENTRIES = 300
 
 /**
- * Nom par défaut d'une conversation tant qu'aucun message n'a été envoyé dedans. C'est un MARQUEUR enregistré tel
- * quel sur le disque (toujours ce texte français) : l'étape 293 le traduit à la lecture (listConversations), pour que
- * changer de langue renomme aussi les conversations vides déjà créées.
+ * Échanges d'une conversation. Étape 325 : avant, toute erreur de lecture rendait une liste VIDE, et l'échange suivant
+ * réécrivait le fichier avec ce seul échange — tout le fil était perdu sur un fichier tronqué ou momentanément verrouillé
+ * (antivirus). Désormais : abîmé, il est rangé de côté puis la conversation repart vide ; illisible, l'action en cours
+ * échoue (DataFileUnreadableError) sans rien écrire.
  */
-export const UNTITLED_CONVERSATION = 'Nouvelle conversation'
-
-interface ConversationsIndex {
-  activeId: string
-  conversations: ConversationSummary[]
-}
-
-/**
- * Titre dérivé du PREMIER message de la conversation (comme ChatGPT/Claude) plutôt qu'un nom à saisir à la
- * main : Léo n'a rien à remplir, et une conversation sans titre n'existe pas — le seul cas restant est celle
- * qu'on vient de créer et où rien n'a encore été dit.
- *
- * Fonction pure, exportée pour être testable directement (scripts/test-conversations.mjs).
- */
-export function titleFromMessage(message: string, maxLength = 48): string {
-  const cleaned = message.replace(/\s+/g, ' ').trim()
-  if (!cleaned) return UNTITLED_CONVERSATION
-  if (cleaned.length <= maxLength) return cleaned
-  // Coupe sur le dernier espace avant la limite plutôt qu'en plein milieu d'un mot.
-  const cut = cleaned.slice(0, maxLength)
-  const lastSpace = cut.lastIndexOf(' ')
-  return `${(lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
-}
-
 async function readEntries(id: string): Promise<ConversationEntry[]> {
-  try {
-    return JSON.parse(await readFile(entriesPath(id), 'utf-8')) as ConversationEntry[]
-  } catch {
-    return []
-  }
+  const read = await readJsonDataFile(entriesPath(id), parseConversationEntries, unreadableDir(), `conversation-${id}`)
+  return read.status === 'ok' ? read.value : []
 }
 
+/** Écriture d'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne version intacte. */
 async function writeEntries(id: string, entries: ConversationEntry[]): Promise<void> {
-  await mkdir(conversationsDir(), { recursive: true })
-  await writeFile(entriesPath(id), JSON.stringify(entries, null, 2), 'utf-8')
+  await writeFileAtomic(entriesPath(id), JSON.stringify(entries, null, 2))
 }
 
 function newConversation(title = UNTITLED_CONVERSATION): ConversationSummary {
@@ -92,11 +88,17 @@ function newConversation(title = UNTITLED_CONVERSATION): ConversationSummary {
  * même si plus rien ne le lit.
  */
 async function readIndex(): Promise<ConversationsIndex> {
-  try {
-    const parsed = JSON.parse(await readFile(indexPath(), 'utf-8')) as ConversationsIndex
-    if (parsed.conversations?.length) return parsed
-  } catch {
-    // Index absent ou illisible : reconstruit juste en dessous.
+  // Étape 325 : un index illisible était reconstruit avec UNE conversation neuve, qui cachait toutes les autres (leurs
+  // fichiers restaient sur le disque, mais plus rien ne les listait). Abîmé, il est rangé de côté ; momentanément
+  // verrouillé, la lecture échoue sans rien réécrire (DataFileUnreadableError).
+  const read = await readJsonDataFile(indexPath(), parseConversationsIndex, unreadableDir(), 'conversations-index')
+  if (read.status === 'ok' && read.value.conversations.length) return read.value
+
+  // Index absent, vide ou abîmé : les conversations dont le fichier est encore là sont retrouvées, plutôt que cachées.
+  const recovered = await recoverIndexFromFiles()
+  if (recovered.conversations.length) {
+    await writeIndex(recovered)
+    return recovered
   }
 
   const legacy = await readLegacyHistory()
@@ -113,9 +115,33 @@ async function readIndex(): Promise<ConversationsIndex> {
   return index
 }
 
-async function readLegacyHistory(): Promise<ConversationEntry[]> {
+/** L'index recalculé depuis les fichiers des conversations encore présents (chacun relu, les abîmés rangés de côté). */
+async function recoverIndexFromFiles(): Promise<ConversationsIndex> {
+  let names: string[] = []
   try {
-    const parsed = JSON.parse(await readFile(legacyHistoryPath, 'utf-8')) as ConversationEntry[]
+    names = await readdir(conversationsDir())
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+  }
+  const entriesById = new Map<string, ConversationEntry[]>()
+  for (const name of [...names].sort()) {
+    const id = isTemporaryDataName(name) ? null : conversationIdFromFileName(name)
+    if (!id) continue
+    const entries = await readEntries(id)
+    if (entries.length) entriesById.set(id, entries)
+  }
+  return mergeConversationsIndex(null, null, [...entriesById.keys()], (id) => entriesById.get(id) ?? null)
+}
+
+/**
+ * L'ancien fichier d'avant l'étape 96, relu seulement pour la migration. Abîmé : ignoré (et jamais réécrit, il reste
+ * comme filet). Momentanément verrouillé : la lecture échoue, plutôt que de migrer « rien » et de ne plus y revenir.
+ */
+async function readLegacyHistory(): Promise<ConversationEntry[]> {
+  const raw = await readFileWithRetries(legacyHistoryPath)
+  if (raw === null) return []
+  try {
+    const parsed = JSON.parse(raw) as ConversationEntry[]
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -123,8 +149,7 @@ async function readLegacyHistory(): Promise<ConversationEntry[]> {
 }
 
 async function writeIndex(index: ConversationsIndex): Promise<void> {
-  await mkdir(conversationsDir(), { recursive: true })
-  await writeFile(indexPath(), JSON.stringify(index, null, 2), 'utf-8')
+  await writeFileAtomic(indexPath(), JSON.stringify(index, null, 2))
 }
 
 /** Conversations existantes, la plus récemment utilisée en premier, et laquelle est active. */
@@ -233,10 +258,17 @@ export async function clearConversationHistory(): Promise<void> {
   } catch {
     // Dossier pas encore créé : rien à effacer.
   }
+  // Les copies de secours de conversations abîmées (étape 325) aussi : « tout supprimer » ne laisse aucun message.
+  try {
+    for (const name of await readdir(unreadableDir())) {
+      if (name.startsWith('conversation-') || name.startsWith('conversations-index-')) await rm(join(unreadableDir(), name), { force: true })
+    }
+  } catch {
+    // Aucune copie de secours : rien à effacer.
+  }
   // L'ancien fichier d'avant l'étape 96 est effacé lui aussi : le garder ferait "revenir" tout l'historique
   // à la prochaine migration, juste après que Léo a demandé de tout supprimer.
-  await mkdir(dirname(legacyHistoryPath), { recursive: true })
-  await writeFile(legacyHistoryPath, '[]', 'utf-8')
+  await writeFileAtomic(legacyHistoryPath, '[]')
 
   const fresh = newConversation()
   await writeIndex({ activeId: fresh.id, conversations: [fresh] })

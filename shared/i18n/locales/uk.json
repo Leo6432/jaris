@@ -1215,6 +1215,7 @@
   "shutdown.shuttingDown": "Триває вимкнення.",
   "shutdown.commandCode": "Команда вимкнення не вдалася (код {code}).",
   "conv.untitled": "Нова розмова",
+  "data.fileBusy": "Jaris не зміг прочитати «{file}» ({detail}): можливо, його використовує інша програма, часто антивірус. Нічого не змінено; спробуй ще раз за мить.",
   "input.typeFailed": "Не вдалося ввести текст: {error}",
   "input.keyFailed": "Не вдалося натиснути клавішу: {error}",
   "input.mediaFailed": "Не вдалося виконати мультимедійну дію: {error}",

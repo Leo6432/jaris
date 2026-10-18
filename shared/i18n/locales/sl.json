@@ -1215,6 +1215,7 @@
   "shutdown.shuttingDown": "Izklop poteka.",
   "shutdown.commandCode": "Ukaz za izklop ni uspel (koda {code}).",
   "conv.untitled": "Nov pogovor",
+  "data.fileBusy": "Jaris ni mogel prebrati „{file}“ ({detail}): morda ga uporablja drug program, pogosto protivirusni program. Nič ni bilo spremenjeno; poskusi znova čez trenutek.",
   "input.typeFailed": "Vnos besedila ni uspel: {error}",
   "input.keyFailed": "Pritisk tipke ni uspel: {error}",
   "input.mediaFailed": "Večpredstavnostno dejanje ni uspelo: {error}",

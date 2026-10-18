@@ -1183,6 +1183,7 @@ export const fr = {
   "shutdown.shuttingDown": "Extinction en cours.",
   "shutdown.commandCode": "Échec de la commande d'extinction (code {code}).",
   "conv.untitled": "Nouvelle conversation",
+  "data.fileBusy": "Jaris n'a pas pu lire « {file} » ({detail}) : un autre programme, souvent un antivirus, l'utilise peut-être. Rien n'a été modifié ; réessaie dans un instant.",
   "input.typeFailed": "Échec de la saisie du texte : {error}",
   "input.keyFailed": "Échec de l'appui sur la touche : {error}",
   "input.mediaFailed": "Échec de l'action multimédia : {error}",

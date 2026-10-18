@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Spegnimento in corso.",
   "shutdown.commandCode": "Comando di spegnimento non riuscito (codice {code}).",
   "conv.untitled": "Nuova conversazione",
+  "data.fileBusy": "Jaris non è riuscito a leggere «{file}» ({detail}): forse un altro programma, spesso un antivirus, lo sta usando. Non è stato modificato nulla; riprova tra un attimo.",
   "input.typeFailed": "Scrittura del testo non riuscita: {error}",
   "input.keyFailed": "Pressione del tasto non riuscita: {error}",
   "input.mediaFailed": "Azione multimediale non riuscita: {error}",

@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Väljalülitamine.",
   "shutdown.commandCode": "Väljalülituskäsk ebaõnnestus (kood {code}).",
   "conv.untitled": "Uus vestlus",
+  "data.fileBusy": "Jaris ei saanud faili „{file}“ lugeda ({detail}): võib-olla kasutab seda mõni teine programm, sageli viirusetõrje. Midagi ei muudetud; proovi kohe uuesti.",
   "input.typeFailed": "Teksti sisestamine ebaõnnestus: {error}",
   "input.keyFailed": "Klahvivajutus ebaõnnestus: {error}",
   "input.mediaFailed": "Meediatoiming ebaõnnestus: {error}",

@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Herunterfahren läuft.",
   "shutdown.commandCode": "Befehl zum Herunterfahren fehlgeschlagen (Code {code}).",
   "conv.untitled": "Neues Gespräch",
+  "data.fileBusy": "Jaris konnte „{file}“ nicht lesen ({detail}): Vielleicht benutzt ein anderes Programm die Datei, oft ein Virenschutz. Es wurde nichts geändert; versuch es gleich noch einmal.",
   "input.typeFailed": "Texteingabe fehlgeschlagen: {error}",
   "input.keyFailed": "Tastendruck fehlgeschlagen: {error}",
   "input.mediaFailed": "Medienaktion fehlgeschlagen: {error}",

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { loadTsModule } from './load-ts-module.mjs'
 
 /**
  * Étape 234 (bêta de Jaris) : un rappel programmé ne doit sonner qu'UNE fois, même si les rappels en attente
@@ -17,10 +18,14 @@ const nodeRequire = createRequire(import.meta.url)
 // CRLF normalisé : la CI extrait le dépôt sous Windows, où les motifs sur plusieurs lignes ne trouvaient plus rien.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
+// Écritures d'un seul tenant et lecture prudente des rappels (étape 325) : le vrai module, sur le vrai disque.
+const atomicFile = loadTsModule('electron/services/atomicFile.ts', { fs: nodeRequire('fs'), 'fs/promises': nodeRequire('fs/promises'), path: nodeRequire('path') })
+
 function loadReminders(dataRoot) {
   const source = ts.transpileModule(read('electron/services/reminders.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   const exports = {}
-  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(exports, (name) => (name === './dataLocation' ? { getDataRoot: () => dataRoot } : nodeRequire(name)), { exports })
+  const modules = { './dataLocation': { getDataRoot: () => dataRoot }, './atomicFile': atomicFile }
+  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(exports, (name) => modules[name] ?? nodeRequire(name), { exports })
   return exports
 }
 

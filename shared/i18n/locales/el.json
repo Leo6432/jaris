@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Τερματισμός σε εξέλιξη.",
   "shutdown.commandCode": "Αποτυχία της εντολής τερματισμού (κωδικός {code}).",
   "conv.untitled": "Νέα συνομιλία",
+  "data.fileBusy": "Ο Jaris δεν μπόρεσε να διαβάσει το «{file}» ({detail}): ίσως το χρησιμοποιεί άλλο πρόγραμμα, συχνά ένα antivirus. Δεν άλλαξε τίποτα· δοκίμασε ξανά σε λίγο.",
   "input.typeFailed": "Αποτυχία πληκτρολόγησης του κειμένου: {error}",
   "input.keyFailed": "Αποτυχία πατήματος του πλήκτρου: {error}",
   "input.mediaFailed": "Αποτυχία της ενέργειας πολυμέσων: {error}",

@@ -19,7 +19,9 @@ function loadStore(fsModule = realFs) {
   return loadTsModule('electron/services/codeConversationsStore.ts', {
     fs: fsModule,
     path,
-    '../../shared/codeConversations': shared
+    '../../shared/codeConversations': shared,
+    // L'écriture d'un seul tenant vit dans atomicFile.ts (étape 325) : avec le MÊME `fs`, pour que ses pannes y passent.
+    './atomicFile': loadTsModule('electron/services/atomicFile.ts', { fs: fsModule, 'fs/promises': realFs.promises, path })
   }).CodeConversationsStore
 }
 

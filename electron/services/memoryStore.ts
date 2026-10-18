@@ -1,6 +1,7 @@
-import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
+import { mkdir, readFile, readdir } from 'fs/promises'
 import { join } from 'path'
 import type { MemoryGraph, MemoryGraphLink } from '../../shared/ipc'
+import { readFileWithRetries, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 const memoryDir = join(getDataRoot(), 'memory')
@@ -44,17 +45,15 @@ export async function rememberNote(title: string, content: string, replace = fal
   const path = notePath(title)
   const timestamp = new Date().toLocaleString('fr-FR')
 
+  // Étape 325 : seule une note ABSENTE est une nouvelle note. Avant, une note verrouillée un instant (antivirus) était
+  // prise pour une nouvelle, et réécrite avec ce seul ajout : tout son contenu était perdu. Elle fait maintenant échouer
+  // l'ajout (DataFileUnreadableError) sans rien écrire.
   let existing = ''
-  if (!replace) {
-    try {
-      existing = await readFile(path, 'utf-8')
-    } catch {
-      // Nouvelle note.
-    }
-  }
+  if (!replace) existing = (await readFileWithRetries(path)) ?? ''
 
   const entry = `\n\n_${timestamp}_\n${content}`
-  await writeFile(path, existing ? existing + entry : `# ${sanitizeTitle(title)}${entry}`, 'utf-8')
+  // D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne note intacte.
+  await writeFileAtomic(path, existing ? existing + entry : `# ${sanitizeTitle(title)}${entry}`)
   return `Noté dans la mémoire ("${title}").`
 }
 

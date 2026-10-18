@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Desligando.",
   "shutdown.commandCode": "Falha no comando de desligamento (código {code}).",
   "conv.untitled": "Nova conversa",
+  "data.fileBusy": "O Jaris não conseguiu ler “{file}” ({detail}): talvez outro programa, muitas vezes um antivírus, esteja usando o arquivo. Nada foi alterado; tente de novo daqui a pouco.",
   "input.typeFailed": "Falha ao digitar o texto: {error}",
   "input.keyFailed": "Falha ao apertar a tecla: {error}",
   "input.mediaFailed": "Falha na ação de mídia: {error}",

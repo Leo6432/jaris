@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Stänger av.",
   "shutdown.commandCode": "Avstängningskommandot misslyckades (kod {code}).",
   "conv.untitled": "Nytt samtal",
+  "data.fileBusy": "Jaris kunde inte läsa ”{file}” ({detail}): kanske använder ett annat program filen, ofta ett antivirusprogram. Inget har ändrats; försök igen om en stund.",
   "input.typeFailed": "Kunde inte skriva texten: {error}",
   "input.keyFailed": "Kunde inte trycka på tangenten: {error}",
   "input.mediaFailed": "Medieåtgärden misslyckades: {error}",

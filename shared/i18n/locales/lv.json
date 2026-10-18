@@ -1194,6 +1194,7 @@
   "shutdown.shuttingDown": "Notiek izslēgšana.",
   "shutdown.commandCode": "Izslēgšanas komanda neizdevās (kods {code}).",
   "conv.untitled": "Jauna saruna",
+  "data.fileBusy": "Jaris nevarēja nolasīt „{file}” ({detail}): iespējams, to izmanto cita programma, bieži vien antivīruss. Nekas netika mainīts; pamēģini vēlreiz pēc brīža.",
   "input.typeFailed": "Teksta ievade neizdevās: {error}",
   "input.keyFailed": "Taustiņa nospiešana neizdevās: {error}",
   "input.mediaFailed": "Multivides darbība neizdevās: {error}",

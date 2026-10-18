@@ -1215,6 +1215,7 @@
   "shutdown.shuttingDown": "Trwa wyłączanie.",
   "shutdown.commandCode": "Polecenie wyłączenia nie powiodło się (kod {code}).",
   "conv.untitled": "Nowa rozmowa",
+  "data.fileBusy": "Jaris nie mógł odczytać „{file}” ({detail}): być może używa go inny program, często antywirus. Nic nie zostało zmienione; spróbuj ponownie za chwilę.",
   "input.typeFailed": "Nie udało się wpisać tekstu: {error}",
   "input.keyFailed": "Nie udało się nacisnąć klawisza: {error}",
   "input.mediaFailed": "Działanie multimedialne nie powiodło się: {error}",

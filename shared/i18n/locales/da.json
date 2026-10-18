@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Slukker.",
   "shutdown.commandCode": "Slukningskommandoen mislykkedes (kode {code}).",
   "conv.untitled": "Ny samtale",
+  "data.fileBusy": "Jaris kunne ikke læse “{file}” ({detail}): måske bruger et andet program filen, ofte et antivirusprogram. Intet er blevet ændret; prøv igen om et øjeblik.",
   "input.typeFailed": "Kunne ikke skrive teksten: {error}",
   "input.keyFailed": "Kunne ikke trykke på tasten: {error}",
   "input.mediaFailed": "Mediehandlingen mislykkedes: {error}",

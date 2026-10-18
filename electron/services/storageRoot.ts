@@ -1,18 +1,5 @@
 import { app } from 'electron'
-import {
-  closeSync,
-  copyFileSync,
-  cpSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, extname, join, resolve, win32 } from 'path'
 import {
@@ -23,6 +10,24 @@ import {
   sanitizeCodeConversations,
   type CodeConversationsData
 } from '../../shared/codeConversations'
+import {
+  CONVERSATIONS_INDEX_FILE,
+  conversationIdFromFileName,
+  mergeConversationEntries,
+  mergeConversationsIndex,
+  parseConversationEntries,
+  parseConversationsIndex,
+  type ConversationsIndex
+} from '../../shared/conversationsData'
+import type { ConversationEntry } from '../../shared/ipc'
+import {
+  UNREADABLE_DATA_DIR,
+  isTemporaryDataName,
+  readFileWithRetriesSync,
+  renameWithRetriesSync,
+  unreadableCopyName,
+  writeFileAtomicSync
+} from './atomicFile'
 
 /**
  * Étape 143, Léo : « si il choisit dès l'installation le D tout est dans le D, ou si il veut changer dans les
@@ -110,7 +115,9 @@ export const OWNED_ENTRIES = [
   CODE_CONVERSATIONS_ASIDE_DIR,
   ...MODEL_TEST_ENTRIES,
   'duel-pilotes',
-  PHONE_TUNNEL_DIR
+  PHONE_TUNNEL_DIR,
+  // Copies de secours d'un profil, d'une conversation, des rappels ou de la langue abîmés (atomicFile.ts, étape 325).
+  UNREADABLE_DATA_DIR
 ]
 
 /**
@@ -134,10 +141,68 @@ export const LEGACY_ELECTRON_ENTRIES = ['github-token.bin', PHONE_TUNNEL_DIR]
  * était déconnecté de GitHub (et l'identité du téléphone remplacée par une neuve). La copie restée sur C est effacée
  * avec le reste du dossier par défaut (cleanupStaleChromiumData).
  *
- * Les conversations du mode Code et leurs copies de secours ne sont pas dans cette liste : elles sont RÉUNIES avec
- * celles déjà à destination (mergeCodeConversationsFileSync, copyKeepingBothSync), jamais l'un par-dessus l'autre.
+ * S'y ajoute `conversation-history.json`, l'ancien historique d'avant l'étape 96 : gardé comme filet, relu seulement
+ * pour la migration. Une session sur C n'y écrit au plus qu'une liste vide (« Supprimer l'historique » de CETTE session),
+ * qui ne doit jamais effacer le filet de D.
+ *
+ * Les autres données ne sont pas dans cette liste : elles sont RÉUNIES avec celles déjà à destination, chacune selon
+ * son format (REBRANCH_RULES), jamais l'une par-dessus l'autre.
  */
-export const KEPT_AT_DESTINATION_ENTRIES = [...LEGACY_ELECTRON_ENTRIES, 'github-connection.json', 'phone-devices.json', ...MODEL_TEST_ENTRIES]
+export const KEPT_AT_DESTINATION_ENTRIES = [
+  ...LEGACY_ELECTRON_ENTRIES,
+  'github-connection.json',
+  'phone-devices.json',
+  ...MODEL_TEST_ENTRIES,
+  'conversation-history.json'
+]
+
+/**
+ * Ce que devient chaque donnée quand le démarrage la rapatrie vers une racine qui l'a DÉJÀ (moveOwnedEntriesSync).
+ * Cas réel (étape 325) : racine sur D, Jaris démarré disque débranché (il tourne alors sur C, où Léo refait l'écran de
+ * premier lancement, discute, pose des rappels, des notes), puis disque rebranché. Recopiées avec `force`, les données
+ * de C passaient PAR-DESSUS celles de D : le vrai profil (choix des modèles compris), l'index des conversations (qui
+ * cachait alors tous les fils de D), les rappels, une note du même titre…
+ *
+ * - `keep-destination` (KEPT_AT_DESTINATION_ENTRIES) : jamais écrasé, voir plus haut ;
+ * - `destination-wins` : profil et langue — un seul réglage possible : celui de D gagne, celui de C ne sert que si D
+ *   n'en a pas, ou si celui de D est abîmé (rangé de côté avant) ;
+ * - `merge-conversations` : union des conversations, index réuni (la conversation active reste celle de D) ;
+ * - `merge-reminders` : union des rappels par identifiant ;
+ * - `merge-memory` : union des notes ; une note du même titre des deux côtés est réunie, entrée par entrée ;
+ * - `append-journal` : le journal de C est ajouté à la suite de celui de D (rien n'est perdu, rien n'est doublé) ;
+ * - `merge-code-conversations` : conversations du mode Code réunies (combineCodeConversations) ;
+ * - `keep-both` : union de fichiers — un même nom au même contenu n'est pas recopié, un même nom au contenu différent est
+ *   gardé à côté (`…-2`) : images, vidéos, applications générées, copies de secours.
+ *
+ * Toute entrée de OWNED_ENTRIES y a sa règle (un test le vérifie) : une nouvelle donnée doit choisir la sienne.
+ */
+export type RebranchRule =
+  | 'keep-destination'
+  | 'destination-wins'
+  | 'merge-conversations'
+  | 'merge-reminders'
+  | 'merge-memory'
+  | 'append-journal'
+  | 'merge-code-conversations'
+  | 'keep-both'
+
+export const REBRANCH_RULES: Record<string, RebranchRule> = {
+  conversations: 'merge-conversations',
+  'profile.json': 'destination-wins',
+  'language.json': 'destination-wins',
+  memory: 'merge-memory',
+  'generated-apps': 'keep-both',
+  'generated-images': 'keep-both',
+  'generated-videos': 'keep-both',
+  'reminders.json': 'merge-reminders',
+  'journal-demandes.txt': 'append-journal',
+  [CODE_CONVERSATIONS_FILE]: 'merge-code-conversations',
+  [CODE_CONVERSATIONS_ASIDE_DIR]: 'keep-both',
+  // Le rapport d'une fonctionnalité retirée : aucune session ne le réécrit, mais rien n'y est jamais écrasé.
+  'duel-pilotes': 'keep-both',
+  [UNREADABLE_DATA_DIR]: 'keep-both',
+  ...Object.fromEntries(KEPT_AT_DESTINATION_ENTRIES.map((entry) => [entry, 'keep-destination' as const]))
+}
 
 /**
  * Fichier de Chromium qui garde la clé de chiffrement de Windows (`os_crypt.encrypted_key`, protégée par DPAPI) :
@@ -195,46 +260,23 @@ export function readStaleElectronDir(userData: string): string | null {
   }
 }
 
-/** Écrit le repère. Seule étape qui « bascule » Jaris vers une nouvelle racine (lue au prochain démarrage). */
+/**
+ * Écrit le repère. Seule étape qui « bascule » Jaris vers une nouvelle racine (lue au prochain démarrage). D'un seul
+ * tenant (étape 325) : tronqué par une coupure, il était lu comme « jamais déplacé », et Jaris repartait sur C, vide.
+ */
 export function writeMarker(userData: string, root: string, staleElectronDir?: string | null): void {
-  mkdirSync(userData, { recursive: true })
-  writeFileSync(join(userData, MARKER_NAME), JSON.stringify({ root, staleElectronDir: staleElectronDir ?? undefined }, null, 2), 'utf-8')
+  writeWholeFileSync(join(userData, MARKER_NAME), JSON.stringify({ root, staleElectronDir: staleElectronDir ?? undefined }, null, 2))
   rmSync(join(userData, LEGACY_MARKER_NAME), { force: true })
 }
 
 /** Suffixe du nom temporaire d'une copie en cours (copyWholeSync). */
 const PARTIAL_COPY_SUFFIX = '.jaris-copie'
 
-/**
- * Délais entre deux essais quand Windows refuse un instant un renommage (antivirus ou indexeur qui ouvre le fichier
- * qu'on vient d'écrire) : au plus ~350 ms d'attente, et seulement quand ça échoue. Mêmes valeurs que le store des
- * conversations du mode Code (codeConversationsStore.ts), pour la même raison.
+/*
+ * Les renommages sont réessayés sur un refus passager de Windows (renameWithRetriesSync, atomicFile.ts). Sans ça, un
+ * seul refus d'un antivirus pendant la réunion des données faisait abandonner toute la racine D pour la session
+ * (bootstrap) : Jaris démarrait sur C, comme si le disque était débranché.
  */
-const RENAME_RETRY_DELAYS_MS = [50, 100, 200]
-/** Les refus passagers d'un renommage sous Windows. */
-const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
-
-/** Attente SYNCHRONE : ce module tourne au chargement, avant que l'application soit prête, sans boucle d'évènements. */
-const sleepSync = (ms: number): void => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-}
-
-/**
- * `renameSync` réessayé sur un refus passager. Sans ça, un seul refus d'un antivirus pendant la réunion des
- * conversations du mode Code faisait abandonner toute la racine D pour la session (bootstrap) : Jaris démarrait sur
- * C, comme si le disque était débranché. Toute autre erreur, ou un refus qui dure, remonte telle quelle.
- */
-function renameWithRetriesSync(from: string, to: string): void {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      renameSync(from, to)
-      return
-    } catch (err) {
-      if (!TRANSIENT_RENAME_CODES.has((err as NodeJS.ErrnoException).code ?? '') || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
-      sleepSync(RENAME_RETRY_DELAYS_MS[attempt])
-    }
-  }
-}
 
 /**
  * Copie `source` vers `dest` (absent) sans JAMAIS laisser `dest` à moitié écrit : la copie se fait sous un nom
@@ -298,16 +340,28 @@ function copyKeepingBothSync(source: string, dest: string): void {
 }
 
 /**
- * Garde une copie de `file` parmi les copies de secours datées (CODE_CONVERSATIONS_ASIDE_DIR) du dossier `dataDir` —
- * sauf si une copie identique y est déjà (démarrage interrompu puis repris : rien n'est doublé).
+ * Garde une copie de `file` dans le dossier de secours `dir`, sous le nom daté `name` — sauf si une copie identique y
+ * est déjà (démarrage interrompu puis repris : rien n'est doublé).
  */
-function keepAsideSync(file: string, dataDir: string): void {
-  const dir = join(dataDir, CODE_CONVERSATIONS_ASIDE_DIR)
+function keepCopyInSync(file: string, dir: string, name: string): void {
   mkdirSync(dir, { recursive: true })
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isFile() && sameContentSync(file, join(dir, entry.name))) return
   }
-  copyWithoutOverwriteSync(file, dir, codeConversationsAsideName(Date.now()))
+  copyWithoutOverwriteSync(file, dir, name)
+}
+
+/** Copie de secours d'un code-conversations.json abîmé, là où le store l'aurait mise (CODE_CONVERSATIONS_ASIDE_DIR). */
+function keepAsideSync(file: string, dataDir: string): void {
+  keepCopyInSync(file, join(dataDir, CODE_CONVERSATIONS_ASIDE_DIR), codeConversationsAsideName(Date.now()))
+}
+
+/**
+ * Copie de secours d'une autre donnée abîmée (profil, conversation, rappels, langue), là où les magasins rangent les
+ * leurs (UNREADABLE_DATA_DIR, atomicFile.ts) : un fichier illisible d'un côté n'est jamais jeté, même s'il ne sert plus.
+ */
+function keepUnreadableCopySync(file: string, dataDir: string, label: string): void {
+  keepCopyInSync(file, join(dataDir, UNREADABLE_DATA_DIR), unreadableCopyName(label, extname(file), Date.now()))
 }
 
 /**
@@ -324,27 +378,212 @@ function readCodeConversationsSync(file: string): CodeConversationsData | null {
   }
 }
 
-/** Écrit `file` d'un seul tenant : contenu forcé sur le disque sous un nom voisin, puis remplacement d'un seul geste. */
+/**
+ * Écrit `file` d'un seul tenant : contenu forcé sur le disque sous un nom voisin, puis remplacement d'un seul geste
+ * (writeFileAtomicSync). Un remplacement refusé pour de bon laisse `file` intact, sans copie temporaire à côté.
+ */
 function writeWholeFileSync(file: string, content: string): void {
-  const partial = `${file}${PARTIAL_COPY_SUFFIX}`
-  const fd = openSync(partial, 'w')
+  writeFileAtomicSync(file, content, { temporarySuffix: PARTIAL_COPY_SUFFIX, removeTemporaryOnFailure: true })
+}
+
+/** Le contenu texte de `file` (`null` s'il n'existe pas) ; un refus passager est réessayé, un refus qui dure fait lever. */
+const readTextSync = (file: string): string | null => readFileWithRetriesSync(file)
+
+/** `parse(JSON)` de `raw`, ou `null` si ce n'est pas du JSON ou pas la forme attendue (fichier abîmé). */
+function parseJsonOrNull<T>(raw: string | null, parse: (value: unknown) => T | null): T | null {
+  if (raw === null) return null
   try {
-    writeFileSync(fd, content, 'utf-8')
-    fsyncSync(fd)
-  } finally {
-    closeSync(fd)
+    return parse(JSON.parse(raw))
+  } catch {
+    return null
   }
-  try {
-    renameWithRetriesSync(partial, file)
-  } catch (err) {
-    // `file` est intact (le renommage n'a pas eu lieu) : on ne laisse pas la copie temporaire traîner à côté.
-    try {
-      rmSync(partial, { force: true })
-    } catch {
-      // réécrite au prochain essai (openSync en écriture)
+}
+
+const parseJsonObject = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+
+const parseJsonArray = (value: unknown): unknown[] | null => (Array.isArray(value) ? value : null)
+
+/**
+ * Deux exemplaires d'un même fichier JSON, celui de C (`source`) et celui de D (`dest`, déjà présent) : `combine`
+ * réunit les deux contenus lisibles et renvoie le texte à écrire dans D, ou `null` si D est déjà complet. Un côté
+ * abîmé n'est jamais jeté : rangé dans les copies de secours de D, l'autre sert seul. Lecture refusée qui dure : rien
+ * n'est touché, le démarrage suivant réessaie.
+ */
+function mergeJsonFileSync<T>(
+  source: string,
+  dest: string,
+  dataDir: string,
+  label: string,
+  parse: (value: unknown) => T | null,
+  combine: (older: T, newer: T, olderRaw: string) => string | null
+): void {
+  const olderRaw = readTextSync(dest)
+  const newerRaw = readTextSync(source)
+  if (olderRaw === null) {
+    copyWholeSync(source, dest)
+    return
+  }
+  if (newerRaw === null || newerRaw === olderRaw) return
+  const older = parseJsonOrNull(olderRaw, parse)
+  const newer = parseJsonOrNull(newerRaw, parse)
+  if (older !== null && newer !== null) {
+    const merged = combine(older, newer, olderRaw)
+    if (merged !== null && merged !== olderRaw) writeWholeFileSync(dest, merged)
+  } else if (newer !== null) {
+    // Celui de D est abîmé : gardé de côté, puis remplacé (d'un seul tenant) par celui de C.
+    keepUnreadableCopySync(dest, dataDir, label)
+    writeWholeFileSync(dest, newerRaw)
+  } else {
+    // Celui de C est abîmé (ou les deux) : gardé de côté, celui de D reste tel quel.
+    keepUnreadableCopySync(source, dataDir, label)
+  }
+}
+
+/**
+ * Profil et langue : un seul réglage possible, celui de D gagne. Celui de C ne sert que si D n'en a pas, ou si celui
+ * de D est abîmé (gardé de côté avant). Un profil de C abîmé est gardé de côté lui aussi.
+ */
+function keepDestinationSettingSync(source: string, dest: string, dataDir: string, label: string): void {
+  mergeJsonFileSync(source, dest, dataDir, label, parseJsonObject, () => null)
+}
+
+/** Rappels : union par identifiant, ceux de D d'abord (deux fois de suite : rien n'est doublé). */
+function mergeRemindersFileSync(source: string, dest: string, dataDir: string): void {
+  const keyOf = (reminder: unknown): string => {
+    const id = (reminder as { id?: unknown } | null)?.id
+    return typeof id === 'string' && id ? `id:${id}` : `json:${JSON.stringify(reminder)}`
+  }
+  mergeJsonFileSync(source, dest, dataDir, 'reminders', parseJsonArray, (older, newer) => {
+    const seen = new Set(older.map(keyOf))
+    const extra = newer.filter((reminder) => {
+      const key = keyOf(reminder)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    return extra.length ? JSON.stringify([...older, ...extra], null, 2) : null
+  })
+}
+
+/**
+ * Conversations du Chat : chaque fil de C rejoint D ; un même fil présent des deux côtés (démarrage interrompu après une
+ * première réunion, puis conversation continuée sur C) est réuni échange par échange, sans doublon (identifiants
+ * randomUUID). Puis l'index : celui de D d'abord (sa conversation active reste active), les fils de C ensuite, et tout
+ * fil présent sans figurer dans aucun index (index perdu ou abîmé) est retrouvé plutôt que caché.
+ */
+function mergeConversationsDirSync(source: string, dest: string, dataDir: string): void {
+  for (const entry of readdirSync(source, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const name = entry.name
+    if (name === CONVERSATIONS_INDEX_FILE || isTemporaryDataName(name)) continue
+    const from = join(source, name)
+    const to = join(dest, name)
+    const id = entry.isDirectory() ? null : conversationIdFromFileName(name)
+    if (entry.isDirectory()) copyKeepingBothSync(from, to)
+    else if (!id) copyWithoutOverwriteSync(from, dest, name)
+    else
+      mergeJsonFileSync(from, to, dataDir, `conversation-${id}`, parseConversationEntries, (older, newer) => {
+        const merged = mergeConversationEntries(older, newer)
+        return merged.length === older.length ? null : JSON.stringify(merged, null, 2)
+      })
+  }
+
+  const indexOf = (dir: string): { raw: string | null; index: ConversationsIndex | null } => {
+    const raw = readTextSync(join(dir, CONVERSATIONS_INDEX_FILE))
+    return { raw, index: parseJsonOrNull(raw, parseConversationsIndex) }
+  }
+  const older = indexOf(dest)
+  const newer = indexOf(source)
+  if (older.raw !== null && !older.index) keepUnreadableCopySync(join(dest, CONVERSATIONS_INDEX_FILE), dataDir, 'conversations-index')
+  if (newer.raw !== null && !newer.index && newer.raw !== older.raw) {
+    keepUnreadableCopySync(join(source, CONVERSATIONS_INDEX_FILE), dataDir, 'conversations-index')
+  }
+
+  const threadIds = readdirSync(dest)
+    .filter((name) => !isTemporaryDataName(name))
+    .map(conversationIdFromFileName)
+    .filter((id): id is string => !!id)
+    .sort()
+  const entriesFor = (id: string): ConversationEntry[] | null => parseJsonOrNull(readTextSync(join(dest, `${id}.json`)), parseConversationEntries)
+  const merged = mergeConversationsIndex(older.index, newer.index, threadIds, entriesFor)
+  // Rien à indexer et pas d'index de D : le magasin des conversations le créera lui-même au premier accès.
+  if (!merged.conversations.length && older.raw === null) return
+  const text = JSON.stringify(merged, null, 2)
+  if (text !== older.raw) writeWholeFileSync(join(dest, CONVERSATIONS_INDEX_FILE), text)
+}
+
+/**
+ * Les entrées d'une note de mémoire (memoryStore.ts) : le titre, puis un bloc « _horodatage_ » par ajout. Coupées sur
+ * l'en-tête de chaque bloc, ce qui permet de réunir deux exemplaires d'une même note sans rien perdre ni doubler.
+ */
+function noteBlocks(text: string): string[] {
+  return text
+    .replace(/\r\n/g, '\n')
+    .split(/\n\n(?=_[^_\n]+_\n)/)
+    .map((block) => block.replace(/\s+$/, ''))
+    .filter((block) => block !== '')
+}
+
+/**
+ * Une note du même titre des deux côtés : celle de D, suivie des blocs de celle de C qu'elle n'a pas encore (les
+ * ajouts faits sur C, dans leur ordre). Réunir deux fois de suite ne change plus rien.
+ */
+export function mergeNoteText(older: string, newer: string): string {
+  if (older === newer) return older
+  const seen = new Set(noteBlocks(older))
+  const extra: string[] = []
+  for (const block of noteBlocks(newer)) {
+    if (seen.has(block)) continue
+    seen.add(block)
+    extra.push(block)
+  }
+  if (!extra.length) return older
+  return `${older.replace(/\s+$/, '')}\n\n${extra.join('\n\n')}`
+}
+
+/**
+ * Mémoire : union des notes. Une note du même titre des deux côtés (même nom de fichier, sans tenir compte des
+ * majuscules, comme Windows) est réunie entrée par entrée (mergeNoteText) ; tout autre fichier est gardé des deux côtés.
+ */
+function mergeMemoryDirSync(source: string, dest: string): void {
+  const existing = new Map(readdirSync(dest).map((name) => [name.toLowerCase(), name]))
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const name = entry.name
+    if (isTemporaryDataName(name)) continue
+    const from = join(source, name)
+    if (entry.isDirectory()) {
+      copyKeepingBothSync(from, join(dest, existing.get(name.toLowerCase()) ?? name))
+      continue
     }
-    throw err
+    const target = existing.get(name.toLowerCase())
+    if (!target) {
+      copyWholeSync(from, join(dest, name))
+      continue
+    }
+    if (!name.toLowerCase().endsWith('.md')) {
+      copyWithoutOverwriteSync(from, dest, name)
+      continue
+    }
+    const older = readTextSync(join(dest, target)) ?? ''
+    const merged = mergeNoteText(older, readTextSync(from) ?? '')
+    if (merged !== older) writeWholeFileSync(join(dest, target), merged)
   }
+}
+
+/**
+ * Journal des demandes (requestJournal.ts, texte ajouté au fil de l'eau) : celui de C est ajouté à la suite de celui de
+ * D. Déjà présent dans D (démarrage interrompu puis repris) : rien n'est ajouté. Le journal se recoupe tout seul à sa
+ * taille maximale au prochain ajout.
+ */
+function appendJournalSync(source: string, dest: string): void {
+  const older = readTextSync(dest)
+  const newer = readTextSync(source)
+  if (older === null) {
+    copyWholeSync(source, dest)
+    return
+  }
+  if (!newer || older.includes(newer)) return
+  writeWholeFileSync(dest, `${older}${older.endsWith('\n') || newer.startsWith('\n') ? '' : '\n'}${newer}`)
 }
 
 /**
@@ -378,10 +617,9 @@ function mergeCodeConversationsFileSync(source: string, dest: string): void {
  * original n'est effacé qu'une fois TOUTES les copies réussies : une erreur en route laisse les originaux
  * intacts (l'exception remonte). Une source absente est simplement sautée (installation neuve).
  *
- * Une entrée de KEPT_AT_DESTINATION_ENTRIES déjà présente dans `to` n'est jamais écrasée : l'original est laissé
- * (effacé ensuite avec le reste du dossier par défaut), et elle n'est copiée, d'un seul tenant, que si `to` ne l'a pas.
- * Les conversations du mode Code et leurs copies de secours déjà présentes dans `to` sont réunies avec celles de
- * `from`, sans rien perdre ni d'un côté ni de l'autre.
+ * Une entrée absente de `to` y est copiée d'un seul tenant (copyWholeSync). Une entrée que `to` a DÉJÀ n'est jamais
+ * recopiée par-dessus : elle suit sa règle (REBRANCH_RULES) — gardée telle quelle, réglage de D gagnant, ou réunie
+ * selon son format —, sans rien perdre ni d'un côté ni de l'autre, et sans rien doubler si le démarrage est rejoué.
  */
 export function moveOwnedEntriesSync(from: string, to: string): void {
   if (from === to) return
@@ -391,19 +629,38 @@ export function moveOwnedEntriesSync(from: string, to: string): void {
     const source = join(from, entry)
     if (!existsSync(source)) continue
     const dest = join(to, entry)
-    if (KEPT_AT_DESTINATION_ENTRIES.includes(entry)) {
-      if (existsSync(dest)) continue
-      copyWholeSync(source, dest)
-    } else if (entry === CODE_CONVERSATIONS_FILE && existsSync(dest)) {
-      mergeCodeConversationsFileSync(source, dest)
-    } else if (entry === CODE_CONVERSATIONS_ASIDE_DIR && existsSync(dest)) {
-      copyKeepingBothSync(source, dest)
-    } else {
-      cpSync(source, dest, { recursive: true, force: true })
-    }
+    if (!existsSync(dest)) copyWholeSync(source, dest)
+    else if (REBRANCH_RULES[entry] === 'keep-destination') continue // original laissé, effacé avec le dossier par défaut
+    else mergeIntoExistingSync(entry, source, dest, to)
     copied.push(source)
   }
   for (const source of copied) rmSync(source, { recursive: true, force: true })
+}
+
+/** `entry` existe des deux côtés : C (`source`) rejoint D (`dest`) selon sa règle. */
+function mergeIntoExistingSync(entry: string, source: string, dest: string, dataDir: string): void {
+  const rule = REBRANCH_RULES[entry] ?? 'keep-both'
+  switch (rule) {
+    case 'keep-destination':
+      return
+    case 'destination-wins':
+      return keepDestinationSettingSync(source, dest, dataDir, entry.replace(/\.json$/, ''))
+    case 'merge-conversations':
+      return mergeConversationsDirSync(source, dest, dataDir)
+    case 'merge-reminders':
+      return mergeRemindersFileSync(source, dest, dataDir)
+    case 'merge-memory':
+      return mergeMemoryDirSync(source, dest)
+    case 'append-journal':
+      return appendJournalSync(source, dest)
+    case 'merge-code-conversations':
+      return mergeCodeConversationsFileSync(source, dest)
+    case 'keep-both':
+      // Un dossier : union de ses fichiers. Un fichier seul : gardé à côté sous un nom libre s'il diffère.
+      if (statSync(source).isDirectory()) return copyKeepingBothSync(source, dest)
+      copyWithoutOverwriteSync(source, dirname(dest), entry)
+      return
+  }
 }
 
 function sameDir(a: string, b: string): boolean {

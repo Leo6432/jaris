@@ -1173,6 +1173,7 @@
   "shutdown.shuttingDown": "Kikapcsolás folyamatban.",
   "shutdown.commandCode": "A kikapcsolási parancs nem sikerült (kód: {code}).",
   "conv.untitled": "Új beszélgetés",
+  "data.fileBusy": "Jaris nem tudta beolvasni ezt: „{file}” ({detail}). Talán egy másik program használja, gyakran egy vírusirtó. Semmi sem változott; próbáld újra egy pillanat múlva.",
   "input.typeFailed": "A szöveg beírása nem sikerült: {error}",
   "input.keyFailed": "A billentyű lenyomása nem sikerült: {error}",
   "input.mediaFailed": "A médiaművelet nem sikerült: {error}",
