@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { formatChatProgress } from '@/lib/formatChatProgress'
+import { ELAPSED_HINT_MS, formatDuration } from '@/lib/formatCodeGenProgress'
+import { useElapsedMs } from '@/lib/useElapsedMs'
 import { t } from '@/lib/i18n'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
@@ -42,6 +44,8 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
+  // Étape 325 : même compteur que le Chat — sans lui, « Jaris réfléchit… » paraît figé pendant une longue attente.
+  const elapsedMs = useElapsedMs(sending)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -239,7 +243,14 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
             <p className="chat-widget__error">{error}</p>
           ) : (
             <div className="chat-widget__reply">
-              {reply ? renderFormattedText(reply) : (progress ?? t('app.status.thinking'))}
+              {reply ? (
+                renderFormattedText(reply)
+              ) : (
+                <>
+                  {progress ?? t('app.status.thinking')}
+                  {elapsedMs >= ELAPSED_HINT_MS && <span className="chat-widget__elapsed"> · {formatDuration(elapsedMs)}</span>}
+                </>
+              )}
             </div>
           )}
           <div className="chat-widget__actions">

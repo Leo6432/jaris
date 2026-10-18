@@ -121,7 +121,11 @@ window.jaris = {
     window.__state.activeId = window.__state.conversations[0].id
     return list()
   },
-  onLog: () => () => {},
+  // Étape 325 : le test envoie lui-même une ligne du journal (window.__log), comme le main pendant une réponse.
+  onLog: (cb) => {
+    window.__log = cb
+    return () => {}
+  },
   onChatStreamToken: () => () => {},
   // Étape 273 : le test envoie lui-même les recherches web « en direct » (window.__web).
   onChatWebActivity: (cb) => {
@@ -424,5 +428,48 @@ test('recherche web en direct : le bloc AU-DESSUS de l’indicateur, et ce qui e
     await page.click('.composer__send--stop')
     await page.waitForSelector('.chat-panel__stopped')
     assert.equal(await page.locator('.web-activity--running').count(), 0, 'le bloc « en direct » reste après la réponse')
+  })
+})
+
+// Étape 325 : « Jaris réfléchit… » sans durée paraissait figé pendant qu'un modèle se charge ou réfléchit 1 à 2 minutes
+// (mesuré : granite4.2:8b, 2 min 06 de réflexion, étape 245). Vraies attentes bornées : pas de page.clock (étape 126).
+test('pendant une réponse, le temps écoulé s’affiche après une dizaine de secondes, à côté de l’étape en cours (étape 325)', options, async () => {
+  const seconds = (text) => Number(text.match(/(\d+) s$/)?.[1])
+  await withPage(async (page) => {
+    await page.fill('.composer__input', 'longue réflexion, s’il te plaît')
+    await page.click('.composer__send')
+    await page.waitForSelector('.chat-panel__thinking')
+    // L'étape en cours (ici la lecture d'une page) reste affichée : la durée s'ajoute à côté, jamais à sa place.
+    await page.evaluate(() => window.__log('Outil appelé : read_web_page({"url":"https://exemple.fr"})'))
+    await page.waitForFunction(() => document.querySelector('.chat-panel__progress')?.textContent?.startsWith('Lecture de la page…'))
+    await page.waitForTimeout(1_500)
+    assert.equal(await page.locator('.chat-panel__elapsed').count(), 0, 'une durée s’affiche dès les premières secondes')
+
+    await page.waitForSelector('.chat-panel__elapsed', { timeout: 15_000 })
+    const first = await page.textContent('.chat-panel__elapsed')
+    assert.match(first, /^ · 1[0-4] s$/)
+    assert.match(await page.textContent('.chat-panel__progress'), /^Lecture de la page… · 1[0-4] s$/)
+    // Elle avance chaque seconde : la preuve que Jaris n'est pas figé.
+    await page.waitForTimeout(2_200)
+    const second = await page.textContent('.chat-panel__elapsed')
+    assert.ok(seconds(second) > seconds(first), `la durée n’avance pas : « ${first} » puis « ${second} »`)
+    const layout = await page.evaluate(() => ({
+      oneLine: document.querySelector('.chat-panel__progress').getBoundingClientRect().height < 30,
+      numeric: getComputedStyle(document.querySelector('.chat-panel__elapsed')).fontVariantNumeric
+    }))
+    assert.ok(layout.oneLine, 'l’étape et sa durée ne tiennent pas sur une ligne')
+    assert.equal(layout.numeric, 'tabular-nums', 'la durée n’est pas habillée par le CSS de Jaris')
+
+    // Fin de la réponse (ici « Arrêter ») : la durée disparaît…
+    await page.click('.composer__send--stop')
+    await page.waitForSelector('.chat-panel__stopped')
+    assert.equal(await page.locator('.chat-panel__elapsed').count(), 0, 'la durée reste après la réponse')
+    // … et repart de zéro à la réponse suivante.
+    await page.fill('.composer__input', 'longue suite')
+    await page.click('.composer__send')
+    await page.waitForSelector('.chat-panel__thinking')
+    await page.waitForTimeout(1_500)
+    assert.equal(await page.locator('.chat-panel__elapsed').count(), 0, 'le compteur n’est pas reparti de zéro')
+    await page.click('.composer__send--stop')
   })
 })

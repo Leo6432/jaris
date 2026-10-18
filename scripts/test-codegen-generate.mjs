@@ -32,13 +32,26 @@ const PYTHON_RESPONSE =
 const TIMERS = { setInterval, clearInterval }
 
 /** Fabrique un module généré avec une file de réponses successives pour chatWithOllama (dans l'ordre d'appel). */
-function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'vision-test' }, installed = ['test-model'] } = {}) {
+function setup(
+  responses,
+  {
+    profile = { codeModel: 'test-model', visionModel: 'vision-test' },
+    installed = ['test-model'],
+    // Étape 325 : un modèle qui se charge (`loaded: false`), attend un peu (`delayMs`, VRAI temps, borné) puis réfléchit
+    // (`thinkFirst`) avant son premier mot — comme un gros modèle avec le vrai Ollama.
+    loaded = true,
+    delayMs = 0,
+    thinkFirst = false
+  } = {}
+) {
   const calls = []
   const models = []
   const statusLines = []
   const activity = []
   const live = []
   const visionCalls = []
+  /** Tout ce qui arrive, dans l'ordre : appels au modèle, fragments, avancement et ligne en direct (étape 325). */
+  const events = []
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
     './dataLocation': { getDataRoot: () => '/tmp' },
@@ -46,14 +59,20 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
       // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
-      isModelLoaded: async () => true,
-      chatWithOllama: async (messages, _tools, model, _think, _signal, _numCtx, onToken) => {
+      isModelLoaded: async () => loaded,
+      chatWithOllama: async (messages, _tools, model, _think, _signal, _numCtx, onToken, onThinking) => {
         calls.push(messages)
         models.push(model)
+        events.push(['call'])
         const next = responses.shift()
         if (next === undefined) throw new Error('plus de réponse simulée disponible (critique/réparation)')
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+        if (thinkFirst) for (const piece of ['Je ', 'réfléchis', '…']) onThinking?.(piece)
         // Étape 288 : la réponse arrive par fragments, comme avec le vrai Ollama, pour suivre ses lignes en direct.
-        for (const piece of next.match(/[\s\S]{1,5}/g) ?? []) onToken?.(piece)
+        for (const piece of next.match(/[\s\S]{1,5}/g) ?? []) {
+          events.push(['token'])
+          onToken?.(piece)
+        }
         return { role: 'assistant', content: next }
       },
       listInstalledModels: async () => installed,
@@ -85,14 +104,19 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     generateApp: (description, currentHtml, imageBase64) =>
       exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64, {
         onActivity: (item) => activity.push(item),
-        onLive: (item) => live.push(item && { ...item })
+        onLive: (item) => {
+          live.push(item && { ...item })
+          events.push(['live', item && { ...item }])
+        },
+        onProgress: (item) => events.push(['progress', { ...item }])
       }),
     calls,
     models,
     statusLines,
     activity,
     live,
-    visionCalls
+    visionCalls,
+    events
   }
 }
 
@@ -216,6 +240,56 @@ test('« Écrit index.html +N lignes » en direct, puis « Relit », et plus rie
   assert.ok(writes.length > 3, 'les lignes ne montent pas au fil de l’eau')
   assert.equal(app.live.some((item) => item?.kind === 'review'), true, 'la relecture n’est pas annoncée')
   assert.equal(app.live.at(-1), null, 'la ligne en direct reste affichée après la fin')
+})
+
+/**
+ * Étape 325 : « Écrit index.html » s'affichait dès le DÉBUT de chaque étape, figé, pendant que le modèle se chargeait,
+ * lisait puis réfléchissait (30 s à 2 min pour un gros modèle) — et cachait ces phases et leur durée (étape 291).
+ */
+test('le fichier n’est annoncé qu’au premier mot du modèle : avant, la ligne suit le chargement et la réflexion', async () => {
+  const app = setup([VALID_HTML, VALID_HTML], { loaded: false, delayMs: 40, thinkFirst: true })
+  await app.generateApp('un bouton')
+  // Un fichier n'est annoncé qu'après un fragment de texte du modèle, reçu dans l'appel en cours et depuis la fin de
+  // l'étape précédente (ligne remise à `null`) — jamais au moment où l'étape commence.
+  let wroteSinceStart = false
+  for (const [kind, item] of app.events) {
+    if (kind === 'call' || (kind === 'live' && !item)) wroteSinceStart = false
+    if (kind === 'token') wroteSinceStart = true
+    if (kind === 'live' && item) assert.ok(wroteSinceStart, `« ${item.path} » annoncé avant le premier mot du modèle`)
+  }
+  // Découpe par appel au modèle : ce qui arrive entre son début et son premier fragment de texte.
+  const calls = []
+  for (const event of app.events) {
+    if (event[0] === 'call') calls.push({ before: [], after: [] })
+    else if (calls.length) (calls.at(-1).sawToken || event[0] === 'token' ? calls.at(-1).after : calls.at(-1).before).push(event)
+    if (event[0] === 'token' && calls.length) calls.at(-1).sawToken = true
+  }
+  assert.equal(calls.length, 2, 'écriture puis relecture attendues')
+  for (const [index, call] of calls.entries()) {
+    const phases = call.before.filter(([kind]) => kind === 'progress').map(([, item]) => item.phase)
+    assert.ok(phases.includes('loading'), `appel ${index + 1} : le chargement n’est pas dit (${phases.join(', ')})`)
+    assert.ok(phases.includes('thinking'), `appel ${index + 1} : la réflexion n’est pas dite (${phases.join(', ')})`)
+    // Dès le premier mot : la phase « écrit » part AVANT le fichier, pour que l'écran passe sans attendre de
+    // « Réfléchit… » à « Écrit index.html ».
+    const firstLive = call.after.findIndex(([kind, item]) => kind === 'live' && item)
+    const firstWriting = call.after.findIndex(([kind, item]) => kind === 'progress' && item.phase === 'writing')
+    assert.ok(firstLive >= 0, `appel ${index + 1} : le fichier n’est jamais annoncé`)
+    assert.ok(firstWriting >= 0 && firstWriting < firstLive, `appel ${index + 1} : la phase « écrit » arrive après le fichier`)
+  }
+  const kinds = app.live.filter(Boolean).map((item) => item.kind)
+  assert.deepEqual([...new Set(kinds)], ['write', 'review'])
+})
+
+test('pendant la réflexion, le temps compte depuis le début de l’appel, pas depuis le dernier fragment', async () => {
+  // `idleMs` repart de zéro à chaque fragment : à lui seul, il ne peut pas dire « Réfléchit… · 50 s ».
+  const app = setup([VALID_HTML], { delayMs: 60, thinkFirst: true })
+  await app.generateApp('un bouton')
+  // L'état final de l'ÉCRITURE (étape 1) : la relecture qui suit n'a pas de réponse simulée et s'arrête tout de suite.
+  const progress = app.events.filter(([kind, item]) => kind === 'progress' && item.stepIndex === 1).map(([, item]) => item)
+  const last = progress.at(-1)
+  assert.equal(typeof last.elapsedMs, 'number', 'pas de temps écoulé dans l’avancement')
+  assert.ok(last.elapsedMs >= 50, `temps écoulé ${last.elapsedMs} ms pour un appel d’au moins 60 ms`)
+  assert.ok(last.idleMs < last.elapsedMs, 'le temps écoulé repart de zéro avec chaque fragment')
 })
 
 test('une modification s’annonce « Modifie index.html », pas « Écrit »', async () => {

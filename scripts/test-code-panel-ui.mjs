@@ -746,6 +746,39 @@ test("pendant une génération, l'écran dit ce que Jaris écrit, en direct (ét
   })
 })
 
+// Étape 325 : pour une nouvelle application, « Écrit index.html » s'affichait figé dès le début de chaque étape, avant
+// même que le modèle soit chargé — « Charge le modèle… », « Réfléchit… » et leur durée (étape 291) ne se voyaient jamais.
+test('avant son premier mot, la ligne dit que le modèle se charge ou réfléchit, avec la durée (étape 325)', options, async () => {
+  const step = { label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true }
+  await withPage(async (page) => {
+    await startGeneration(page)
+    // Un fichier annoncé sans aucune ligne pendant le chargement : c'est la phase réelle qui s'affiche.
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 0 }))
+    await page.evaluate((s) => window.__emitProgress({ ...s, idleMs: 45_000, elapsedMs: 45_000, phase: 'loading' }), step)
+    assert.equal(await liveText(page), 'Charge le modèle… · 45 s')
+    // Pendant la réflexion, la durée compte depuis le début de l'appel, pas depuis le dernier fragment de réflexion.
+    await page.evaluate((s) => window.__emitProgress({ ...s, idleMs: 2_000, elapsedMs: 72_000, phase: 'thinking' }), step)
+    assert.equal(await liveText(page), 'Réfléchit… · 1 min 12')
+    // Dès la première ligne : le fichier et ses lignes, sans durée.
+    await page.evaluate((s) => window.__emitProgress({ ...s, thinking: false, charsWritten: 120, idleMs: 0, elapsedMs: 80_000, phase: 'writing' }), step)
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 3 }))
+    assert.equal(await liveText(page), 'Écrit index.html +3 lignes')
+  })
+})
+
+test('aperçu agrandi : la barre de la carte dit aussi depuis combien de temps le modèle se charge (étape 325)', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    await startGeneration(page)
+    await page.click('.code-preview__expand')
+    await page.evaluate(() =>
+      window.__emitProgress({ label: "Modification de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true, idleMs: 45_000, elapsedMs: 45_000, phase: 'loading' })
+    )
+    assert.equal(await page.textContent('.code-preview__busy'), 'Charge le modèle… · 45 s')
+  })
+})
+
 test("on arrête par le bouton du champ, comme dans le Chat — sans erreur rouge (étape 288)", options, async () => {
   // Léo : « enlève ça [Arrêter], on peut [arrêter] comme dans le chat ».
   await withPage(async (page) => {

@@ -86,3 +86,35 @@ test("juste en dessous du seuil, on n'alarme pas pour rien", () => {
   assert.equal(formatCodeLive(null, progress({ idleMs: STALL_HINT_MS - 1 })).stall, null)
   assert.equal(formatCodeLive(null, progress({ phase: 'reading', idleMs: START_STALL_HINT_MS - 1 })).stall, null)
 })
+
+// Étape 325 : « Écrit index.html » s'affichait figé dès le début de chaque étape d'une nouvelle application, avant même
+// que le modèle soit chargé — les phases de l'étape 291 et leur durée ne se voyaient jamais.
+test('un fichier annoncé sans aucune ligne ne cache pas le chargement ni la réflexion', () => {
+  const announced = { kind: 'write', path: 'index.html', lines: 0 }
+  assert.deepEqual(formatCodeLive(announced, progress({ phase: 'loading', idleMs: 45_000, elapsedMs: 45_000 })), {
+    action: 'Charge le modèle…',
+    path: null,
+    lines: null,
+    elapsed: '45 s',
+    stall: null
+  })
+  assert.equal(formatCodeLive(announced, progress({ phase: 'reading' })).action, 'Prépare sa réponse…')
+  assert.equal(formatCodeLive(announced, progress({ phase: 'thinking' })).action, 'Réfléchit…')
+  // Dès qu'il écrit : le fichier, puis ses lignes.
+  const writing = progress({ phase: 'writing', thinking: false, charsWritten: 40 })
+  assert.equal(formatCodeLive(announced, writing).path, 'index.html')
+  assert.equal(formatCodeLive({ ...announced, lines: 3 }, writing).lines, '+3 lignes')
+})
+
+test('pendant la réflexion, la durée compte depuis le début de l’appel — jamais depuis le dernier fragment', () => {
+  // `idleMs` repart de zéro à chaque fragment de réflexion : 2 s de silence, mais 50 s que le modèle réfléchit.
+  assert.equal(formatCodeLive(null, progress({ phase: 'thinking', idleMs: 2_000, elapsedMs: 50_000 })).elapsed, '50 s')
+  // Les toutes premières secondes, rien : la ligne vient d'apparaître.
+  assert.equal(formatCodeLive(null, progress({ phase: 'thinking', idleMs: 2_000, elapsedMs: 4_000 })).elapsed, null)
+  // Une fois qu'il écrit, ce sont ses lignes qui avancent, pas une durée.
+  assert.equal(formatCodeLive(null, progress({ phase: 'writing', thinking: false, idleMs: 0, elapsedMs: 50_000 })).elapsed, null)
+  // Un vrai silence pendant la réflexion reste dit à la place de la durée.
+  const silent = formatCodeLive(null, progress({ phase: 'thinking', idleMs: STALL_HINT_MS + 15_000, elapsedMs: 90_000 }))
+  assert.equal(silent.stall, 'rien reçu du modèle depuis 45 s')
+  assert.equal(silent.elapsed, null)
+})

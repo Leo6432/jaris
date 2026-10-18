@@ -4615,6 +4615,15 @@ textarea::placeholder {
   color: var(--hud-text-dim);
 }
 
+/* Étape 325 : le temps écoulé, à côté de l'étape en cours — chiffres à chasse fixe, pour que la ligne ne bouge pas
+   à chaque seconde, et plus discret que le texte qu'il complète. */
+.chat-panel__elapsed,
+.chat-widget__elapsed {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-text-faint);
+}
+
 .chat-panel__typing {
   display: inline-flex;
   gap: 5px;

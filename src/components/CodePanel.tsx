@@ -129,8 +129,12 @@ function LiveLine({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.El
   )
 }
 
-/** La même chose en une phrase, pour la barre de l'aperçu agrandi (la conversation est alors repliée). */
-const liveSummary = (text: ReturnType<typeof formatCodeLive>): string => [text.action, text.path, text.lines].filter(Boolean).join(' ')
+/**
+ * La même chose en une phrase, pour la barre de l'aperçu agrandi (la conversation est alors repliée). Le temps écoulé
+ * y figure aussi (étape 325) : sans lui, « Charge le modèle… » resterait figé pendant tout le chargement.
+ */
+const liveSummary = (text: ReturnType<typeof formatCodeLive>): string =>
+  [text.action, text.path, text.lines, text.elapsed && `· ${text.elapsed}`].filter(Boolean).join(' ')
 
 /**
  * Ce qui s'affiche dans la conversation : les tours tels quels, sauf les lectures consécutives, réunies en une ligne

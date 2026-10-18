@@ -774,6 +774,11 @@ export interface CodeGenProgress {
    */
   idleMs: number
   /**
+   * Étape 325 : temps écoulé depuis le DÉBUT de l'appel au modèle (chargement, lecture, puis réflexion). `idleMs` repart
+   * de zéro à chaque fragment de réflexion reçu : il ne peut pas dire depuis combien de temps le modèle réfléchit.
+   */
+  elapsedMs: number
+  /**
    * Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit ») : où en est le
    * modèle. Avant son premier mot il se CHARGE en mémoire (`loading`), puis LIT tout ce qu'on lui envoie (`reading`) —
    * deux phases muettes, normales, qui peuvent durer longtemps. Ensuite il réfléchit (`thinking`) ou écrit (`writing`).

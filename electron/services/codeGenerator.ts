@@ -190,6 +190,8 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
     let charsWritten = 0
     let thinking = true
     let lastActivity = Date.now()
+    // Étape 325 : début de l'appel, pour dire depuis combien de temps le modèle se charge, lit ou réfléchit.
+    let startedAt = lastActivity
     // Étape 291 : avant le premier mot, le modèle se charge, puis lit — rien n'arrive, et c'est normal.
     let phase: CodeGenProgress['phase'] = 'reading'
     let checkingLoad = false
@@ -225,6 +227,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         charsWritten,
         thinking,
         idleMs: now - lastActivity,
+        elapsedMs: now - startedAt,
         phase
       })
     }
@@ -247,19 +250,23 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         signal,
         numCtx,
         (delta) => {
+          // Étape 325 : un changement de phase part tout de suite (jamais étranglé) — c'est lui qui fait passer la ligne
+          // de « Réfléchit… » à « Écrit index.html », annoncé juste après par `onDelta`.
+          const changed = phase !== 'writing'
           thinking = false
           phase = 'writing'
           charsWritten += delta.length
           lastActivity = Date.now()
-          emit(true)
+          emit(!changed)
           onDelta?.(delta)
         },
         // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
         // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
         () => {
+          const changed = phase !== 'writing' && phase !== 'thinking'
           if (phase !== 'writing') phase = 'thinking'
           lastActivity = Date.now()
-          emit(true)
+          emit(!changed)
         }
       )
     try {
@@ -280,6 +287,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         thinking = true
         phase = 'reading'
         lastActivity = Date.now()
+        startedAt = lastActivity
         emit()
         try {
           message = await call(larger)
@@ -799,10 +807,13 @@ export async function generateApp(
   /**
    * Étape 288 (Léo : « mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : chaque ligne du
    * fichier reçue du modèle fait avancer « Écrit index.html · +N lignes ». La ligne disparaît à la fin de l'étape.
+   *
+   * Étape 325 : le fichier n'est annoncé qu'au PREMIER fragment de texte reçu, jamais au début de l'étape. Annoncé
+   * d'avance, « Écrit index.html » restait figé pendant que le modèle se chargeait, lisait ou réfléchissait (30 s à
+   * 2 min pour un gros modèle) et cachait ces phases et leur durée (étape 291).
    */
-  const liveStep = async (kind: CodeLiveWrite['kind'], step: () => Promise<OllamaMessage>): Promise<OllamaMessage> => {
+  const liveStep = async (step: () => Promise<OllamaMessage>): Promise<OllamaMessage> => {
     if (!onLive) return step()
-    onLive({ kind, path: 'index.html', lines: 0 })
     try {
       return await step()
     } finally {
@@ -811,12 +822,12 @@ export async function generateApp(
   }
   const countLines = (kind: CodeLiveWrite['kind']): ((delta: string) => void) | undefined => {
     if (!onLive) return undefined
-    let lines = 0
+    let lines = -1
     return (delta) => {
       let added = 0
       for (const char of delta) if (char === '\n') added += 1
-      if (added === 0) return
-      lines += added
+      if (lines >= 0 && added === 0) return
+      lines = Math.max(lines, 0) + added
       onLive({ kind, path: 'index.html', lines })
     }
   }
@@ -871,7 +882,7 @@ export async function generateApp(
   ]
   const expectedChars = currentHtml ? currentHtml.length : NEW_APP_EXPECTED_CHARS
   const writeKind: CodeLiveWrite['kind'] = currentHtml ? 'edit' : 'write'
-  const first = await liveStep(writeKind, () =>
+  const first = await liveStep(() =>
     runModelStep(
       currentHtml ? "Modification de l'application" : "Écriture de l'application",
       generateMessages,
@@ -911,7 +922,7 @@ export async function generateApp(
     // première — l'annoncer évite de laisser croire que l'étape en cours patine. Le total prévu monte
     // d'autant : mieux vaut un total qui s'ajuste qu'une "étape 4 sur 3".
     steps.count += 1
-    const retry = await liveStep(writeKind, () => runModelStep('Nouvelle tentative', retryMessages, expectedChars, undefined, countLines(writeKind)))
+    const retry = await liveStep(() => runModelStep('Nouvelle tentative', retryMessages, expectedChars, undefined, countLines(writeKind)))
     draft = extractHtml(retry.content)
     if (!draft) {
       // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit :
@@ -934,7 +945,7 @@ export async function generateApp(
         content: `Demande initiale de l'utilisateur : ${description}\n\nCode à relire :\n\n\`\`\`html\n${draft}\n\`\`\``
       }
     ]
-    const reviewed = await liveStep('review', () => runModelStep('Relecture du code', critiqueMessages, draft.length, undefined, countLines('review')))
+    const reviewed = await liveStep(() => runModelStep('Relecture du code', critiqueMessages, draft.length, undefined, countLines('review')))
     const reviewedHtml = extractHtml(reviewed.content)
     if (reviewedHtml) {
       final = reviewedHtml

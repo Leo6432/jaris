@@ -7,6 +7,8 @@ import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
 import { formatChatProgress } from '@/lib/formatChatProgress'
+import { ELAPSED_HINT_MS, formatDuration } from '@/lib/formatCodeGenProgress'
+import { useElapsedMs } from '@/lib/useElapsedMs'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList, WebActivity } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
@@ -37,6 +39,11 @@ export default function ChatPanel(): JSX.Element {
   const threadRef = useRef<HTMLDivElement>(null)
   /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
   const [savedIndex, setSavedIndex] = useState<number | null>(null)
+  /**
+   * Étape 325 : « Jaris réfléchit… » sans durée paraissait figé pendant qu'un modèle se charge ou réfléchit 1 à 2 min
+   * (mesuré : granite4.2:8b, 2 min 06, étape 245). Le temps écoulé s'affiche à côté, après une dizaine de secondes.
+   */
+  const elapsedMs = useElapsedMs(sending)
 
   const saveImage = async (dataUrl: string, index: number): Promise<void> => {
     const result = await window.jaris.saveGeneratedImage(dataUrl)
@@ -240,7 +247,11 @@ export default function ChatPanel(): JSX.Element {
                         <span />
                         <span />
                       </span>
-                      <span className="chat-panel__progress">{progress ?? t('app.status.thinking')}</span>
+                      <span className="chat-panel__progress">
+                        {progress ?? t('app.status.thinking')}
+                        {/* Étape 325 : à côté de l'étape en cours (recherche, lecture d'une page…), jamais à sa place. */}
+                        {elapsedMs >= ELAPSED_HINT_MS && <span className="chat-panel__elapsed"> · {formatDuration(elapsedMs)}</span>}
+                      </span>
                     </div>
                   )
                 )}

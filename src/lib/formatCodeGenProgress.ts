@@ -44,7 +44,7 @@ export interface CodeLiveText {
   path: string | null
   /** « +20 lignes », dès la première ligne reçue. */
   lines: string | null
-  /** Avant le premier mot : le temps déjà passé à charger ou à lire (« 45 s »), sans inquiéter. */
+  /** Tant que le modèle n'écrit pas encore : le temps déjà passé à charger, lire ou réfléchir (« 45 s »), sans inquiéter. */
   elapsed: string | null
   /** Un silence prolongé du modèle, dit en clair plutôt que laissé à deviner (« c'est long » ≠ « c'est bloqué »). */
   stall: string | null
@@ -63,6 +63,7 @@ export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProg
   const idle = progress?.idleMs ?? 0
   // Le modèle a-t-il déjà donné signe de vie dans cet appel (réflexion ou texte) ? Avant, son silence est normal.
   const started = progress !== null && (progress.phase === 'thinking' || progress.phase === 'writing')
+  const writing = progress?.phase === 'writing'
   const stall = started
     ? idle >= STALL_HINT_MS
       ? t('code.stall.started', { duration: formatDuration(idle) })
@@ -70,8 +71,13 @@ export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProg
     : idle >= START_STALL_HINT_MS
       ? t('code.stall.start', { duration: formatDuration(idle) })
       : null
-  const elapsed = !started && !stall && idle >= ELAPSED_HINT_MS ? formatDuration(idle) : null
-  if (live) {
+  // Étape 325 : le temps depuis le début de l'appel, aussi PENDANT la réflexion (`idleMs`, lui, repart de zéro à chaque
+  // fragment de réflexion). Avant son premier mot, les deux valent pareil : `idleMs` sert de repli.
+  const sinceStart = progress?.elapsedMs ?? idle
+  const elapsed = !writing && !stall && sinceStart >= ELAPSED_HINT_MS ? formatDuration(sinceStart) : null
+  // Étape 325 : un fichier annoncé sans aucune ligne, alors que le modèle n'écrit pas encore, ne cache jamais la phase
+  // réelle (« Charge le modèle… · 45 s ») derrière un « Écrit index.html » figé.
+  if (live && (live.lines > 0 || writing || progress === null)) {
     return {
       action: t(LIVE_VERB[live.kind]),
       path: live.path,
