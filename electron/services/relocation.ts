@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { existsSync } from 'fs'
 import { readdir, rm, rmdir } from 'fs/promises'
 import { join, win32 } from 'path'
-import { copyDataTo, getDataRoot, removeOldData, switchStorageRoot } from './dataLocation'
+import { copyDataTo, getDataRoot, removeDeletedSinceCopy, removeOldData, switchStorageRoot, type DataCopy } from './dataLocation'
 import { DOCKER_APP_SUBDIR, DOCKER_DATA_SUBDIR, isInside, planDockerMove, uninstallDockerForMove, type DockerMovePlan } from './dockerLocation'
 import { downloadToFile } from './download'
 import {
@@ -166,6 +166,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     if (programInstaller) await rm(join(newRoot, DOWNLOADS_SUBDIR), { recursive: true, force: true }).catch(() => {})
   }
 
+  let dataCopy: DataCopy | null = null
   try {
     await copyAll(plans, onProgress)
     // Les petites données (conversations, réglages, jeton GitHub…) APRÈS les modèles et Python : leur copie dure
@@ -174,7 +175,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     // fin. Même essai, même annulation complète si cette copie échoue. Ce qui change encore ensuite (bascule,
     // désinstallation de Docker en attente d'une autorisation Windows, sa réinstallation) est rattrapé juste avant
     // d'effacer l'ancien dossier (étape 5).
-    await copyDataTo(newRoot, onProgress)
+    dataCopy = await copyDataTo(newRoot, onProgress)
   } catch (err) {
     await discardEverything()
     throw new Error(t('move.copyFailed', { error: err instanceof Error ? err.message : String(err) }))
@@ -234,12 +235,14 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   // Jaris est resté ouvert depuis la copie des données, et il écrit toujours dans l'ancien dossier jusqu'à sa
   // relance : une conversation du Chat envoyée pendant que la fenêtre d'autorisation de Windows attendait (Docker),
   // pendant l'effacement des anciens modèles ou pendant la réinstallation de Docker (plusieurs minutes). Ce qui a été
-  // ajouté ou modifié depuis est recopié juste avant d'effacer, sans rien d'autre entre les deux. La bascule est déjà
-  // faite : si ce rattrapage échoue, rien n'est effacé — l'ancien dossier reste, signalé, plutôt que de perdre ces
-  // dernières modifications.
+  // ajouté ou modifié depuis est recopié juste avant d'effacer, sans rien d'autre entre les deux ; ce qui a été
+  // SUPPRIMÉ depuis (une conversation, une application, une image, une note) est retiré de la copie, sinon il
+  // réapparaissait après la relance. La bascule est déjà faite : si ce rattrapage échoue, rien n'est effacé — l'ancien
+  // dossier reste, signalé, plutôt que de perdre ces dernières modifications.
   const oldData = previousRoot ? join(previousRoot, DATA_SUBDIR) : t('move.oldConversations')
   try {
     await copyDataTo(newRoot, onProgress, { onlyChanged: true })
+    if (dataCopy) await removeDeletedSinceCopy(dataCopy)
     try {
       await removeOldData(previousRoot, newRoot)
     } catch {

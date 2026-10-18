@@ -3,7 +3,8 @@ import { loadTsModule } from './load-ts-module.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -28,7 +29,7 @@ function transpile(path) {
   }).outputText
 }
 
-function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dockerInstallOk = true, onDockerUninstall = null } = {}) {
+function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dockerInstallOk = true, onDockerUninstall = null, dataModules = {} } = {}) {
   const base = mkdtempSync(join(tmpdir(), 'jaris-relocation-'))
   const env = { USERPROFILE: join(base, 'user'), LOCALAPPDATA: join(base, 'local'), SystemDrive: 'C:' }
   const userData = join(base, 'roaming', 'Jaris')
@@ -70,7 +71,7 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dock
     '../../shared/conversationsData': conversationsDataModule,
     './atomicFile': atomicFileModule
   })
-  const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot })
+  const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
   const modelsLocation = load('../electron/services/modelsLocation.ts', { child_process: { spawn } })
   const dockerLocation = {
     DOCKER_APP_SUBDIR: 'docker',
@@ -248,6 +249,168 @@ test('si ce rattrapage final échoue, l’ancien dossier des données n’est PA
   assert.equal(JSON.parse(readFileSync(join(t.userData, 'storage-location.json'), 'utf8')).root, newRoot)
   assert.equal(readFileSync(join(t.userData, 'conversations', 'fil-1.json'), 'utf8'), '{"messages":["dernier message"]}')
   assert.equal(readFileSync(join(t.userData, 'profile.json'), 'utf8'), '{"name":"Léo"}')
+  assert.deepEqual(result.leftovers, ['anciennes conversations'])
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+/**
+ * Étape 325 : le rattrapage final ne recopiait que ce qui avait été AJOUTÉ ou MODIFIÉ depuis la première copie des
+ * données. Ce que Léo SUPPRIMAIT entre les deux (une conversation du Chat, une application du mode Code, une image, une
+ * note de mémoire), pendant la longue copie des modèles, restait dans la nouvelle copie et réapparaissait après la
+ * relance. Les changements sont faits pendant la désinstallation de Docker : après la première copie, avant le
+ * rattrapage.
+ */
+function fillData(dir) {
+  mkdirSync(join(dir, 'conversations'), { recursive: true })
+  writeFileSync(join(dir, 'conversations', 'index.json'), '{"conversations":["fil-1","fil-2"]}')
+  writeFileSync(join(dir, 'conversations', 'fil-1.json'), '{"messages":["gardé"]}')
+  writeFileSync(join(dir, 'conversations', 'fil-2.json'), '{"messages":["supprimé pendant le déplacement"]}')
+  mkdirSync(join(dir, 'generated-apps', '1760000000000-snake'), { recursive: true })
+  writeFileSync(join(dir, 'generated-apps', '1760000000000-snake', 'index.html'), '<html>Snake</html>')
+  mkdirSync(join(dir, 'generated-apps', '1760000000001-meteo'), { recursive: true })
+  writeFileSync(join(dir, 'generated-apps', '1760000000001-meteo', 'index.html'), '<html>Météo</html>')
+  mkdirSync(join(dir, 'generated-images'), { recursive: true })
+  writeFileSync(join(dir, 'generated-images', 'chat.png'), 'image')
+  mkdirSync(join(dir, 'memory'), { recursive: true })
+  writeFileSync(join(dir, 'memory', 'Adresse.md'), '# Adresse')
+  writeFileSync(join(dir, 'memory', 'Voiture.md'), '# Voiture')
+}
+
+test('un fichier supprimé dans l’ancien dossier pendant le déplacement ne réapparaît pas dans le nouveau', async () => {
+  let t = null
+  t = setup({
+    dockerPlan: DOCKER_ELSEWHERE,
+    onDockerUninstall: () => {
+      // Léo fait le ménage pendant que la fenêtre d'autorisation de Windows attend.
+      rmSync(join(t.userData, 'conversations', 'fil-2.json'))
+      writeFileSync(join(t.userData, 'conversations', 'index.json'), '{"conversations":["fil-1"]}')
+      rmSync(join(t.userData, 'generated-apps', '1760000000000-snake'), { recursive: true })
+      rmSync(join(t.userData, 'generated-images', 'chat.png'))
+      rmSync(join(t.userData, 'memory', 'Voiture.md'))
+    }
+  })
+  fillData(t.userData)
+  const newRoot = join(t.base, 'D', 'Jaris')
+  const result = await run(t, newRoot)
+  const data = join(newRoot, 'jaris-data')
+  assert.ok(!existsSync(join(data, 'conversations', 'fil-2.json')), 'conversation supprimée revenue')
+  assert.equal(readFileSync(join(data, 'conversations', 'index.json'), 'utf8'), '{"conversations":["fil-1"]}')
+  // Une application est un dossier : un dossier vide laissé derrière revenait dans la liste du mode Code.
+  assert.ok(!existsSync(join(data, 'generated-apps', '1760000000000-snake')), 'application supprimée revenue')
+  assert.deepEqual(readdirSync(join(data, 'generated-apps')), ['1760000000001-meteo'])
+  assert.ok(!existsSync(join(data, 'generated-images', 'chat.png')), 'image supprimée revenue')
+  assert.ok(existsSync(join(data, 'generated-images')), 'le dossier des images existe encore à la source : gardé')
+  assert.ok(!existsSync(join(data, 'memory', 'Voiture.md')), 'note supprimée revenue')
+  // Le reste est bien là, et l'ancien dossier est effacé normalement.
+  assert.equal(readFileSync(join(data, 'conversations', 'fil-1.json'), 'utf8'), '{"messages":["gardé"]}')
+  assert.equal(readFileSync(join(data, 'memory', 'Adresse.md'), 'utf8'), '# Adresse')
+  assert.equal(readFileSync(join(data, 'profile.json'), 'utf8'), '{"name":"Léo"}')
+  assert.ok(!existsSync(join(t.userData, 'conversations')))
+  assert.deepEqual(result.leftovers, [])
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('un fichier déjà présent à destination AVANT le déplacement n’est jamais retiré par le rattrapage', async () => {
+  let t = null
+  t = setup({
+    dockerPlan: DOCKER_ELSEWHERE,
+    onDockerUninstall: () => {
+      rmSync(join(t.userData, 'memory', 'Commune.md'))
+      rmSync(join(t.userData, 'generated-images', 'chat.png'))
+    }
+  })
+  fillData(t.userData)
+  writeFileSync(join(t.userData, 'memory', 'Commune.md'), '# Commune (C)')
+  // Un dossier déjà utilisé par Jaris (ancienne racine, disque rebranché…) : ce qu'il contient n'est pas à ce déplacement.
+  const newRoot = join(t.base, 'D', 'Jaris')
+  const data = join(newRoot, 'jaris-data')
+  mkdirSync(join(data, 'memory'), { recursive: true })
+  writeFileSync(join(data, 'memory', 'Ancienne.md'), '# Ancienne (D)')
+  writeFileSync(join(data, 'memory', 'Commune.md'), '# Commune (D)')
+  mkdirSync(join(data, 'generated-images'), { recursive: true })
+  writeFileSync(join(data, 'generated-images', 'ancienne.png'), 'image de D')
+  const result = await run(t, newRoot)
+  assert.equal(readFileSync(join(data, 'memory', 'Ancienne.md'), 'utf8'), '# Ancienne (D)')
+  // Recouverte par la première copie, mais son nom était déjà là avant : jamais retirée.
+  assert.ok(existsSync(join(data, 'memory', 'Commune.md')), 'un fichier présent avant le déplacement a été retiré')
+  assert.equal(readFileSync(join(data, 'generated-images', 'ancienne.png'), 'utf8'), 'image de D')
+  // Ce que la copie a apporté et que Léo a supprimé, lui, est bien retiré.
+  assert.ok(!existsSync(join(data, 'generated-images', 'chat.png')))
+  assert.deepEqual(result.leftovers, [])
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('un fichier créé PUIS supprimé entre la copie et le rattrapage reste absent', async () => {
+  let t = null
+  t = setup({
+    dockerPlan: DOCKER_ELSEWHERE,
+    onDockerUninstall: () => {
+      writeFileSync(join(t.userData, 'conversations', 'fil-3.json'), '{"messages":["éphémère"]}')
+      mkdirSync(join(t.userData, 'generated-apps', '1760000000002-essai'), { recursive: true })
+      writeFileSync(join(t.userData, 'generated-apps', '1760000000002-essai', 'index.html'), '<html>Essai</html>')
+      rmSync(join(t.userData, 'conversations', 'fil-3.json'))
+      rmSync(join(t.userData, 'generated-apps', '1760000000002-essai'), { recursive: true })
+      // Et dans le même temps, une conversation copiée par la première passe est supprimée.
+      rmSync(join(t.userData, 'conversations', 'fil-2.json'))
+    }
+  })
+  fillData(t.userData)
+  const newRoot = join(t.base, 'D', 'Jaris')
+  const result = await run(t, newRoot)
+  const data = join(newRoot, 'jaris-data')
+  assert.ok(!existsSync(join(data, 'conversations', 'fil-3.json')))
+  assert.ok(!existsSync(join(data, 'generated-apps', '1760000000002-essai')))
+  assert.deepEqual(readdirSync(join(data, 'conversations')).sort(), ['fil-1.json', 'index.json'])
+  assert.deepEqual(result.leftovers, [])
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('jamais un fichier réécrit à destination depuis la copie (conversations du mode Code relâchées dans le nouveau dossier)', async () => {
+  let t = null
+  let newRoot = null
+  t = setup({
+    dockerPlan: DOCKER_ELSEWHERE,
+    onDockerUninstall: () => {
+      // Le fichier d'origine a quitté sa place (mis de côté comme illisible par le magasin)…
+      mkdirSync(join(t.userData, 'code-conversations-illisibles'), { recursive: true })
+      renameSync(join(t.userData, 'code-conversations.json'), join(t.userData, 'code-conversations-illisibles', 'code-conversations-1.json'))
+      // … et le magasin écrit déjà le sien dans le nouveau dossier : il n'appartient plus à la copie.
+      writeFileSync(join(newRoot, 'jaris-data', 'code-conversations.json'), '{"version":1,"repos":[],"conversations":{"app:x":[1]}}')
+    }
+  })
+  writeFileSync(join(t.userData, 'code-conversations.json'), '{"version":1,"repos":[],"conversations":{}}')
+  newRoot = join(t.base, 'D', 'Jaris')
+  await run(t, newRoot)
+  const data = join(newRoot, 'jaris-data')
+  assert.equal(readFileSync(join(data, 'code-conversations.json'), 'utf8'), '{"version":1,"repos":[],"conversations":{"app:x":[1]}}')
+  assert.ok(existsSync(join(data, 'code-conversations-illisibles', 'code-conversations-1.json')), 'la copie de secours suit')
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('si le retrait d’un fichier supprimé échoue, l’ancien dossier des données n’est PAS effacé (tout ou rien)', async () => {
+  let t = null
+  let blocked = null
+  t = setup({
+    dockerPlan: DOCKER_ELSEWHERE,
+    onDockerUninstall: () => rmSync(join(t.userData, 'memory', 'Voiture.md')),
+    dataModules: {
+      'fs/promises': {
+        ...fsPromises,
+        // La copie de la note supprimée est tenue ouverte (antivirus) : Windows refuse de la retirer.
+        rm: async (path, options) => {
+          if (path === blocked) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' })
+          return fsPromises.rm(path, options)
+        }
+      }
+    }
+  })
+  fillData(t.userData)
+  const newRoot = join(t.base, 'D', 'Jaris')
+  blocked = join(newRoot, 'jaris-data', 'memory', 'Voiture.md')
+  const result = await run(t, newRoot)
+  assert.equal(JSON.parse(readFileSync(join(t.userData, 'storage-location.json'), 'utf8')).root, newRoot)
+  assert.equal(readFileSync(join(t.userData, 'profile.json'), 'utf8'), '{"name":"Léo"}', 'ancien dossier effacé malgré l’échec')
+  assert.equal(readFileSync(join(t.userData, 'conversations', 'fil-1.json'), 'utf8'), '{"messages":["gardé"]}')
   assert.deepEqual(result.leftovers, ['anciennes conversations'])
   rmSync(t.base, { recursive: true, force: true })
 })

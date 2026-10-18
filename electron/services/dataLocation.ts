@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { existsSync, rmSync } from 'fs'
-import { cp, mkdir, rm, stat } from 'fs/promises'
-import { join } from 'path'
+import { cp, lstat, mkdir, rm, rmdir, stat } from 'fs/promises'
+import { join, relative } from 'path'
 import { DATA_SUBDIR, DEFAULT_USER_DATA, ELECTRON_SUBDIR, OWNED_ENTRIES, carryChromiumKeySync, getStorageRoot, writeMarker } from './storageRoot'
 import { t } from '../../shared/i18n'
 
@@ -32,8 +32,28 @@ async function changedSinceCopy(source: string, destination: string): Promise<bo
   return !copy || copy.size !== original.size || original.mtimeMs > copy.mtimeMs
 }
 
+/** L'état d'un fichier juste après sa copie : s'il a changé depuis, quelqu'un d'autre y a écrit. */
+interface CopyStamp {
+  size: number
+  mtimeMs: number
+}
+
 /**
- * Étape 1 d'un « Déplacer » : copie des données vers la nouvelle racine. Rien n'est effacé.
+ * Ce qu'une copie des données a CRÉÉ dans la destination : les fichiers et dossiers qui n'y existaient pas avant elle,
+ * en chemins relatifs au dossier des données (`generated-apps\…\index.html`). Un nom déjà présent à destination avant
+ * la copie (dossier déjà utilisé par Jaris, ancienne racine) n'y figure jamais : il appartient à ce qui était là.
+ */
+export interface DataCopy {
+  from: string
+  dest: string
+  files: Map<string, CopyStamp>
+  dirs: string[]
+}
+
+/**
+ * Étape 1 d'un « Déplacer » : copie des données vers la nouvelle racine. Rien n'est effacé. Renvoie ce que la copie a
+ * créé à destination (`null` si la source EST la destination), pour que le rattrapage final retire ce que Léo a
+ * supprimé entre-temps (removeDeletedSinceCopy).
  * `onlyChanged` : rattrapage, juste avant d'effacer l'ancien dossier — seuls les fichiers ajoutés ou modifiés depuis la
  * première copie sont recopiés (sans tout recopier, vidéos comprises), sans message d'avancement.
  */
@@ -41,17 +61,66 @@ export async function copyDataTo(
   newRoot: string,
   onProgress: (message: string) => void,
   { onlyChanged = false }: { onlyChanged?: boolean } = {}
-): Promise<void> {
+): Promise<DataCopy | null> {
   const from = getDataRoot()
   const dest = join(newRoot, DATA_SUBDIR)
-  if (from === dest) return
+  if (from === dest) return null
   await mkdir(dest, { recursive: true })
+  const createdFiles: string[] = []
+  const dirs: string[] = []
+  // Appelé par cp AVANT de copier chaque élément : un élément absent de la destination à ce moment-là est créé par
+  // cette copie. Un élément sauté (rattrapage : inchangé) n'est pas copié, donc pas noté.
+  const filter = async (source: string, destination: string): Promise<boolean> => {
+    if (onlyChanged && !(await changedSinceCopy(source, destination))) return false
+    if (!(await lstat(destination).catch(() => null))) {
+      const created = (await lstat(source)).isDirectory() ? dirs : createdFiles
+      created.push(relative(dest, destination))
+    }
+    return true
+  }
   for (const entry of OWNED_ENTRIES) {
     const source = join(from, entry)
     if (!existsSync(source)) continue
     if (!onlyChanged) onProgress(t('move.copyingData', { entry }))
-    const filter = onlyChanged ? { filter: changedSinceCopy } : {}
-    await cp(source, join(dest, entry), { recursive: true, force: true, ...filter })
+    await cp(source, join(dest, entry), { recursive: true, force: true, filter })
+  }
+  const files = new Map<string, CopyStamp>()
+  for (const rel of createdFiles) {
+    const copy = await lstat(join(dest, rel)).catch(() => null)
+    if (copy?.isFile()) files.set(rel, { size: copy.size, mtimeMs: copy.mtimeMs })
+  }
+  return { from, dest, files, dirs }
+}
+
+/**
+ * Rattrapage d'un « Déplacer », après la recopie de ce qui a changé : retire de la destination ce que la PREMIÈRE copie
+ * y avait mis et qui a été supprimé de l'ancien dossier depuis — une conversation, une application, une image ou une
+ * note supprimée pendant la longue copie des modèles réapparaissait sinon après la relance. Ne retire jamais :
+ * - un fichier qui était à destination avant le déplacement (absent de `copy`) ;
+ * - un fichier modifié à destination depuis la copie (quelqu'un d'autre y a écrit, par exemple les conversations du
+ *   mode Code relâchées dans le nouveau dossier) ;
+ * - un dossier qui existe encore à la source, ou qui n'est pas vide.
+ * Lève à la moindre erreur : le rattrapage a échoué, l'ancien dossier n'est alors pas effacé (relocation.ts).
+ */
+export async function removeDeletedSinceCopy(copy: DataCopy): Promise<void> {
+  for (const [rel, stamp] of copy.files) {
+    if (existsSync(join(copy.from, rel))) continue
+    const target = join(copy.dest, rel)
+    const now = await lstat(target).catch(() => null)
+    if (!now || !now.isFile() || now.size !== stamp.size || now.mtimeMs !== stamp.mtimeMs) continue
+    await rm(target, { force: true })
+  }
+  // Les plus profonds d'abord : un sous-dossier vidé libère son parent. Un dossier vide créé par la copie et supprimé
+  // depuis à la source compte : une application du mode Code est un dossier, elle reviendrait sinon dans la liste.
+  for (const rel of [...copy.dirs].sort((a, b) => b.length - a.length)) {
+    if (existsSync(join(copy.from, rel))) continue
+    try {
+      await rmdir(join(copy.dest, rel))
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      // Pas vide : quelqu'un y a écrit depuis, rien n'est effacé. Déjà absent : rien à faire.
+      if (code !== 'ENOTEMPTY' && code !== 'EEXIST' && code !== 'ENOENT') throw err
+    }
   }
 }
 
