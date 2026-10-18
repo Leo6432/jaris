@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * shared/imageGallery.ts (étape 200, mode Image) : nom, date et avancement d'une image dessinée, lus sur son
@@ -13,7 +14,8 @@ const source = ts.transpileModule(readFileSync(new URL('../shared/imageGallery.t
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 const exports = {}
-vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, () => ({}))
+// Le vrai traducteur (le nom par défaut d'une image suit la langue de Jaris) ; tout autre import est une erreur.
+vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n((name) => { throw new Error(`import inattendu : ${name}`) }))
 const { isGeneratedImageFileName, imageTimestampFromFileName, imageLabelFromFileName, imageStepFromLog } = exports
 
 const NAME = '2026-09-28T17-22-15-un-chat-astronaute-sur-la-lune.png'

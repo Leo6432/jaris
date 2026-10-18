@@ -195,7 +195,7 @@ export class VoiceClient extends EventEmitter {
         }
         this.proc = null
         this.ready = null
-        if (!settled) rejectReady(new Error(`sidecar vocal arrêté avant d'être prêt (code ${code})`))
+        if (!settled) rejectReady(new Error(t('voice.stoppedEarly', { code: String(code) })))
       })
 
       proc.on('error', (err) => {

@@ -10,7 +10,7 @@ import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
 import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
-import { imageLabelFromFileName, imageTimestampFromFileName, isGeneratedImageFileName } from '../../shared/imageGallery'
+import { engineStepLine, imageLabelFromFileName, imageTimestampFromFileName, isGeneratedImageFileName } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 import { t, type MessageKey } from '../../shared/i18n'
 
@@ -364,8 +364,9 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
         const progress = parseSdProgress(line)
         if (progress && progress.step !== lastStep) {
           lastStep = progress.step
-          // Étape 293 : « Dessin : 2/4 » — une forme sans mot à traduire, que imageStepFromLog lit dans toutes les langues.
-          onLog(t('common.labelValue', { label: t(wording.step), value: `${progress.step}/${progress.total}` }))
+          // « Dessin : 2/4 », « Drawing: 2/4 » : fabriquée par engineStepLine, la fonction qui la reconnaît aussi
+          // (engineStepFromLine, téléphone) ; imageStepFromLog lit ses chiffres dans toutes les langues.
+          onLog(engineStepLine(wording.step, progress.step, progress.total))
           if (progress.step === progress.total) onLog(t(wording.finishing))
         }
       }
@@ -533,7 +534,7 @@ export async function listGeneratedImages(): Promise<GeneratedImageSummary[]> {
 
 /** Chemin d'une image dessinée ; le nom vient de l'écran, il est donc revérifié ici (jamais un chemin). */
 export function generatedImagePath(fileName: string): string {
-  if (!isGeneratedImageFileName(fileName)) throw new Error('Image inconnue.')
+  if (!isGeneratedImageFileName(fileName)) throw new Error(t('image.unknown'))
   return join(generatedImagesDir(), fileName)
 }
 

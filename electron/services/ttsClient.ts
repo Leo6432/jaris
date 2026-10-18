@@ -6,7 +6,7 @@ import type { Readable, Writable } from 'stream'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { resolvePythonBin } from './pythonRuntime'
-import { currentLanguage } from '../../shared/i18n'
+import { currentLanguage, t } from '../../shared/i18n'
 
 type TtsServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -84,7 +84,7 @@ class TtsClient extends EventEmitter {
       proc.on('exit', (code) => {
         this.proc = null
         this.ready = null
-        const err = new Error(`sidecar TTS arrêté avant d'être prêt (code ${code})`)
+        const err = new Error(t('voice.ttsStoppedEarly', { code: String(code) }))
         if (!settled) rejectReady(err)
         for (const pending of this.queue.splice(0)) pending.reject(err)
       })

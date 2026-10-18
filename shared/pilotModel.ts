@@ -1,4 +1,4 @@
-import { t } from './i18n'
+import { formatDecimal, t } from './i18n'
 /**
  * Le modèle de pilotage d'écran (étape 231, Léo : « oui pour nouveau rôle… comme image vidéo le mettre seul, si
  * l'utilisateur n'a pas assez on met pas le rôle et il fait comme maintenant »). Un seul modèle, comme Image et
@@ -31,7 +31,7 @@ export interface PilotModelPick {
 export function pickPilotModel(vramGb: number | null): PilotModelPick {
   if (vramGb === null) return { model: null, reason: t('hw.noGpu', { need: 8 }) }
   if (vramGb < PILOT_MIN_VRAM_GB) {
-    return { model: null, reason: t('hw.gpuTooSmall', { have: vramGb, need: 8 }) }
+    return { model: null, reason: t('hw.gpuTooSmall', { have: formatDecimal(vramGb), need: 8 }) }
   }
   return { model: PILOT_MODEL, reason: null }
 }

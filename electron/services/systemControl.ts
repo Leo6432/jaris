@@ -39,7 +39,7 @@ function runShutdown(args: string[], failure: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn('shutdown', args, { windowsHide: true })
     proc.on('error', (err) => reject(new Error(t('common.labelValue', { label: failure, value: err.message }))))
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`${failure} (code ${code}).`))))
+    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(t('shutdown.withCode', { reason: failure, code: String(code) })))))
   })
 }
 

@@ -6,7 +6,7 @@ import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
-import { t } from '@/lib/i18n'
+import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -297,7 +297,7 @@ export default function AllModelsOverview(): JSX.Element {
                                   {entry.readsImages ? ` · ${t('models.readsImages')}` : ''}
                                 </td>
                                 <td>{entry.usedIn?.length ? t('models.usedIn', { roles: entry.usedIn.join(', ') }) : t('common.no')}</td>
-                                <td className="options-menu__col-num">{t('unit.gb', { value: entry.vramGb })}</td>
+                                <td className="options-menu__col-num">{t('unit.gb', { value: formatDecimal(entry.vramGb) })}</td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.toolCalling} />
                                 </td>

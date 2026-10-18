@@ -15,7 +15,7 @@ import { detectRamGb } from './systemResources'
 import { pickImageModel } from '../../shared/imageModel'
 import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
 import { pickVideoModel } from '../../shared/videoModel'
-import { t } from '../../shared/i18n'
+import { formatDecimal, t } from '../../shared/i18n'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -30,7 +30,7 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
   let picked = await pickBestModelsFromBenchmark()
   onLine(
     picked.vramGb !== null
-      ? t('bench.gpuVram', { gpu: picked.gpuName ?? t('bench.unknownGpu'), vram: picked.vramGb })
+      ? t('bench.gpuVram', { gpu: picked.gpuName ?? t('bench.unknownGpu'), vram: formatDecimal(picked.vramGb) })
       : t('bench.gpu', { gpu: picked.gpuName ?? t('bench.unknownGpu') })
   )
 

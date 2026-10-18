@@ -4,7 +4,7 @@ import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
-import { t } from '@/lib/i18n'
+import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 
 interface MyModelPicksProps {
@@ -48,7 +48,7 @@ function formatIntelligence(entry: ModelOverviewEntry): string {
 /** "RTX 3070 · 8 Go de VRAM · 32 Go de RAM" — seulement ce qui a vraiment été détecté, jamais inventé. */
 export function formatHardware(picks: MyModelPicksData): string {
   const parts = [picks.gpuName ?? t('picks.noGpu')]
-  if (picks.vramGb !== null) parts.push(t('picks.vram', { gb: picks.vramGb }))
+  if (picks.vramGb !== null) parts.push(t('picks.vram', { gb: formatDecimal(picks.vramGb) }))
   // Arrondi : la RAM détectée arrive en Go fractionnaires (« 63.161624908447266 Go », capture de Léo).
   parts.push(t('picks.ram', { gb: Math.round(picks.ramGb) }))
   return parts.join(' · ')

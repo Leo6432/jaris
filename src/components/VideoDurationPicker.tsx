@@ -28,13 +28,13 @@ export default function VideoDurationPicker({ value, onChange, disabled = false 
     <SliderPicker
       className="duration-picker"
       icon={<ClockIcon />}
-      triggerLabel={`${value} s`}
+      triggerLabel={t('duration.seconds', { s: value })}
       name={t('video.duration.name')}
       title={label(value)}
       steps={VIDEO_DURATIONS.map((seconds) => ({ value: seconds, label: label(seconds) }))}
       value={value}
       onChange={onChange}
-      scale={[`${VIDEO_DURATIONS[0]} s`, `${VIDEO_DURATIONS[VIDEO_DURATIONS.length - 1]} s`]}
+      scale={[t('duration.seconds', { s: VIDEO_DURATIONS[0] }), t('duration.seconds', { s: VIDEO_DURATIONS[VIDEO_DURATIONS.length - 1] })]}
       disabled={disabled}
     />
   )
