@@ -6669,6 +6669,16 @@ select {
   color: var(--hud-text-faint);
 }
 
+/* Étape 325 : pourquoi « Parler à Jaris » n'a rien déclenché (écoute pas prête, clic désactivé), juste sous le bouton. */
+.voice-screen__notice {
+  margin: 0;
+  max-width: 440px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--hud-gold);
+}
+
 /* ==========================================================================
    Modes Image et Vidéo : les créations récentes (étape 268, Léo : « c'est mal fait les vidéos créées et
    images »). La galerie était repoussée tout en bas de l'écran (marges automatiques de l'accueil), collée à

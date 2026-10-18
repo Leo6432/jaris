@@ -143,7 +143,9 @@ test('le widget texte dit au main la hauteur qu’il occupe VRAIMENT', () => {
 test('le rendu Chat possède un état inactif et + le remplace par la barre', () => {
   assert.match(widgetSource, /inactive[\s\S]{0,800}?chat-widget__idle/)
   assert.match(appSource, /widgetMode === ['"]chat-idle['"][\s\S]{0,300}?inactive=/)
-  assert.match(mainSource, /activeMode === ['"]chat['"][\s\S]{0,180}?showWidgetWindow\(true\)/)
+  // Étape 325 : + et le clic sur l'indicateur passent par openChatWidgetBar, qui déplie la barre.
+  assert.match(mainSource, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/)
+  assert.match(mainSource, /function openChatWidgetBar\(\)[\s\S]{0,180}?showWidgetWindow\(true\)/)
   assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,80}?widgetWindow\.focus\(\)/)
 })
 
@@ -258,4 +260,53 @@ test('hors Agent vocal ou Options ouvertes : le sidecar ne transcrit plus rien, 
   assert.match(clientSource, /this\.proc = proc;?\s*if \(this\.wakePaused\)\s*proc\.stdin\.write\(['"]pause-wake\\n['"]\)/,
     'un sidecar redémarré (changement de micro…) doit repartir en pause s’il l’était')
   assert.match(clientSource, /paused \? ['"]pause-wake\\n['"] : ['"]resume-wake\\n['"]/)
+})
+
+// Étape 325 : « Parler à Jaris », l'orbe et « + » ne faisaient RIEN quand l'écoute n'était pas prête — et « + »
+// dépliait même le widget vocal pour rien (grande zone invisible qui capte les clics, jamais repliée).
+test('« + » et « Parler à Jaris » : la disponibilité de l’écoute est vérifiée AVANT de déplier le widget', () => {
+  const wake = /function triggerVisibleWake\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.ok(wake, 'triggerVisibleWake introuvable')
+  const check = wake.indexOf('listeningUnavailable()')
+  const unfold = wake.indexOf('showWidgetWindow(true)')
+  assert.ok(check > 0 && unfold > check, 'l’écoute doit être vérifiée avant de déplier le widget vocal')
+  assert.match(
+    wake.slice(check, unfold),
+    /reportWakeUnavailable\([\s\S]*?\);?\s*return;?\s*\}/,
+    'écoute pas prête : la raison est donnée, et rien n’est déplié ni envoyé au programme d’écoute'
+  )
+  assert.doesNotMatch(wake, /if \(!pipeline\)\s*return\s*\n/, 'plus de sortie silencieuse quand le pipeline n’existe pas encore')
+  assert.match(mainSource, /function listeningUnavailable\(\)[\s\S]{0,120}?pipeline \? pipeline\.listeningUnavailable\(\) : t\(['"]main\.voiceNotReady['"]\)/)
+})
+
+test('la raison va à l’écran vocal, et en notification de Windows quand Jaris est réduit', () => {
+  const report = /function reportWakeUnavailable\([\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(report, /broadcast\(IPC_CHANNELS\.wakeAvailability, \{ reason, attempt: true \}/)
+  assert.match(report, /fullWindow\.isVisible\(\)[^\n]*\)\s*return[\s\S]*new Notification\(/, 'la notification ne doit partir que si la grande fenêtre est cachée')
+  assert.match(report, /WAKE_NOTICE_REPEAT_MS/, 'une même raison ne doit pas être notifiée à chaque pression de +')
+  // Effacée quand l'écoute redevient possible : l'état réel du programme d'écoute est relayé jusqu'à l'écran.
+  assert.match(mainSource, /pipeline\.on\(['"]listeningStatus['"],[\s\S]{0,160}?IPC_CHANNELS\.wakeAvailability, \{ reason, attempt: false \}/)
+  const pipelineSource = sourceWithoutComments('electron/services/voicePipeline.ts')
+  assert.match(pipelineSource, /this\.voice\.on\(['"]status['"],[\s\S]{0,120}?this\.emit\(['"]listeningStatus['"], this\.listeningUnavailable\(\)\)/)
+  const clientSource = sourceWithoutComments('electron/services/voiceClient.ts')
+  assert.doesNotMatch(clientSource, /this\.status = \{/, 'tout changement d’état doit passer par setStatus, qui l’annonce')
+})
+
+// Étape 325 : sans pavé numérique (la plupart des portables), la barre du Chat n'était accessible qu'avec « + ».
+test('un clic sur le petit indicateur du Chat ouvre la barre de saisie, pas toute l’application', () => {
+  const idle = /if \(inactive\) \{[\s\S]*?chat-widget__idle[\s\S]*?<\/button>/.exec(widgetSource)?.[0] ?? ''
+  assert.ok(idle, 'branche inactive de ChatWidget introuvable')
+  assert.match(idle, /onClick=\{\(\) => window\.jaris\.openChatWidget\(\)\}/)
+  assert.doesNotMatch(idle, /openSettings/, 'le clic rouvrait toute l’application au lieu de la barre')
+  assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.openChatWidget, \(\) => openChatWidgetBar\(\)\)/)
+  const open = /function openChatWidgetBar\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  // Les gardes (mode Chat seulement, jamais par-dessus la grande fenêtre) sont EXÉCUTÉES par test-wake-availability.mjs.
+  assert.match(open, /activeMode !== ['"]chat['"][\s\S]{0,200}?showWidgetWindow\(true\)/, 'même chemin que + : forme native, région cliquable et contenu dérivés du même état')
+  // Le clic arrive avec la souris déjà DANS la fenêtre : rien ne doit pré-armer le relevé du pointeur, sinon la barre
+  // se replierait au premier relevé si la souris est encore dans la marge du halo.
+  assert.doesNotMatch(open, /chatPointerWasInside/, 'le relevé du pointeur ne doit être armé qu’après une vraie entrée')
+  const wake = /function triggerVisibleWake\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(wake, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/, '+ et le clic passent par la même fonction')
+  const preload = sourceWithoutComments('electron/preload.ts')
+  assert.match(preload, /openChatWidget: \(\) => ipcRenderer\.send\(IPC_CHANNELS\.openChatWidget\)/)
 })
