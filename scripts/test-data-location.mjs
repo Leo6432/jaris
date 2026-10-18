@@ -14,6 +14,7 @@ import ts from 'typescript'
 import { loadTsModule } from './load-ts-module.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
+const sharedCodeConversations = loadTsModule('shared/codeConversations.ts')
 
 /**
  * Étape 143 : une racine de stockage UNIQUE (storageRoot.ts) pour tout ce que Jaris écrit. Ce fichier vérifie
@@ -69,7 +70,12 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
     )
     return exports
   }
-  const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app }, ...storageModules })
+  const storageRoot = load('../electron/services/storageRoot.ts', {
+    electron: { app },
+    // Les conversations du mode Code sont RÉUNIES au démarrage (disque rebranché), avec le vrai module partagé.
+    '../../shared/codeConversations': sharedCodeConversations,
+    ...storageModules
+  })
   const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
   return { storageRoot, dataLocation, setPathCalls, app }
 }
@@ -305,6 +311,33 @@ function startJaris(userData, options) {
 const GITHUB_TOKEN = 'gho_jeton_de_leo'
 const GITHUB_REFRESH = 'ghr_renouvellement_de_leo'
 
+/** Le vrai store des conversations du mode Code (codeConversationsStore.ts), sur le vrai disque. */
+const CodeConversationsStore = loadTsModule('electron/services/codeConversationsStore.ts', {
+  fs: nodeRequire('node:fs'),
+  path: nodePath,
+  '../../shared/codeConversations': sharedCodeConversations
+}).CodeConversationsStore
+const codeTurns = (text, first = 1) => [
+  { id: first, kind: 'user', text },
+  { id: first + 1, kind: 'reply', text: 'Fait.' }
+]
+const CODE_FILE = 'code-conversations.json'
+const ASIDE_DIR = 'code-conversations-illisibles'
+/** Une copie de secours d'un fichier abîmé, déjà rangée sur D. */
+const ASIDE_ON_D = 'code-conversations-2026-10-01T10-00-00-000Z.json'
+/**
+ * Écrit par l'ancienne version : la conversation d'une application rangée sous son chemin ABSOLU (sur C, avant le
+ * déplacement) ; elle doit se retrouver sous le nom du dossier de l'application, où qu'il soit désormais.
+ */
+const CODE_FILE_BEFORE = {
+  version: 1,
+  repos: [{ fullName: 'leo/site', at: 5 }],
+  conversations: {
+    'app:C:\\Users\\leo\\AppData\\Roaming\\Jaris\\generated-apps\\1750000000000-snake': codeTurns('un snake'),
+    'repo:leo/site': codeTurns('corrige le README')
+  }
+}
+
 /** Tout ce qu'un Jaris utilisé a dans ses données en plus des conversations et du profil. */
 async function fillForgottenData(jaris) {
   assert.equal(await jaris.github.saveGithubToken({ token: GITHUB_TOKEN, refreshToken: GITHUB_REFRESH, expiresAt: 42 }), true)
@@ -312,7 +345,9 @@ async function fillForgottenData(jaris) {
   mkdirSync(join(jaris.dataRoot, 'phone-tunnel', 'certs'), { recursive: true })
   writeFileSync(join(jaris.dataRoot, 'phone-tunnel', 'tailscaled.state'), '{"_machinekey":"mkey:pc-de-leo"}')
   writeFileSync(join(jaris.dataRoot, 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'certificat')
-  writeFileSync(join(jaris.dataRoot, 'code-conversations.json'), '{"repos":["leo/site"]}')
+  writeFileSync(join(jaris.dataRoot, CODE_FILE), JSON.stringify(CODE_FILE_BEFORE))
+  mkdirSync(join(jaris.dataRoot, ASIDE_DIR), { recursive: true })
+  writeFileSync(join(jaris.dataRoot, ASIDE_DIR, ASIDE_ON_D), '{ abîmé sur D')
   writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md'), '# Résultats')
   writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.traces.jsonl'), '{"type":"campagne"}\n')
   writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md.telecharges.json'), '["k2-horizon:7b"]')
@@ -331,7 +366,13 @@ async function assertForgottenDataReadable(jaris, phoneToken) {
   assert.equal((await jaris.devices.findByToken(phoneToken))?.name, 'iPhone de Léo', 'le téléphone appairé doit encore être reconnu')
   assert.equal(readFileSync(join(jaris.dataRoot, 'phone-tunnel', 'tailscaled.state'), 'utf8'), '{"_machinekey":"mkey:pc-de-leo"}')
   assert.equal(readFileSync(join(jaris.dataRoot, 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'utf8'), 'certificat')
-  assert.equal(readFileSync(join(jaris.dataRoot, 'code-conversations.json'), 'utf8'), '{"repos":["leo/site"]}')
+  // Relues avec le vrai store, comme le mode Code les relira : l'application sous le nom de son dossier, le dépôt avec
+  // ses messages d'avant (suivis, éventuellement, de ceux d'une session sur C), la copie de secours de D intacte.
+  const code = new CodeConversationsStore(join(jaris.dataRoot, CODE_FILE)).load()
+  assert.deepEqual(code.conversations['app:1750000000000-snake'], codeTurns('un snake'), 'conversation de l’application perdue')
+  assert.deepEqual(code.conversations['repo:leo/site']?.slice(0, 2), codeTurns('corrige le README'), 'historique du dépôt perdu')
+  assert.ok(code.repos.some((repo) => repo.fullName === 'leo/site'))
+  assert.equal(readFileSync(join(jaris.dataRoot, ASIDE_DIR, ASIDE_ON_D), 'utf8'), '{ abîmé sur D')
   assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md'), 'utf8'), '# Résultats')
   assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.traces.jsonl'), 'utf8'), '{"type":"campagne"}\n')
   assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md.telecharges.json'), 'utf8'), '["k2-horizon:7b"]')
@@ -451,7 +492,7 @@ test('installé sur D (ou ancien repère) : la clé de chiffrement de l’ancien
   rmSync(root, { recursive: true, force: true })
 })
 
-test('disque débranché puis rebranché : le jeton GitHub et le téléphone de D ne sont jamais écrasés par ceux créés sur C', async () => {
+test('disque débranché puis rebranché : jeton GitHub, téléphone, mode Code et tests de modèles de D jamais écrasés par ceux de C', async () => {
   const { userData, root } = setupUserData()
   const before = startJaris(userData)
   const phoneToken = await fillForgottenData(before)
@@ -471,6 +512,21 @@ test('disque débranché puis rebranché : le jeton GitHub et le téléphone de 
   mkdirSync(join(userData, 'phone-tunnel'), { recursive: true })
   writeFileSync(join(userData, 'phone-tunnel', 'tailscaled.state'), '{"_machinekey":"mkey:identite-neuve"}')
   await onC.devices.add('Téléphone ajouté sur C')
+  // Et le mode Code sur C : une application créée là, le même dépôt repris (numéroté à partir de 1, lui aussi), un
+  // test de modèles lancé, et une copie de secours au MÊME nom qu'une de D, au contenu différent.
+  const codeOnC = new CodeConversationsStore(join(userData, CODE_FILE))
+  const pongOnC = join(userData, 'generated-apps', '1760000000000-pong')
+  mkdirSync(pongOnC, { recursive: true })
+  writeFileSync(join(pongOnC, 'index.html'), '<html>Pong</html>')
+  codeOnC.setConversation(sharedCodeConversations.appConversationKey(pongOnC), codeTurns('un pong'))
+  codeOnC.setConversation('repo:leo/site', codeTurns('ajoute une page contact'))
+  codeOnC.setRepos([{ fullName: 'leo/site', at: 9 }])
+  writeFileSync(join(userData, 'benchmark-nouveaux-modeles.md'), '# Session sur C')
+  writeFileSync(join(userData, 'benchmark-nouveaux-modeles.traces.jsonl'), '{"type":"session-sur-C"}\n')
+  writeFileSync(join(userData, 'benchmark-nouveaux-modeles.md.telecharges.json'), '["qwen3:0.6b"]')
+  mkdirSync(join(userData, ASIDE_DIR), { recursive: true })
+  writeFileSync(join(userData, ASIDE_DIR, ASIDE_ON_D), '{ abîmé sur C')
+  writeFileSync(join(userData, ASIDE_DIR, 'code-conversations-2026-10-02T08-00-00-000Z.json'), '{ autre copie')
 
   // Disque rebranché.
   renameSync(unplugged, newRoot)
@@ -480,8 +536,122 @@ test('disque débranché puis rebranché : le jeton GitHub et le téléphone de 
   await assertForgottenDataReadable(after, phoneToken)
   assert.equal((await after.github.readConnectionRecord())?.login, 'leo', 'la trace décrit le jeton gardé')
   assert.deepEqual((await after.devices.list()).map((d) => d.name), ['iPhone de Léo'])
+
+  // Les deux historiques du mode Code sont RÉUNIS, rien de D ni de C n'est perdu.
+  const code = new CodeConversationsStore(join(after.dataRoot, CODE_FILE)).load()
+  const pongOnD = join(after.dataRoot, 'generated-apps', '1760000000000-pong')
+  assert.equal(readFileSync(join(pongOnD, 'index.html'), 'utf8'), '<html>Pong</html>')
+  assert.deepEqual(
+    code.conversations[sharedCodeConversations.appConversationKey(pongOnD)],
+    codeTurns('un pong'),
+    'l’application créée sur C retrouve sa conversation par son nouveau chemin, sur D'
+  )
+  const site = code.conversations['repo:leo/site']
+  assert.deepEqual(site.map((turn) => turn.text), ['corrige le README', 'Fait.', 'ajoute une page contact', 'Fait.'])
+  assert.equal(new Set(site.map((turn) => turn.id)).size, site.length, 'deux messages au même numéro')
+  assert.deepEqual(code.repos, [{ fullName: 'leo/site', at: 9 }])
+  // Copies de secours : celle de D intacte (vérifié plus haut), celle de C au même nom gardée à côté, l'autre ajoutée.
+  const asideDir = join(after.dataRoot, ASIDE_DIR)
+  assert.deepEqual(
+    readdirSync(asideDir).sort(),
+    [ASIDE_ON_D, 'code-conversations-2026-10-01T10-00-00-000Z-2.json', 'code-conversations-2026-10-02T08-00-00-000Z.json'].sort()
+  )
+  assert.equal(readFileSync(join(asideDir, 'code-conversations-2026-10-01T10-00-00-000Z-2.json'), 'utf8'), '{ abîmé sur C')
   assert.deepEqual(readdirSync(userData), ['storage-location.json'], 'les copies laissées sur C sont effacées')
   rmSync(root, { recursive: true, force: true })
+})
+
+/** Deux dossiers de données vides, et la racine de stockage chargée (sans repère : rien n'est déplacé au chargement). */
+function setupMerge(storageModules) {
+  const { userData, root } = setupUserData()
+  const from = join(root, 'C', 'Jaris')
+  const to = join(root, 'D', 'Jaris-data', 'jaris-data')
+  mkdirSync(from, { recursive: true })
+  mkdirSync(to, { recursive: true })
+  const { storageRoot } = loadStorage(userData, { storageModules })
+  return { root, from, to, storageRoot }
+}
+
+const codeFile = (conversations) => JSON.stringify({ version: 1, repos: [], conversations })
+
+test('rebranché, démarrage coupé juste après la fusion (originaux pas encore effacés) : le suivant ne double rien', () => {
+  const { root, from, to, storageRoot } = setupMerge()
+  writeFileSync(join(to, CODE_FILE), codeFile({ 'repo:leo/site': codeTurns('corrige le README') }))
+  mkdirSync(join(to, ASIDE_DIR), { recursive: true })
+  writeFileSync(join(to, ASIDE_DIR, ASIDE_ON_D), '{ abîmé sur D')
+  const fromC = codeFile({ 'repo:leo/site': codeTurns('ajoute une page contact'), 'app:1760000000000-pong': codeTurns('un pong') })
+  const putBackOriginals = () => {
+    writeFileSync(join(from, CODE_FILE), fromC)
+    mkdirSync(join(from, ASIDE_DIR), { recursive: true })
+    writeFileSync(join(from, ASIDE_DIR, ASIDE_ON_D), '{ abîmé sur C')
+    writeFileSync(join(from, ASIDE_DIR, 'code-conversations-2026-10-02T08-00-00-000Z.json'), '{ autre copie')
+  }
+  putBackOriginals()
+
+  storageRoot.moveOwnedEntriesSync(from, to)
+  const once = readFileSync(join(to, CODE_FILE), 'utf8')
+  assert.equal(JSON.parse(once).conversations['repo:leo/site'].length, 4)
+  const asideOnce = readdirSync(join(to, ASIDE_DIR)).sort()
+  assert.equal(asideOnce.length, 3)
+  // Coupure entre la fusion et l'effacement des originaux : ils sont encore sur C au démarrage suivant.
+  putBackOriginals()
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.equal(readFileSync(join(to, CODE_FILE), 'utf8'), once, 'des messages ont été doublés')
+  assert.deepEqual(readdirSync(join(to, ASIDE_DIR)).sort(), asideOnce, 'une copie de secours a été doublée (…-3.json)')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('rebranché, un code-conversations.json abîmé n’est jamais perdu : mis de côté, l’autre sert', () => {
+  // Celui de D est abîmé : mis de côté (comme le store l'aurait fait), celui de C sert.
+  let setup = setupMerge()
+  writeFileSync(join(setup.to, CODE_FILE), '{ abîmé sur D')
+  writeFileSync(join(setup.from, CODE_FILE), codeFile({ 'app:1760000000000-pong': codeTurns('un pong') }))
+  setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to)
+  assert.deepEqual(new CodeConversationsStore(join(setup.to, CODE_FILE)).load().conversations['app:1760000000000-pong'], codeTurns('un pong'))
+  let aside = readdirSync(join(setup.to, ASIDE_DIR))
+  assert.equal(aside.length, 1)
+  assert.equal(readFileSync(join(setup.to, ASIDE_DIR, aside[0]), 'utf8'), '{ abîmé sur D')
+  rmSync(setup.root, { recursive: true, force: true })
+
+  // Celui de C est abîmé : mis de côté, celui de D reste tel quel — une seule fois, même si le démarrage est rejoué.
+  setup = setupMerge()
+  const fromD = codeFile({ 'repo:leo/site': codeTurns('corrige le README') })
+  writeFileSync(join(setup.to, CODE_FILE), fromD)
+  for (let boot = 0; boot < 2; boot++) {
+    writeFileSync(join(setup.from, CODE_FILE), '{ abîmé sur C')
+    setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to)
+    // Une autre milliseconde, donc un autre nom daté : seul le contenu identique doit empêcher une seconde copie.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5)
+  }
+  assert.equal(readFileSync(join(setup.to, CODE_FILE), 'utf8'), fromD)
+  aside = readdirSync(join(setup.to, ASIDE_DIR))
+  assert.equal(aside.length, 1, `copie de secours doublée : ${aside}`)
+  assert.equal(readFileSync(join(setup.to, ASIDE_DIR, aside[0]), 'utf8'), '{ abîmé sur C')
+  rmSync(setup.root, { recursive: true, force: true })
+})
+
+test('rebranché, code-conversations.json de D verrouillé un instant : rien n’est touché, le démarrage suivant réessaie', () => {
+  const realFs = nodeRequire('node:fs')
+  let locked = null
+  const setup = setupMerge({
+    fs: {
+      ...realFs,
+      readFileSync: (file, ...rest) => {
+        if (file === locked) throw Object.assign(new Error('EBUSY: fichier ouvert par un antivirus'), { code: 'EBUSY' })
+        return realFs.readFileSync(file, ...rest)
+      }
+    }
+  })
+  const fromD = codeFile({ 'repo:leo/site': codeTurns('corrige le README') })
+  const fromC = codeFile({ 'app:1760000000000-pong': codeTurns('un pong') })
+  writeFileSync(join(setup.to, CODE_FILE), fromD)
+  writeFileSync(join(setup.from, CODE_FILE), fromC)
+  locked = join(setup.to, CODE_FILE)
+  assert.throws(() => setup.storageRoot.moveOwnedEntriesSync(setup.from, setup.to), /EBUSY/)
+  assert.equal(readFileSync(join(setup.to, CODE_FILE), 'utf8'), fromD, 'un fichier momentanément illisible a été touché')
+  assert.equal(readFileSync(join(setup.from, CODE_FILE), 'utf8'), fromC, 'l’original de C a été effacé sans être réuni')
+  assert.ok(!existsSync(join(setup.to, ASIDE_DIR)), 'un simple refus passager ne met rien de côté')
+  rmSync(setup.root, { recursive: true, force: true })
 })
 
 test('mise à jour après une session disque débranché : le jeton du dossier de Chromium de la racine passe avant celui de C', async () => {
@@ -682,8 +852,21 @@ test('les entrées liées à une clé ou à une identité ne sont jamais écras�
   const { userData, root } = setupUserData()
   const { storageRoot } = loadStorage(userData)
   rmSync(root, { recursive: true, force: true })
-  for (const name of ['github-token.bin', 'github-connection.json', 'phone-tunnel', 'phone-devices.json']) {
+  for (const name of [
+    'github-token.bin',
+    'github-connection.json',
+    'phone-tunnel',
+    'phone-devices.json',
+    // Des jours de traces de test : jamais remplacées par celles d'une session lancée disque débranché.
+    'benchmark-nouveaux-modeles.md',
+    'benchmark-nouveaux-modeles.traces.jsonl',
+    'benchmark-nouveaux-modeles.md.telecharges.json'
+  ]) {
     assert.ok(storageRoot.KEPT_AT_DESTINATION_ENTRIES.includes(name), `${name} doit être protégé`)
+  }
+  // Réunies, jamais l'un par-dessus l'autre : ni gardées telles quelles (la session sur C serait perdue), ni écrasées.
+  for (const name of ['code-conversations.json', 'code-conversations-illisibles']) {
+    assert.ok(!storageRoot.KEPT_AT_DESTINATION_ENTRIES.includes(name), `${name} doit être réuni, pas ignoré`)
   }
   for (const name of storageRoot.KEPT_AT_DESTINATION_ENTRIES) assert.ok(storageRoot.OWNED_ENTRIES.includes(name), `${name} doit aussi suivre « Déplacer »`)
 })

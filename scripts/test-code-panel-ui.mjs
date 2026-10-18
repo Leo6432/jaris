@@ -1037,6 +1037,45 @@ test('les conversations survivent à un redémarrage de Jaris (étape 288)', opt
   }
 })
 
+test('après un « Déplacer », chaque application garde sa conversation (son chemin a changé, pas son dossier)', options, async () => {
+  // La conversation d'une application était rangée sous son chemin ABSOLU : après un « Déplacer » (ou le rapatriement
+  // du démarrage), listGeneratedApps renvoie les nouveaux chemins et plus aucune conversation ne s'affichait.
+  const html = buildPage()
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1280, height: 860 })
+    await page.route('http://jaris.test/**', (route) => route.fulfill({ contentType: 'text/html', body: html }))
+    await page.goto('http://jaris.test/')
+    await page.waitForSelector('.workspace__rail')
+    await generateNewApp(page)
+    await page.waitForFunction(() => Object.keys(window.__codeFile?.conversations ?? {}).length === 1)
+
+    // Les données ont déménagé sur D : même dossier d'application, autre chemin (écrit par Windows, avec « \ »).
+    const moved = (await page.evaluate(() => window.__apps)).map((app) => ({
+      ...app,
+      path: app.path.replace('C:/Users/leo/Jaris/generated-apps/', 'D:\\Jaris-data\\jaris-data\\generated-apps\\')
+    }))
+    assert.ok(moved.some((app) => app.path.startsWith('D:\\')), 'le test doit vraiment changer le chemin')
+    const codeFile = await page.evaluate(() => window.__codeFile)
+    await page.evaluate(() => localStorage.clear())
+    await page.addInitScript(
+      ({ savedApps, savedFile }) => {
+        window.__presetApps = savedApps
+        window.__presetCodeFile = savedFile
+      },
+      { savedApps: moved, savedFile: codeFile }
+    )
+    await page.reload()
+    await page.waitForSelector('.workspace__rail')
+    await page.click('.workspace__item:has-text("liste de courses v2")')
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1, null, { timeout: 5000 })
+    assert.deepEqual((await threadLines(page)).slice(0, 2), ['code-chat__user:une liste de courses', 'code-chat__activity:Créé index.html +20'])
+  } finally {
+    await browser.close()
+  }
+})
+
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
 })

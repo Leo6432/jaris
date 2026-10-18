@@ -12,6 +12,7 @@ import ts from 'typescript'
 
 const nodeRequire = createRequire(import.meta.url)
 const formatBytesModule = loadTsModule('shared/formatBytes.ts')
+const codeConversationsModule = loadTsModule('shared/codeConversations.ts')
 
 /**
  * relocation.ts — étape 143, Léo : « si il veut changer dans les options ça doit tout déplacer, jamais une
@@ -61,7 +62,7 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dock
     )
     return exports
   }
-  const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app } })
+  const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app }, '../../shared/codeConversations': codeConversationsModule })
   const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot })
   const modelsLocation = load('../electron/services/modelsLocation.ts', { child_process: { spawn } })
   const dockerLocation = {
