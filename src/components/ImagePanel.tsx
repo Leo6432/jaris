@@ -31,9 +31,11 @@ export default function ImagePanel(): JSX.Element {
   const [images, setImages] = useState<GeneratedImageSummary[]>([])
   const [selected, setSelected] = useState<GeneratedImageSummary | null>(null)
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null)
-  const [ratio, setRatio] = useState<number | null>(null)
-  // Proportions de l'image affichée (étape 271) : remises à zéro à chaque nouvelle image.
-  useEffect(() => setRatio(null), [selectedUrl])
+  // Proportions de l'image affichée (étape 271), rangées AVEC l'adresse qu'elles décrivent. Les effacer dans un
+  // useEffect à chaque nouvelle image perdait la course quand l'image était déjà en mémoire : son chargement
+  // arrivait avant l'effet, qui effaçait alors la bonne valeur, et l'image restait à sa taille d'origine.
+  const [loadedRatio, setLoadedRatio] = useState<{ url: string; ratio: number | null } | null>(null)
+  const ratio = loadedRatio && loadedRatio.url === selectedUrl ? loadedRatio.ratio : null
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -289,7 +291,7 @@ export default function ImagePanel(): JSX.Element {
                     src={selectedUrl}
                     alt={selected.label}
                     style={mediaRatioStyle(ratio)}
-                    onLoad={(e) => setRatio(mediaRatio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
+                    onLoad={(e) => setLoadedRatio({ url: selectedUrl, ratio: mediaRatio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) })}
                   />
                 )}
               </figure>

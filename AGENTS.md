@@ -9016,3 +9016,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pas — seul un vrai 404 le prouve.
   Régression : `node --test scripts/test-model-note.mjs` (K2-Horizon-32B à 62,6 ; qwen3.5:27b et 35b restent sans
   score — vérifié en retirant la ligne : le test échoue).
+  **Trouvé en lançant toute la suite, sans lien avec ces scores : un vrai défaut de l'écran Image.** L'image ouverte
+  restait parfois à sa taille d'origine au lieu de remplir la place (étape 271). Ses proportions étaient effacées par
+  `useEffect(() => setRatio(null), [selectedUrl])` APRÈS l'affichage ; une image déjà en mémoire (vignette de la
+  galerie, image rouverte) finissait de charger AVANT cet effet, qui effaçait donc la bonne valeur, pour toujours.
+  Le test `dessiner : avancement…` (test-image-panel-ui.mjs) échouait 3 fois sur 3 ici, image à 1×1. Corrigé en
+  rangeant les proportions AVEC l'adresse qu'elles décrivent (`loadedRatio`, ImagePanel.tsx) : plus rien à effacer,
+  donc plus de course. La Vidéo n'a pas ce défaut : elle remet ses proportions à zéro avant même de demander le
+  fichier. **Leçon générale : un état lié à un élément qui charge (image, vidéo) ne doit jamais être remis à zéro
+  par un useEffect qui suit l'affichage — le chargement peut arriver avant lui. Ranger l'état avec la source qu'il
+  décrit, et le comparer à la source affichée.** Deux autres tests ont échoué une fois dans la suite complète puis
+  passé seuls (signes de vie à 0,4 s près, attente d'une confirmation) : dépendants de la charge de la machine.
