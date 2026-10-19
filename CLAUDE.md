@@ -9116,3 +9116,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   machines, les tests ne couvrent que quelques cas.** Régression : `test-hardwarescan-small-machines.mjs`, chaque
   garde vérifiée en la retirant.
   Suite (v0.34.41) : qwen3.5:2b (script de test seulement) remis à 2,7 Go réels ; image, vidéo et MAI-UI revérifiés à l'octet près, tous justes. Et « · qualité Moyen » retiré de la ligne Vidéo de « Ce que ta machine fait tourner » (Léo) — la qualité reste choisie dans le mode Vidéo.
+
+- **Étape 333, Muse Glimmer ajouté pour être testé (Léo : « ajoute le modèle Muse Glimmer, score, VRAM réelle, et
+  ajoute test »).** `muse-glimmer:30b` (Meta, Apache 2.0, 30 Md dense + lecteur d'images) vérifié dans le registre
+  d'Ollama : 18,2 Go réels (modèle 16,76 + projecteur 1,40), Q4_K_M, tools + thinking + vision, Ollama 0.32.8 minimum
+  (pas d'entrée MIN_OLLAMA_VERSION). Artificial Analysis, objet `currentModel` de la fiche (seule variante publiée :
+  High) : intelligence 17,5, Omniscience −32,9, Terminal-Bench 2.1 51,7 %, 139 tokens/s. Candidat Élevé (débordement
+  RAM) et Vision, comme qwen3.8:27b ; copie du script de test mise à jour. Sans score d'appel d'outils, jamais choisi :
+  le bouton « Tester les modèles sans score » le propose. `AWAITING` (test-hardwarescan-single-pool.mjs) : le retirer
+  une fois ses scores recopiés.

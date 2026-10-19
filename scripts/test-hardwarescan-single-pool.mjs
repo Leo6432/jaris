@@ -195,6 +195,11 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 
 // Étape 168 : la liste que teste le bouton « Tester les modèles ». Étape 230 : rôle par rôle, et un score de
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
+// Étape 333 : modèles ajoutés sans score, en attente du test de Léo. Retirer un modèle de cette liste quand ses
+// scores sont recopiés dans verified-tool-scores.md.
+const AWAITING = ['muse-glimmer:30b']
+const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
+
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
   const conversationModels = new Set(
     [...source.matchAll(/const (?:FLASH|MEDIUM|LARGE)_CANDIDATES[\s\S]*?\n\]/g)].flatMap((m) => [...m[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
@@ -209,8 +214,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     codeOnly.delete(model)
   }
   // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté (phi4-mini,
-  // redevenu candidat à l'étape 316, mesuré à l'étape 317).
-  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], [])
+  // redevenu candidat à l'étape 316, mesuré à l'étape 317), sauf Muse Glimmer, ajouté à l'étape 333 pour être testé.
+  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], AWAITING)
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')
   assert.deepEqual(new Set(setup({ vramMib: 8 * 1024, scores: before }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
@@ -221,12 +226,12 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     table('Vision — compréhension', visionOnly, '30/34') +
     table('Code — génération', codeOnly, '4/5') +
     table('Demandes complètes', conversationModels, '40/48')
-  assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], [])
+  assert.deepEqual(notAwaiting(setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()), [])
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  // 30, plus phi4-mini (étape 316).
-  assert.equal(conversationModels.size, 31)
+  // 30, plus phi4-mini (étape 316) et Muse Glimmer (étape 333).
+  assert.equal(conversationModels.size, 32)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).
@@ -384,7 +389,7 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   scan.setOllamaVersionSource(() => '0.40.5')
   assert.ok(scan.parseModelsToRemeasure().has(k2))
   assert.match(REAL_SCORES, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m, 'ses scores restent dans le fichier')
-  assert.deepEqual([...scan.getUnscoredModels()], [k2], 'seul modèle proposé')
+  assert.deepEqual(notAwaiting(scan.getUnscoredModels()), [k2], 'seul modèle proposé')
   const { models } = await scan.pickBestModelsFromBenchmark()
   assert.equal(models.flash, k2, 'toujours choisi en attendant (carte de 6 Go)')
   const lines = [{ type: 'campagne', versions: { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
@@ -392,9 +397,9 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) lines.push({ type: 'demande', model: k2, id: `d${i % 24}`, pass: i < 24 ? 1 : 2, ok: true, turns: [], calls: [] })
   for (const id of ['compteur', 'addition', 'convertisseur', 'liste-taches', 'formulaire-contact']) lines.push({ type: 'code', model: k2, id, ok: true })
   const traces = (rows) => rows.map((l) => JSON.stringify(l)).join('\n')
-  assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))], [], 'tout passé : plus proposé')
+  assert.deepEqual(notAwaiting(scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))), [], 'tout passé : plus proposé')
   const withoutQuestions = lines.filter((l) => l.type !== 'question')
-  assert.deepEqual([...scan.getUnscoredModels(scan.campaignCompletion(traces(withoutQuestions)))], [k2], 'les 78 questions manquent encore')
+  assert.deepEqual(notAwaiting(scan.getUnscoredModels(scan.campaignCompletion(traces(withoutQuestions)))), [k2], 'les 78 questions manquent encore')
 })
 
 // Étape 328, Léo (« fait solution 1 et 2 ») : en conversation, la force d'un modèle = intelligence × part

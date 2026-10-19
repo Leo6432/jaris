@@ -221,6 +221,10 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // confirmé par un vrai chiffre comparatif ici, voir pickBestFrom dans computeModelPicks : le départage
   // entre candidats à 6/6 utilise maintenant MMLU-Pro quand les deux le connaissent, VRAM sinon).
   { model: 'qwen3.8:27b', vramGb: 17.7 },
+  // Muse Glimmer (Meta, Apache 2.0, étape 333) : 30 Md de paramètres DENSE + lecteur d'images, vérifié dans le
+  // registre d'Ollama (muse-glimmer:30b = :latest, Q4_K_M, 18,2 Go réels : modèle 16,76 + projecteur 1,40 ;
+  // tools + thinking + vision, Ollama 0.32.8 minimum). Sans score d'appel d'outils tant que Léo ne l'a pas testé.
+  { model: 'muse-glimmer:30b', vramGb: 18.2 },
   // Trois candidats supplémentaires dans la même tranche (17-19 Go), utiles pour les machines avec plus de
   // VRAM que la config de développement (8 Go) — pas retenus faute de "trop lourd" mais parce qu'un candidat
   // de plus dans cette tranche ne changeait rien pour Léo ; ajoutés maintenant pour ceux qui ont la VRAM.
@@ -286,6 +290,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
+  'muse-glimmer:30b',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',
@@ -336,6 +341,8 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // table ci-dessous n'a pas bougé sur ces deux-là) : seule cette proposition-ci a été retenue, après
   // vérification indépendante du score ET du support image.
   { model: 'qwen3.8:27b', vramGb: 17.7 },
+  // Muse Glimmer : vision native (voir LARGE_CANDIDATES).
+  { model: 'muse-glimmer:30b', vramGb: 18.2 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
   // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
@@ -953,6 +960,7 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen3.6:35b': 18.2, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.6:35b-a3b': 18.2, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.8:27b': 33.7, // Qwen3.8 27B (Xhigh)
+  'muse-glimmer:30b': 17.5, // Muse Glimmer (High), relevé le 19/10/2026
   'gpt-oss:20b': 9.0, // gpt-oss-20b (High)
   'gemma4:12b': 14.2, // Gemma 4 12B (Reasoning)
   'gemma4:26b': 16.7, // Gemma 4 26B A4B (Reasoning)
@@ -1014,6 +1022,7 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'qwen3.6:35b': 128,
   'qwen3.6:35b-a3b': 128,
   'qwen3.8:27b': 46,
+  'muse-glimmer:30b': 139,
   'gpt-oss:20b': 187,
   'gemma4:12b': 115,
   'gemma4:31b': 35,
@@ -1056,6 +1065,7 @@ const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
   'qwen3.6:35b': -22.2, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.6:35b-a3b': -22.2, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.8:27b': -10.0, // Qwen3.8 27B (Xhigh)
+  'muse-glimmer:30b': -32.9, // Muse Glimmer (High)
   'gpt-oss:20b': -63.1, // gpt-oss-20b (High)
   'gemma4:12b': -52.7, // Gemma 4 12B (Reasoning)
   'gemma4:26b': -50.8, // Gemma 4 26B A4B (Reasoning)
@@ -1113,6 +1123,7 @@ const ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21: Record<string, number> = {
   'qwen3.6:35b': 44.9, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.6:35b-a3b': 44.9, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.8:27b': 79.8, // Qwen3.8 27B (Xhigh)
+  'muse-glimmer:30b': 51.7, // Muse Glimmer (High)
   'gpt-oss:20b': 13.9, // gpt-oss-20b (High)
   'gemma4:12b': 27.3, // Gemma 4 12B (Reasoning)
   'gemma4:26b': 39.0, // Gemma 4 26B A4B (Reasoning)
@@ -1442,6 +1453,7 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'qwen3-coder:30b': 'Q4_K_M',
   'north-mini-code-1.0': 'Q4_K_M',
   'qwen3.8:27b': 'Q4_K_M',
+  'muse-glimmer:30b': 'Q4_K_M',
   'qwen3.6:27b': 'Q4_K_M',
   'granite4.2:30b': 'Q4_K_M',
   'qwen3.5:27b': 'Q4_K_M',

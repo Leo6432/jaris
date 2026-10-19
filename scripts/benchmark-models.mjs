@@ -325,6 +325,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
+  'muse-glimmer:30b',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',
@@ -414,6 +415,7 @@ const MODELS = [
   // uniquement — ce run donnera une vraie mesure locale plutôt que de deviner. Source taille :
   // ollama.com/library/qwen3.8 (tag 27b, 18 Go).
   'qwen3.8:27b',
+  'muse-glimmer:30b',
   // Candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM que la
   // config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
   'qwen3.6:27b',
@@ -454,6 +456,7 @@ const VISION_CANDIDATES = [
   // testés en vision : le contrôle de synchronisation ne vérifiait que la présence du nom dans le script.
   { model: 'gemma4:26b', vramGb: 18.7 },
   { model: 'qwen3.8:27b', vramGb: 17.7 },
+  { model: 'muse-glimmer:30b', vramGb: 18.2 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
@@ -539,6 +542,7 @@ const MODEL_SIZE_HINTS = {
   'qwen3.6:35b': 22.6,
   'qwen3.5:27b': 17.5,
   'qwen3.8:27b': 17.7,
+  'muse-glimmer:30b': 18.2,
   'qwen3.6:27b': 17.8,
   'granite4.2:30b': 17.7,
   'gemma4:26b': 18.7,
@@ -594,6 +598,7 @@ const LARGE_TIER_MODELS = new Set([
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
+  'muse-glimmer:30b',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',
