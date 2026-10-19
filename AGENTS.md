@@ -9034,3 +9034,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   installée. La correction, envoyée ensuite avec le même numéro, aurait été ignorée (tag déjà là), d'où la 0.34.38.
   **Règle : ne rien envoyer sur AUCUNE branche avant la fin des tests, et changer de numéro de version avant chaque
   nouvel envoi qui doit être publié.**
+  **Échec de la CI Windows sur la 0.34.38, causé par un test et non par Jaris** : « un rappel dans un mois attend
+  vraiment un mois » (test-reminders.mjs) fige l'horloge (`t.mock.timers`) ; sous Windows, un antivirus refuse
+  parfois un instant le renommage du fichier temporaire, et atomicFile réessaie après un `setTimeout`, figé lui
+  aussi : la liste ne se vidait jamais. L'attente fait maintenant avancer l'horloge simulée (`waitForEmptyList`),
+  et un nouveau test reproduit ce refus (EPERM une fois sur la liste vidée), vérifié en retirant la correction.
+  **Leçon générale : un test à horloge simulée qui attend une écriture réelle doit faire avancer cette horloge
+  pendant l'attente — tout `setTimeout` du code testé (un nouvel essai, un délai) y est figé, et le cas ne se
+  produit que sur la machine où l'écriture échoue un instant (ici Windows, jamais Linux).**

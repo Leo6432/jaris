@@ -21,10 +21,10 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 // Écritures d'un seul tenant et lecture prudente des rappels (étape 325) : le vrai module, sur le vrai disque.
 const atomicFile = loadTsModule('electron/services/atomicFile.ts', { fs: nodeRequire('fs'), 'fs/promises': nodeRequire('fs/promises'), path: nodeRequire('path') })
 
-function loadReminders(dataRoot) {
+function loadReminders(dataRoot, atomic = atomicFile) {
   const source = ts.transpileModule(read('electron/services/reminders.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   const exports = {}
-  const modules = { './dataLocation': { getDataRoot: () => dataRoot }, './atomicFile': atomicFile }
+  const modules = { './dataLocation': { getDataRoot: () => dataRoot }, './atomicFile': atomic }
   vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(exports, (name) => modules[name] ?? nodeRequire(name), { exports })
   return exports
 }
@@ -78,8 +78,17 @@ test('un rappel dans un mois attend vraiment un mois (étape 324 : setTimeout ra
   assert.deepEqual(fired, [], 'toujours rien à 29 jours')
   t.mock.timers.tick(DAY)
   assert.deepEqual(fired, ['réarmé payer le loyer'], 'sonne une seule fois, à 30 jours')
-  // L'effacement du fichier est asynchrone (vraie écriture disque, hors horloge simulée) : on lui laisse jusqu'à 5 s
-  // de VRAI temps (performance.now n'est pas simulé). Un nombre de tours fixe échouait sur une machine chargée.
+  assert.deepEqual(await waitForEmptyList(t, dir), [], 'puis disparaît du fichier')
+})
+
+/**
+ * Attend que le rappel sonné quitte reminders.json. L'écriture est asynchrone (vrai disque) : jusqu'à 5 s de VRAI temps
+ * (performance.now n'est pas simulé) — un nombre de tours fixe échouait sur une machine chargée. Et l'horloge simulée
+ * AVANCE pendant l'attente : sous Windows, un antivirus refuse parfois un instant le renommage du fichier temporaire,
+ * et atomicFile réessaie après un setTimeout — figé par l'horloge simulée, il n'arrivait jamais, et le test échouait
+ * sur la CI Windows (étape 330) sans que Jaris soit en cause.
+ */
+async function waitForEmptyList(t, dir) {
   let stored = null
   const deadline = performance.now() + 5000
   while (performance.now() < deadline) {
@@ -89,9 +98,38 @@ test('un rappel dans un mois attend vraiment un mois (étape 324 : setTimeout ra
     } catch {
       // fichier en cours de réécriture : on relit au tour suivant
     }
+    t.mock.timers.tick(50)
     await new Promise((resolve) => setImmediate(resolve))
   }
-  assert.deepEqual(stored, [], 'puis disparaît du fichier')
+  return stored
+}
+
+test('un renommage refusé un instant par Windows (antivirus) : le rappel sonné quitte quand même le fichier', async (t) => {
+  // Reproduit la CI Windows de l'étape 330 : le renommage de la liste vidée est refusé une fois (EPERM), comme quand un
+  // antivirus lit le fichier temporaire tout juste écrit. atomicFile réessaie après un court délai.
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-rappels-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  const realPromises = nodeRequire('fs/promises')
+  let refused = 0
+  const flakyPromises = {
+    ...realPromises,
+    rename: async (from, to) => {
+      if (refused === 0 && readFileSync(from, 'utf8').trim() === '[]') {
+        refused++
+        throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
+      }
+      return realPromises.rename(from, to)
+    }
+  }
+  const flakyAtomic = loadTsModule('electron/services/atomicFile.ts', { fs: nodeRequire('fs'), 'fs/promises': flakyPromises, path: nodeRequire('path') })
+  const reminders = loadReminders(dir, flakyAtomic)
+  const fired = []
+  await reminders.scheduleReminder('arroser les plantes', 1, (m) => fired.push(m))
+  t.mock.timers.tick(60_000)
+  assert.deepEqual(fired, ['arroser les plantes'])
+  assert.deepEqual(await waitForEmptyList(t, dir), [], 'le rappel quitte le fichier malgré le refus passager')
+  assert.equal(refused, 1, 'le refus passager a bien eu lieu (sinon ce test ne prouve rien)')
 })
 
 // Étape 328 : plusieurs rappels en retard au lancement sonnaient ensemble ; chacun relisait la liste complète et ne
