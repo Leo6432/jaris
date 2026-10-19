@@ -9027,3 +9027,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   par un useEffect qui suit l'affichage — le chargement peut arriver avant lui. Ranger l'état avec la source qu'il
   décrit, et le comparer à la source affichée.** Deux autres tests ont échoué une fois dans la suite complète puis
   passé seuls (signes de vie à 0,4 s près, attente d'une confirmation) : dépendants de la charge de la machine.
+  **Piège de publication, vécu ici : un envoi sur la branche de travail (`claude/gallant-archimedes-m03hq6`) PUBLIE
+  aussi la version** — le workflow « Installeur Windows » tourne sur ce push et crée la Release si le tag n'existe pas.
+  Le scénario de cette étape : le commit de la 0.34.37 a été envoyé sur la branche de travail pour sauvegarde, pendant
+  que la suite de tests tournait encore. La Release v0.34.37 est sortie sans la correction de l'écran Image, et Léo l'a
+  installée. La correction, envoyée ensuite avec le même numéro, aurait été ignorée (tag déjà là), d'où la 0.34.38.
+  **Règle : ne rien envoyer sur AUCUNE branche avant la fin des tests, et changer de numéro de version avant chaque
+  nouvel envoi qui doit être publié.**
