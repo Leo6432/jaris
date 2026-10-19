@@ -1421,9 +1421,68 @@ export function codeStrength(model: string): number | null {
 }
 const VISION_CHAIN_LENGTH = 1
 
+/**
+ * Étape 331, Léo (« revoit tous les modèles et doit mettre s'il est Q4 ou pas ») : version compressée réellement
+ * téléchargée par Jaris pour chaque modèle, lue le 19/10/2026 dans le registre lui-même (champ `file_type` de la
+ * configuration d'Ollama ; pour un import hf.co/, le tag, et pour G9v3-3B sans tag, le fichier par défaut
+ * reconnu à sa taille exacte : ai9stars_G9v3-3B-Q4_K_M.gguf). Q4_K_M partout sauf qwen3.5:0.8b et qwen3.5:2b
+ * (Q8_0, plus proches de l'original) et gpt-oss:20b (MXFP4, le format 4 bits dans lequel OpenAI l'a publié).
+ * Les scores d'Artificial Analysis sont mesurés sur la version d'origine, pas sur celle-ci. Affichage seulement.
+ */
+export const MODEL_QUANTIZATION: Record<string, string> = {
+  'nemotron-3.5-lightning:30b': 'Q4_K_M',
+  'qwen3.5:35b': 'Q4_K_M',
+  'qwen3.6:35b': 'Q4_K_M',
+  'qwen3.6:35b-a3b': 'Q4_K_M',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 'Q4_K_M',
+  'gemma4:31b': 'Q4_K_M',
+  'qwen2.5-coder:32b': 'Q4_K_M',
+  'gemma4:26b': 'Q4_K_M',
+  'glm-4.7-flash:q4_K_M': 'Q4_K_M',
+  'qwen3-coder:30b': 'Q4_K_M',
+  'north-mini-code-1.0': 'Q4_K_M',
+  'qwen3.8:27b': 'Q4_K_M',
+  'qwen3.6:27b': 'Q4_K_M',
+  'granite4.2:30b': 'Q4_K_M',
+  'qwen3.5:27b': 'Q4_K_M',
+  'mistral-small3.2:24b': 'Q4_K_M',
+  'devstral-small-2:24b': 'Q4_K_M',
+  'gpt-oss:20b': 'MXFP4',
+  'gemma4:e4b': 'Q4_K_M',
+  'ministral-3:14b': 'Q4_K_M',
+  'qwen2.5-coder:14b': 'Q4_K_M',
+  'qwen3-vl:8b': 'Q4_K_M',
+  'gemma4:12b': 'Q4_K_M',
+  'qwen3.5:9b': 'Q4_K_M',
+  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M': 'Q4_K_M',
+  'ministral-3:8b': 'Q4_K_M',
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 'Q4_K_M',
+  'granite4.2:8b': 'Q4_K_M',
+  'granite4.1:8b': 'Q4_K_M',
+  'qwen3-vl:4b': 'Q4_K_M',
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 'Q4_K_M',
+  'qwen2.5-coder:7b': 'Q4_K_M',
+  'qwen3.5:4b': 'Q4_K_M',
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 'Q4_K_M',
+  'ministral-3:3b': 'Q4_K_M',
+  'qwen3-vl:2b': 'Q4_K_M',
+  'qwen3.5:2b': 'Q8_0',
+  'phi4-mini': 'Q4_K_M',
+  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 'Q4_K_M',
+  'granite4.2:3b': 'Q4_K_M',
+  'granite4.1:3b': 'Q4_K_M',
+  'qwen3:1.7b': 'Q4_K_M',
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 'Q4_K_M',
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 'Q4_K_M',
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 'Q4_K_M',
+  'qwen3.5:0.8b': 'Q8_0',
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 'Q4_K_M'
+}
+
 /** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
-function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'omniscience' | 'terminalBench'> {
+function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'omniscience' | 'terminalBench' | 'quantization'> {
   return {
+    quantization: MODEL_QUANTIZATION[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null,
     omniscience: ARTIFICIAL_ANALYSIS_OMNISCIENCE[model] ?? null,

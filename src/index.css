@@ -998,6 +998,19 @@ body.body--splash {
   white-space: nowrap;
 }
 
+/* Étape 331 : version compressée (Q4_K_M…) sous le nom du modèle, discrète. Sur sa propre ligne : à côté du
+   nom, elle disparaissait derrière les points de suspension d'un nom long (nemotron-3.5-lightning:30b). */
+.options-menu__quant {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 0 5px;
+  border: 1px solid var(--hud-line);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
 .options-menu__badge {
   display: inline-block;
   padding: 1px 9px;

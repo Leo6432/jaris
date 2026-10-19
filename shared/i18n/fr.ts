@@ -564,6 +564,7 @@ export const fr = {
   "models.all.label": "Tous les modèles de Jaris",
   "models.candidates": "Tous les modèles candidats",
   "models.candidates.hint": "Tous les modèles que Jaris connaît, dans une seule liste. Pour chaque rôle, Jaris cherche dans toute la liste : le plus intelligent parmi les plus rapides pour Faible, le plus intelligent qui tient sur ta carte pour Moyen, le plus intelligent tout court pour Élevé et Code. La catégorie sert seulement à repérer les modèles rapides ou puissants. En conversation, un modèle qui invente souvent ses réponses perd des points ; pour Code, c'est le test de code Terminal-Bench 2.1 qui compte.",
+  "models.quant.title": "Version compressée téléchargée par Jaris : Q4 est la plus légère, Q8 est plus proche de l'original. Les scores d'Artificial Analysis sont mesurés sur la version d'origine.",
   "models.search.none": "Aucun modèle ne correspond à « {query} ».",
   "models.col.model": "Modèle",
   "models.col.category": "Catégorie",

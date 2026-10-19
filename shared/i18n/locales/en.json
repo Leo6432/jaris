@@ -554,6 +554,7 @@
   "models.all.label": "All Jaris models",
   "models.candidates": "All candidate models",
   "models.candidates.hint": "All the models Jaris knows, in a single list. For each role, Jaris searches the whole list: the smartest among the fastest for Low, the smartest that fits on your card for Medium, the smartest overall for High and Code. The category only helps spot fast or powerful models. In conversation, a model that often makes up answers loses points; for Code, the Terminal-Bench 2.1 coding test is what counts.",
+  "models.quant.title": "Compressed version downloaded by Jaris: Q4 is the lightest, Q8 is closer to the original. Artificial Analysis scores are measured on the original version.",
   "models.search.none": "No model matches “{query}”.",
   "models.col.model": "Model",
   "models.col.category": "Category",

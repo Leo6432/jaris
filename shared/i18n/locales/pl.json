@@ -574,6 +574,7 @@
   "models.all.label": "Wszystkie modele Jarisa",
   "models.candidates": "Wszystkie modele kandydujące",
   "models.candidates.hint": "Wszystkie modele, które zna Jaris, na jednej liście. Dla każdej roli Jaris szuka na całej liście: najinteligentniejszego spośród najszybszych dla Niskiego, najinteligentniejszego, który mieści się na twojej karcie, dla Średniego, po prostu najinteligentniejszego dla Wysokiego i Kodu. Kategoria służy tylko do odróżniania modeli szybkich od mocnych. W rozmowie model, który często zmyśla odpowiedzi, traci punkty; dla Code liczy się test programowania Terminal-Bench 2.1.",
+  "models.quant.title": "Skompresowana wersja pobierana przez Jaris: Q4 jest najlżejsza, Q8 jest bliższa oryginałowi. Wyniki Artificial Analysis są mierzone na wersji oryginalnej.",
   "models.search.none": "Żaden model nie pasuje do „{query}”.",
   "models.col.model": "Model",
   "models.col.category": "Kategoria",

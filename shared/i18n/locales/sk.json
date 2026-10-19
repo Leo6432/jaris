@@ -564,6 +564,7 @@
   "models.all.label": "Všetky modely Jarisa",
   "models.candidates": "Všetky kandidátske modely",
   "models.candidates.hint": "Všetky modely, ktoré Jaris pozná, v jednom zozname. Pre každú rolu Jaris hľadá v celom zozname: pre Nízku najinteligentnejší spomedzi najrýchlejších, pre Strednú najinteligentnejší, ktorý sa zmestí na tvoju kartu, pre Vysokú a Kód jednoducho najinteligentnejší. Kategória slúži len na rozlíšenie rýchlych a výkonných modelov. V konverzácii model, ktorý si často vymýšľa odpovede, stráca body; pri Code rozhoduje programovací test Terminal-Bench 2.1.",
+  "models.quant.title": "Komprimovaná verzia, ktorú Jaris sťahuje: Q4 je najľahšia, Q8 je bližšie k originálu. Skóre Artificial Analysis sa merajú na pôvodnej verzii.",
   "models.search.none": "Výrazu „{query}“ nezodpovedá žiadny model.",
   "models.col.model": "Model",
   "models.col.category": "Kategória",

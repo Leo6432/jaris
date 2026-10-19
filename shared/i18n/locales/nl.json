@@ -554,6 +554,7 @@
   "models.all.label": "Alle modellen van Jaris",
   "models.candidates": "Alle kandidaatmodellen",
   "models.candidates.hint": "Alle modellen die Jaris kent, in één lijst. Voor elke rol zoekt Jaris in de hele lijst: het slimste onder de snelste voor Laag, het slimste dat op je kaart past voor Gemiddeld, het allerslimste voor Hoog en Code. De categorie dient alleen om snelle of krachtige modellen te herkennen. In een gesprek verliest een model dat vaak antwoorden verzint punten; voor Code telt de programmeertest Terminal-Bench 2.1.",
+  "models.quant.title": "Gecomprimeerde versie die Jaris downloadt: Q4 is de lichtste, Q8 ligt dichter bij het origineel. De scores van Artificial Analysis zijn gemeten op de originele versie.",
   "models.search.none": "Geen model komt overeen met “{query}”.",
   "models.col.model": "Model",
   "models.col.category": "Categorie",

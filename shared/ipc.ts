@@ -482,6 +482,8 @@ export interface ModelOverviewEntry {
   omniscience: number | null
   /** Étape 329 : Terminal-Bench 2.1 (% des 89 tâches de code réussies), la mesure du rôle Code. `null` sans mesure. */
   terminalBench: number | null
+  /** Étape 331 : version compressée téléchargée (« Q4_K_M », « Q8_0 », « MXFP4 »), voir MODEL_QUANTIZATION. */
+  quantization?: string | null
   /**
    * Étape 329, Léo (« ça utilise combien de pourcentage ») : le calcul de la note de ce modèle pour le rôle où il
    * est affiché, facteur par facteur. Seulement dans « Modèles utilisés sur ta machine » (une note n'a de sens que

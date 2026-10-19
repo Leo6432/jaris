@@ -564,6 +564,7 @@
   "models.all.label": "Toate modelele lui Jaris",
   "models.candidates": "Toate modelele candidate",
   "models.candidates.hint": "Toate modelele pe care le cunoaște Jaris, într-o singură listă. Pentru fiecare rol, Jaris caută în toată lista: cel mai inteligent dintre cele mai rapide pentru Scăzut, cel mai inteligent care încape pe placa ta pentru Mediu, pur și simplu cel mai inteligent pentru Ridicat și Cod. Categoria servește doar la reperarea modelelor rapide sau puternice. În conversație, un model care inventează des răspunsuri pierde puncte; pentru Code contează testul de programare Terminal-Bench 2.1.",
+  "models.quant.title": "Versiune comprimată descărcată de Jaris: Q4 este cea mai ușoară, Q8 este mai aproape de original. Scorurile Artificial Analysis sunt măsurate pe versiunea originală.",
   "models.search.none": "Niciun model nu corespunde cu „{query}”.",
   "models.col.model": "Model",
   "models.col.category": "Categorie",

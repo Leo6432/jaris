@@ -554,6 +554,7 @@
   "models.all.label": "Jaris összes modellje",
   "models.candidates": "Az összes jelölt modell",
   "models.candidates.hint": "Az összes modell, amelyet Jaris ismer, egyetlen listában. Jaris minden szerephez a teljes listában keres: az Alacsonyhoz a leggyorsabbak közül a legintelligensebbet, a Közepeshez a kártyádra férő legintelligensebbet, a Magashoz és a Kódhoz egyszerűen a legintelligensebbet. A kategória csak a gyors vagy erős modellek megkülönböztetésére szolgál. Beszélgetésben az a modell, amely gyakran kitalál válaszokat, pontokat veszít; a Code szerepnél a Terminal-Bench 2.1 programozási teszt számít.",
+  "models.quant.title": "A Jaris által letöltött tömörített változat: a Q4 a legkönnyebb, a Q8 közelebb áll az eredetihez. Az Artificial Analysis pontszámait az eredeti változaton mérik.",
   "models.search.none": "Egyetlen modell sem egyezik ezzel: „{query}”.",
   "models.col.model": "Modell",
   "models.col.category": "Kategória",

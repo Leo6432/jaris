@@ -554,6 +554,7 @@
   "models.all.label": "Kõik Jarise mudelid",
   "models.candidates": "Kõik kandidaatmudelid",
   "models.candidates.hint": "Kõik mudelid, mida Jaris tunneb, ühes nimekirjas. Iga rolli jaoks otsib Jaris kogu nimekirjast: Madala jaoks kiireimate seast intelligentseima, Keskmise jaoks intelligentseima, mis mahub su kaardile, Kõrge ja Koodi jaoks lihtsalt intelligentseima. Kategooria aitab ainult kiireid või võimsaid mudeleid ära tunda. Vestluses kaotab punkte mudel, mis mõtleb sageli vastuseid välja; Code puhul loeb programmeerimistest Terminal-Bench 2.1.",
+  "models.quant.title": "Jarise allalaaditud tihendatud versioon: Q4 on kõige kergem, Q8 on originaalile lähemal. Artificial Analysise tulemused on mõõdetud originaalversioonil.",
   "models.search.none": "Päringule „{query}“ ei vasta ükski mudel.",
   "models.col.model": "Mudel",
   "models.col.category": "Kategooria",

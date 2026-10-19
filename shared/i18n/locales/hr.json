@@ -564,6 +564,7 @@
   "models.all.label": "Svi Jarisovi modeli",
   "models.candidates": "Svi kandidatski modeli",
   "models.candidates.hint": "Svi modeli koje Jaris poznaje, na jednom popisu. Za svaku ulogu Jaris pretražuje cijeli popis: za Nisku najinteligentniji među najbržima, za Srednju najinteligentniji koji stane na tvoju karticu, za Visoku i Kod jednostavno najinteligentniji. Kategorija služi samo za razlikovanje brzih i snažnih modela. U razgovoru model koji često izmišlja odgovore gubi bodove; za Code se računa programerski test Terminal-Bench 2.1.",
+  "models.quant.title": "Komprimirana verzija koju Jaris preuzima: Q4 je najlakša, Q8 je bliža izvorniku. Rezultati Artificial Analysisa mjere se na izvornoj verziji.",
   "models.search.none": "Nijedan model ne odgovara upitu „{query}”.",
   "models.col.model": "Model",
   "models.col.category": "Kategorija",

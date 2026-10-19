@@ -554,6 +554,7 @@
   "models.all.label": "Alla Jaris modeller",
   "models.candidates": "Alla kandidatmodeller",
   "models.candidates.hint": "Alla modeller som Jaris känner till, i en enda lista. För varje roll söker Jaris i hela listan: den smartaste bland de snabbaste för Låg, den smartaste som får plats på ditt kort för Medel, den allra smartaste för Hög och Kod. Kategorin hjälper bara till att hitta snabba eller kraftfulla modeller. I samtal förlorar en modell som ofta hittar på svar poäng; för Code är det programmeringstestet Terminal-Bench 2.1 som räknas.",
+  "models.quant.title": "Komprimerad version som Jaris laddar ned: Q4 är lättast, Q8 ligger närmare originalet. Artificial Analysis poäng mäts på originalversionen.",
   "models.search.none": "Ingen modell matchar ”{query}”.",
   "models.col.model": "Modell",
   "models.col.category": "Kategori",

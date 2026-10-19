@@ -564,6 +564,7 @@
   "models.all.label": "Visi Jaris modeļi",
   "models.candidates": "Visi kandidātmodeļi",
   "models.candidates.hint": "Visi modeļi, ko Jaris zina, vienā sarakstā. Katrai lomai Jaris meklē visā sarakstā: Zemam — gudrāko starp ātrākajiem, Vidējam — gudrāko, kas ietilpst tavā kartē, Augstam un Kodam — vienkārši gudrāko. Kategorija kalpo tikai ātro vai jaudīgo modeļu atpazīšanai. Sarunā modelis, kas bieži izdomā atbildes, zaudē punktus; Code lomā izšķir programmēšanas tests Terminal-Bench 2.1.",
+  "models.quant.title": "Jaris lejupielādētā saspiestā versija: Q4 ir vieglākā, Q8 ir tuvāk oriģinālam. Artificial Analysis rezultāti ir mērīti ar oriģinālo versiju.",
   "models.search.none": "Neviens modelis neatbilst „{query}”.",
   "models.col.model": "Modelis",
   "models.col.category": "Kategorija",

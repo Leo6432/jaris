@@ -135,3 +135,19 @@ test('« Tous les modèles » : Omniscience et Terminal-Bench publiés pour chaq
   assert.equal(byModel.get('qwen3.5:27b').terminalBench, null)
   assert.equal(byModel.get('qwen3.5:35b').terminalBench, null)
 })
+
+test('étape 331 : chaque modèle de Jaris a sa version compressée, et « Tous les modèles » l\'affiche', async () => {
+  const m = setup({ vramMib: 8 * 1024 })
+  const overview = await m.getModelOverview()
+  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry]))
+  // Un modèle ajouté plus tard sans sa version ferait échouer ce test, au lieu d'afficher un badge vide.
+  for (const model of m.getAllCandidateModelIds()) {
+    assert.match(m.MODEL_QUANTIZATION[model] ?? '', /^(Q4_K_M|Q8_0|MXFP4)$/, `${model} : version manquante`)
+    assert.equal(byModel.get(model)?.quantization, m.MODEL_QUANTIZATION[model], `${model} : version absente de l'écran`)
+  }
+  // Relevé du registre le 19/10/2026 : les seules exceptions au Q4_K_M.
+  assert.equal(m.MODEL_QUANTIZATION['qwen3.5:0.8b'], 'Q8_0')
+  assert.equal(m.MODEL_QUANTIZATION['qwen3.5:2b'], 'Q8_0')
+  assert.equal(m.MODEL_QUANTIZATION['gpt-oss:20b'], 'MXFP4')
+  assert.equal(m.MODEL_QUANTIZATION['hf.co/bartowski/ai9stars_G9v3-3B-GGUF'], 'Q4_K_M')
+})

@@ -564,6 +564,7 @@
   "models.all.label": "Visi Jaris modeliai",
   "models.candidates": "Visi modeliai kandidatai",
   "models.candidates.hint": "Visi modeliai, kuriuos žino Jaris, viename sąraše. Kiekvienam vaidmeniui Jaris ieško visame sąraše: protingiausio tarp greičiausių – Žemam, protingiausio, kuris telpa tavo vaizdo plokštėje – Vidutiniam, apskritai protingiausio – Aukštam ir Kodui. Kategorija padeda tik atpažinti greitus ar galingus modelius. Pokalbyje modelis, kuris dažnai išsigalvoja atsakymus, praranda taškų; Code vaidmeniui lemia programavimo testas Terminal-Bench 2.1.",
+  "models.quant.title": "Jaris atsisiųsta suspausta versija: Q4 yra lengviausia, Q8 artimesnė originalui. Artificial Analysis rezultatai išmatuoti su originalia versija.",
   "models.search.none": "Joks modelis neatitinka „{query}“.",
   "models.col.model": "Modelis",
   "models.col.category": "Kategorija",

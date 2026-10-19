@@ -445,7 +445,8 @@ const LONG_OVERVIEW = [
   readsImages: /vl|gemma|ministral|GLM/.test(model), usedIn: model === 'granite4.2:8b' ? ['Faible', 'Moyen'] : [],
   toolCalling: `${50 + i}/78`, demands: /vl|coder|GLM/.test(model) ? null : `${20 + i}/48`, intelligence: null,
   artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null,
-  omniscience: i % 7 === 0 ? null : -77.5 + i * 2.3, terminalBench: i % 6 === 0 ? null : 10 + i * 2.9
+  omniscience: i % 7 === 0 ? null : -77.5 + i * 2.3, terminalBench: i % 6 === 0 ? null : 10 + i * 2.9,
+  quantization: i % 9 === 4 ? 'Q8_0' : 'Q4_K_M'
 }))
 
 async function measureModelsTable(page, width, height) {
@@ -470,6 +471,25 @@ test('« Tous les modèles » tient en entier sans défiler de côté sur un éc
       assert.ok(m.card.width > 880, `${width} px : la page ne doit plus être bloquée à 880 px (carte de ${m.card.width} px)`)
       assert.ok(m.card.scrollWidth <= m.card.clientWidth + 1, `${width} px : le tableau défile encore de côté (${m.card.scrollWidth} > ${m.card.clientWidth})`)
       await page.click('.options-page--models .options-page__close')
+    }
+  })
+})
+
+test('étape 331 : la version compressée s’affiche en entier sous chaque nom, même le plus long', options, async () => {
+  await withOptions(async (page) => {
+    await measureModelsTable(page, 1000, 760)
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.options-page--models tbody tr')].map((tr) => {
+      const cell = tr.querySelector('.options-menu__model-name')
+      const badge = cell.querySelector('.options-menu__quant')
+      const c = cell.getBoundingClientRect()
+      const b = badge?.getBoundingClientRect()
+      return { title: cell.title, badge: badge?.textContent, inside: !!b && b.right <= c.right + 0.5 && b.width > 20, border: badge && getComputedStyle(badge).borderTopStyle }
+    }))
+    assert.ok(rows.length > 20, `toutes les lignes attendues : ${rows.length}`)
+    for (const row of rows) {
+      assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0)$/, `${row.title} : version absente`)
+      assert.ok(row.inside, `${row.title} : version coupée ou cachée`)
+      assert.equal(row.border, 'solid', `${row.title} : badge non habillé par le CSS`)
     }
   })
 })

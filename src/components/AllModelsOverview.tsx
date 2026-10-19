@@ -309,7 +309,13 @@ export default function AllModelsOverview(): JSX.Element {
                             {sortedEntries.map((entry) => (
                               <tr key={entry.model}>
                                 <td className="options-menu__model-name" title={entry.model}>
-                                  {formatModelName(entry.model)}
+                                  {formatModelName(entry.model, { quant: false })}
+                                  {/* Étape 331 : la version compressée réellement téléchargée, pour tous les modèles. */}
+                                  {entry.quantization && (
+                                    <span className="options-menu__quant" title={t('models.quant.title')}>
+                                      {entry.quantization}
+                                    </span>
+                                  )}
                                 </td>
                                 <td>
                                   {entry.category ? t(CATEGORY_LABELS[entry.category]) : '—'}

@@ -9081,3 +9081,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Leçon générale : un test à horloge simulée qui attend une écriture réelle doit faire avancer cette horloge
   pendant l'attente — tout `setTimeout` du code testé (un nouvel essai, un délai) y est figé, et le cas ne se
   produit que sur la machine où l'écriture échoue un instant (ici Windows, jamais Linux).**
+
+- **Étape 331, Léo : « revoit tous les modèles et doit mettre s'il est Q4 ou pas ».** Seul MiniCPM5-2B affichait
+  « (Q4_K_M) », parce que son nom hf.co/ le contient ; tous les autres étaient aussi compressés, sans le dire. Relevé
+  pour de vrai dans le registre de chaque modèle (`file_type` de la configuration d'Ollama ; pour un import hf.co/, le
+  tag, et pour G9v3-3B sans tag, le fichier par défaut reconnu à sa taille exacte) : Q4_K_M partout, sauf
+  qwen3.5:0.8b et qwen3.5:2b (Q8_0) et gpt-oss:20b (MXFP4, son format de publication). Table `MODEL_QUANTIZATION`
+  (hardwareScan.ts), affichée en petit badge SOUS le nom dans « Tous les modèles » — à côté du nom, elle disparaissait
+  derrière les points de suspension d'un nom long. Infobulle (24 langues) : les scores d'Artificial Analysis sont
+  mesurés sur la version d'origine, pas sur celle-ci. Affichage seulement, aucun choix ne change. Rappel donné à
+  Léo : pour un petit modèle Q4, ces scores sont un peu optimistes, mais le classement reste comparable (tous sont
+  mesurés en original et tournent compressés) ; les tests d'appel d'outils, eux, sont faits sur la vraie version Q4.
+  **Coût** : Léo a interrompu un essai de vérification par plusieurs agents (« arrête de me dépenser des tokens en
+  mettant plein d'agents ») — pour une question ou une recherche simple, répondre directement, sans agents.
+  Régression : `scripts/test-model-note.mjs` (chaque modèle candidat a sa version — un modèle ajouté sans elle fait
+  échouer le test) et `scripts/test-options-reorganization-ui.mjs` (badge entier sous les 26 noms, y compris le plus
+  long, habillé par le CSS ; vérifié en remettant le badge à côté du nom : le test échoue).

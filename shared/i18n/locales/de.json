@@ -554,6 +554,7 @@
   "models.all.label": "Alle Modelle von Jaris",
   "models.candidates": "Alle Kandidatenmodelle",
   "models.candidates.hint": "Alle Modelle, die Jaris kennt, in einer einzigen Liste. Für jede Rolle sucht Jaris in der ganzen Liste: das intelligenteste unter den schnellsten für Niedrig, das intelligenteste, das auf deine Karte passt, für Mittel, das intelligenteste überhaupt für Hoch und Code. Die Kategorie hilft nur, schnelle oder leistungsstarke Modelle zu erkennen. Im Gespräch verliert ein Modell, das oft Antworten erfindet, Punkte; für Code zählt der Programmiertest Terminal-Bench 2.1.",
+  "models.quant.title": "Von Jaris heruntergeladene komprimierte Version: Q4 ist die leichteste, Q8 ist näher am Original. Die Werte von Artificial Analysis werden mit der Originalversion gemessen.",
   "models.search.none": "Kein Modell passt zu „{query}“.",
   "models.col.model": "Modell",
   "models.col.category": "Kategorie",

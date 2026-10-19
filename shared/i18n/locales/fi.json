@@ -554,6 +554,7 @@
   "models.all.label": "Kaikki Jarisin mallit",
   "models.candidates": "Kaikki ehdokasmallit",
   "models.candidates.hint": "Kaikki Jarisin tuntemat mallit yhdessä luettelossa. Jokaiseen rooliin Jaris etsii koko luettelosta: nopeimpien joukosta älykkäimmän Matalalle, älykkäimmän korttiisi mahtuvan Keskitasolle ja kaikkein älykkäimmän Korkealle ja Koodille. Luokka auttaa vain tunnistamaan nopeat tai tehokkaat mallit. Keskustelussa malli, joka keksii usein vastauksia, menettää pisteitä; Code-roolissa ratkaisee ohjelmointitesti Terminal-Bench 2.1.",
+  "models.quant.title": "Jarisin lataama pakattu versio: Q4 on kevyin, Q8 on lähempänä alkuperäistä. Artificial Analysisin pisteet mitataan alkuperäisellä versiolla.",
   "models.search.none": "Mikään malli ei vastaa hakua ”{query}”.",
   "models.col.model": "Malli",
   "models.col.category": "Luokka",
