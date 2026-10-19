@@ -252,7 +252,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                 <tr className="capacity-scan__tier-image capacity-scan__tier-video">
                   <td className="capacity-scan__tier-slot">{t('app.mode.video')}</td>
                   <td className="capacity-scan__tier-model">
-                    {picks.video.model ? t('picks.video.model', { model: picks.video.model, quality: picks.video.qualityLabel ?? '' }) : t('picks.noModel')}
+                    {picks.video.model ? picks.video.model : t('picks.noModel')}
                   </td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>

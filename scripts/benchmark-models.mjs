@@ -336,7 +336,7 @@ const RAM_OFFLOAD_MODELS = new Set([
 ])
 
 const MODELS = [
-  'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
+  'qwen3.5:2b', // par défaut en Q8_0 (2,7 Go) : plus précis mais plus lourd que la variante ci-dessous
   // Contrairement à qwen3.5:4b/9b (déjà en Q4_K_M par défaut, donc un tag "-q4_K_M" y serait redondant),
   // qwen3.5:2b par défaut est en Q8_0 : ce tag explicite est un fichier réellement différent (1,95 Go,
   // plus compressé, potentiellement plus rapide), donc ça vaut le coup de le comparer séparément.
@@ -505,7 +505,7 @@ const CODE_CANDIDATES = [
  * dépôt Hugging Face (taille du fichier Q4_K_M, la quantification par défaut) avant d'écrire ce tableau.
  */
 const MODEL_SIZE_HINTS = {
-  'qwen3.5:2b': 2.74,
+  'qwen3.5:2b': 2.7,
   'qwen3.5:2b-q4_K_M': 1.95,
   'qwen3.5:4b': 3.3,
   'qwen3.5:9b': 6.6,

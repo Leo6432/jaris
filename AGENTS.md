@@ -9076,3 +9076,4 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   le registre, jamais de mémoire ; et après tout changement de taille, comparer les choix sur une grille de
   machines, les tests ne couvrent que quelques cas.** Régression : `test-hardwarescan-small-machines.mjs`, chaque
   garde vérifiée en la retirant.
+  Suite (v0.34.41) : qwen3.5:2b (script de test seulement) remis à 2,7 Go réels ; image, vidéo et MAI-UI revérifiés à l'octet près, tous justes. Et « · qualité Moyen » retiré de la ligne Vidéo de « Ce que ta machine fait tourner » (Léo) — la qualité reste choisie dans le mode Vidéo.

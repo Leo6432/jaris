@@ -804,7 +804,7 @@ async function videoRow(page, pick, ramGb) {
 test('Modèles : une ligne « Vidéo » avec le modèle vidéo et sa meilleure qualité, et la RAM arrondie', options, async () => {
   await withOptions(async (page) => {
     const row = await videoRow(page, null, 63.161624908447266)
-    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B · qualité Moyen', '—', '—', '—', ''])
+    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B', '—', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.")
     assert.ok(row.afterImage, 'la ligne Vidéo suit la ligne Image')
     assert.match(row.hardware, /63 Go de RAM/)

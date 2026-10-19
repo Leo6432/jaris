@@ -36,7 +36,7 @@ const MODELS = {
   vision: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
   code: 'qwen2.5-coder:14b'
 }
-const SHOWN = ['K2-Horizon-3.7B (Q4_K_M)', 'nemotron-3.5-lightning:30b', 'qwen3.6:35b-a3b', 'GLM-4.6V-Flash (Q4_K_M)', 'qwen2.5-coder:14b', 'FLUX.2 klein 4B', 'FastWan 2.2 TI2V 5B · qualité Moyen', 'MAI-UI 8B']
+const SHOWN = ['K2-Horizon-3.7B (Q4_K_M)', 'nemotron-3.5-lightning:30b', 'qwen3.6:35b-a3b', 'GLM-4.6V-Flash (Q4_K_M)', 'qwen2.5-coder:14b', 'FLUX.2 klein 4B', 'FastWan 2.2 TI2V 5B', 'MAI-UI 8B']
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
