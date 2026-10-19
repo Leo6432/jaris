@@ -9026,3 +9026,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-model-note.mjs` (nouveau), `test-my-model-picks-ui.mjs` et `test-options-reorganization-ui.mjs`.
   Chaque garde a été vérifiée en remettant son défaut : 9 mutations, toutes attrapées. **Non vérifié en usage réel**
   sur la machine de Léo.
+
+- **Étape 330, Léo (v0.34.36, capture des 13 modèles sans Terminal-Bench) : « essaye de trouver les scores Terminal
+  Bench 2.0 », puis « je veux seulement que tous les modèles aient le même score : si K2 Horizon 32B a Terminal 2.1,
+  mets-le ».** Recherche faite sur les données BRUTES (objet `currentModel` de chaque fiche Artificial Analysis, fiches
+  officielles Hugging Face des créateurs, classement tbench.ai), jamais sur un résumé :
+  - **Artificial Analysis n'a jamais mesuré Terminal-Bench 2.0.** Sa page de méthode le dit : il est passé de
+    « Terminal-Bench Hard » (sous-ensemble de 44 tâches DIFFICILES de l'ancien terminal-bench-core, champ
+    `terminalbenchHard`) directement à la 2.1 (les 89 tâches de la 2.0, corrigées), puis à la 4.0 (66 tâches, champ
+    `terminalBench40`) dans l'Intelligence Index v4.3. Le classement officiel tbench.ai n'a pas pu être lu pour la
+    2.0 : sans navigateur, le site ne renvoie que celui de la 4.0, quelle que soit l'adresse (aucun des 13 dedans).
+  - **Trouvé en 2.0, annoncé par le créateur, NON ajouté** (autre version du test) : qwen3.5:27b 41,6 %, qwen3.5:35b
+    40,5 % (fiches Qwen). Artificial Analysis a aussi mesuré qwen3.5:35b en 2.1 (40,8 %), mais seulement en mode
+    « sans réflexion » : la règle « variante raisonnement » l'écarte.
+  - **Ajouté** : K2-Horizon-32B, 62,6 % en Terminal-Bench 2.1, seule exception à « mesuré par Artificial Analysis »
+    (il n'a pas de fiche chez eux). Chiffre de la fiche d'IFM, avec le même outil (terminus-2, 3 essais) ; les modèles
+    de référence de cette fiche reprennent exactement les mesures d'Artificial Analysis (Qwen3.8 27B 79,8, Granite 4.2
+    30B 26,6). Un chiffre annoncé peut quand même s'écarter de leur mesure (K2 Horizon 7B : 39,1 annoncé, 44,2 mesuré).
+  - **Rien de publié en 2.1** pour les 12 autres : qwen3:1.7b, qwen3-vl:2b/4b/8b, GLM-4.6V-Flash, qwen2.5-coder:7b/
+    14b/32b, glm-4.7-flash (Z.ai donne les réglages du test, pas le score), qwen3-coder:30b, qwen3.5:27b/35b.
+  - **Effet calculé avant de livrer** (16 machines types, de 0 à 48 Go de carte) : aucun modèle choisi ne change ;
+    qwen3.8:27b (79,8 %) reste le meilleur en code partout où il tient.
+  **Leçon générale : avant d'ajouter un score « du même test », vérifier la VERSION exacte du test chez chaque source**
+  — « Terminal Bench 2 » chez Qwen, « Terminal-Bench Hard », 2.1 et 4.0 chez Artificial Analysis désignent quatre
+  ensembles de tâches différents, et les champs d'une même fiche les rangent côte à côte. **Piège de manipulation** :
+  plusieurs fiches lues d'affilée font couper la connexion par Artificial Analysis (« Connection reset ») ; espacer les
+  requêtes (quelques secondes) et relancer seulement celles qui ont échoué, plutôt que conclure qu'une fiche n'existe
+  pas — seul un vrai 404 le prouve.
+  Régression : `node --test scripts/test-model-note.mjs` (K2-Horizon-32B à 62,6 ; qwen3.5:27b et 35b restent sans
+  score — vérifié en retirant la ligne : le test échoue).

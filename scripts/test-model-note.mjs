@@ -129,4 +129,9 @@ test('« Tous les modèles » : Omniscience et Terminal-Bench publiés pour chaq
   assert.equal(byModel.get('ministral-3:3b').terminalBench, 0, 'un 0 % publié reste 0, pas null')
   assert.equal(byModel.get('qwen2.5-coder:14b').omniscience, null)
   assert.equal(byModel.get('qwen2.5-coder:14b').terminalBench, null)
+  // Étape 330 : K2-Horizon-32B en Terminal-Bench 2.1 (fiche d'IFM) ; jamais un chiffre de Terminal-Bench 2.0, même
+  // publié par le créateur (Qwen : 41,6 % pour qwen3.5:27b, 40,5 % pour qwen3.5:35b) — une autre version du test.
+  assert.equal(byModel.get('hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M').terminalBench, 62.6)
+  assert.equal(byModel.get('qwen3.5:27b').terminalBench, null)
+  assert.equal(byModel.get('qwen3.5:35b').terminalBench, null)
 })

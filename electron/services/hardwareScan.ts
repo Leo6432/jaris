@@ -1096,6 +1096,13 @@ const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
  * de Jaris (qwen3.5 0.8b à 4b, gemma4:12b, K2 Horizon…) : une moyenne qui mélange « deux mesures » et « une seule »
  * ne serait pas comparable d'un modèle à l'autre. Terminal-Bench 2.1 seul, même protocole pour tous : écrire du
  * code, l'exécuter, corriger, dans un vrai terminal — ce que fait l'agent de dépôt GitHub de Jaris.
+ *
+ * Étape 330 (Léo : « je veux seulement que tous les modèles aient le même score ») : JAMAIS de Terminal-Bench 2.0,
+ * même quand le créateur le publie (Qwen annonce 41,6 % pour qwen3.5:27b et 40,5 % pour qwen3.5:35b) — c'est une
+ * autre version du test. Seule exception à « mesuré par Artificial Analysis » : K2-Horizon-32B, qui n'a pas de
+ * fiche chez eux ; son 62,6 % vient de la fiche officielle d'IFM (huggingface.co/IFM/K2-Horizon-32B, lue le
+ * 19/10/2026), en Terminal-Bench 2.1 avec le même outil qu'Artificial Analysis (terminus-2, 3 essais). Un chiffre
+ * annoncé par le créateur peut s'écarter de leur mesure (K2 Horizon 7B : 39,1 % annoncé, 44,2 % mesuré).
  */
 const ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21: Record<string, number> = {
   'qwen3.5:0.8b': 0.0, // Qwen3.5 0.8B (Reasoning)
@@ -1131,6 +1138,7 @@ const ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21: Record<string, number> = {
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.1, // K2 Horizon 0.9B
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 28.1, // K2 Horizon 3.7B
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 44.2, // K2 Horizon 7B
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 62.6, // K2 Horizon 32B — annoncé par IFM, voir ci-dessus
   'phi4-mini': 0.4 // Phi-4 Mini Instruct
 }
 
