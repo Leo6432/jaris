@@ -322,6 +322,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'devstral-small-2:24b',
   // devstral-2:123b (étape 225) et qwen3-coder-next (étape 227) retirés : moins bons qu'un modèle de 8 Go.
   'qwen3.5:35b',
+  'ornith-1.5:35b',
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
@@ -344,6 +345,7 @@ const MODELS = [
   'qwen3.5:2b-q4_K_M',
   'qwen3.5:4b',
   'qwen3.5:9b',
+  'ornith-1.5:9b',
   // Étape 316 : de nouveau candidat de Jaris (Rapide, Médium, Code), voir FLASH_CANDIDATES dans hardwareScan.ts.
   'phi4-mini',
   'gemma4:e4b',
@@ -406,6 +408,7 @@ const MODELS = [
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
   // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
   'qwen3.5:35b',
+  'ornith-1.5:35b',
   // Variante dense de qwen3.6 (distincte de qwen3.6:35b-a3b, MoE, plus bas dans les candidats Code) — voir
   // LARGE_CANDIDATES dans hardwareScan.ts pour le détail de la vérification.
   'qwen3.6:35b',
@@ -457,6 +460,8 @@ const VISION_CANDIDATES = [
   { model: 'gemma4:26b', vramGb: 18.7 },
   { model: 'qwen3.8:27b', vramGb: 17.7 },
   { model: 'muse-glimmer:30b', vramGb: 18.2 },
+  { model: 'ornith-1.5:35b', vramGb: 22.6 },
+  { model: 'ornith-1.5:9b', vramGb: 6.6 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
@@ -512,6 +517,7 @@ const MODEL_SIZE_HINTS = {
   'qwen3.5:2b-q4_K_M': 1.95,
   'qwen3.5:4b': 3.3,
   'qwen3.5:9b': 6.6,
+  'ornith-1.5:9b': 6.6,
   'phi4-mini': 2.5,
   'gemma4:e4b': 6.6,
   'gemma4:12b': 8.0,
@@ -539,6 +545,7 @@ const MODEL_SIZE_HINTS = {
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 5.6,
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 21.1,
   'qwen3.5:35b': 22.1,
+  'ornith-1.5:35b': 22.6,
   'qwen3.6:35b': 22.6,
   'qwen3.5:27b': 17.5,
   'qwen3.8:27b': 17.7,
@@ -580,6 +587,7 @@ const MEDIUM_TIER_MODELS = new Set([
   'gemma4:12b',
   'ministral-3:8b',
   'qwen3.5:9b',
+  'ornith-1.5:9b',
   'granite4.2:8b',
   'granite4.1:8b',
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M',
@@ -595,6 +603,7 @@ const MEDIUM_TIER_MODELS = new Set([
 ])
 const LARGE_TIER_MODELS = new Set([
   'qwen3.5:35b',
+  'ornith-1.5:35b',
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
@@ -612,6 +621,7 @@ const LARGE_TIER_MODELS = new Set([
   // FLASH/MEDIUM/LARGE_TIER_MODELS reflètent fidèlement hardwareScan.ts, même si en pratique ça les exclut
   // du nettoyage anticipé.
   'qwen3.5:9b',
+  'ornith-1.5:9b',
   'qwen3.5:4b',
   'qwen3.5:2b',
   'qwen3.5:0.8b'

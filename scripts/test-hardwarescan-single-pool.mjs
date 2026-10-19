@@ -197,7 +197,7 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
 // Étape 333 : modèles ajoutés sans score, en attente du test de Léo. Retirer un modèle de cette liste quand ses
 // scores sont recopiés dans verified-tool-scores.md.
-const AWAITING = ['muse-glimmer:30b']
+const AWAITING = ['ornith-1.5:9b', 'muse-glimmer:30b', 'ornith-1.5:35b']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -214,7 +214,7 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     codeOnly.delete(model)
   }
   // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté (phi4-mini,
-  // redevenu candidat à l'étape 316, mesuré à l'étape 317), sauf Muse Glimmer, ajouté à l'étape 333 pour être testé.
+  // redevenu candidat à l'étape 316, mesuré à l'étape 317), sauf Muse Glimmer et Ornith 1.5, ajoutés à l'étape 333 pour être testés.
   assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], AWAITING)
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')
@@ -230,8 +230,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  // 30, plus phi4-mini (étape 316) et Muse Glimmer (étape 333).
-  assert.equal(conversationModels.size, 32)
+  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333).
+  assert.equal(conversationModels.size, 34)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).

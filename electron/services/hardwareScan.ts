@@ -164,6 +164,11 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'ministral-3:14b', vramGb: 9.1 },
   { model: 'gemma4:12b', vramGb: 8.0 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
+  // Ornith 1.5 9B (ornith-ai, MIT, étape 333) : Qwen3.5 9B réentraîné par son créateur, tag OFFICIEL
+  // ornith-1.5:9b sur Ollama (6,6 Go réels : modèle 5,63 + projecteur 0,92 ; Q4_K_M). Essayé pour de vrai
+  // avec Ollama 0.40.5 : tools + thinking + vision annoncés, set_reminder appelé avec le bon délai. Aucune fiche
+  // Artificial Analysis : pas d'intelligence publiée (les chiffres du créateur ne recoupent pas les leurs).
+  { model: 'ornith-1.5:9b', vramGb: 6.6 },
   { model: 'ministral-3:8b', vramGb: 6.0 },
   // K2 Horizon 7B, 3.7B et 0.9B : voir la note de l'étape 312 dans FLASH_CANDIDATES.
   { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
@@ -202,6 +207,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:35b', vramGb: 22.1 },
+  // Ornith 1.5 35B (MoE 35B / 3B actifs, même famille, MIT) : ornith-1.5:35b, 22,6 Go réels (21,71 + 0,90).
+  { model: 'ornith-1.5:35b', vramGb: 22.6 },
   // Variante DENSE de la famille qwen3.6 (distincte de qwen3.6:35b-a3b, le MoE déjà en Code) : tag réel
   // confirmé sur ollama.com/library/qwen3.6/tags (vision+tools+thinking natifs, disponible en 27b et 35b —
   // qwen3.6:27b est déjà candidat plus bas). Taille EXACTE désormais confirmée (23 Go, ollama.com/library/
@@ -268,6 +275,7 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'nemotron-3.5-lightning:30b', vramGb: 25.4 },
   { model: 'glm-4.7-flash:q4_K_M', vramGb: 19.0 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
+  { model: 'ornith-1.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.3 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'qwen3.5:0.8b', vramGb: 1.3 }
@@ -287,6 +295,7 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
  */
 const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:35b',
+  'ornith-1.5:35b',
   'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
@@ -343,6 +352,9 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.8:27b', vramGb: 17.7 },
   // Muse Glimmer : vision native (voir LARGE_CANDIDATES).
   { model: 'muse-glimmer:30b', vramGb: 18.2 },
+  // Ornith 1.5 : lecteur d'images inclus (voir MEDIUM_CANDIDATES et LARGE_CANDIDATES).
+  { model: 'ornith-1.5:35b', vramGb: 22.6 },
+  { model: 'ornith-1.5:9b', vramGb: 6.6 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
   // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
@@ -1443,6 +1455,8 @@ const VISION_CHAIN_LENGTH = 1
 export const MODEL_QUANTIZATION: Record<string, string> = {
   'nemotron-3.5-lightning:30b': 'Q4_K_M',
   'qwen3.5:35b': 'Q4_K_M',
+  'ornith-1.5:35b': 'Q4_K_M',
+  'ornith-1.5:9b': 'Q4_K_M',
   'qwen3.6:35b': 'Q4_K_M',
   'qwen3.6:35b-a3b': 'Q4_K_M',
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 'Q4_K_M',

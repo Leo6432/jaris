@@ -9086,3 +9086,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   RAM) et Vision, comme qwen3.8:27b ; copie du script de test mise à jour. Sans score d'appel d'outils, jamais choisi :
   le bouton « Tester les modèles sans score » le propose. `AWAITING` (test-hardwarescan-single-pool.mjs) : le retirer
   une fois ses scores recopiés.
+  Même étape, Léo : « ajoute aussi Ornith 1.5 ». Tags OFFICIELS d'Ollama `ornith-1.5:9b` (6,6 Go réels) et
+  `ornith-1.5:35b` (MoE 3B actifs, 22,6 Go), ornith-ai, MIT, Qwen3.5 réentraîné. Le manifeste n'a ni modèle de prompt
+  ni « renderer » : Ollama lit le gabarit du GGUF. Essayé pour de vrai avec Ollama 0.40.5 (9B) : tools + thinking +
+  vision annoncés, `set_reminder` appelé avec le bon délai. AUCUNE fiche Artificial Analysis, et les chiffres du
+  créateur ne recoupent pas les leurs (Qwen3.5 9B en Terminal-Bench 2.1 : 21,3 chez eux, 29,2 chez Artificial Analysis),
+  donc rien n'est repris, contrairement à K2-Horizon-32B (étape 330). Candidats Moyen/Élevé (9B), Élevé (35B, RAM) et
+  Vision. Sans intelligence publiée, ils passeront après les modèles mesurés même avec un bon score d'outils.
