@@ -449,30 +449,30 @@ const VISION_CANDIDATES = [
   // gemma4:31b (VISION_CANDIDATES dans hardwareScan.ts) : 20 Go, dense, vision native — voir son commentaire
   // complet là-bas pour pourquoi il n'est QUE en Vision (bugs de tool-calling ouverts sur toute la famille
   // Gemma 4, sans impact sur ce rôle).
-  { model: 'gemma4:31b', vramGb: 20 },
+  { model: 'gemma4:31b', vramGb: 20.4 },
   // Étape 230 : candidats Vision de Jaris (VISION_CANDIDATES, hardwareScan.ts) jamais recopiés ici, donc jamais
   // testés en vision : le contrôle de synchronisation ne vérifiait que la présence du nom dans le script.
-  { model: 'gemma4:26b', vramGb: 19 },
-  { model: 'qwen3.8:27b', vramGb: 18 },
+  { model: 'gemma4:26b', vramGb: 18.7 },
+  { model: 'qwen3.8:27b', vramGb: 17.7 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
-  { model: 'gemma4:e4b', vramGb: 9.6 },
-  { model: 'qwen3-vl:8b', vramGb: 8 },
-  { model: 'gemma4:12b', vramGb: 7.6 },
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  { model: 'gemma4:e4b', vramGb: 6.6 },
+  { model: 'qwen3-vl:8b', vramGb: 6.1 },
+  { model: 'gemma4:12b', vramGb: 8.0 },
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 7.1 },
   // ministral-3:8b (voir MEDIUM_CANDIDATES/VISION_CANDIDATES dans hardwareScan.ts) : nativement multimodal.
   { model: 'ministral-3:8b', vramGb: 6.0 },
-  { model: 'qwen3-vl:4b', vramGb: 5 },
-  { model: 'qwen3.5:4b', vramGb: 3.4 },
-  { model: 'qwen3-vl:2b', vramGb: 3 }
+  { model: 'qwen3-vl:4b', vramGb: 3.3 },
+  { model: 'qwen3.5:4b', vramGb: 3.3 },
+  { model: 'qwen3-vl:2b', vramGb: 1.9 }
 ]
 
 // Candidats du palier Code (CODE_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
 // VISION_CANDIDATES/detectVramGb ci-dessus). Testés séparément de MODELS : pas sur l'appel d'outils
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
-  { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'qwen3.6:35b-a3b', vramGb: 22.6 },
   // Étape 312 : les quatre K2 Horizon (voir CODE_CANDIDATES dans hardwareScan.ts).
   { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
   { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
@@ -482,12 +482,12 @@ const CODE_CANDIDATES = [
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
-  { model: 'qwen3-coder:30b', vramGb: 19 },
-  { model: 'north-mini-code-1.0', vramGb: 19 },
-  { model: 'qwen2.5-coder:32b', vramGb: 20 },
+  { model: 'qwen3-coder:30b', vramGb: 18.6 },
+  { model: 'north-mini-code-1.0', vramGb: 18.6 },
+  { model: 'qwen2.5-coder:32b', vramGb: 19.9 },
   // Mistral, agent de code autonome. DENSE (comme qwen2.5-coder:32b) : voir la même remarque dans
   // hardwareScan.ts. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
-  { model: 'devstral-small-2:24b', vramGb: 15 },
+  { model: 'devstral-small-2:24b', vramGb: 15.2 },
   // Étape 167 : oublié ici alors que Jaris le connaît (CODE_CANDIDATES de hardwareScan.ts) — jamais testé
   // lors de l'analyse de Léo du 25/09/2026. Test permanent désormais : test-benchmark-candidates-sync.mjs.
   { model: 'qwen2.5-coder:14b', vramGb: 9 },
@@ -507,11 +507,11 @@ const CODE_CANDIDATES = [
 const MODEL_SIZE_HINTS = {
   'qwen3.5:2b': 2.74,
   'qwen3.5:2b-q4_K_M': 1.95,
-  'qwen3.5:4b': 3.4,
+  'qwen3.5:4b': 3.3,
   'qwen3.5:9b': 6.6,
   'phi4-mini': 2.5,
-  'gemma4:e4b': 9.6,
-  'gemma4:12b': 7.6,
+  'gemma4:e4b': 6.6,
+  'gemma4:12b': 8.0,
   'granite4.2:8b': 5.3,
   'granite4.1:8b': 5.3,
   'granite4.2:3b': 2.2,
@@ -521,9 +521,9 @@ const MODEL_SIZE_HINTS = {
   'ministral-3:8b': 6.0,
   'ministral-3:14b': 9.1,
   'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF': 0.73,
-  'qwen3:1.7b': 2.0,
+  'qwen3:1.7b': 1.4,
   'granite4:1b': 3.3,
-  'qwen3.5:0.8b': 1.0,
+  'qwen3.5:0.8b': 1.3,
   'functiongemma:270m': 0.3,
   'hf.co/openbmb/MiniCPM5-1B-GGUF': 0.69,
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
@@ -535,17 +535,17 @@ const MODEL_SIZE_HINTS = {
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 3.2,
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 5.6,
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 21.1,
-  'qwen3.5:35b': 24,
-  'qwen3.6:35b': 24,
-  'qwen3.5:27b': 17,
-  'qwen3.8:27b': 18,
-  'qwen3.6:27b': 18,
-  'granite4.2:30b': 18,
-  'gemma4:26b': 19,
-  'gpt-oss:20b': 14,
-  'mistral-small3.2:24b': 15,
-  'glm-4.7-flash:q4_K_M': 19,
-  'nemotron-3.5-lightning:30b': 25
+  'qwen3.5:35b': 22.1,
+  'qwen3.6:35b': 22.6,
+  'qwen3.5:27b': 17.5,
+  'qwen3.8:27b': 17.7,
+  'qwen3.6:27b': 17.8,
+  'granite4.2:30b': 17.7,
+  'gemma4:26b': 18.7,
+  'gpt-oss:20b': 13.8,
+  'mistral-small3.2:24b': 15.2,
+  'glm-4.7-flash:q4_K_M': 19.0,
+  'nemotron-3.5-lightning:30b': 25.4
 }
 
 // Combine MODEL_SIZE_HINTS avec les tailles déjà présentes sur VISION_CANDIDATES/CODE_CANDIDATES (pas la

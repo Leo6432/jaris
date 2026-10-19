@@ -9097,3 +9097,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-model-note.mjs` (chaque modèle candidat a sa version — un modèle ajouté sans elle fait
   échouer le test) et `scripts/test-options-reorganization-ui.mjs` (badge entier sous les 26 noms, y compris le plus
   long, habillé par le CSS ; vérifié en remettant le badge à côté du nom : le test échoue).
+
+- **Étape 332, Léo (« pourquoi qwen3-vl:8b tu mets 8 Go de VRAM », puis « revérifie tous les modèles ») : 10 tailles de
+  modèles fausses sur 47.** Chaque taille relue dans le registre (somme des couches du manifeste Ollama, ou de hf.co pour
+  un import) : qwen3-vl:8b pesait 6,1 Go et non 8, gemma4:e4b 6,6 et non 9,6, qwen3-vl:4b 3,3, qwen3-vl:2b 1,9,
+  qwen3:1.7b 1,4, qwen3.5:35b 22,1 (notés trop lourds : écartés à tort) ; gemma4:12b 8,0, GLM-4.6V-Flash 7,1,
+  qwen3.5:0.8b 1,3 (notés trop légers : choisis alors qu’ils débordaient sur la RAM). Les 37 autres étaient à 0,4 Go
+  près, mis aussi à leur valeur exacte (hardwareScan.ts et la copie de benchmark-models.mjs). Les valeurs venaient
+  d’estimations de l’étape 6 jamais revérifiées. **Effet de bord attrapé en comparant les choix avant/après sur 19
+  machines types** : avec la vraie taille de qwen3.5:0.8b, une carte de 2 Go ne laissait tenir que K2 Horizon 0.9B
+  (0/48 aux demandes), choisi partout. Le gabarit « meilleur des petits » (étape 318) s’applique maintenant aussi
+  quand la carte est trop petite pour ce gabarit ET que rien de plus gros ne tient (sans la seconde condition,
+  Élevé et Code perdaient gpt-oss:20b et devstral sans carte graphique : vu dans la grille, pas dans les tests).
+  Résultat : de 0 à 2 Go, la conversation passe à qwen3:1.7b (28/48 au lieu de 13/48) ; sur 4 Go, Vision passe à
+  qwen3.5:4b (28/34, déborde de 0,3 Go) ; à partir de 3 Go, rien ne change, la machine de Léo comprise. L’ordre des
+  listes de candidats n’a plus d’effet (ALL_MODELS est trié par taille). **Leçon : une taille de modèle se lit dans
+  le registre, jamais de mémoire ; et après tout changement de taille, comparer les choix sur une grille de
+  machines, les tests ne couvrent que quelques cas.** Régression : `test-hardwarescan-small-machines.mjs`, chaque
+  garde vérifiée en la retirant.

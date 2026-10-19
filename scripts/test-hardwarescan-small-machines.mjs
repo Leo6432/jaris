@@ -55,13 +55,16 @@ test('sans carte graphique : jamais le modèle qui rate toutes les demandes comp
     const chosen = await picks(0, ramGb)
     for (const role of ['flash', 'medium', 'large', 'code']) {
       assert.notEqual(chosen[role], TINY_K2, `${role} avec ${ramGb} Go de RAM`)
-      assert.equal(chosen[role], 'qwen3.5:0.8b', `${role} avec ${ramGb} Go de RAM`)
+      // Étape 332 : avec sa vraie taille (1,4 Go et non 2), qwen3:1.7b (28/48) entre dans le gabarit des petits et
+      // passe devant qwen3.5:0.8b (13/48) pour la conversation ; le Code reste à qwen3.5:0.8b.
+      assert.equal(chosen[role], role === 'code' ? 'qwen3.5:0.8b' : 'qwen3:1.7b', `${role} avec ${ramGb} Go de RAM`)
     }
   }
 })
 
 test('petite carte (1 à 2 Go) : Rapide prend la meilleure note, plus le plus léger des plus fiables aux questions', async () => {
-  for (const vramMib of [1024, 2048]) assert.equal((await picks(vramMib, 8)).flash, 'qwen3.5:0.8b', `${vramMib} Mo`)
+  // Étape 332 : sur 2 Go, seule K2 Horizon 0.9B (0/48) tient ; le gabarit des petits est appliqué quand même.
+  for (const vramMib of [1024, 2048]) assert.equal((await picks(vramMib, 8)).flash, 'qwen3:1.7b', `${vramMib} Mo`)
   // 3 Go : MiniCPM5-2B (37/48, plus léger) plutôt que qwen3:1.7b (28/48), qui avait seulement le meilleur score aux questions.
   assert.equal((await picks(3072, 16)).flash, 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M')
 })
@@ -80,4 +83,11 @@ test('la machine de Léo (8 Go de VRAM, 63 Go de RAM) ne change pas', async () =
     vision: 'qwen3.8:27b',
     code: 'qwen3.8:27b'
   })
+})
+
+test('étape 332 : sans carte graphique mais avec beaucoup de RAM, Élevé et Code gardent un vrai modèle (pas le gabarit des petits)', async () => {
+  const chosen = await picks(0, 32)
+  assert.equal(chosen.flash, 'qwen3:1.7b')
+  assert.equal(chosen.large, 'gpt-oss:20b')
+  assert.equal(chosen.code, 'devstral-small-2:24b')
 })

@@ -88,7 +88,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // Nanbeige4.1-3B : voir le commentaire de l'étape 229 dans FLASH_CANDIDATES.
   { model: 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M', vramGb: 2.4 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
-  { model: 'qwen3:1.7b', vramGb: 2 },
+  { model: 'qwen3:1.7b', vramGb: 1.4 },
   // Étape 132, Léo : "on a bien les meilleur model... regarde bien". Déjà présent dans
   // scripts/benchmark-models.mjs comme candidat EXPLORATOIRE depuis longtemps (import Hugging Face direct,
   // quantification GGUF par bartowski — quantifieur reconnu de la communauté Ollama/llama.cpp, PAS le même
@@ -122,7 +122,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
-  { model: 'qwen3.5:0.8b', vramGb: 1.0 },
+  { model: 'qwen3.5:0.8b', vramGb: 1.3 },
   // K2 Horizon 0.9B : voir la note de l'étape 312 juste au-dessus de ministral-3:3b.
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
@@ -153,7 +153,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
 // verified-tool-scores.md, mesuré sur la machine de Léo début septembre 2026), alors que 4.2 n'a encore
 // aucune mesure : les remplacer perdrait une preuve réelle au profit d'un chiffre encore jamais vérifié.
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
-  { model: 'gemma4:e4b', vramGb: 9.6 },
+  { model: 'gemma4:e4b', vramGb: 6.6 },
   // ministral-3:14b/8b (voir FLASH_CANDIDATES plus haut pour le contexte de cet ajout) : function calling
   // natif annoncé par Mistral, mais un bug OUVERT (github.com/ollama/ollama/issues/13750) fait ignorer les
   // outils quand `response_format`/`format` est envoyé EN MÊME TEMPS que `tools` sur une instance Ollama
@@ -162,7 +162,7 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // générique. D'autres bugs Ministral existants (#13328/#13334, "plus de 2 outils" / appels multiples) sont
   // antérieurs et non reconfirmés sur les tailles ajoutées ici.
   { model: 'ministral-3:14b', vramGb: 9.1 },
-  { model: 'gemma4:12b', vramGb: 7.6 },
+  { model: 'gemma4:12b', vramGb: 8.0 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'ministral-3:8b', vramGb: 6.0 },
   // K2 Horizon 7B, 3.7B et 0.9B : voir la note de l'étape 312 dans FLASH_CANDIDATES.
@@ -182,7 +182,7 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // - Intelligence Index Artificial Analysis 11 (variante Reasoning, la seule publiée), 58 tokens/s.
   // Ne gagne pas tout seul : choisi seulement d'après son score d'appel d'outils (verified-tool-scores.md).
   { model: 'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', vramGb: 4.8 },
-  { model: 'qwen3.5:4b', vramGb: 3.4 },
+  { model: 'qwen3.5:4b', vramGb: 3.3 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   // Phi-4-mini : voir la note de l'étape 316 dans FLASH_CANDIDATES.
@@ -197,18 +197,18 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // LFM2.5-2.6B et MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
-  { model: 'qwen3.5:0.8b', vramGb: 1.0 },
+  { model: 'qwen3.5:0.8b', vramGb: 1.3 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
-  { model: 'qwen3.5:35b', vramGb: 24 },
+  { model: 'qwen3.5:35b', vramGb: 22.1 },
   // Variante DENSE de la famille qwen3.6 (distincte de qwen3.6:35b-a3b, le MoE déjà en Code) : tag réel
   // confirmé sur ollama.com/library/qwen3.6/tags (vision+tools+thinking natifs, disponible en 27b et 35b —
   // qwen3.6:27b est déjà candidat plus bas). Taille EXACTE désormais confirmée (23 Go, ollama.com/library/
   // qwen3.6/tags) — remplace le poids "en attendant" de qwen3.5:35b utilisé jusqu'ici faute de chiffre réel
   // (revue complète des candidats, demande de Léo "revoire tous les model pour des meilleurs").
-  { model: 'qwen3.6:35b', vramGb: 23 },
-  { model: 'qwen3.5:27b', vramGb: 17 },
+  { model: 'qwen3.6:35b', vramGb: 22.6 },
+  { model: 'qwen3.5:27b', vramGb: 17.5 },
   // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
   // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
   // qwen3.5:27b — gain en code/agentic rapporté par des sources tierces uniquement (pas de chiffre MMLU-Pro
@@ -220,7 +220,7 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // "gain" rapporté par les PDF de Léo sur l'axe connaissance générale — seulement sur code/agentic (jamais
   // confirmé par un vrai chiffre comparatif ici, voir pickBestFrom dans computeModelPicks : le départage
   // entre candidats à 6/6 utilise maintenant MMLU-Pro quand les deux le connaissent, VRAM sinon).
-  { model: 'qwen3.8:27b', vramGb: 18 },
+  { model: 'qwen3.8:27b', vramGb: 17.7 },
   // Trois candidats supplémentaires dans la même tranche (17-19 Go), utiles pour les machines avec plus de
   // VRAM que la config de développement (8 Go) — pas retenus faute de "trop lourd" mais parce qu'un candidat
   // de plus dans cette tranche ne changeait rien pour Léo ; ajoutés maintenant pour ceux qui ont la VRAM.
@@ -229,16 +229,16 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // - gemma4:26b : MoE Google (25,2 Md total / 3,8 Md actifs), vérifié sur ollama.com/library/gemma4 (19 Go).
   // - gpt-oss:20b (OpenAI, poids ouverts) : vérifié sur ollama.com/library/gpt-oss (14 Go, tools+thinking,
   //   texte seul — pas de vision contrairement aux autres candidats de cette liste).
-  { model: 'qwen3.6:27b', vramGb: 18 },
+  { model: 'qwen3.6:27b', vramGb: 17.8 },
   // granite4.2:30b (IBM, sorti le 25/08/2026, Apache 2.0) : tag réel confirmé sur ollama.com/library/
   // granite4.2/tags (18 Go, tools natifs, 128K contexte) — voir MEDIUM_CANDIDATES plus haut pour le
   // raisonnement complet sur pourquoi granite4.1 reste en parallèle plutôt que d'être remplacé.
-  { model: 'granite4.2:30b', vramGb: 18 },
-  { model: 'gemma4:26b', vramGb: 19 },
+  { model: 'granite4.2:30b', vramGb: 17.7 },
+  { model: 'gemma4:26b', vramGb: 18.7 },
   // K2 Horizon 32B (dense, 21 Go en Q4_K_M) : voir la note de l'étape 312 dans FLASH_CANDIDATES. Peut déborder
   // sur la RAM comme les autres grands modèles (LARGE_RAM_OFFLOAD_MODELS).
   { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
-  { model: 'gpt-oss:20b', vramGb: 14 },
+  { model: 'gpt-oss:20b', vramGb: 13.8 },
   // Mistral Small : la conclusion précédente ("3.1"/"3.2" n'existent pas sous ce nom sur Ollama") était
   // FAUSSE — vérifiée à nouveau sur ollama.com/library/mistral-small3.2 (revue des 5 listes de candidats,
   // demande de Léo "regarde lm studio... fait tes analyse de ton coté") : mistral-small3.2:24b est un tag
@@ -246,7 +246,7 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // jusqu'ici (`mistral-small:24b`, en réalité l'ancienne Mistral Small 3/2501, jamais versionnée 3.1/3.2,
   // 32K de contexte seulement, texte uniquement) et ajoute la vision + un contexte de 128K. Remplacé : aucune
   // raison de garder l'ancienne version une fois la bonne trouvée.
-  { model: 'mistral-small3.2:24b', vramGb: 15 },
+  { model: 'mistral-small3.2:24b', vramGb: 15.2 },
   // GLM-4.7-Flash (Zhipu/Z.ai) : plus récent que GLM-4.6V-Flash déjà en Vision (2 mois vs plus ancien),
   // tools+thinking, texte seul. Vérifié sur ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
   // Réexaminé (même revue que Mistral Small ci-dessus) : plusieurs bugs OFFICIELS (github.com/ollama/ollama,
@@ -261,12 +261,12 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // 264 tokens/s (artificialanalysis.ai/models/nemotron-3-5-lightning, v4.3.2). Sa force est la vitesse, pas
   // l'intelligence : utile en Rapide sur une carte de 32 Go+. Pas encore de score d'appel d'outils (trop
   // gros pour être testé ici comme sur la machine de Léo) : Jaris ne le choisit pas tant qu'il n'est pas mesuré.
-  { model: 'nemotron-3.5-lightning:30b', vramGb: 25 },
-  { model: 'glm-4.7-flash:q4_K_M', vramGb: 19 },
+  { model: 'nemotron-3.5-lightning:30b', vramGb: 25.4 },
+  { model: 'glm-4.7-flash:q4_K_M', vramGb: 19.0 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
-  { model: 'qwen3.5:4b', vramGb: 3.4 },
+  { model: 'qwen3.5:4b', vramGb: 3.3 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
-  { model: 'qwen3.5:0.8b', vramGb: 1.0 }
+  { model: 'qwen3.5:0.8b', vramGb: 1.3 }
 ]
 
 /**
@@ -319,12 +319,12 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // non géré, appel abandonné sur un accolade manquante) rendent l'appel d'outils non fiable pour ce
   // modèle sur Ollama ; la Vision n'a pas cette exigence (look_at_screen ne rappelle pas d'outil depuis ce
   // modèle). En tête de liste (le plus gros candidat vision) : l'ordre doit rester strictement décroissant.
-  { model: 'gemma4:31b', vramGb: 20 },
+  { model: 'gemma4:31b', vramGb: 20.4 },
   // Même candidat "réutilisation" que gemma4:e4b/gemma4:12b plus bas, mais pour gemma4:26b (déjà dans
   // LARGE_CANDIDATES, palier Puissant) — signalé par Léo, vérifié directement sur ollama.com/library/gemma4 :
   // le tag `gemma4:26b` porte bien le badge "Text, Image" (vision native), pas seulement les tags plus
   // petits de la famille.
-  { model: 'gemma4:26b', vramGb: 19 },
+  { model: 'gemma4:26b', vramGb: 18.7 },
   // Candidat "réutilisation" : qwen3.8:27b (déjà dans LARGE_CANDIDATES, palier Puissant) — étape 127,
   // proposé par ChatGPT (via le comparateur .../models/recommend, inaccessible depuis cet environnement,
   // voir le commentaire au-dessus de ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Vérifié directement sur sa
@@ -335,7 +335,7 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // d'y toucher (gemma4:31b annoncé à 15 au lieu de 19, qwen3.6:35b-a3b annoncé à 19 au lieu de 18 — la
   // table ci-dessous n'a pas bougé sur ces deux-là) : seule cette proposition-ci a été retenue, après
   // vérification indépendante du score ET du support image.
-  { model: 'qwen3.8:27b', vramGb: 18 },
+  { model: 'qwen3.8:27b', vramGb: 17.7 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
   // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
@@ -343,26 +343,26 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // conversation déjà chargé pour look_at_screen, sans jamais charger un second modèle (zéro swap VRAM). Pas
   // encore le cas aujourd'hui : resolveVisionModel continue de choisir dans cette liste normalement, ce test
   // sert juste à savoir si ça vaudrait le coup.
-  { model: 'gemma4:e4b', vramGb: 9.6 },
-  { model: 'qwen3-vl:8b', vramGb: 8 },
+  { model: 'gemma4:e4b', vramGb: 6.6 },
+  { model: 'qwen3-vl:8b', vramGb: 6.1 },
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour gemma4:12b (déjà dans
   // MEDIUM_CANDIDATES, tag réel confirmé sur ollama.com/library/gemma4).
-  { model: 'gemma4:12b', vramGb: 7.6 },
+  { model: 'gemma4:12b', vramGb: 8.0 },
   // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
   // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
   // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
   // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 7.1 },
   // Candidat "réutilisation" : ministral-3:8b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal
   // (vérifié sur ollama.com/library/ministral-3, badge "Text, Image"). Aucune exigence de tool-calling ici
   // (voir gemma4:31b plus haut) : la réserve response_format+tools qui vaut pour son usage en Médium ne
   // s'applique pas à ce rôle.
   { model: 'ministral-3:8b', vramGb: 6.0 },
-  { model: 'qwen3-vl:4b', vramGb: 5 },
+  { model: 'qwen3-vl:4b', vramGb: 3.3 },
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour qwen3.5 (déjà dans MEDIUM_CANDIDATES) :
   // vérifié nativement multimodal sur ollama.com/library/qwen3.5 (badge vision+tools+thinking).
-  { model: 'qwen3.5:4b', vramGb: 3.4 },
-  { model: 'qwen3-vl:2b', vramGb: 3 }
+  { model: 'qwen3.5:4b', vramGb: 3.3 },
+  { model: 'qwen3-vl:2b', vramGb: 1.9 }
 ]
 
 // Palier "Code" : modèles spécialisés génération/complétion de code, distincts des paliers de conversation
@@ -400,16 +400,16 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   // Artificial Analysis : 8,6, sous granite4.2:8b (11,1) et qwen3.5:9b (11,2), pour 75 Go dense.
   // Étape 227 (Léo : « il est nul ») : qwen3-coder-next RETIRÉ pour la même raison. Vérifié : 9,2 chez Artificial
   // Analysis, deux fois moins que qwen3.6:35b-a3b (18,2) juste en dessous, pour 52 Go contre 22.
-  { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'qwen3.6:35b-a3b', vramGb: 22.6 },
   // Étape 312 : les quatre K2 Horizon passent aussi le test de code (voir FLASH_CANDIDATES).
   { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
-  { model: 'qwen3-coder:30b', vramGb: 19 },
-  { model: 'north-mini-code-1.0', vramGb: 19 },
-  { model: 'qwen2.5-coder:32b', vramGb: 20 },
+  { model: 'qwen3-coder:30b', vramGb: 18.6 },
+  { model: 'north-mini-code-1.0', vramGb: 18.6 },
+  { model: 'qwen2.5-coder:32b', vramGb: 19.9 },
   // Mistral, agent de code autonome (exploration de dépôt, édition multi-fichiers). DENSE comme
   // qwen2.5-coder:32b ci-dessus (pas de "-a3b"/MoE dans son nom) : même remarque, débordement RAM plus
   // pénalisant qu'un MoE de taille comparable. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
-  { model: 'devstral-small-2:24b', vramGb: 15 },
+  { model: 'devstral-small-2:24b', vramGb: 15.2 },
   // Palier intermédiaire entre 32b et 7b ci-dessous, absent jusqu'ici (relecture Codex, étape 46) : taille
   // vérifiée sur ollama.com/library/qwen2.5-coder:14b (9 Go).
   { model: 'qwen2.5-coder:14b', vramGb: 9 },
@@ -1900,8 +1900,18 @@ function computeModelPicks(
     // Repli : aucun modèle testé ne tient (ex. pas de carte graphique du tout). Le plus gros modèle qui tient,
     // sinon le plus petit — parmi ceux qui ont un score pour ce rôle quand il y en a, pour ne jamais tomber
     // sur un modèle jamais testé pour ça.
-    if (!scored.length) {
-      const known = candidates.filter((c) => resultOf(c)?.toolCalling != null)
+    // Étape 332 : même repli quand la carte est trop petite pour le gabarit des plus petits modèles notés (deux fois
+    // le plus léger). Avec les vraies tailles, une carte de 2 Go ne laissait tenir que K2 Horizon 0.9B (0/48 aux
+    // demandes) : il était choisi partout, alors qu'un petit modèle à peine plus lourd (qwen3:1.7b, 1,4 Go) fait
+    // bien mieux en débordant de quelques centaines de Mo.
+    const knownCandidates = candidates.filter((c) => resultOf(c)?.toolCalling != null)
+    const lightestKnown = Math.min(...knownCandidates.map((c) => c.vramGb))
+    // Les deux conditions : la carte est trop petite ET rien de plus gros ne tient (Puissant et Code peuvent déborder
+    // sur la RAM : sans carte graphique, gpt-oss:20b reste le bon choix pour eux).
+    const tinyClass = lightestKnown * SMALL_CLASS_FACTOR
+    const onlyTinyFit = scored.length > 0 && budgetGb < tinyClass && scored.every((c) => c.vramGb <= tinyClass)
+    if (!scored.length || onlyTinyFit) {
+      const known = knownCandidates
       // Étape 318 : parmi les modèles notés, aucun ne tient — le meilleur des plus légers, et non plus le plus léger.
       if (known.length) {
         const ranked = known
