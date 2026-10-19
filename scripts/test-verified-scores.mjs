@@ -41,9 +41,9 @@ test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être reco
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 
-test('demandes complètes : les 30 modèles de conversation, plus K2 Horizon 3.7B (étape 312), 0.9B, 7B et 32B (étape 314), phi4-mini (étape 317), chacun sur 48', () => {
+test('demandes complètes : les 30 modèles de conversation, plus K2 Horizon 3.7B (étape 312), 0.9B, 7B et 32B (étape 314), phi4-mini (étape 317), Ornith 1.5 9B et 35B (étape 334), chacun sur 48', () => {
   const demandes = rows(section('Demandes'))
-  assert.equal(demandes.length, 35)
+  assert.equal(demandes.length, 37)
   for (const [model, score] of demandes) assert.match(score, /^\d+\/48$/, `Demandes ${model} : ${score}`)
 })
 

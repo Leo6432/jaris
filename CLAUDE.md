@@ -9132,3 +9132,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   créateur ne recoupent pas les leurs (Qwen3.5 9B en Terminal-Bench 2.1 : 21,3 chez eux, 29,2 chez Artificial Analysis),
   donc rien n'est repris, contrairement à K2-Horizon-32B (étape 330). Candidats Moyen/Élevé (9B), Élevé (35B, RAM) et
   Vision. Sans intelligence publiée, ils passeront après les modèles mesurés même avec un bon score d'outils.
+
+- **Étape 334, scores partiels d'Ornith 1.5 et de Muse Glimmer (Léo a arrêté le test pendant les demandes de Muse :
+  « fais les scores sur ceux qui sont déjà passés, pour Muse je peux tout relancer demain »).** Demandes rejugées à
+  blanc avec le simulateur actuel (`rejudge`, mêmes verdicts), puis toutes les réponses relues, justes comprises.
+  Ornith 9B et 35B : 78/78 aux questions ; aux demandes, la blague sans aucun sens comptée fausse chez les deux
+  (même règle que K2 Horizon 3.7B à l'étape 323) : 9B 43/48, 35B 45/48. Muse Glimmer : 76/78 aux questions (deux
+  « je vais sur YouTube » sans rien lancer). Recopier ses questions évite à Léo de les repasser : le script saute un
+  modèle déjà noté sur cette épreuve. Restent : les demandes de Muse et la vision des trois. Choix calculés sur
+  19 machines types avant/après : identiques (les Ornith n'ont pas d'intelligence publiée, Muse pas de demandes).
+  **Piège de manipulation** : le fichier de résultats d'un test interrompu contient les questions de Muse, mais pas
+  ses demandes (écrites à la fin de chaque modèle) ; elles ne sont que dans les traces.

@@ -83,6 +83,14 @@ est-il ? » (l'heure est dans les consignes), et « Comment tu t'appelles ? » s
 informations… »). Demandes 4 → 2 : « Regardez l'écran, s'il vous plaît. » à un merci, et la phrase de Tom recopiée
 comme si c'était lui. Code 5/5, chaque appli utilisée pour de vrai : il écrit du code, pas des appels d'outils.
 
+Étape 334 : Ornith 1.5 (9B et 35B) et Muse Glimmer mesurés par Léo le 19/10/2026 (Jaris 0.34.43, Ollama 0.40.5),
+toutes les réponses relues une à une, justes comprises. Questions : Ornith 9B et 35B 78/78, Muse Glimmer 76/78 (2 fois
+« je m'en occupe, je vais sur YouTube » sans rien lancer : vraies erreurs). Demandes : la seule correction est la blague,
+sans aucun sens chez les deux Ornith (« Regardez le cadavre qu'elle a fait ! », « pas de café pour le bébé »), comptée
+fausse comme celle de K2 Horizon 3.7B : Ornith 9B 44 → 43/48, Ornith 35B 46 → 45/48. Léo a arrêté le test pendant les
+demandes de Muse Glimmer (3,4 mots par seconde, 29 % sur la carte) : ses demandes, et la vision des trois, restent à
+mesurer au prochain clic sur « Tester ces modèles ».
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -120,6 +128,9 @@ comme si c'était lui. Code 5/5, chaque appli utilisée pour de vrai : il écrit
 | nemotron-3.5-lightning:30b | 78/78 |
 | ministral-3:8b | 78/78 |
 | ministral-3:14b | 56/78 |
+| ornith-1.5:9b | 78/78 |
+| ornith-1.5:35b | 78/78 |
+| muse-glimmer:30b | 76/78 |
 
 ## Vision — compréhension d'image
 
@@ -246,9 +257,11 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.5:9b | 46/48 |
 | glm-4.7-flash:q4_K_M | 45/48 |
 | qwen3.5:35b | 45/48 |
+| ornith-1.5:35b | 45/48 |
 | granite4.2:3b | 44/48 |
 | gemma4:e4b | 43/48 |
 | gpt-oss:20b | 43/48 |
+| ornith-1.5:9b | 43/48 |
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 42/48 |
