@@ -12,15 +12,55 @@ import { Fragment } from 'react'
  * le même code — une deuxième copie aurait divergé au premier ajustement, comme les deux composeurs avant
  * d'être fusionnés.
  */
-/** Gras et `code` dans un morceau de texte ordinaire. */
+/**
+ * Étape 339 (Léo : « dans le chat il y a encore les ** ») : l'ancien motif du gras (`\*\*[^*]+\*\*`) refusait
+ * tout astérisque à l'intérieur, donc un gras qui contient de l'italique (« **les sites (c'est-à-dire *avec
+ * autorisation*) sont :** ») restait affiché avec ses étoiles, et l'italique (`*…*`) ne l'était jamais. Le gras
+ * accepte maintenant un astérisque seul à l'intérieur, l'italique est rendu (étoile collée au mot des deux côtés,
+ * pour ne pas prendre « 3 * 4 * 5 » pour de l'italique), un titre « ### … » devient une ligne en gras, et un
+ * « ** » resté sans partenaire (le modèle oublie parfois de fermer) est retiré au lieu d'être affiché.
+ */
+const BOLD = /(\*\*(?:[^*]|\*(?!\*))+?\*\*)/g
+const CODE = /(`[^`\n]+`)/g
+const ITALIC = /((?<![*\w])\*(?=[^\s*])[^*\n]*?[^\s*]\*(?![*\w])|(?<![*\w])\*[^\s*]\*(?![*\w]))/g
+const HEADING = /^(#{1,6}[ \t]+.*)$/gm
+
+/** Italique et étoiles orphelines, dans un texte sans code. */
+function renderEmphasis(text: string, keyPrefix: string): JSX.Element[] {
+  return text.split(ITALIC).map((part, index) => {
+    const key = `${keyPrefix}-i${index}`
+    if (index % 2 === 1) return <em key={key}>{part.slice(1, -1)}</em>
+    return <Fragment key={key}>{part.replace(/\*\*/g, '')}</Fragment>
+  })
+}
+
+/** `code` puis italique, dans un texte sans gras. */
+function renderSpans(text: string, keyPrefix: string): JSX.Element[] {
+  return text.split(CODE).flatMap((part, index) => {
+    const key = `${keyPrefix}-c${index}`
+    if (index % 2 === 1) return [<code key={key} className="reply-code-inline">{part.slice(1, -1)}</code>]
+    return renderEmphasis(part, key)
+  })
+}
+
+/** Gras, italique et `code` dans un morceau de texte ordinaire. */
+function renderParagraph(text: string, keyPrefix: string): JSX.Element[] {
+  return text.split(BOLD).flatMap((part, index) => {
+    const key = `${keyPrefix}-b${index}`
+    if (index % 2 === 1) return [<strong key={key}>{renderSpans(part.slice(2, -2), key)}</strong>]
+    return renderSpans(part, key)
+  })
+}
+
+/** Un morceau hors bloc de code : les lignes « ### Titre » deviennent une ligne en gras. */
 function renderInline(text: string, keyPrefix: string): JSX.Element[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/g).map((part, index) => {
-    const key = `${keyPrefix}-${index}`
-    const bold = /^\*\*([^*]+)\*\*$/.exec(part)
-    if (bold) return <strong key={key}>{bold[1]}</strong>
-    const code = /^`([^`\n]+)`$/.exec(part)
-    if (code) return <code key={key} className="reply-code-inline">{code[1]}</code>
-    return <Fragment key={key}>{part}</Fragment>
+  return text.split(HEADING).flatMap((part, index) => {
+    const key = `${keyPrefix}-h${index}`
+    if (index % 2 === 1) {
+      const title = part.replace(/^#{1,6}[ \t]+/, '').replace(/[ \t]+#+[ \t]*$/, '')
+      return [<strong key={key}>{renderParagraph(title.replace(/^\*\*(.*)\*\*$/, '$1'), key)}</strong>]
+    }
+    return renderParagraph(part, key)
   })
 }
 

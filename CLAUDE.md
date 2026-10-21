@@ -9224,3 +9224,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   widget qui remplace la fenêtre doit toujours garder un geste simple pour la rouvrir — en donner un second usage au
   clic retire ce geste.** Régression : `test-chat-widget-ui.mjs` et `test-widget-mode.mjs` (vérifiés en remettant
   l'ouverture de la barre au clic : 3 échecs).
+
+- **Étape 339, Léo : « dans le chat il y a encore les ** » (réponse réelle à l’appui).** Le gras n’acceptait aucun
+  astérisque à l’intérieur (`\*\*[^*]+\*\*`) : un gras contenant de l’italique (« **les sites (c’est-à-dire *avec
+  autorisation*) sont :** ») restait affiché avec ses étoiles, et l’italique `*…*` ne l’était jamais.
+  `formatReply.tsx` (Chat et widget) : gras avec un astérisque seul à l’intérieur, italique rendu seulement si
+  l’étoile est collée au mot des deux côtés (« 3 * 4 * 5 » reste tel quel), titre « ### » en ligne grasse, « ** » sans
+  partenaire retiré ; rien ne change dans un bloc de code. Régression : `test-format-reply.mjs` (vraie réponse de
+  Léo ; 3 tests échouent avec l’ancien code).
