@@ -83,3 +83,15 @@ test('étape 259 : les touches de la Calculatrice (noms Windows en toutes lettre
   for (const name of ['Un article', 'Plus de vidéos', 'Rechercher', 'Effacer']) assert.equal(keySymbol(name), null, name)
   assert.equal(keySymbol('  un '), '1')
 })
+
+// Le modèle recopie parfois la ligne de la liste avec son numéro et son type (gemma4:12b, Ornith 1.5 35B).
+test('un nom recopié avec son type ou son numéro (« [Button] Annuler ») retrouve le bon élément', () => {
+  const elements = [element('Enregistrer'), element('Annuler'), element('Lien', { type: 'Hyperlink' })]
+  for (const wanted of ['[Button] Annuler', 'Button Annuler', '2. [Button] Annuler', 'button annuler']) {
+    assert.equal(findElementByName(elements, wanted)?.name, 'Annuler', wanted)
+  }
+  // Un mot qui n'est le type d'aucun élément n'est jamais retiré, et un élément réellement nommé ainsi reste prioritaire.
+  assert.equal(findElementByName(elements, 'Bouton Annuler'), null)
+  assert.equal(findElementByName([element('Button Annuler'), element('Annuler')], 'Button Annuler').name, 'Button Annuler')
+  assert.equal(findElementByName(elements, '[Button]'), null)
+})

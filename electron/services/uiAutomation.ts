@@ -47,12 +47,27 @@ export function findElementByName<T extends ClickableElement>(elements: T[], tar
   const wanted = normalize(target)
   if (!wanted) return null
   const named = elements.map((element) => ({ element, name: normalize(element.name) }))
-  return (
-    named.find((candidate) => candidate.name === wanted)?.element ??
-    named.find((candidate) => candidate.name.startsWith(wanted))?.element ??
-    named.find((candidate) => candidate.name.includes(wanted))?.element ??
+  const match = (name: string): T | null =>
+    named.find((candidate) => candidate.name === name)?.element ??
+    named.find((candidate) => candidate.name.startsWith(name))?.element ??
+    named.find((candidate) => candidate.name.includes(name))?.element ??
     null
-  )
+  const found = match(wanted)
+  if (found) return found
+  // Le modèle recopie parfois la ligne telle que la liste l'affiche (« 3. [Button] Annuler », « Button Annuler ») :
+  // constaté avec gemma4:12b et Ornith 1.5 35B. Le bouton est le bon, seul le préfixe le rend introuvable. Retiré
+  // seulement en second essai, pour qu'un élément réellement nommé ainsi garde la priorité.
+  const stripped = stripListPrefix(wanted, elements)
+  return stripped && stripped !== wanted ? match(stripped) : null
+}
+
+/** Retire le numéro et le type qui précèdent un nom dans la liste montrée au modèle (`describeElements`). */
+function stripListPrefix(wanted: string, elements: ClickableElement[]): string {
+  const types = new Set(elements.map((element) => normalize(element.type)).filter(Boolean))
+  let rest = wanted.replace(/^\d+\.\s*/, '').replace(/^\[[^\]]*\]\s*/, '')
+  const firstWord = rest.split(' ')[0]
+  if (rest.includes(' ') && types.has(firstWord)) rest = rest.slice(firstWord.length + 1)
+  return rest.trim()
 }
 
 /**

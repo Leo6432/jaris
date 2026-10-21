@@ -9104,3 +9104,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   19 machines types avant/après : identiques (les Ornith n'ont pas d'intelligence publiée, Muse pas de demandes).
   **Piège de manipulation** : le fichier de résultats d'un test interrompu contient les questions de Muse, mais pas
   ses demandes (écrites à la fin de chaque modèle) ; elles ne sont que dans les traces.
+
+- **Étape 335, fin du test de Muse Glimmer et d'Ornith 1.5 (Léo, 21/10/2026).** Toutes les réponses relues, justes
+  comprises. Muse Glimmer : demandes 43/48, rejugées à l'identique (5 vraies erreurs, dont 2 réponses vides à fenêtre
+  pleine), vision 34/34. Ornith 9B vision 26/34. Ornith 35B : 29 → 31/34. Son « Button Annuler », comme le
+  « [Button] Annuler » de gemma4:12b (24 → 25/34), désignait le BON bouton, avec le type recopié depuis la liste que
+  Jaris lui montre (« 3. [Button] Annuler »). C'est donc Jaris qui ne le retrouvait pas (même leçon qu'à l'étape 314 :
+  se demander si c'est Jaris qui devrait nettoyer). `findElementByName` (uiAutomation.ts), et sa copie dans
+  benchmark-vision.mjs, retirent en second essai le numéro, un « [Type] », ou un premier mot égal au type d'un élément.
+  Un élément vraiment nommé ainsi garde la priorité. Le choix de modèle ne change sur aucune des 19 machines types.
+  Régression : `test-ui-automation.mjs` et `test-benchmark-vision.mjs` (copie identique), vérifiés en retirant le
+  second essai.

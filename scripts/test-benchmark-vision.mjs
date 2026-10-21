@@ -189,7 +189,7 @@ test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, m
     '{"action":"click","x":"douze","y":2}', '{"action":"click","x":"396","y":"973"}', '{"action":"open_app","app":"Calculatrice"}', '{"action":"open_app","app":" "}'
   ]
   for (const raw of samples) assert.deepEqual(extractPilotStep(raw), real.extractStep(raw), raw)
-  for (const name of ['Annuler', 'annuler', 'Ne pas', 'enregistrer', 'Quitter', '']) {
+  for (const name of ['Annuler', 'annuler', 'Ne pas', 'enregistrer', 'Quitter', '', '[Button] Annuler', 'Button Annuler', '3. [Button] Annuler', 'Bouton Annuler', '[Button]']) {
     assert.equal(findPilotElement(elements, name)?.name ?? null, ui.findElementByName(elements, name)?.name ?? null, name)
   }
 })

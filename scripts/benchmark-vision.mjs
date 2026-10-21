@@ -224,12 +224,20 @@ export function findPilotElement(elements, target) {
   const wanted = normName(target)
   if (!wanted) return null
   const named = elements.map((element) => ({ element, name: normName(element.name) }))
-  return (
-    named.find((c) => c.name === wanted)?.element ??
-    named.find((c) => c.name.startsWith(wanted))?.element ??
-    named.find((c) => c.name.includes(wanted))?.element ??
+  const match = (name) =>
+    named.find((c) => c.name === name)?.element ??
+    named.find((c) => c.name.startsWith(name))?.element ??
+    named.find((c) => c.name.includes(name))?.element ??
     null
-  )
+  const found = match(wanted)
+  if (found) return found
+  // Numéro et type recopiés de la liste (« [Button] Annuler ») : retirés en second essai, comme uiAutomation.ts.
+  const types = new Set(elements.map((element) => normName(element.type)).filter(Boolean))
+  let rest = wanted.replace(/^\d+\.\s*/, '').replace(/^\[[^\]]*\]\s*/, '')
+  const firstWord = rest.split(' ')[0]
+  if (rest.includes(' ') && types.has(firstWord)) rest = rest.slice(firstWord.length + 1)
+  rest = rest.trim()
+  return rest && rest !== wanted ? match(rest) : null
 }
 
 /** Les boutons de la boîte « Enregistrer ? » tels que Windows les liste (cas de visée par nom). */

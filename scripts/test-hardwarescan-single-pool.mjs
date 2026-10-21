@@ -196,8 +196,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 168 : la liste que teste le bouton « Tester les modèles ». Étape 230 : rôle par rôle, et un score de
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
 // Étape 333 : modèles ajoutés sans score, en attente du test de Léo. Retirer un modèle de cette liste quand ses
-// scores sont recopiés dans verified-tool-scores.md.
-const AWAITING = ['ornith-1.5:9b', 'muse-glimmer:30b', 'ornith-1.5:35b']
+// scores sont recopiés dans verified-tool-scores.md (Muse Glimmer et Ornith 1.5 : tous notés à l'étape 335).
+const AWAITING = []
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -214,7 +214,7 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     codeOnly.delete(model)
   }
   // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté (phi4-mini,
-  // redevenu candidat à l'étape 316, mesuré à l'étape 317), sauf Muse Glimmer et Ornith 1.5, ajoutés à l'étape 333 pour être testés.
+  // redevenu candidat à l'étape 316, mesuré à l'étape 317 ; Muse Glimmer et Ornith 1.5 à l'étape 335).
   assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], AWAITING)
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')

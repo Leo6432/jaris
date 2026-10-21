@@ -91,6 +91,14 @@ fausse comme celle de K2 Horizon 3.7B : Ornith 9B 44 → 43/48, Ornith 35B 46 �
 demandes de Muse Glimmer (3,4 mots par seconde, 29 % sur la carte) : ses demandes, et la vision des trois, restent à
 mesurer au prochain clic sur « Tester ces modèles ».
 
+Étape 335 : la suite, mesurée par Léo le 21/10/2026 (Jaris 0.34.44). Toutes les réponses relues, justes comprises.
+Demandes de Muse Glimmer : 43/48, rejugées à l'identique. Les 5 erreurs sont réelles : la Clio jamais notée,
+« j'envoie le mail » sans l'envoyer, 10 recherches sans réponse, et 2 réponses vides (fenêtre de contexte pleine).
+Vision : Muse Glimmer 34/34 ; Ornith 1.5 9B 26/34 (prix lu « 49,70 € », « Enregistrer » au lieu d'« Annuler »,
+« fini » attendu quand la recherche est déjà faite) ; Ornith 1.5 35B 31/34 au lieu de 29 : son « Button Annuler »
+désignait le bon bouton, avec le type recopié depuis la liste. C'est Jaris qui ne le retrouvait pas (corrigé dans
+uiAutomation.ts et le test), et le même cas fait passer gemma4:12b de 24 à 25/34 (« [Button] Annuler »).
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -149,12 +157,15 @@ marge est retirée.
 | qwen3.8:27b | 34/34 |
 | gemma4:e4b | 17/34 |
 | qwen3-vl:8b | 29/34 |
-| gemma4:12b | 24/34 |
+| gemma4:12b | 25/34 |
 | hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 27/34 |
 | ministral-3:8b | 23/34 |
 | qwen3-vl:4b | 30/34 |
 | qwen3.5:4b | 28/34 |
 | qwen3-vl:2b | 21/34 |
+| muse-glimmer:30b | 34/34 |
+| ornith-1.5:35b | 31/34 |
+| ornith-1.5:9b | 26/34 |
 
 ## Code — génération de code
 
@@ -262,6 +273,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | gemma4:e4b | 43/48 |
 | gpt-oss:20b | 43/48 |
 | ornith-1.5:9b | 43/48 |
+| muse-glimmer:30b | 43/48 |
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 42/48 |
