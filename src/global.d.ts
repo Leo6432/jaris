@@ -223,7 +223,6 @@ declare global {
       setChatWidgetKeepOpen: (keepOpen: boolean) => void
       armChatWidgetPointer: () => void
       collapseChatWidget: () => void
-      openChatWidget: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void

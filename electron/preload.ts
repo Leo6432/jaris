@@ -275,7 +275,6 @@ const api = {
     ipcRenderer.send(IPC_CHANNELS.setChatWidgetKeepOpen, keepOpen),
   armChatWidgetPointer: (): void => ipcRenderer.send(IPC_CHANNELS.armChatWidgetPointer),
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
-  openChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.openChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
   onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb),

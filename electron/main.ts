@@ -874,8 +874,8 @@ function showWidgetWindow(forceExpanded = false): void {
 }
 
 /**
- * Ouvre la barre de saisie du widget Chat, clavier prêt à écrire : touche « + », et depuis l'étape 325 un clic sur le
- * petit indicateur inactif (la plupart des ordinateurs portables n'ont pas de pavé numérique, donc pas de « + »).
+ * Ouvre la barre de saisie du widget Chat, clavier prêt à écrire : touche « + » seulement. Un clic sur le petit
+ * indicateur ramène toute l'application (étape 338 ; il ouvrait la barre depuis l'étape 325, et Léo ne pouvait plus revenir).
  * `showWidgetWindow(true)` dérive la forme native, la région cliquable et le contenu dessiné du même état, et relance
  * le relevé du pointeur DÉSARMÉ : il ne repliera la barre qu'après y avoir vu entrer la souris puis en sortir — un
  * clic arrive avec la souris déjà dans la fenêtre, la barre ne se replie donc pas aussitôt.
@@ -1597,7 +1597,6 @@ app.whenReady().then(async () => {
     if (displayedWidgetMode === 'chat') chatPointerWasInside = true
   })
   ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
-  ipcMain.on(IPC_CHANNELS.openChatWidget, () => openChatWidgetBar())
   ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform))
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
     setLaunchAtStartup(app, process.platform, enabled)

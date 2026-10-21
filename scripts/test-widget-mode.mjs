@@ -143,7 +143,7 @@ test('le widget texte dit au main la hauteur qu’il occupe VRAIMENT', () => {
 test('le rendu Chat possède un état inactif et + le remplace par la barre', () => {
   assert.match(widgetSource, /inactive[\s\S]{0,800}?chat-widget__idle/)
   assert.match(appSource, /widgetMode === ['"]chat-idle['"][\s\S]{0,300}?inactive=/)
-  // Étape 325 : + et le clic sur l'indicateur passent par openChatWidgetBar, qui déplie la barre.
+  // La touche + passe par openChatWidgetBar, qui déplie la barre (le clic ramène l'application, étape 338).
   assert.match(mainSource, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/)
   assert.match(mainSource, /function openChatWidgetBar\(\)[\s\S]{0,180}?showWidgetWindow\(true\)/)
   assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,80}?widgetWindow\.focus\(\)/)
@@ -297,21 +297,20 @@ test('la raison va à l’écran vocal, et en notification de Windows quand Jari
   assert.doesNotMatch(clientSource, /this\.status = \{/, 'tout changement d’état doit passer par setStatus, qui l’annonce')
 })
 
-// Étape 325 : sans pavé numérique (la plupart des portables), la barre du Chat n'était accessible qu'avec « + ».
-test('un clic sur le petit indicateur du Chat ouvre la barre de saisie, pas toute l’application', () => {
+// Étape 338 : le clic sur le petit indicateur du Chat ramène l'application (comme l'orbe du mode vocal) ; seule la
+// touche « + » ouvre la barre. Le clic qui ouvrait la barre (étape 325) empêchait Léo de revenir à Jaris.
+test('un clic sur le petit indicateur du Chat ramène l’application, + ouvre la barre', () => {
   const idle = /if \(inactive\) \{[\s\S]*?chat-widget__idle[\s\S]*?<\/button>/.exec(widgetSource)?.[0] ?? ''
   assert.ok(idle, 'branche inactive de ChatWidget introuvable')
-  assert.match(idle, /onClick=\{\(\) => window\.jaris\.openChatWidget\(\)\}/)
-  assert.doesNotMatch(idle, /openSettings/, 'le clic rouvrait toute l’application au lieu de la barre')
-  assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.openChatWidget, \(\) => openChatWidgetBar\(\)\)/)
+  assert.match(idle, /onClick=\{\(\) => window\.jaris\.openSettings\(\)\}/)
+  assert.doesNotMatch(idle, /openChatWidget/, 'le clic ouvre encore la barre au lieu de l’application')
+  assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.openSettings, \(\) => showFullWindow\(\)\)/)
   const open = /function openChatWidgetBar\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
   // Les gardes (mode Chat seulement, jamais par-dessus la grande fenêtre) sont EXÉCUTÉES par test-wake-availability.mjs.
-  assert.match(open, /activeMode !== ['"]chat['"][\s\S]{0,200}?showWidgetWindow\(true\)/, 'même chemin que + : forme native, région cliquable et contenu dérivés du même état')
-  // Le clic arrive avec la souris déjà DANS la fenêtre : rien ne doit pré-armer le relevé du pointeur, sinon la barre
-  // se replierait au premier relevé si la souris est encore dans la marge du halo.
+  assert.match(open, /activeMode !== ['"]chat['"][\s\S]{0,200}?showWidgetWindow\(true\)/, 'forme native, région cliquable et contenu dérivés du même état')
   assert.doesNotMatch(open, /chatPointerWasInside/, 'le relevé du pointeur ne doit être armé qu’après une vraie entrée')
   const wake = /function triggerVisibleWake\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
-  assert.match(wake, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/, '+ et le clic passent par la même fonction')
+  assert.match(wake, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/, '+ ouvre la barre du Chat')
   const preload = sourceWithoutComments('electron/preload.ts')
-  assert.match(preload, /openChatWidget: \(\) => ipcRenderer\.send\(IPC_CHANNELS\.openChatWidget\)/)
+  assert.doesNotMatch(preload, /openChatWidget/, 'plus aucun canal pour ouvrir la barre au clic')
 })

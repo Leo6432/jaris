@@ -1231,7 +1231,6 @@ export const IPC_CHANNELS = {
    * « + » — absente de la plupart des ordinateurs portables (pas de pavé numérique). La grande fenêtre reste joignable
    * par « Ouvrir le Chat » dans la barre.
    */
-  openChatWidget: 'jaris:open-chat-widget',
   /**
    * renderer -> main : OptionsMenu.tsx prévient à chaque ouverture/fermeture de la page Options (elle vit
    * dans la fenêtre normale, pas une fenêtre à part — voir `optionsOpen`, main.ts). Léo : "quand on est

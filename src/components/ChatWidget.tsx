@@ -181,16 +181,15 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   }, [inactive, sending, error, reply, hovering, input])
 
   if (inactive) {
-    // Étape 325 : un clic ouvre la barre de saisie, comme la touche « + » — sans pavé numérique (la plupart des
-    // portables), la barre était sinon inaccessible et le clic rouvrait toute l'application. « Ouvrir le Chat », dans
-    // la barre, mène toujours à l'application.
+    // Étape 338 : un clic ramène Jaris, comme le petit orbe du mode vocal ; seule la touche « + » ouvre la barre de
+    // saisie. L'étape 325 avait fait ouvrir la barre au clic : on ne pouvait alors plus revenir à l'application.
     return (
       <button
         className="chat-widget__idle"
         type="button"
         title={t('widget.chat.idle.title')}
         aria-label={t('widget.chat.idle')}
-        onClick={() => window.jaris.openChatWidget()}
+        onClick={() => window.jaris.openSettings()}
       >
         <ChatIcon />
       </button>

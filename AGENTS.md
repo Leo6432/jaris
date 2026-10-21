@@ -9175,3 +9175,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Chromium, garde de main.ts, retrait du conteneur dans tous les cas de Docker), `test-relocation.mjs` (les écritures
   pendant le déplacement sont maintenant faites à la bascule et pendant l'effacement, au lieu de la désinstallation
   de Docker qui n'existe plus).
+
+- **Étape 338, Léo : « en Chat, ça se met en widget, on veut cliquer dessus pour revenir mais ça met le chat ; ça doit
+  être comme ça quand on clique sur +, sinon on ne peut pas revenir ».** Depuis l'étape 325, un clic sur le petit
+  indicateur du Chat ouvrait la barre de saisie (pour les portables sans pavé numérique) : plus aucun moyen de revenir
+  à l'application depuis le widget. Le clic ramène maintenant Jaris (`openSettings`, comme le petit orbe du mode
+  vocal) ; seule la touche « + » ouvre la barre. Le canal `openChatWidget` (seul usage : ce clic) est retiré ;
+  infobulle et libellé réécrits dans les 24 langues. Cette entrée REMPLACE le point 7 de l'étape 325. **Leçon : un
+  widget qui remplace la fenêtre doit toujours garder un geste simple pour la rouvrir — en donner un second usage au
+  clic retire ce geste.** Régression : `test-chat-widget-ui.mjs` et `test-widget-mode.mjs` (vérifiés en remettant
+  l'ouverture de la barre au clic : 3 échecs).

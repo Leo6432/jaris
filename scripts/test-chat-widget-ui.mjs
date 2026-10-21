@@ -154,46 +154,18 @@ test('le Chat inactif reste un petit widget puis + peut afficher une barre déj�
   })
 })
 
-// Étape 325 : la barre n'était accessible qu'avec la touche + du pavé numérique, absente de la plupart des portables ;
-// le clic sur l'indicateur rouvrait toute l'application.
-test('un clic sur l’indicateur inactif ouvre la barre (pas l’application), sans qu’elle se replie aussitôt', options, async () => {
+// Étape 338 : depuis l'étape 325, le clic sur l'indicateur ouvrait la barre de saisie — Léo ne pouvait plus revenir à
+// l'application. Comme le petit orbe du mode vocal, le clic ramène Jaris ; seule la touche « + » ouvre la barre.
+test('un clic sur l’indicateur inactif ramène l’application, sans ouvrir la barre', options, async () => {
   await withWidget(async (page) => {
     await page.evaluate(() => window.__renderChatWidget(true))
     await page.waitForSelector('.chat-widget__idle')
-    assert.match(await page.getAttribute('.chat-widget__idle', 'title'), /clique pour écrire/, 'l’infobulle doit dire qu’un clic suffit')
-    const rectOf = (selector) => page.$eval(selector, (el) => {
-      const { left, top, right, bottom } = el.getBoundingClientRect()
-      return { left, top, right, bottom }
-    })
-    const idle = await rectOf('.chat-widget__idle')
-
+    assert.match(await page.getAttribute('.chat-widget__idle', 'title'), /clique pour revenir à Jaris/, 'l’infobulle doit dire que le clic ramène Jaris')
+    assert.match(await page.getAttribute('.chat-widget__idle', 'title'), /\+/, 'l’infobulle doit encore dire comment écrire (touche +)')
     await page.click('.chat-widget__idle')
-    await page.waitForSelector('.chat-widget__input')
-    assert.equal(await page.evaluate(() => window.__openedChatBar), 1, 'le clic ne demande pas la barre de saisie')
-    assert.equal(await page.evaluate(() => window.__openedSettings), 0, 'le clic rouvre encore toute l’application')
-
-    // Le point cliqué reste DANS la barre dépliée, et dans la surface que le relevé natif du pointeur (main.ts) tient pour
-    // « dedans » (la fenêtre moins la marge du halo) : le renderer (mouseenter) et le main ne peuvent pas être en
-    // désaccord sur la position de la souris juste après le clic — sinon le relevé armé par mouseenter verrait la
-    // souris « dehors » et replierait la barre aussitôt.
-    const halo = Number(/const WIDGET_CHAT_HALO_MARGIN = (\d+)/.exec(readFileSync(join(projectRoot, 'electron/main.ts'), 'utf8'))?.[1])
-    assert.ok(halo > 0, 'WIDGET_CHAT_HALO_MARGIN introuvable dans main.ts')
-    const bar = await rectOf('.chat-widget')
-    const viewport = page.viewportSize()
-    assert.ok(
-      idle.left >= Math.max(bar.left, halo) && idle.right <= Math.min(bar.right, viewport.width - halo) &&
-        idle.top >= Math.max(bar.top, halo) && idle.bottom <= Math.min(bar.bottom, viewport.height - halo),
-      `l’indicateur (${JSON.stringify(idle)}) déborde de la barre dépliée (${JSON.stringify(bar)}) ou de la surface du relevé natif`
-    )
-    // La souris est restée là où elle a cliqué, DANS la barre : rien ne doit la replier tout seul.
-    await page.waitForTimeout(400)
-    assert.equal(await page.evaluate(() => window.__collapsed), 0, 'la barre s’est repliée juste après le clic')
-    assert.equal(await page.$eval('.chat-widget__input', (el) => document.activeElement === el), true, 'le clavier n’est pas prêt à écrire')
-
-    // Elle se replie toujours quand la souris en sort vraiment.
-    await page.mouse.move(240, 34)
-    await page.mouse.move(459, 67)
-    await page.waitForFunction(() => window.__collapsed === 1)
+    await page.waitForFunction(() => window.__openedSettings === 1)
+    assert.equal(await page.evaluate(() => window.__openedChatBar), 0, 'le clic ouvre encore la barre au lieu de l’application')
+    assert.equal(await page.$('.chat-widget__input'), null, 'la barre ne doit pas apparaître au clic')
   })
 })
 
