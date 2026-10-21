@@ -61,11 +61,12 @@ test('machine de Léo (8 Go de VRAM) : Code prend le plus intelligent de TOUS le
   assert.equal(picks.code, 'qwen3.8:27b', `Code attendu : le même que Puissant, obtenu ${picks.code}`)
 })
 
-test('Rapide sur 8 Go, seuil de 50 % (Léo, 04/10/2026) : granite4.2:8b entre dans la course et l’emporte', async () => {
+test('Rapide sur 8 Go, seuil de 50 % (Léo, 04/10/2026) : le plus intelligent parmi ceux qui restent assez rapides', async () => {
   const picks = await picksFor(8, 32)
-  // Référence : ministral-3:8b (100), le plus rapide des 78/78. À 75 %, seuls les 3B passaient (granite4.2:3b
-  // gagnait) ; à 50 % (50 et plus), granite4.2:8b (62, intelligence 11,1) passe aussi et a la meilleure note.
-  assert.equal(picks.flash, 'granite4.2:8b')
+  // Vitesses relevées le 21/10/2026 (étape 340). Référence : ministral-3:8b (111,4), le plus rapide des 78/78 ;
+  // plancher 55,7. granite4.2:8b (47,1, il était à 62) passe sous le plancher ; qwen3.5:9b (64,4) passe et a la
+  // meilleure note de ceux qui restent.
+  assert.equal(picks.flash, 'qwen3.5:9b')
 })
 
 // 03/10/2026, Léo : « une vraie analyse, avec un algorithme qui sait faire un entre-deux entre intelligence et
@@ -109,11 +110,13 @@ test('demandes complètes : multipliées à la note des rôles de conversation, 
  * 5 points d'intelligence en plus mais ne perd que 3 points de vitesse ». Exactement le cas de granite4.2:3b
  * face à ministral-3:3b (9 contre 5 d'intelligence, 218 contre 221 de vitesse), rendu fiable ici exprès.
  */
-test('Rapide : un modèle nettement plus intelligent et à peine plus lent l’emporte sur le plus rapide', async () => {
-  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
-  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
-  assert.equal(r.models.flash, 'granite4.2:3b', '+4 d’intelligence pour -3 de vitesse : le plus intelligent doit gagner')
-  // qwen3.5:9b (11 d'intelligence) est bien plus lent (56 contre 221) : il ne compte pas comme « rapide ».
+test('Rapide : un modèle nettement plus intelligent et un peu plus lent l’emporte sur le plus rapide', async () => {
+  // Étape 340 : l'exemple de Léo (granite4.2:3b, 218 contre 221) ne tient plus — sa vitesse publiée est tombée à
+  // 51,7. Même règle avec les vitesses du 21/10/2026 : gemma4:12b (114,9, 58 % de ministral-3:3b à 197,9) est bien
+  // plus fort (14,2 contre 4,8) ; qwen3.5:9b (64,4, 33 %) reste trop lent pour compter comme « rapide ».
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| gemma4:12b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
+  const r = await setup({ vramMib: 12 * 1024, scores }).pickBestModelsFromBenchmark()
+  assert.equal(r.models.flash, 'gemma4:12b', 'un peu plus lent mais bien plus intelligent : il doit gagner')
   assert.notEqual(r.models.flash, 'qwen3.5:9b')
 })
 
@@ -144,7 +147,9 @@ test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de 
 
 test('Médium peut être un « gros » modèle quand la carte le permet (plus de liste réservée)', async () => {
   const picks = await picksFor(24, 64)
-  assert.equal(picks.medium, 'qwen3.8:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
+  // Étape 340 : qwen3.8:27b (39,2 tokens/s publiés) passe sous le plancher de Médium (20 % de gpt-oss:20b, 235,4) ;
+  // qwen3.6:27b (17 Go) le remplace — toujours un « gros » modèle.
+  assert.equal(picks.medium, 'qwen3.6:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
 })
 
 test('Vision ne choisit QUE parmi les modèles qui lisent une image', async () => {
@@ -423,10 +428,12 @@ test('force en Code : Terminal-Bench 2.1, avec un plancher d’une tâche sur 89
   assert.equal(scan.codeStrength('qwen3-coder:30b'), null, 'pas de Terminal-Bench 2.1 publié : passe après les modèles mesurés')
 })
 
-test('« n’invente pas » change le modèle Faible sur 12 Go : granite4.2:8b et plus gemma4:12b', async () => {
+test('« n’invente pas » départage gemma4:12b et granite4.2:8b sur 12 Go', async () => {
   // gemma4:12b invente souvent (Omniscience −52,7) : 14,2 × 0,24 = 3,4 ; granite4.2:8b (−17,2) : 11,1 × 0,41 = 4,6.
-  const picks = await picksFor(12, 32)
-  assert.equal(picks.flash, 'granite4.2:8b')
+  // Étape 340 : vérifié sur Moyen. En Faible, granite4.2:8b (47,1 tokens/s publiés) est désormais trop lent.
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| gemma4:12b | 6/6 |', '| granite4.2:8b | 6/6 |'].join('\n')
+  const r = await setup({ vramMib: 12 * 1024, ramGb: 32, scores }).pickBestModelsFromBenchmark()
+  assert.equal(r.models.medium, 'granite4.2:8b')
 })
 
 test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au test de code) grâce au plancher', async () => {
@@ -437,14 +444,15 @@ test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au tes
   assert.equal(r.codeModel, 'qwen3.5:0.8b')
 })
 
-test('machine de Léo (8 Go, 32 Go de RAM) : les nouveaux scores ne changent aucun de ses modèles', async () => {
+test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
   // Ollama 0.40.5, comme chez Léo : sans version connue, K2 Horizon n'est jamais choisi (étape 312).
   const scan = setup({ vramMib: 8 * 1024, ramGb: 32 })
   scan.setOllamaVersionSource(() => '0.40.5')
   const r = await scan.pickBestModelsFromBenchmark()
   const picks = { ...r.models, vision: r.visionModel, code: r.codeModel }
   assert.deepEqual(JSON.parse(JSON.stringify(picks)), {
-    flash: 'granite4.2:8b',
+    // Étape 340 : granite4.2:8b → qwen3.5:9b en Faible (vitesses Artificial Analysis du 21/10/2026).
+    flash: 'qwen3.5:9b',
     medium: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
     large: 'qwen3.8:27b',
     vision: 'qwen3.8:27b',

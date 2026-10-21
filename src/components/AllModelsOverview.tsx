@@ -332,7 +332,7 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? t('models.notPublished') : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
                                 <td className="options-menu__col-num">{entry.omniscience == null ? '—' : formatDecimal(entry.omniscience)}</td>
                                 <td className="options-menu__col-num">{entry.terminalBench == null ? '—' : formatPercent(entry.terminalBench / 100)}</td>
-                                <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
+                                <td className="options-menu__col-num">{typeof entry.artificialAnalysisSpeed === 'number' ? formatDecimal(entry.artificialAnalysisSpeed) : '—'}</td>
                               </tr>
                             ))}
                           </tbody>

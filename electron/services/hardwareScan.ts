@@ -1024,34 +1024,42 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
  * fournisseurs : ministral-3:14b était à 87, il est à 65. mistral-small3.2:24b, devstral-2:123b,
  * devstral-small-2:24b et gemma4:26b n'ont plus de vitesse publiée (N/A) : retirées. Les chiffres présents
  * sur leur page appartiennent aux modèles cités en comparaison, pas à eux.
+ *
+ * Étape 340 (Léo : « qwen3.5:27b tu as mis 75 mais sur le site ça met 76.3 ») : tableau entier relu le
+ * 21/10/2026 sur les fiches, phrase « X generates output at N tokens per second » ET champ
+ * `timescaleData.medianOutputSpeed` de l'objet du modèle (identiques à la décimale près). Une décimale désormais,
+ * comme le site. Ces vitesses changent souvent, et parfois beaucoup, quand le fournisseur mesuré change :
+ * granite4.2:3b est passé de 221 à 51,7 tokens/s. gemma4:26b (63,8) et mistral-small3.2:24b (32,9) ont de nouveau
+ * une vitesse publiée ; qwen3-vl:8b n'en a plus (retirée).
  */
 const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
-  'qwen3.5:4b': 22,
-  'qwen3.5:9b': 52,
-  'qwen3.5:27b': 75,
-  'qwen3.5:35b': 148,
-  'qwen3.6:27b': 58,
-  'qwen3.6:35b': 128,
-  'qwen3.6:35b-a3b': 128,
-  'qwen3.8:27b': 46,
-  'muse-glimmer:30b': 139,
-  'gpt-oss:20b': 187,
-  'gemma4:12b': 115,
-  'gemma4:31b': 35,
-  'gemma4:e4b': 69,
-  'ministral-3:14b': 65,
-  'ministral-3:3b': 194,
-  'granite4.2:3b': 221,
-  'ministral-3:8b': 100,
-  'granite4.2:8b': 62,
-  'granite4.2:30b': 77,
-  'glm-4.7-flash:q4_K_M': 61,
-  'nemotron-3.5-lightning:30b': 301,
-  'qwen3-vl:8b': 115,
-  'qwen3-coder:30b': 85,
-  'north-mini-code-1.0': 84,
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58,
-  'phi4-mini': 46
+  'qwen3.5:4b': 17.7,
+  'qwen3.5:9b': 64.4,
+  'qwen3.5:27b': 76.3,
+  'qwen3.5:35b': 142.4,
+  'qwen3.6:27b': 58.2,
+  'qwen3.6:35b': 134.4,
+  'qwen3.6:35b-a3b': 134.4,
+  'qwen3.8:27b': 39.2,
+  'muse-glimmer:30b': 112.1,
+  'gpt-oss:20b': 235.4,
+  'gemma4:12b': 114.9,
+  'gemma4:26b': 63.8,
+  'gemma4:31b': 35.7,
+  'gemma4:e4b': 28.3,
+  'ministral-3:14b': 80.7,
+  'ministral-3:3b': 197.9,
+  'granite4.2:3b': 51.7,
+  'ministral-3:8b': 111.4,
+  'granite4.2:8b': 47.1,
+  'granite4.2:30b': 41.2,
+  'mistral-small3.2:24b': 32.9,
+  'glm-4.7-flash:q4_K_M': 84.5,
+  'nemotron-3.5-lightning:30b': 307.2,
+  'qwen3-coder:30b': 178.9,
+  'north-mini-code-1.0': 75.4,
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 24.8,
+  'phi4-mini': 45.7
 }
 
 /**
@@ -1078,7 +1086,7 @@ const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
   'qwen3.6:35b-a3b': -22.2, // Qwen3.6 35B A3B (Reasoning)
   'qwen3.8:27b': -10.0, // Qwen3.8 27B (Xhigh)
   'muse-glimmer:30b': -32.9, // Muse Glimmer (High)
-  'gpt-oss:20b': -63.1, // gpt-oss-20b (High)
+  'gpt-oss:20b': -63.0, // gpt-oss-20b (High) — -63,1 jusqu'au 21/10/2026
   'gemma4:12b': -52.7, // Gemma 4 12B (Reasoning)
   'gemma4:26b': -50.8, // Gemma 4 26B A4B (Reasoning)
   'gemma4:31b': -47.9, // Gemma 4 31B (Reasoning)
@@ -1104,7 +1112,7 @@ const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': -19.4, // Ling 3.0 Tiny
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': -11.7, // MiniCPM5-2B
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': -42.5, // Nanbeige4.1-3B
-  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': -11.0, // LFM2.5-2.6B
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': -10.9, // LFM2.5-2.6B — -11,0 jusqu'au 21/10/2026
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': -72.8, // K2 Horizon 0.9B
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': -28.6, // K2 Horizon 3.7B
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': -16.6, // K2 Horizon 7B

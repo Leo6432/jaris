@@ -140,8 +140,12 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
-  assert.equal(byModel.get('ministral-3:3b'), 194)
-  assert.equal(byModel.get('granite4.2:3b'), 221)
+  // Étape 340 : relevées le 21/10/2026, avec la décimale du site (qwen3.5:27b : 76,3, signalé par Léo).
+  assert.equal(byModel.get('ministral-3:3b'), 197.9)
+  assert.equal(byModel.get('granite4.2:3b'), 51.7)
+  assert.equal(byModel.get('qwen3.5:27b'), 76.3)
+  assert.equal(byModel.get('gemma4:26b'), 63.8, 'de nouveau publiée')
+  assert.equal(byModel.get('qwen3-vl:8b'), null, 'plus publiée : retirée')
   // Étape 220 : plus de vitesse publiée pour Devstral Small 2 (N/A) — retirée plutôt que gardée périmée.
   assert.equal(byModel.get('devstral-small-2:24b'), null)
   // qwen3.5:0.8b a un Intelligence Index connu (6) mais Artificial Analysis affiche "N/A" pour sa vitesse.

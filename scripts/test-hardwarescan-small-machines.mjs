@@ -75,9 +75,10 @@ test('le gabarit « deux fois le plus léger » ne sert QUE quand rien ne tient 
   assert.equal(chosen.medium, 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M')
 })
 
-test('la machine de Léo (8 Go de VRAM, 63 Go de RAM) ne change pas', async () => {
+test('la machine de Léo (8 Go de VRAM, 63 Go de RAM) : modèles attendus', async () => {
   assert.deepEqual(await picks(8192, 63), {
-    flash: 'granite4.2:8b',
+    // Étape 340 : granite4.2:8b → qwen3.5:9b en Faible (vitesses Artificial Analysis du 21/10/2026).
+    flash: 'qwen3.5:9b',
     medium: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
     large: 'qwen3.8:27b',
     vision: 'qwen3.8:27b',

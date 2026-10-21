@@ -37,7 +37,7 @@ const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: Mes
 
 /** Vitesse publiée par Artificial Analysis (étape 131) — mesurée sur leur matériel, pas sur cette machine. */
 function formatSpeed(entry: ModelOverviewEntry): string {
-  return entry.artificialAnalysisSpeed === null ? '—' : `${entry.artificialAnalysisSpeed} tok/s`
+  return typeof entry.artificialAnalysisSpeed === 'number' ? `${formatDecimal(entry.artificialAnalysisSpeed)} tok/s` : '—'
 }
 
 /** Libellé collé à la valeur : ce tableau n'a pas d'en-tête, un nombre nu serait incompréhensible (étape 130). */
@@ -171,7 +171,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                     {/* « — » si rien n'est publié : aligné en colonne dans le tableau large, masqué quand la carte passe sur
                         deux lignes par rôle (il n'y a plus de colonne pour lui donner un sens, voir index.css). */}
                     <td
-                      className={`capacity-scan__tier-speed${entry.artificialAnalysisSpeed === null ? EMPTY : ''}`}
+                      className={`capacity-scan__tier-speed${typeof entry.artificialAnalysisSpeed === 'number' ? '' : EMPTY}`}
                       title={t('picks.speed.title')}
                     >
                       {formatSpeed(entry)}

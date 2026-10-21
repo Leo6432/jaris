@@ -9193,3 +9193,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l’étoile est collée au mot des deux côtés (« 3 * 4 * 5 » reste tel quel), titre « ### » en ligne grasse, « ** » sans
   partenaire retiré ; rien ne change dans un bloc de code. Régression : `test-format-reply.mjs` (vraie réponse de
   Léo ; 3 tests échouent avec l’ancien code).
+
+- **Étape 340, Léo : « revois tous les scores Artificial Analysis… qwen3.5:27b tu as mis 75, le site met 76,3 ».**
+  Les 43 fiches ont été relues le 21/10/2026, sur les données brutes de chaque page. La vitesse est lue dans la phrase
+  « X generates output at N tokens per second » ET dans `timescaleData.medianOutputSpeed` de l'objet du modèle
+  (identiques). Les pages qui regroupent les deux variantes (« Reasoning » / « Non-reasoning ») n'ont pas d'objet
+  `currentModel` : il faut chercher l'objet dont le `name` est la variante exacte. Résultats :
+  - Intelligence et Terminal-Bench 2.1 : tous identiques. Aucun nouveau score : qwen3.5:27b/35b, glm-4.7-flash,
+    qwen3-vl, qwen3:1.7b, qwen3-coder:30b et qwen2.5-coder n'ont toujours pas de Terminal-Bench 2.1 en
+    raisonnement.
+  - Omniscience : gpt-oss:20b passe à −63,0 et LFM2.5 à −10,9.
+  - Vitesses : presque toutes ont bougé, parfois beaucoup, car le fournisseur mesuré change. granite4.2:3b passe de
+    221 à 51,7, gpt-oss:20b de 187 à 235,4, qwen3-coder:30b de 85 à 178,9. gemma4:26b et mistral-small3.2:24b ont
+    de nouveau une vitesse, qwen3-vl:8b n'en a plus. Stockées et affichées avec une décimale, comme le site
+    (`formatDecimal`).
+  **Conséquence sur les choix, comparés sur 19 machines types** : sur la machine de Léo, Faible passe de
+  granite4.2:8b (47,1 tok/s, sous le plancher de 50 % de ministral-3:8b à 111,4) à qwen3.5:9b. D'autres choix
+  changent aussi :
+  - Faible : ministral-3:3b sur 4 Go, gemma4:12b sur 10-12 Go, gpt-oss:20b sur 16 Go ;
+  - Moyen sur 24 Go : qwen3.6:27b, car qwen3.8:27b, à 39,2, passe sous le plancher de 20 %.
+  **Leçon : les vitesses d'Artificial Analysis mesurent un fournisseur en ligne, pas la machine de l'utilisateur, et
+  elles changent de semaine en semaine.** Un test qui illustre une règle avec de VRAIES vitesses casse dès qu'elles
+  bougent : les exemples sont refaits avec les valeurs du jour, la règle testée reste la même. Régression :
+  `test-hardwarescan-*.mjs`, `test-my-model-picks-ui.mjs` (« 17,7 tok/s »).

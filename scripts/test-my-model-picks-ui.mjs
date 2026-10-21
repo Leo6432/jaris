@@ -40,7 +40,7 @@ const e = (model, tool, ai, aiSpeed, demands = null) => ({
 const picks = {
   gpuName: 'NVIDIA GeForce RTX 3070', vramGb: window.__vramGb ?? 8, ramGb: 32,
   flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '62/78', 10.8, null, '26/48'),
-  medium: e('qwen3.5:4b', '74/78', 13.1, 22, '38/48'),
+  medium: e('qwen3.5:4b', '74/78', 13.1, 17.7, '38/48'),
   large: e('qwen3.8:27b', '77/78', 33.7, 46, '45/48'),
   vision: e('qwen3-vl:4b', '30/34', 7, 109, '40/48'),
   // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
@@ -138,7 +138,7 @@ test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec lib
     )
     assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
       ['Faible', 'G9v3-3B', '—', 'Intelligence 10,8'],
-      ['Moyen', 'qwen3.5:4b', '22 tok/s', 'Intelligence 13,1'],
+      ['Moyen', 'qwen3.5:4b', '17,7 tok/s', 'Intelligence 13,1'],
       ['Élevé', 'qwen3.8:27b', '46 tok/s', 'Intelligence 33,7'],
       ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Intelligence 7,0'],
       ['Code', 'qwen2.5-coder:14b', '—', '—']
@@ -346,7 +346,7 @@ test('carte sur deux lignes par rôle : aucun « — » orphelin, les valeurs pu
         tds.filter((td) => td.getClientRects().length > 0).map((td) => td.textContent.trim())
       )
       assert.ok(!visible.includes('—'), `à ${width} px, un « — » seul reste visible : ${JSON.stringify(visible)}`)
-      for (const value of ['Intelligence 10,8', '22 tok/s', 'Intelligence 13,1', '109 tok/s', 'Intelligence 7,0']) {
+      for (const value of ['Intelligence 10,8', '17,7 tok/s', 'Intelligence 13,1', '109 tok/s', 'Intelligence 7,0']) {
         assert.ok(visible.includes(value), `à ${width} px, « ${value} » a disparu`)
       }
       // Code : ni vitesse ni intelligence publiées, mais son score reste.
