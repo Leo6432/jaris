@@ -1,6 +1,10 @@
 import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
-import { globSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
+import * as nodeFs from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -8,201 +12,288 @@ import vm from 'node:vm'
 import ts from 'typescript'
 
 /**
- * Bouton "Mettre à jour" d'Ollama (Options → Modèles), étape 112.
+ * Étape 336 — l'Ollama de Jaris (ollamaEngine.ts) et le bouton d'Options qui l'installe ou le met à jour
+ * (updateOllama, dependencyServices.ts). Les deux modules RÉELS sont chargés ensemble, sur un vrai dossier
+ * temporaire ; seuls internet, le serveur Ollama et les programmes Windows (tar.exe, PowerShell, taskkill) sont
+ * simulés par une fausse machine qui sait quelle version d'Ollama tourne.
  *
- * Léo : "je clique sur mis a jour de ollama [...] ça bloque depuis 5m et je fait clique droit sur ollama et
- * je voit aucune mis a jour". Rien n'était bloqué : Jaris téléchargeait l'installeur officiel d'Ollama,
- * 1,5 Go (mesuré), sans remonter le moindre signe de vie — le bouton restait figé sur "Mise à jour en
- * cours…" pendant tout ce temps, impossible à distinguer d'un plantage. C'était le SEUL des quatre appels à
- * `downloadToFile` du dépôt à ne passer aucun `onProgress`, alors que c'est de loin le plus long.
- *
- * Deux garanties verrouillées ici :
- *  1. l'avancement traverse vraiment toute la chaîne jusqu'à l'appelant (comportement réel, modules simulés) ;
- *  2. aucun futur téléchargement ne peut réintroduire le même silence (garde structurel sur tout le dépôt).
+ * Ce qui est verrouillé :
+ *  - passer de l'Ollama de Windows à celui de Jaris, avec l'avancement réel du téléchargement (étape 112 :
+ *    1,6 Go sans signe de vie se lit comme un blocage) ;
+ *  - une mise à jour qui démarre la nouvelle version, vérifie son numéro, et efface l'ancienne seulement après ;
+ *  - une nouvelle version qui ne démarre pas : retour à l'ancienne, rien de perdu ;
+ *  - un fichier dont l'empreinte ne correspond pas : rien n'est installé ni lancé.
  */
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 
-/**
- * Chargé dans le realm COURANT (`runInThisContext`), pas dans un contexte séparé : ce test compare de vrais
- * objets d'avancement avec `assert.deepEqual`, et `vm.runInNewContext` leur donnerait des prototypes
- * différents — "Values have same structure but are not reference-equal", piège déjà documenté dans ce dépôt.
- */
-function loadModule(relativePath, requireShim) {
-  const source = ts.transpileModule(readFileSync(join(projectRoot, relativePath), 'utf8'), {
+function compile(relativePath) {
+  return ts.transpileModule(readFileSync(join(projectRoot, relativePath), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
-  const exports = {}
-  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n(requireShim))
-  return exports
 }
-
-function loadDependencyServices({ onDownload }) {
-  const spawned = []
-  return {
-    spawned,
-    module: loadModule('electron/services/dependencyServices.ts', (id) => {
-      if (id === 'child_process') {
-        return {
-          exec: (_cmd, _opts, cb) => cb?.(null, { stdout: '', stderr: '' }),
-          execSync: () => '',
-          spawn: (command) => {
-            spawned.push(command)
-            // Faux process minimal mais RÉALISTE sur un point précis : winget est interrogé en dernier
-            // recours, et updateOllama l'attend via une promesse que seul un évènement 'error'/'close'
-            // résout. Un mock qui n'émet jamais rien laisse cette promesse pendante pour toujours — le test
-            // ne se termine alors pas du tout, sans dire pourquoi (piège rencontré en écrivant ce fichier).
-            const handlers = {}
-            const proc = {
-              stdout: { on: () => {} },
-              stderr: { on: () => {} },
-              unref: () => {},
-              on: (event, cb) => {
-                handlers[event] = cb
-                return proc
-              }
-            }
-            if (String(command) === 'winget') {
-              // Machine sans winget : exactement le cas où Jaris doit renvoyer un message actionnable.
-              setImmediate(() => handlers.error?.(new Error('winget introuvable')))
-            } else if (String(command) === 'powershell.exe') {
-              // La signature officielle de l'installeur est vérifiée avant son lancement.
-              setImmediate(() => handlers.close?.(0))
-            }
-            return proc
-          }
-        }
-      }
-      // `existsSync` toujours false : "ollama app.exe" est introuvable, donc restartOllamaApp abandonne
-      // immédiatement et updateOllama passe directement au téléchargement de l'installeur — le chemin qui
-      // a occupé Léo pendant 5 minutes.
-      if (id === 'fs') return { existsSync: () => false }
-      if (id === 'fs/promises') return { rm: async () => {} }
-      if (id.endsWith('/storageRoot')) return { downloadsDir: () => '/tmp', getStorageRoot: () => null }
-      if (id.endsWith('/dockerLocation')) return { dockerInstallFlags: () => [] }
-      if (id === 'path') return { join: (...parts) => parts.join('/'), basename: (p) => p.split('/').pop(), dirname: (p) => p.split('/').slice(0, -1).join('/') }
-      if (id === 'util') return { promisify: (fn) => (...args) => new Promise((resolve) => fn(...args, () => resolve({ stdout: '', stderr: '' }))) }
-      if (id.endsWith('/config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
-      if (id.endsWith('/appLauncher')) return { didAppLaunch: () => true, openApp: async () => '' }
-      if (id.endsWith('/download')) return { downloadToFile: onDownload }
-      if (id.endsWith('/searxngHome')) return {} // SearXNG (étape 153) : sans rapport avec la mise à jour d'Ollama
-      if (id.endsWith('/formatBytes')) return { formatBytes: (n) => `${n} o` }
-      throw new Error(`module non simulé dans le test : ${id}`)
-    })
-  }
-}
-
-test("l'avancement du téléchargement d'Ollama remonte vraiment jusqu'à l'appelant", async () => {
-  // 1,5 Go livrés en quatre paquets, comme le ferait le vrai serveur.
-  const total = 1_610_612_736
-  const { module, spawned } = loadDependencyServices({
-    onDownload: async (_url, _destination, options) => {
-      for (const percent of [0, 25, 75, 100]) {
-        options?.onProgress?.({ receivedBytes: Math.round(total * (percent / 100)), totalBytes: total, percent })
-      }
-    }
-  })
-
-  const recu = []
-  const result = await module.updateOllama((progress) => recu.push(progress))
-
-  assert.equal(result.success, true, `la mise à jour a échoué : ${result.message}`)
-  assert.ok(spawned.some((cmd) => String(cmd).includes('JarisOllamaSetup')), "l'installeur n'a jamais été lancé")
-
-  // Le vrai cœur du correctif : sans onProgress, ce tableau restait VIDE pendant plusieurs minutes.
-  const telechargement = recu.filter((p) => p.phase === 'download')
-  assert.ok(telechargement.length >= 4, `avancement muet : ${JSON.stringify(recu)}`)
-  assert.deepEqual(
-    telechargement.map((p) => p.percent),
-    [0, 25, 75, 100],
-    "les pourcentages réellement reçus ne sont pas ceux transmis par le téléchargement"
-  )
-  assert.equal(telechargement[0].totalBytes, total, 'la taille totale ne remonte pas (aucune barre possible)')
-  // Une dernière étape après le téléchargement : l'installeur est lancé, la fenêtre attend un clic.
-  assert.equal(recu.at(-1).phase, 'install')
-})
-
-test("aucun avancement n'est inventé quand le téléchargement échoue", async () => {
-  // Un échec doit retomber sur les méthodes suivantes (winget), jamais faire croire que c'est terminé.
-  const { module } = loadDependencyServices({
-    onDownload: async () => {
-      throw new Error('connexion coupée')
-    }
-  })
-
-  const recu = []
-  await module.updateOllama((progress) => recu.push(progress))
-  assert.deepEqual(
-    recu.filter((p) => p.phase === 'install'),
-    [],
-    "un téléchargement échoué a quand même annoncé « installation lancée »"
-  )
-})
 
 /**
- * Étape 170, Léo : « après la mise à jour le message ne se supprime pas et on peut refaire la mise à jour, faut
- * redémarrer l'appli ». L'installeur officiel se termine dans SA fenêtre, bien après le clic ; le statut n'était
- * relu qu'une fois, juste après son lancement. Faux Ollama local : la version change quand l'installeur a fini.
+ * Horloge rapide : les attentes de quelques secondes (serveur qui démarre, port qui se libère) passent en un
+ * tour de boucle, sinon un démarrage raté coûterait 30 vraies secondes au test.
  */
-function fakeOllamaFetch(versions) {
-  let calls = 0
-  return async (url) => {
-    if (String(url).endsWith('/api/version')) {
-      const version = versions[Math.min(calls++, versions.length - 1)]
-      return { ok: true, json: async () => ({ version }) }
+function fastClock() {
+  let now = 0
+  const timers = new Map()
+  let next = 1
+  return {
+    setTimeout: (fn, ms = 0) => {
+      const id = next++
+      timers.set(id, true)
+      setImmediate(() => {
+        if (!timers.delete(id)) return
+        now += ms
+        fn()
+      })
+      return { unref() {}, id }
+    },
+    clearTimeout: (handle) => timers.delete(handle?.id),
+    Date: class extends Date {
+      static now() {
+        return now
+      }
     }
-    if (String(url).includes('api.github.com/repos/ollama/ollama/releases/latest')) {
-      return { ok: true, json: async () => ({ tag_name: 'v0.34.4' }) }
-    }
-    throw new Error(`requête inattendue : ${url}`)
   }
 }
 
-async function withFetch(fetchImpl, run) {
-  const original = globalThis.fetch
-  globalThis.fetch = fetchImpl
-  // La surveillance attend avec des minuteurs « unref » (elle ne doit jamais retenir Jaris) : sans ce minuteur
-  // normal, Node s'arrêterait pendant l'attente du test.
-  const keepAlive = setInterval(() => {}, 1000)
-  try {
-    await run()
-  } finally {
-    clearInterval(keepAlive)
-    globalThis.fetch = original
-  }
+const ZIP_CONTENT = {
+  '0.40.4': 'paquet officiel 0.40.4',
+  '0.40.5': 'paquet officiel 0.40.5'
 }
+const sha = (text) => createHash('sha256').update(text).digest('hex')
 
-test("fin de l'installeur officiel : la nouvelle version est diffusée sans redémarrer Jaris", async () => {
-  const { module } = loadDependencyServices({ onDownload: async () => {} })
-  const recu = []
-  module.onOllamaVersionStatus((status) => recu.push(status))
-  await withFetch(fakeOllamaFetch(['0.34.2', '0.34.2', '0.34.4']), () =>
-    module.watchOllamaInstallerCompletion('0.34.2', { intervalMs: 5, timeoutMs: 5000 })
-  )
-  assert.deepEqual(recu.at(-1), { current: '0.34.4', latest: '0.34.4', outdated: false })
-  assert.deepEqual(module.getOllamaVersionStatus(), { current: '0.34.4', latest: '0.34.4', outdated: false })
-})
+/**
+ * La fausse machine : `running` est la version d'Ollama qui répond sur le port de Jaris, `broken` les versions qui
+ * ne démarrent jamais, `latest` la dernière publiée sur GitHub.
+ */
+function setupMachine({ latest = '0.40.5', installed = null, broken = [], corrupt = false } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'jaris-ollama-engine-'))
+  const localAppData = join(root, 'local')
+  const machine = { root, localAppData, latest, broken, running: null, downloads: [], spawns: [], host: 'http://127.0.0.1:11434' }
+  const engineDir = join(localAppData, 'Jaris', 'ollama-engine')
+  mkdirSync(engineDir, { recursive: true })
+  if (installed) {
+    mkdirSync(join(engineDir, 'versions', installed), { recursive: true })
+    writeFileSync(join(engineDir, 'versions', installed, 'ollama.exe'), `ollama ${installed}`)
+    writeFileSync(join(engineDir, 'current.json'), JSON.stringify({ version: installed }))
+    machine.running = installed
+  }
+  const engineUrl = 'http://127.0.0.1:11435'
 
-test("installeur fermé sans installer : le statut « pas à jour » revient, pour pouvoir relancer", async () => {
-  const { module } = loadDependencyServices({ onDownload: async () => {} })
-  const recu = []
-  module.onOllamaVersionStatus((status) => recu.push(status))
-  await withFetch(fakeOllamaFetch(['0.34.2']), () =>
-    module.watchOllamaInstallerCompletion('0.34.2', { intervalMs: 5, timeoutMs: 60 })
-  )
-  assert.equal(recu.at(-1)?.outdated, true)
-})
+  machine.fetch = async (url) => {
+    url = String(url)
+    if (url.startsWith(engineUrl)) {
+      if (!machine.running) throw new Error('connexion refusée')
+      if (url.endsWith('/api/version')) return { ok: true, json: async () => ({ version: machine.running }) }
+      return { ok: true, json: async () => ({ models: [] }) }
+    }
+    if (url.includes('api.github.com/repos/ollama/ollama/releases/latest')) {
+      return { ok: true, json: async () => ({ tag_name: `v${machine.latest}` }) }
+    }
+    if (url.endsWith('/sha256sum.txt')) {
+      const version = /\/v([^/]+)\/sha256sum\.txt$/.exec(url)[1]
+      return { ok: true, text: async () => `${'0'.repeat(64)}  ./ollama-windows-arm64.zip\n${sha(ZIP_CONTENT[version])}  ./ollama-windows-amd64.zip\n` }
+    }
+    throw new Error(`connexion refusée : ${url}`)
+  }
 
-test("updateOllama signale que l'installeur tourne encore (le bouton ne doit pas réapparaître)", async () => {
-  const { module } = loadDependencyServices({ onDownload: async () => {} })
-  await withFetch(fakeOllamaFetch(['0.34.2']), async () => {
-    const result = await module.updateOllama()
-    assert.equal(result.installerPending, true, result.message)
+  const fakeProcess = { platform: 'win32', env: { ...process.env, LOCALAPPDATA: localAppData, SystemRoot: 'C:\\Windows' } }
+
+  const childProcess = {
+    execFile: (_file, args, _opts, cb) => {
+      // tar.exe -xf <zip> -C <dossier> : le paquet contient ollama.exe à sa racine.
+      const zip = args[1]
+      const destination = args[3]
+      writeFileSync(join(destination, 'ollama.exe'), readFileSync(zip, 'utf8'))
+      cb(null)
+    },
+    execSync: (command) => {
+      if (/taskkill \/pid/.test(command)) machine.running = null
+      return ''
+    },
+    exec: (_command, _opts, cb) => cb?.(null, { stdout: '', stderr: '' }),
+    spawn: (file, _args, options = {}) => {
+      const handlers = {}
+      const proc = { pid: 4242, unref() {}, on: (event, cb) => ((handlers[event] = cb), proc) }
+      const exe = options.env?.JARIS_OLLAMA_EXE
+      if (exe) {
+        const version = /versions[\\/]([^\\/]+)[\\/]ollama\.exe$/.exec(exe)[1]
+        machine.spawns.push({ version, env: options.env })
+        if (!machine.broken.includes(version)) machine.running = version
+      } else if (file === 'powershell.exe') {
+        // Arrêt des restes d'un lancement précédent (stopStrayEngines).
+        machine.running = null
+        setImmediate(() => handlers.close?.(0))
+      }
+      return proc
+    }
+  }
+
+  const clock = fastClock()
+  const wrap = (relativePath, requireShim) => {
+    const exports = {}
+    vm.runInThisContext(`(function (exports, module, require, process, setTimeout, clearTimeout, Date, fetch) { ${compile(relativePath)} })`)(
+      exports,
+      { exports },
+      withI18n(requireShim),
+      fakeProcess,
+      clock.setTimeout,
+      clock.clearTimeout,
+      clock.Date,
+      machine.fetch
+    )
+    return exports
+  }
+
+  const engine = wrap('electron/services/ollamaEngine.ts', (id) => {
+    if (id === 'child_process') return childProcess
+    if (id === './download') {
+      return {
+        downloadToFile: async (url, destination, options) => {
+          machine.downloads.push(url)
+          const version = /\/v([^/]+)\/ollama-windows-amd64\.zip$/.exec(url)[1]
+          const content = corrupt ? 'fichier abîmé en route' : ZIP_CONTENT[version]
+          const total = 1_610_612_736
+          for (const percent of [0, 50, 100]) options?.onProgress?.({ receivedBytes: Math.round(total * (percent / 100)), totalBytes: total, percent })
+          writeFileSync(destination, content)
+          return content.length
+        }
+      }
+    }
+    if (id === './ollamaModelsVariable') return { countOllamaModels: async () => 0 }
+    if (id === 'os') return { homedir: () => join(root, 'home') }
+    if (id === 'fs') return nodeFs
+    if (id === 'fs/promises') return fsPromises
+    if (id === 'crypto' || id === 'path') return id === 'crypto' ? { createHash } : { join }
+    throw new Error(`module non simulé (ollamaEngine) : ${id}`)
   })
+
+  const services = wrap('electron/services/dependencyServices.ts', (id) => {
+    if (id === './ollamaEngine') return engine
+    if (id === 'child_process') return childProcess
+    if (id === 'fs') return { mkdirSync: () => {} }
+    if (id === 'fs/promises') return { rm: fsPromises.rm, rmdir: async () => {} }
+    if (id === 'path') return { join, basename: (p) => p.split('/').pop(), dirname: (p) => p.split('/').slice(0, -1).join('/') }
+    if (id === 'util') return { promisify: () => async () => ({ stdout: '', stderr: '' }) }
+    if (id.endsWith('/storageRoot')) return { downloadsDir: () => root, getStorageRoot: () => null }
+    if (id.endsWith('/dockerLocation')) return { dockerInstallFlags: () => [] }
+    if (id.endsWith('/config')) {
+      return {
+        config: { ollama: { get host() { return machine.host } } },
+        setOllamaHost: (host) => (machine.host = host),
+        WINDOWS_OLLAMA_HOST: 'http://127.0.0.1:11434'
+      }
+    }
+    if (id.endsWith('/appLauncher')) return { didAppLaunch: () => true, openApp: async () => '' }
+    if (id.endsWith('/download')) return { downloadToFile: async () => 0 }
+    if (id.endsWith('/searxngHome')) return {} // SearXNG : sans rapport avec Ollama
+    if (id.endsWith('/formatBytes')) return { formatBytes: (n) => `${n} o` }
+    throw new Error(`module non simulé (dependencyServices) : ${id}`)
+  })
+
+  machine.engineDir = engineDir
+  machine.current = () => JSON.parse(readFileSync(join(engineDir, 'current.json'), 'utf8')).version
+  machine.versions = () => (existsSync(join(engineDir, 'versions')) ? nodeFs.readdirSync(join(engineDir, 'versions')).sort() : [])
+  machine.cleanup = () => rmSync(root, { recursive: true, force: true })
+  return { machine, services, engine }
+}
+
+test("Ollama de Windows → Ollama de Jaris : avancement réel, bascule sans redémarrer Jaris", async () => {
+  const { machine, services } = setupMachine({ latest: '0.40.5' })
+  const recu = []
+  const result = await services.updateOllama((progress) => recu.push(progress))
+
+  assert.equal(result.success, true, result.message)
+  assert.match(result.message, /0\.40\.5/)
+  assert.deepEqual(recu.filter((p) => p.phase === 'download').map((p) => p.percent), [0, 50, 100])
+  assert.equal(recu.at(-1).phase, 'install', 'la fin du téléchargement doit être annoncée')
+  assert.equal(machine.current(), '0.40.5')
+  assert.equal(machine.running, '0.40.5')
+  assert.equal(machine.host, 'http://127.0.0.1:11435', "Jaris doit interroger son propre Ollama, sur son propre port")
+  assert.equal(machine.spawns[0].env.OLLAMA_HOST, '127.0.0.1:11435')
+  assert.ok(machine.spawns[0].env.OLLAMA_MODELS, 'le dossier des modèles doit être passé au moteur')
+  assert.equal(services.getOllamaVersionStatus().embedded, true)
+  assert.deepEqual(machine.versions(), ['0.40.5'])
+  assert.ok(!existsSync(join(machine.engineDir, 'download', 'ollama-0.40.5.zip')), 'le paquet de 1,6 Go doit être effacé après usage')
+  machine.cleanup()
+})
+
+test('mise à jour : la nouvelle version démarre, son numéro est vérifié, puis seulement l’ancienne est effacée', async () => {
+  const { machine, services } = setupMachine({ installed: '0.40.4', latest: '0.40.5' })
+  await services.ensureOllamaRunning(() => {})
+  const result = await services.updateOllama()
+
+  assert.equal(result.success, true, result.message)
+  assert.equal(machine.running, '0.40.5')
+  assert.equal(machine.current(), '0.40.5')
+  assert.deepEqual(machine.versions(), ['0.40.5'])
+  assert.equal(services.getOllamaVersionStatus().outdated, false)
+  machine.cleanup()
+})
+
+test('une nouvelle version qui ne démarre pas : retour à l’ancienne, rien de perdu', async () => {
+  const { machine, services } = setupMachine({ installed: '0.40.4', latest: '0.40.5', broken: ['0.40.5'] })
+  await services.ensureOllamaRunning(() => {})
+  const result = await services.updateOllama()
+
+  assert.equal(result.success, false)
+  assert.match(result.message, /0\.40\.5/)
+  assert.equal(machine.current(), '0.40.4', 'la version qui marchait doit rester notée en service')
+  assert.equal(machine.running, '0.40.4', 'la version qui marchait doit tourner de nouveau')
+  assert.deepEqual(machine.versions(), ['0.40.4'], 'la version qui ne démarre pas est effacée, jamais l’autre')
+  machine.cleanup()
+})
+
+test('un fichier dont l’empreinte ne correspond pas : rien n’est installé ni arrêté', async () => {
+  const { machine, services } = setupMachine({ installed: '0.40.4', latest: '0.40.5', corrupt: true })
+  await services.ensureOllamaRunning(() => {})
+  const spawnsBefore = machine.spawns.length
+  const result = await services.updateOllama()
+
+  assert.equal(result.success, false)
+  assert.match(result.message, /0\.40\.5/)
+  assert.equal(machine.running, '0.40.4', 'le serveur en service ne doit même pas être arrêté')
+  assert.equal(machine.spawns.length, spawnsBefore)
+  assert.deepEqual(machine.versions(), ['0.40.4'])
+  assert.equal(machine.current(), '0.40.4')
+  machine.cleanup()
+})
+
+test('déjà à jour : aucun téléchargement', async () => {
+  const { machine, services } = setupMachine({ installed: '0.40.5', latest: '0.40.5' })
+  await services.ensureOllamaRunning(() => {})
+  const result = await services.updateOllama()
+  assert.equal(result.success, true)
+  assert.deepEqual(machine.downloads, [])
+  machine.cleanup()
+})
+
+test('premier lancement : Jaris installe son Ollama et le démarre', async () => {
+  const { machine, services } = setupMachine({ latest: '0.40.5' })
+  assert.equal(await services.isOllamaInstalled(), false)
+  const messages = []
+  assert.equal(await services.installOllamaSilently((message) => messages.push(message)), true, messages.join(' | '))
+  assert.equal(await services.isOllamaInstalled(), true)
+  assert.equal(machine.running, '0.40.5')
+  assert.ok(messages.some((m) => /1610612736 o/.test(m)), `taille du téléchargement absente : ${messages.join(' | ')}`)
+  machine.cleanup()
+})
+
+test('jamais une version qui ressemble à un chemin', async () => {
+  const { machine, engine } = setupMachine()
+  for (const bad of ['../../Windows', '0.40', 'v0.40.5', '0.40.5/../x']) assert.equal(engine.isValidEngineVersion(bad), false, bad)
+  assert.equal(engine.isValidEngineVersion('0.40.4-rc1'), true)
+  assert.equal(engine.checksumFor('abc  ./ollama-windows-amd64.zip'), null, 'une empreinte mal formée ne vaut rien')
+  machine.cleanup()
 })
 
 test('aucun téléchargement du dépôt ne se fait en silence', () => {
   // Garde pour la suite : c'est précisément l'oubli d'un `onProgress` sur UN seul appel (le plus lourd) qui a
-  // produit le blocage apparent. Un futur téléchargement ajouté sans avancement se lirait pareil.
+  // produit le blocage apparent de l'étape 112. Un futur téléchargement ajouté sans avancement se lirait pareil.
   const fichiers = globSync('electron/**/*.ts', { cwd: projectRoot })
   const appels = []
   for (const fichier of fichiers) {

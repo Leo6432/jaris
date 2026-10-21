@@ -15,6 +15,30 @@ function readEnv(name: string, fallback = ''): string {
   return process.env[name]?.trim() || fallback
 }
 
+/**
+ * Adresse d'Ollama telle que l'écrit sa variable OLLAMA_HOST : parfois sans « http:// », parfois « 0.0.0.0 »
+ * (écouter partout), qui n'est pas une adresse qu'on peut joindre. Ramenée à une vraie adresse locale.
+ */
+export function normalizeOllamaHost(value: string): string {
+  let host = value.trim() || '127.0.0.1:11434'
+  if (!/^https?:\/\//i.test(host)) host = `http://${host}`
+  host = host.replace(/\/\/0\.0\.0\.0(?=[:/]|$)/, '//127.0.0.1').replace(/\/+$/, '')
+  return /:\d+$/.test(host.replace(/^https?:\/\//i, '')) ? host : `${host}:11434`
+}
+
+/**
+ * L'Ollama installé sur Windows (étape 336 : utilisé seulement tant que Jaris n'a pas encore le sien, voir
+ * ollamaEngine.ts). JARIS_OLLAMA_HOST, réglage de développement, fige l'adresse quoi qu'il arrive.
+ */
+export const WINDOWS_OLLAMA_HOST = normalizeOllamaHost(readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'))
+const fixedOllamaHost = readEnv('JARIS_OLLAMA_HOST')
+let activeOllamaHost = fixedOllamaHost ? normalizeOllamaHost(fixedOllamaHost) : WINDOWS_OLLAMA_HOST
+
+/** Le serveur que Jaris interroge désormais : le sien dès qu'il est installé (dependencyServices.ts). */
+export function setOllamaHost(host: string): void {
+  if (!fixedOllamaHost) activeOllamaHost = host
+}
+
 export const config = {
   python: {
     bin: readEnv('PYTHON_BIN', 'python')
@@ -31,7 +55,10 @@ export const config = {
     language: readEnv('TTS_LANGUAGE', 'fr')
   },
   ollama: {
-    host: readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
+    /** Lu à chaque appel : passe de l'Ollama de Windows à celui de Jaris sans redémarrer (étape 336). */
+    get host(): string {
+      return activeOllamaHost
+    },
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
     /**
      * Fenêtre de contexte : volontairement bien plus basse que le max du modèle (overkill pour de la

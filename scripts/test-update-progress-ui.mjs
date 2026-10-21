@@ -185,13 +185,14 @@ test("une mise à jour d'Ollama ne promet jamais que Jaris va se fermer", option
     assert.match(label, /1,5 Go/, "la taille réelle (1,5 Go) n'est pas annoncée")
     assert.doesNotMatch(await page.textContent('.options-menu__progress-sub'), /se ferme/)
 
-    // Fin : l'installeur d'Ollama n'a aucun mode silencieux, il attend un clic — ne jamais annoncer
-    // une fin automatique.
+    // Fin (étape 336) : Jaris vérifie et installe lui-même son Ollama, puis le redémarre — aucune fenêtre à
+    // attendre, et jamais Jaris qui se ferme.
     await page.evaluate(() =>
       window.__render({ target: 'ollama', phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 }, 'ollama')
     )
     const fin = await page.textContent('.options-menu__progress-label')
-    assert.match(fin, /fenêtre/, `la fin ne dit pas qu'une fenêtre attend un clic : ${fin.trim()}`)
-    assert.doesNotMatch(fin, /se rouvre tout seul/, 'la fin promet une reprise automatique qui ne vient pas')
+    assert.match(fin, /Ollama/, `la fin ne dit pas ce qui s'installe : ${fin.trim()}`)
+    assert.doesNotMatch(fin, /fenêtre/, "plus aucune fenêtre d'installeur à attendre depuis l'étape 336")
+    assert.doesNotMatch(fin, /Jaris se ferme|se rouvre tout seul/, 'la fin annonce une fermeture de Jaris qui ne vient pas')
   })
 })

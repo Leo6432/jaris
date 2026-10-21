@@ -227,11 +227,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
-  // Étape 170 : l'installeur officiel d'Ollama a été lancé et se termine dans SA fenêtre. Tant qu'il tourne, pas de
-  // second bouton « Mettre à jour » (Léo le relançait, croyant que rien ne s'était passé) ; le statut arrive tout
-  // seul à la fin (onOllamaVersionStatus). Ref en plus de l'état : lue dans l'abonnement, créé une seule fois.
-  const [ollamaInstallerPending, setOllamaInstallerPending] = useState(false)
-  const ollamaInstallerPendingRef = useRef(false)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [installedVersion, setInstalledVersion] = useState<string | null>(null)
   const [launchAtStartup, setLaunchAtStartupStatus] = useState<LaunchAtStartupStatus | null>(null)
@@ -590,17 +585,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
 
   useEffect(
     () =>
-      window.jaris.onOllamaVersionStatus((status) => {
-        setOllamaVersionStatus(status)
-        if (!ollamaInstallerPendingRef.current) return
-        ollamaInstallerPendingRef.current = false
-        setOllamaInstallerPending(false)
-        setOllamaUpdateMessage(
-          status.outdated
-            ? t('options.ollama.installFailed', { current: status.current ?? '' })
-            : t('options.ollama.upToDate', { current: status.current ?? '' })
-        )
-      }),
+      window.jaris.onOllamaVersionStatus(setOllamaVersionStatus),
     []
   )
 
@@ -612,10 +597,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     setOllamaUpdateProgress(null)
     window.jaris
       .updateOllama()
-      .then(({ message, installerPending }) => {
+      .then(({ message }) => {
         setOllamaUpdateMessage(message)
-        ollamaInstallerPendingRef.current = Boolean(installerPending)
-        setOllamaInstallerPending(Boolean(installerPending))
         return window.jaris.getOllamaVersionStatus()
       })
       .then(setOllamaVersionStatus)
@@ -1292,54 +1275,47 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 Ollama reste visible même à jour (seule la donnée déjà lue par getOllamaVersionStatus()
                 change de forme d'affichage, aucun nouvel appel IPC). */}
             <SettingGroup title={t('options.files.group')}>
+              {/* Étape 336 : l'Ollama de Jaris (ollamaEngine.ts). Tant que Jaris utilise encore celui de Windows,
+                  la ligne le dit et propose d'installer le sien ; ensuite, un bouton apparaît seulement quand une
+                  version plus récente est publiée. Plus de fenêtre d'installeur ni d'autorisation Windows. */}
               <SettingRow
                 label="Ollama"
                 description={
                   !ollamaVersionStatus
                     ? t('options.ollama.checking')
-                    : !ollamaVersionStatus.current
-                      ? t('options.ollama.down')
-                      : ollamaVersionStatus.outdated
-                        ? t('options.ollama.outdated', { current: ollamaVersionStatus.current, latest: ollamaVersionStatus.latest ?? '' })
-                        : ollamaVersionStatus.latest
-                          ? t('options.ollama.current', { current: ollamaVersionStatus.current })
-                          : t('options.ollama.unknownLatest', { current: ollamaVersionStatus.current })
+                    : !ollamaVersionStatus.embedded
+                      ? ollamaVersionStatus.current
+                        ? t('options.ollama.windows', { current: ollamaVersionStatus.current })
+                        : t('options.ollama.windowsDown')
+                      : !ollamaVersionStatus.current
+                        ? t('options.ollama.down')
+                        : ollamaVersionStatus.outdated
+                          ? t('options.ollama.embeddedOutdated', { current: ollamaVersionStatus.current, latest: ollamaVersionStatus.latest ?? '' })
+                          : ollamaVersionStatus.latest
+                            ? t('options.ollama.embeddedCurrent', { current: ollamaVersionStatus.current })
+                            : t('options.ollama.unknownLatest', { current: ollamaVersionStatus.current })
                 }
               >
-                {ollamaVersionStatus?.outdated && !ollamaInstallerPending && (
+                {ollamaVersionStatus && (!ollamaVersionStatus.embedded || ollamaVersionStatus.outdated) && (
                   <button className="options-menu__action" onClick={handleUpdateOllama} disabled={updatingOllama}>
-                    {updatingOllama ? t('options.update.running') : t('options.update.button')}
+                    {updatingOllama
+                      ? t('options.update.running')
+                      : ollamaVersionStatus.embedded
+                        ? t('options.update.button')
+                        : t('options.ollama.install')}
                   </button>
                 )}
               </SettingRow>
-              {ollamaVersionStatus?.outdated && (
+              {ollamaVersionStatus && !ollamaVersionStatus.embedded && !updatingOllama && (
+                <p className="options-menu__ollama-update-note">{t('options.ollama.installSize')}</p>
+              )}
+              {updatingOllama && (
                 <div className="options-menu__ollama-warning">
-                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                    {t('options.ollama.manual')}
-                  </a>
-                  {updatingOllama && (
-                    <>
-                      {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
-                          passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour
-                          de Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
-                      <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
-                      <p className="options-menu__ollama-update-note">
-                        {t('options.ollama.elevation')}
-                      </p>
-                    </>
-                  )}
+                  {/* Le paquet d'Ollama pèse 1,6 Go : même barre que la mise à jour de Jaris (étape 98). */}
+                  <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
                 </div>
               )}
-              {/* Hors du bandeau "outdated" ci-dessus, à dessein : une mise à jour réussie fait justement
-                  passer ollamaVersionStatus.outdated à false juste après, ce qui ferait disparaître le
-                  message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
-                  message alors que la mise à jour avait réellement marché. */}
               {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
-              {ollamaInstallerPending && (
-                <p className="options-menu__ollama-update-note">
-                  {t('options.ollama.waiting')}
-                </p>
-              )}
 
               <SettingRow
                 label={t('options.folder.label')}

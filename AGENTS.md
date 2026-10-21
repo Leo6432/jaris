@@ -9115,3 +9115,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Un élément vraiment nommé ainsi garde la priorité. Le choix de modèle ne change sur aucune des 19 machines types.
   Régression : `test-ui-automation.mjs` et `test-benchmark-vision.mjs` (copie identique), vérifiés en retirant le
   second essai.
+
+- **Étape 336 (v0.35.0) : Jaris a son propre Ollama (Léo : « on peut pas tout intégrer dans Jaris, c'est open
+  source Ollama », puis « on commence avec Ollama, et les mises à jour dans les options »).** `ollamaEngine.ts` :
+  le paquet officiel `ollama-windows-amd64.zip` (MIT, fait pour être intégré selon docs/windows.mdx d'Ollama ;
+  NVIDIA + Vulkan, donc AMD et Intel, vérifié dans son répertoire central : `ollama.exe` à la racine, 2,2 Go
+  décompressé), téléchargé depuis les Releases GitHub, vérifié par l'empreinte de `sha256sum.txt` de la même
+  version, décompressé par tar.exe dans `versions/<x.y.z>`, la version en service notée dans `current.json`
+  (écriture d'un seul tenant). Lancé par Jaris sur le port 11435 (l'Ollama de Windows peut tourner à côté sur
+  11434), avec le VRAI chemin des modèles passé directement au processus : plus de variable OLLAMA_MODELS ni
+  d'appli Ollama qui relance son serveur avec son propre réglage — la cause des pannes « modèle introuvable » des
+  étapes 254, 289 et 313. `config.ollama.host` devient une propriété lue à chaque appel (`setOllamaHost`) : Jaris
+  bascule de l'Ollama de Windows au sien sans redémarrer. Le dossier du moteur est une brique de « Déplacer ».
+  **Mise à jour (Options → Général)** : la nouvelle version s'installe À CÔTÉ de l'ancienne ; le serveur est
+  relancé dessus, son numéro est vérifié par `/api/version`, et seulement alors l'ancienne est effacée ; sinon,
+  retour à l'ancienne, rien n'est perdu. Plus d'installeur à fenêtre, d'autorisation Windows ni de winget : tout
+  ce code est retiré (avec ses 28 phrases dans les 24 langues). Une installation existante garde l'Ollama de
+  Windows jusqu'au clic sur « Installer l'Ollama de Jaris » (1,6 Go) : jamais un gros téléchargement sans clic.
+  Le premier lancement installe directement celui de Jaris.
+  **Pièges** : la version publiée devient un nom de dossier — refusée si elle n'a pas la forme x.y.z ; un reste
+  d'un lancement précédent sur le port 11435 est arrêté (par son chemin, jamais l'Ollama de Windows) avant de
+  lancer le bon. Le proxy de l'environnement de développement bloque l'API GitHub d'Ollama : seule la lecture de
+  l'empreinte a été vérifiée sur le vrai GitHub (0.40.5) ; la lecture de la dernière version reprend le code déjà
+  utilisé en production avant cette étape. **Non vérifié ici** : le lancement réel sous Windows (pas de Windows).
+  Régression : `node --test scripts/test-ollama-update-progress.mjs` (vrais modules sur un vrai dossier, fausse
+  machine : bascule, mise à jour, version qui ne démarre pas, empreinte fausse, déjà à jour, premier lancement ;
+  4 défauts réintroduits, tous attrapés), `test-options-reorganization-ui.mjs`, `test-models-location.mjs`.

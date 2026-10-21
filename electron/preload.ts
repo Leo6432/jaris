@@ -132,7 +132,7 @@ const api = {
   setContextLength: (contextLength: number | undefined): Promise<void> =>
     invoke(IPC_CHANNELS.setContextLength, contextLength),
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => invoke(IPC_CHANNELS.getOllamaVersionStatus),
-  updateOllama: (): Promise<{ success: boolean; message: string; installerPending?: boolean }> =>
+  updateOllama: (): Promise<{ success: boolean; message: string }> =>
     invoke(IPC_CHANNELS.updateOllama),
   onOllamaVersionStatus: (cb: (status: OllamaVersionStatus) => void) => subscribe(IPC_CHANNELS.ollamaVersionStatusChanged, cb),
   getAppVersionStatus: (): Promise<AppVersionStatus | null> => invoke(IPC_CHANNELS.getAppVersionStatus),

@@ -105,7 +105,7 @@ declare global {
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
-      updateOllama: () => Promise<{ success: boolean; message: string; installerPending?: boolean }>
+      updateOllama: () => Promise<{ success: boolean; message: string }>
       onOllamaVersionStatus: (cb: (status: OllamaVersionStatus) => void) => () => void
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>

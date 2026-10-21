@@ -99,7 +99,8 @@ function fillEverything({ userProfile, localAppData }) {
     [join(localAppData, 'Jaris', 'python-runtime', 'python.exe')]: 'python',
     [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix',
     [join(userProfile, '.cache', 'supertonic3', 'onnx', 'vector_estimator.onnx')]: 'voix de Jaris',
-    [join(localAppData, 'Jaris', 'image-generation', 'models', 'flux-2-klein-4b-Q4_0.gguf')]: 'modèle de dessin'
+    [join(localAppData, 'Jaris', 'image-generation', 'models', 'flux-2-klein-4b-Q4_0.gguf')]: 'modèle de dessin',
+    [join(localAppData, 'Jaris', 'ollama-engine', 'versions', '0.40.5', 'ollama.exe')]: 'Ollama de Jaris'
   }
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(join(path, '..'), { recursive: true })
@@ -108,7 +109,7 @@ function fillEverything({ userProfile, localAppData }) {
   return files
 }
 
-const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache', 'image-generation']
+const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache', 'image-generation', 'ollama-engine']
 
 test('tout part : modèles ET programme Ollama, données d’Ollama, Python et voix — accessibles au même chemin qu’avant', async () => {
   const home = setupFakeHome()
@@ -215,15 +216,18 @@ test("le bouton \"Mettre à jour\" d'Ollama ne touche JAMAIS au dossier des mod�
   // une mise à jour continue de passer par la jonction déjà posée précisément PARCE QUE rien dans le flux de
   // mise à jour ne la recrée ni ne la supprime.
   const source = readFileSync(new URL('../electron/services/dependencyServices.ts', import.meta.url), 'utf8')
-  const updateSectionStart = source.indexOf('export async function updateOllama(')
+  const updateSectionStart = source.indexOf('export function updateOllama(')
   assert.ok(updateSectionStart !== -1, 'updateOllama introuvable dans dependencyServices.ts')
-  // Toute la fonction, jusqu'à la prochaine fonction de haut niveau exportée après elle (ensureOllamaRunning).
+  // Toute la mise à jour, jusqu'à la prochaine fonction exportée après elle (ensureOllamaRunning).
   const nextExportStart = source.indexOf('export async function ensureOllamaRunning(', updateSectionStart)
   assert.ok(nextExportStart !== -1, 'ensureOllamaRunning introuvable après updateOllama')
   const updateFlow = source.slice(updateSectionStart, nextExportStart)
 
   assert.ok(!/\.ollama[\\/]?models/i.test(updateFlow), 'le flux de mise à jour ne doit jamais référencer le dossier des modèles Ollama directement')
-  assert.ok(!/\brmSync\(|['"]rm['"]|\brm\(/i.test(updateFlow.replace(/\bwarm\b/gi, '')), 'le flux de mise à jour ne doit jamais supprimer de dossier')
+  // Étape 336 : la mise à jour efface seulement ce qui appartient au moteur (la version qui ne démarre pas, la
+  // version notée en service) — jamais autre chose.
+  const removals = [...updateFlow.replace(/\bwarm\b/gi, '').matchAll(/\brm(?:Sync)?\((.*?), \{/g)].map((m) => m[1].trim())
+  assert.deepEqual(removals.sort(), ["fresh.dir", "join(root, 'current.json')"].sort(), `suppressions inattendues : ${removals.join(' ; ')}`)
 })
 
 test('pip n’écrit pas son cache sur C : chaque installation Python passe --no-cache-dir', () => {

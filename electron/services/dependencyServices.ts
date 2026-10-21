@@ -1,13 +1,28 @@
 import { dockerInstallFlags } from './dockerLocation'
 import { downloadsDir, getStorageRoot } from './storageRoot'
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
-import { existsSync, mkdirSync } from 'fs'
-import { readFile, rm, rmdir } from 'fs/promises'
+import { mkdirSync } from 'fs'
+import { rm, rmdir } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import { promisify } from 'util'
-import { config } from '../config'
+import { config, setOllamaHost, WINDOWS_OLLAMA_HOST } from '../config'
 import { didAppLaunch, openApp } from './appLauncher'
 import { downloadToFile } from './download'
+import {
+  ENGINE_HOST,
+  engineEnv,
+  engineModelsDir,
+  engineRelease,
+  engineRoot,
+  installEngineVersion,
+  installedEngine,
+  latestEngineVersion,
+  removeOtherEngineVersions,
+  setCurrentEngine,
+  spawnEngine,
+  type EngineInstallProgress,
+  type InstalledEngine
+} from './ollamaEngine'
 import {
   LEGACY_SEARXNG_PROJECT,
   SEARXNG_PROJECT,
@@ -56,14 +71,7 @@ async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, inter
   return false
 }
 
-/** Correctif historique des consoles des runners. Ce seuil ne garantit pas l’absence
- * de régression : les helpers 0.34.0 ont nécessité le lancement avec console cachée
- * héritée dans ensureOllamaRunning, confirmé par une trace sur la machine réelle. */
-const MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH = '0.7.0'
-
-/** Un seul essai de redémarrage silencieux par lancement de Jaris — voir warnIfOllamaOutdated. */
-let attemptedSilentOllamaRestart = false
-
+/** « 0.40.4-rc1 » compte comme 0.40.4 : seule la partie chiffrée est comparée. */
 function isVersionOlder(version: string, minVersion: string): boolean {
   const parts = (v: string): number[] => v.split('.').map((p) => parseInt(p, 10) || 0)
   const a = parts(version)
@@ -75,60 +83,15 @@ function isVersionOlder(version: string, minVersion: string): boolean {
   return false
 }
 
-async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
-  try {
-    const response = await fetch(`${config.ollama.host}/api/version`)
-    if (!response.ok) return
-    const data = (await response.json()) as { version?: string }
-    if (data.version && isVersionOlder(data.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)) {
-      if (attemptedSilentOllamaRestart) return
-      attemptedSilentOllamaRestart = true
-      log(t('dep.ollamaOld', { version: data.version, min: MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH }))
-      // Uniquement le redémarrage silencieux (applique une mise à jour déjà téléchargée en arrière-plan par
-      // Ollama, sans la moindre fenêtre) : jamais le vrai installeur ici (downloadAndLaunchOfficialInstaller,
-      // utilisé par le bouton "Mettre à jour" d'Options), qui lui ouvre une fenêtre — remplacer le problème
-      // (des fenêtres apparaissent) par un autre irait à l'encontre du but recherché.
-      const restarted = await restartOllamaApp()
-      if (restarted) {
-        await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 20000)
-        void checkOllamaFreshness()
-        try {
-          // Comparé directement au seuil du bug (pas à `outdated`, qui compare à la toute dernière version
-          // GitHub) : le redémarrage peut très bien suffire à passer 0.7.0 sans pour autant retomber sur la
-          // toute dernière version publiée — le bug de fenêtres est alors déjà réglé, `outdated` dirait
-          // pourtant encore "oui".
-          const recheck = await fetch(`${config.ollama.host}/api/version`)
-          const recheckData = recheck.ok ? ((await recheck.json()) as { version?: string }) : null
-          const stillOld = !recheckData?.version || isVersionOlder(recheckData.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)
-          log(
-            stillOld
-              ? t('dep.ollamaStillOld')
-              : t('dep.ollamaSilentlyUpdated', { version: recheckData?.version ?? '' })
-          )
-        } catch {
-          log(t('dep.ollamaUpdateManually'))
-        }
-      } else {
-        log(t('dep.ollamaUpdateManually'))
-      }
-    }
-  } catch {
-    // Purement informatif : un échec ici (Ollama trop vieux pour exposer /api/version, etc.) ne doit
-    // jamais empêcher Jaris de démarrer.
-  }
-}
-
 /**
- * Version locale d'Ollama comparée à la dernière publiée sur GitHub — voir checkOllamaFreshness. Le type vient de
+ * Version d'Ollama comparée à la dernière publiée sur GitHub — voir checkOllamaFreshness. Le type vient de
  * shared/ipc.ts (étape 234) : la copie locale qui existait ici avait déjà divergé une fois de l'autre côté.
  */
 export type { OllamaVersionStatus }
 
 /**
- * Résultat du dernier check, gardé en mémoire pour que l'onglet Modèles (OptionsMenu.tsx) puisse le lire
- * à tout moment via getOllamaVersionStatus() sans refaire l'appel réseau à chaque ouverture — un seul check
- * par lancement de Jaris suffit, la version installée ne change pas pendant que Jaris tourne. `null` tant
- * que le check n'a pas encore abouti (ou a échoué) : jamais affiché comme "à jour" par défaut, juste absent.
+ * Résultat du dernier check, gardé en mémoire pour que la page Options puisse le lire à tout moment sans refaire
+ * l'appel réseau. `null` tant que le check n'a pas encore abouti : jamais affiché comme "à jour" par défaut.
  */
 let cachedOllamaVersionStatus: OllamaVersionStatus | null = null
 
@@ -136,18 +99,14 @@ export function getOllamaVersionStatus(): OllamaVersionStatus | null {
   return cachedOllamaVersionStatus
 }
 
-/**
- * Étape 170 : prévenu à CHAQUE nouveau résultat de checkOllamaFreshness — main.ts le relaie à l'écran. Sans ça,
- * la page Options ne relisait le statut qu'une fois, juste après le clic : après l'installeur officiel (fini
- * plus tard, dans sa propre fenêtre), le bandeau « Mettre à jour » restait affiché jusqu'au redémarrage de Jaris.
- */
+/** Étape 170 : prévenu à CHAQUE nouveau résultat de checkOllamaFreshness — main.ts le relaie à l'écran. */
 const ollamaVersionListeners = new Set<(status: OllamaVersionStatus) => void>()
 export function onOllamaVersionStatus(listener: (status: OllamaVersionStatus) => void): () => void {
   ollamaVersionListeners.add(listener)
   return () => ollamaVersionListeners.delete(listener)
 }
 
-/** Relit la version réellement installée (serveur local), `null` tant qu'Ollama ne répond pas. */
+/** Relit la version réellement en service, `null` tant qu'Ollama ne répond pas. */
 async function readLocalOllamaVersion(): Promise<string | null> {
   try {
     const response = await fetch(`${config.ollama.host}/api/version`)
@@ -159,421 +118,225 @@ async function readLocalOllamaVersion(): Promise<string | null> {
 }
 
 /**
- * Surveille la fin de l'installeur officiel lancé par updateOllama (étape 170) : dès que le serveur local répond
- * avec une AUTRE version qu'avant, le statut est relu et diffusé (bandeau retiré tout seul). Toutes les 5 s,
- * au plus 30 min — l'installeur attend des clics de l'utilisateur, sa durée n'est pas prévisible. À la fin du
- * délai, le statut est relu quand même : un installeur fermé sans installer fait réapparaître le bouton.
+ * Étape 336 : l'Ollama de Jaris en service (ollamaEngine.ts), `null` tant que Jaris utilise encore celui
+ * installé sur Windows (installation faite avant l'étape 336, en attendant le clic dans Options).
  */
-export async function watchOllamaInstallerCompletion(
-  previousVersion: string | null,
-  options: { intervalMs?: number; timeoutMs?: number } = {}
-): Promise<void> {
-  const { intervalMs = 5000, timeoutMs = 30 * 60 * 1000 } = options
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    // unref : cette attente ne doit jamais, à elle seule, empêcher un process de se terminer.
-    await new Promise((resolve) => setTimeout(resolve, intervalMs).unref?.())
-    const version = await readLocalOllamaVersion()
-    if (version && version !== previousVersion) break
-  }
-  await checkOllamaFreshness()
-}
+let embedded: InstalledEngine | null = null
 
-/**
- * Dernière version publiée d'Ollama sur GitHub (contrairement à MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH, un
- * plancher fixe qu'il faudrait remonter à la main à chaque fois qu'un modèle exige une version plus
- * récente qu'installée — voir l'échec `pull model manifest: 412` de scripts/benchmark-models.mjs) : ce
- * check compare toujours à la VRAIE dernière version, sans jamais avoir besoin d'être mis à jour ici.
- */
-async function fetchLatestOllamaVersion(): Promise<string | null> {
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5000)
-    const response = await fetch('https://api.github.com/repos/ollama/ollama/releases/latest', {
-      signal: controller.signal,
-      headers: { Accept: 'application/vnd.github+json' }
-    })
-    clearTimeout(timer)
-    if (!response.ok) return null
-    const data = (await response.json()) as { tag_name?: string }
-    // Tags GitHub d'Ollama sont préfixés "v" (ex: "v0.12.3"), jamais /api/version côté serveur local.
-    return data.tag_name?.replace(/^v/, '') ?? null
-  } catch {
-    // Pas de réseau, GitHub inaccessible, rate limit (60 requêtes/heure sans authentification, largement
-    // suffisant pour un check par lancement) : jamais bloquant, l'utilisateur voit juste l'avertissement.
-    return null
-  }
-}
-
-/**
- * Compare la version locale d'Ollama à la dernière publiée, met le résultat en cache pour l'UI (voir
- * getOllamaVersionStatus) — contrairement à warnIfOllamaOutdated (un seul plancher fixe pour un bug
- * cosmétique précis), sert à avertir l'utilisateur de façon générale dès qu'une mise à jour existe, avant
- * qu'un téléchargement de modèle échoue pour de vrai (ex: qwen3.8:27b, qui demande une version d'Ollama
- * plus récente que ce que beaucoup d'installations auront par défaut).
- */
+/** Compare la version en service à la dernière publiée, et le diffuse (bouton « Mettre à jour » d'Options). */
 async function checkOllamaFreshness(): Promise<void> {
   try {
     // Étape 234 (bêta) : un résultat est TOUJOURS enregistré, même partiel. Avant, Ollama muet ou GitHub
     // injoignable ne laissaient rien en cache, et Options affichait « Vérification de la version… » sans fin.
     const current = await readLocalOllamaVersion()
-    const latest = current ? await fetchLatestOllamaVersion() : null
-    cachedOllamaVersionStatus = { current, latest, outdated: Boolean(current && latest && isVersionOlder(current, latest)) }
-    for (const listener of ollamaVersionListeners) listener(cachedOllamaVersionStatus)
+    const latest = await latestEngineVersion()
+    cachedOllamaVersionStatus = {
+      current,
+      latest,
+      outdated: Boolean(current && latest && isVersionOlder(current, latest)),
+      embedded: embedded !== null
+    }
+    const status = cachedOllamaVersionStatus
+    for (const listener of ollamaVersionListeners) listener(status)
   } catch {
-    // Best-effort, comme warnIfOllamaOutdated : ne doit jamais empêcher Jaris de démarrer.
+    // Ne doit jamais empêcher Jaris de démarrer.
   }
 }
 
 /**
- * Chemin de "ollama app.exe" (l'appli barre système Windows — auto-démarrée au login, PAS `ollama.exe` le
- * CLI utilisé partout ailleurs dans ce fichier). Contrairement à winget (voir updateOllama plus bas),
- * aucune dépendance à un catalogue externe : Ollama télécharge déjà ses mises à jour tout seul en
- * arrière-plan (réglage "Auto-download updates", activé par défaut) et les applique au redémarrage du
- * process — exactement ce que fait "Restart to update" dans le menu de SA PROPRE icône barre système.
- */
-function ollamaAppExePath(): string {
-  return join(process.env.LOCALAPPDATA ?? '', 'Ollama', 'ollama app.exe')
-}
-
-/**
- * Tue puis relance "ollama app.exe" pour appliquer une mise à jour déjà téléchargée en arrière-plan par
- * Ollama lui-même — `null` si l'exécutable n'est pas à l'emplacement attendu (installation différente,
- * jamais bloquant : updateOllama retombe alors directement sur winget). Le délai entre le kill et la
- * relance laisse le temps au process de vraiment libérer le port du serveur avant qu'une nouvelle instance
- * n'essaie de l'ouvrir.
- */
-async function restartOllamaApp(): Promise<boolean> {
-  const exePath = ollamaAppExePath()
-  if (!existsSync(exePath)) return false
-  await execAsync('taskkill /IM "ollama app.exe" /F', { windowsHide: true }).catch(() => {
-    // Rien à faire si le process n'était pas lancé (déjà arrêté, ou l'utilisateur avait quitté Ollama) :
-    // on relance quand même juste en dessous.
-  })
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-  // 'error' DOIT avoir un listener même si on ignore le résultat (detached + unref) : un spawn() qui
-  // échoue de façon asynchrone (chemin invalide, permission refusée...) sur un process sans aucun
-  // listener 'error' fait planter tout le process principal d'Electron (unhandled 'error' event), pas
-  // juste échouer proprement cet appel.
-  spawn(exePath, [], { detached: true, stdio: 'ignore', windowsHide: true })
-    .on('error', () => {
-      // Rien à faire ici : updateOllama() attend ensuite que le serveur réponde (waitUntil) puis
-      // retombe sur la suite si ce n'est jamais le cas, ce qui couvre déjà cet échec.
-    })
-    .unref()
-  return true
-}
-
-const OLLAMA_INSTALLER_URL = 'https://ollama.com/download/OllamaSetup.exe'
-
-/** Comme le script d'installation officiel d'Ollama : exécuter seulement un installeur signé par Ollama Inc. */
-async function isOfficialOllamaInstaller(installerPath: string): Promise<boolean> {
-  const script =
-    "$sig = Get-AuthenticodeSignature -LiteralPath $env:JARIS_OLLAMA_INSTALLER; " +
-    "if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch '(^|, )O=Ollama Inc\\.(,|$)') { exit 1 }"
-  return new Promise((resolve) => {
-    const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-      windowsHide: true,
-      env: { ...process.env, JARIS_OLLAMA_INSTALLER: installerPath }
-    })
-    proc.on('error', () => resolve(false))
-    proc.on('close', (code) => resolve(code === 0))
-  })
-}
-
-/** Installe directement dans la racine choisie. Si Inno Setup bloque encore une autre jonction Jaris
- * (code Windows 448), l'exception est limitée à cet installeur officiel vérifié et signé. */
-function ollamaInstallerLocationArgs(allowJunctions = false): string[] {
-  const root = getStorageRoot()
-  return root ? [`/DIR=${join(root, 'ollama-app')}`, ...(allowJunctions ? ['/NOREDIRECTIONGUARD'] : [])] : []
-}
-
-/** Inno Setup copie son installeur et extrait des fichiers dans TEMP. Le journal du PC de test montre
- * que ce dossier restait sur C: malgré une installation sur D:. Ne changer que l'environnement du
- * sous-processus Ollama, pas celui de Jaris ni les préférences Windows de l'utilisateur. */
-function ollamaInstallerEnv(): NodeJS.ProcessEnv {
-  const root = getStorageRoot()
-  if (!root) return process.env
-  const tempDir = join(downloadsDir(), 'ollama-temp')
-  mkdirSync(tempDir, { recursive: true })
-  return { ...process.env, TEMP: tempDir, TMP: tempDir }
-}
-
-/**
  * Avancement remonté pendant la mise à jour d'Ollama (étape 112) — `target` est ajouté par main.ts, qui seul
- * sait sur quel canal l'envoyer : ce module n'a pas à connaître la forme exacte du message IPC.
+ * sait sur quel canal l'envoyer.
  */
 export type OllamaUpdateProgress = (progress: Omit<UpdateProgress, 'target'>) => void
 /** Lien stable officiel documenté par Docker (docs.docker.com/desktop/setup/install/windows-install) — toujours la dernière version stable pour Windows/amd64. */
 const DOCKER_DESKTOP_INSTALLER_URL = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe'
 
-/**
- * Télécharge le VRAI installeur officiel Ollama (source fiable : ollama.com, jamais un fichier qu'Ollama
- * aurait lui-même mis en cache dans un dossier temporaire — voir le commentaire de updateOllama plus bas)
- * et le lance. Constaté en usage réel (Léo) : simplement redémarrer "ollama app.exe" (restartOllamaApp
- * ci-dessus) ne suffit pas toujours à appliquer une mise à jour déjà annoncée par Ollama — le vrai "Restart
- * to update" de sa propre icône barre système relance en fait tout l'installeur, pas juste le même binaire.
- * Aucun flag silencieux documenté pour OllamaSetup.exe : la fenêtre de l'installeur s'ouvre normalement,
- * l'utilisateur clique "Suivant"/"Installer" lui-même — plus rapide que d'aller le chercher soi-même dans
- * un navigateur, mais pas 100% automatique jusqu'au bout comme restartOllamaApp quand elle marche.
- */
-async function downloadAndLaunchOfficialInstaller(onProgress?: OllamaUpdateProgress): Promise<boolean> {
-  try {
-    // OllamaSetup.exe pèse 1,5 Go (mesuré pour de vrai). L'ancien plafond de 30 secondes sur le
-    // téléchargement ENTIER exigeait 400 Mbit/s soutenus : cette méthode ne pouvait donc JAMAIS aboutir,
-    // et "Mettre à jour" retombait systématiquement sur winget sans que rien ne l'explique. downloadToFile
-    // n'a plus de délai total du tout — seule une connexion vraiment muette pendant une minute abandonne.
-    //
-    // `onProgress` (étape 112) : 1,5 Go, c'est de loin le plus gros téléchargement de Jaris — plusieurs
-    // minutes sur une connexion ordinaire. Sans lui, le bouton restait figé sur "Mise à jour en cours…"
-    // tout ce temps ("ça bloque depuis 5m", Léo), impossible à distinguer d'un plantage. C'était le SEUL
-    // des quatre appels à downloadToFile du dépôt à ne rien remonter, alors que c'est le plus long.
-    const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
-    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
-      onProgress: (progress) => onProgress?.({ phase: 'download', ...progress })
-    })
-    if (!(await isOfficialOllamaInstaller(installerPath))) return false
-    onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
-    // windowsHide: false ici, volontairement, contrairement au reste du fichier : l'utilisateur DOIT voir
-    // et pouvoir interagir avec cette fenêtre pour terminer l'installation.
-    // Mise à jour lancée sans attendre sa fin : pas de second essai possible après lecture du journal.
-    // Le fichier est vérifié signé juste au-dessus ; les jonctions Jaris doivent rester utilisables.
-    spawn(installerPath, ollamaInstallerLocationArgs(true), { detached: true, stdio: 'ignore', windowsHide: false, env: ollamaInstallerEnv() })
-      .on('error', () => {
-        // Rien à faire : updateOllama() traite déjà `false` (renvoyé plus bas si le téléchargement échoue)
-        // comme un échec de cette méthode et retombe sur winget — un échec asynchrone du spawn lui-même,
-        // lui, n'a plus d'impact sur le message déjà renvoyé, juste un filet anti-crash comme ailleurs.
-      })
-      .unref()
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Emplacements d'installation d'Ollama sur Windows : par utilisateur (le défaut) puis pour toute la machine. */
-function ollamaExePaths(): string[] {
-  return [
-    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Ollama', 'ollama.exe'),
-    join(process.env.ProgramFiles ?? '', 'Ollama', 'ollama.exe')
-  ]
-}
-
-/** true si Ollama est installé sur cette machine (qu'il tourne déjà ou non). */
+/** Le premier lancement n'a plus rien à installer côté Ollama dès que Jaris a le sien. */
 export async function isOllamaInstalled(): Promise<boolean> {
-  if (await isUp(`${config.ollama.host}/api/tags`)) return true
-  return ollamaExePaths().some((p) => existsSync(p))
+  return (await installedEngine().catch(() => null)) !== null
 }
 
 /**
- * Installe Ollama sans que l'utilisateur ait quoi que ce soit à cliquer (étape 16) : télécharge
- * l'installeur officiel et le lance en mode silencieux. OllamaSetup.exe est construit avec Inno Setup, dont
- * `/VERYSILENT` est l'option standard "aucune fenêtre, aucune question" ; `/SUPPRESSMSGBOXES` couvre les
- * boîtes de dialogue qui bloqueraient quand même l'installation en attendant un clic, et `/NORESTART`
- * évite qu'il redémarre le PC de l'utilisateur en plein premier lancement de Jaris.
- *
- * En cas d'échec, l'appelant peut toujours retomber sur downloadAndLaunchOfficialInstaller (fenêtre
- * visible, quelques clics) : mieux vaut demander deux clics que ne pas installer Ollama du tout.
+ * Processus de l'Ollama de Jaris restés d'un lancement précédent (Jaris arrêté brutalement) : ils tiennent le port
+ * 11435. Seuls les programmes rangés dans le dossier du moteur sont arrêtés, jamais l'Ollama de Windows.
+ */
+async function stopStrayEngines(): Promise<void> {
+  if (process.platform !== 'win32') return
+  const root = await engineRoot().catch(() => null)
+  if (!root) return
+  await new Promise<void>((resolve) => {
+    const proc = spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:JARIS_ENGINE_ROOT, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction SilentlyContinue"
+      ],
+      { windowsHide: true, stdio: 'ignore', env: { ...process.env, JARIS_ENGINE_ROOT: root } }
+    )
+    proc.on('error', () => resolve())
+    proc.on('close', () => resolve())
+  })
+}
+
+/** Arrête l'Ollama de Jaris (tout son arbre) et attend que le port soit libre. */
+async function stopEmbeddedProcess(): Promise<void> {
+  stopOllamaIfStartedByJaris()
+  if (await waitUntil(async () => !(await isUp(`${ENGINE_HOST}/api/tags`, 1000)), 10_000, 500)) return
+  await stopStrayEngines()
+  await waitUntil(async () => !(await isUp(`${ENGINE_HOST}/api/tags`, 1000)), 10_000, 500)
+}
+
+/** Lance une version du moteur et attend qu'elle réponde. Vrai si elle répond. */
+async function startEmbedded(found: InstalledEngine, log: LogFn): Promise<boolean> {
+  embedded = found
+  setOllamaHost(ENGINE_HOST)
+  // Un serveur répond déjà sur le port. Lancé par ce Jaris et dans la bonne version : gardé. Sinon, c'est un reste
+  // d'un lancement précédent (Jaris arrêté brutalement), peut-être avec un ancien dossier de modèles et que Jaris
+  // ne pourrait pas arrêter en quittant : il est remplacé.
+  if (await isUp(`${ENGINE_HOST}/api/tags`)) {
+    if (ollamaProcessStartedByJaris && (await readLocalOllamaVersion()) === found.version) return true
+    await stopStrayEngines()
+    await waitUntil(async () => !(await isUp(`${ENGINE_HOST}/api/tags`, 1000)), 10_000, 500)
+  }
+  const modelsDir = await engineModelsDir()
+  const proc = spawnEngine(found.exe, engineEnv(modelsDir))
+  // spawn() signale un échec de façon asynchrone : sans ce listener, toute l'application planterait.
+  proc.on('error', (err) => log(t('dep.ollamaAutoStartFailed', { error: err.message })))
+  proc.unref()
+  ollamaProcessStartedByJaris = proc
+  return waitUntil(() => isUp(`${ENGINE_HOST}/api/tags`), 30_000, 500)
+}
+
+function engineProgressToUpdate(progress: EngineInstallProgress): Omit<UpdateProgress, 'target'> {
+  return progress.phase === 'download'
+    ? { phase: 'download', receivedBytes: progress.receivedBytes, totalBytes: progress.totalBytes, percent: progress.percent }
+    : { phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 }
+}
+
+/**
+ * Premier lancement : installe l'Ollama de Jaris (dernière version) et le démarre. `false` en cas d'échec, avec
+ * la vraie raison passée à onProgress.
  */
 export async function installOllamaSilently(onProgress: (message: string, percent?: number) => void): Promise<boolean> {
   onProgress(t('dep.ollamaDownloading'), 0)
-  const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
-  const logPath = join(downloadsDir(), 'JarisOllamaSetup.log')
   try {
-    // 1,5 Go (mesuré) : l'ancien plafond de 120 secondes sur le téléchargement ENTIER exigeait 100 Mbit/s
-    // soutenus, donc le tout premier lancement de Jaris échouait à installer Ollama sur la quasi-totalité
-    // des connexions — sans rien afficher d'autre qu'un "Téléchargement d'Ollama…" figé pendant deux
-    // minutes. Avancement réel affiché ici aussi : c'est de loin le plus long téléchargement de Jaris.
-    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
-      onProgress: ({ receivedBytes, totalBytes, percent }) =>
+    const version = await latestEngineVersion()
+    if (!version) throw new Error(t('ollamaEngine.noLatest'))
+    const release = await engineRelease(version)
+    const root = await engineRoot()
+    const fresh = await installEngineVersion(release, (progress) => {
+      if (progress.phase === 'download') {
         onProgress(
-          totalBytes === null
-            ? t('dep.ollamaDownloadingBytes', { received: formatBytes(receivedBytes) })
-            : t('dep.ollamaDownloadingOf', { received: formatBytes(receivedBytes), total: formatBytes(totalBytes) }),
-          percent ?? undefined
+          progress.totalBytes === null
+            ? t('dep.ollamaDownloadingBytes', { received: formatBytes(progress.receivedBytes) })
+            : t('dep.ollamaDownloadingOf', { received: formatBytes(progress.receivedBytes), total: formatBytes(progress.totalBytes) }),
+          progress.percent ?? undefined
         )
-    })
+      } else {
+        onProgress(t(progress.phase === 'verify' ? 'ollamaEngine.verifying' : 'ollamaEngine.extracting'))
+      }
+    }, { root })
+    await setCurrentEngine(root, fresh.version)
+    await removeOtherEngineVersions(root, fresh.version)
+    onProgress(t('dep.ollamaStarting'))
+    if (!(await startEmbedded(fresh, () => {}))) throw new Error(t('ollamaEngine.startFailed'))
+    void checkOllamaFreshness()
+    return true
   } catch (err) {
-    onProgress(err instanceof Error ? err.message : t('dep.ollamaDownloadFailed'))
+    onProgress(err instanceof Error ? err.message : String(err))
     return false
   }
-
-  if (!(await isOfficialOllamaInstaller(installerPath))) {
-    onProgress(t('dep.ollamaBadSignature'))
-    await rm(installerPath, { force: true }).catch(() => {})
-    return false
-  }
-
-  const runInstaller = (silent: boolean, allowJunctions: boolean): Promise<string | null> => new Promise((resolve) => {
-    const args = silent ? ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'] : ['/NORESTART']
-    // Inno Setup prend en charge /LOG= et Ollama active ses logs d'installation. Le chemin fixe permet de
-    // retrouver la vraie erreur sur la machine concernée, même après fermeture de l'écran d'installation.
-    const proc = spawn(installerPath, [...args, ...ollamaInstallerLocationArgs(allowJunctions), `/LOG=${logPath}`], {
-      windowsHide: silent,
-      env: ollamaInstallerEnv()
-    })
-    proc.on('error', (err) => resolve(t('dep.ollamaInstallerOpenFailed', { error: err.message })))
-    proc.on('close', (code) => resolve(code === 0 ? null : t('dep.ollamaInstallerCode', { code: code ?? t('engine.code.unknown') })))
-  })
-
-  onProgress(t('dep.ollamaInstalling'))
-  let allowJunctions = false
-  let failure = await runInstaller(true, allowJunctions)
-  if (failure && getStorageRoot()) {
-    const firstLog = await readFile(logPath, 'utf8').catch(() => '')
-    if (/code 448\b|untrusted mount point|point de montage non approuv/i.test(firstLog)) {
-      // Inno Setup 6.7 protège les jonctions non élevées. Tenter d'abord /DIR= vers le vrai dossier,
-      // puis n'ouvrir cette exception que si le journal prouve qu'une autre jonction Jaris est bloquée.
-      allowJunctions = true
-      onProgress(t('dep.ollamaJunctionRetry'))
-      failure = await runInstaller(true, allowJunctions)
-    }
-  }
-  if (failure) {
-    // L'installation silencieuse masque les boîtes d'erreur. Une seule reprise avec la fenêtre officielle
-    // laisse voir le problème et permet de terminer sans retélécharger 1,5 Go.
-    onProgress(t('dep.ollamaSilentFailed'))
-    failure = await runInstaller(false, allowJunctions)
-  }
-  // 1,5 Go qui n'a plus aucune utilité une fois l'installation terminée (réussie ou non).
-  await rm(installerPath, { force: true }).catch(() => {})
-  if (failure) {
-    const installerLog = await readFile(logPath, 'utf8').catch(() => '')
-    const detail = installerLog.split(/\r?\n/).filter((line) => /error|failed|cannot|denied|erreur|impossible|refus/i.test(line)).at(-1)?.trim()
-    onProgress(`${failure}${detail ? ` ${t('dep.detail', { detail: detail.slice(-300) })}` : ''} ${t('dep.logFile', { path: logPath })}`)
-    return false
-  }
-
-  // L'installeur rend la main avant qu'Ollama ait fini de démarrer son serveur : sans cette attente, la
-  // suite (téléchargement des modèles) partirait sur un service qui ne répond pas encore.
-  onProgress(t('dep.ollamaStarting'))
-  await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 60000)
-  if (!(await isOllamaInstalled())) {
-    onProgress(t('dep.ollamaNotFoundAfterInstall', { path: logPath }))
-    return false
-  }
-  return true
 }
 
-/**
- * Déclenché par le bouton "Mettre à jour" du bandeau (OptionsMenu.tsx). Trois méthodes, dans cet ordre :
- * 1. Redémarrer "ollama app.exe" (restartOllamaApp ci-dessus) : rapide, silencieux, aucune invite Windows —
- *    marche quand Ollama a déjà tout ce qu'il faut prêt en arrière-plan, mais pas toujours (voir plus haut).
- * 2. Télécharger et lancer le VRAI installeur officiel (downloadAndLaunchOfficialInstaller ci-dessus) si le
- *    redémarrage seul n'a pas suffi : garanti de fonctionner (c'est l'installeur officiel), demande juste
- *    quelques clics à l'utilisateur dans la fenêtre qui s'ouvre.
- * 3. `winget` (App Installer, préinstallé sur Windows 10 1809+/11) en tout dernier repli, seulement si même
- *    le téléchargement de l'installeur a échoué (pas de réseau vers ollama.com, par exemple) : le paquet
- *    `Ollama.Ollama` est officiellement maintenu sur github.com/microsoft/winget-pkgs. Une invite Windows
- *    (élévation UAC) reste possible ici — ni winget ni Jaris ne peuvent la contourner, et il ne faut pas
- *    essayer.
- */
+/** Résultat du bouton « Mettre à jour » / « Installer » d'Options. */
 export interface OllamaUpdateResult {
   success: boolean
   message: string
-  /** Installeur officiel lancé : l'installation se termine plus tard, dans la fenêtre d'Ollama (étape 170). */
-  installerPending?: boolean
 }
 
-export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<OllamaUpdateResult> {
-  try {
-    return await updateOllamaInner(onProgress)
-  } catch (err) {
-    // Filet de sécurité final : une exception qui remonte jusqu'ici sans ce try/catch traverserait
-    // ipcMain.handle telle quelle jusqu'au renderer, où handleUpdateOllama (OptionsMenu.tsx) n'a pas de
-    // .catch() — le bouton redeviendrait "Mettre à jour" sans jamais afficher la moindre explication.
-    return { success: false, message: t('dep.updateUnexpected', { error: err instanceof Error ? err.message : String(err) }) }
-  }
+let updating: Promise<OllamaUpdateResult> | null = null
+
+/**
+ * Bouton d'Options (étape 336). Deux cas, un seul chemin :
+ * - Jaris utilise encore l'Ollama de Windows : installe le sien et bascule dessus, sans redémarrer Jaris ;
+ * - Jaris a déjà le sien : installe la nouvelle version À CÔTÉ, redémarre le serveur dessus, vérifie qu'il répond
+ *   avec le bon numéro, et seulement alors efface l'ancienne. Sinon, retour à l'ancienne, qui n'a pas bougé.
+ * Plus de fenêtre d'installeur, plus d'autorisation Windows, plus de winget : tout se passe dans Jaris.
+ */
+export function updateOllama(onProgress?: OllamaUpdateProgress, log: LogFn = () => {}): Promise<OllamaUpdateResult> {
+  if (updating) return updating
+  updating = updateOllamaInner(onProgress, log)
+    .catch((err): OllamaUpdateResult => ({ success: false, message: err instanceof Error ? err.message : String(err) }))
+    .finally(() => {
+      updating = null
+    })
+  return updating
 }
 
-async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<OllamaUpdateResult> {
-  const restarted = await restartOllamaApp()
-  if (restarted) {
-    // Attend que le serveur revienne avant de reverifier : quelques secondes le temps qu'Ollama redémarre
-    // et réouvre son API.
-    await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 20000)
+async function updateOllamaInner(onProgress: OllamaUpdateProgress | undefined, log: LogFn): Promise<OllamaUpdateResult> {
+  const latest = await latestEngineVersion()
+  if (!latest) return { success: false, message: t('ollamaEngine.noLatest') }
+  const root = await engineRoot()
+  const previous = await installedEngine(root)
+  if (previous && !isVersionOlder(previous.version, latest)) {
     await checkOllamaFreshness()
-    const status = getOllamaVersionStatus()
-    if (status && !status.outdated) {
-      return { success: true, message: t('dep.ollamaRestartedUpdated', { version: status.current ?? '' }) }
-    }
-    // Le redémarrage n'a rien changé (rien de prêt en arrière-plan, "Auto-download updates" désactivé côté
-    // Ollama, ou le vrai payload de mise à jour vit ailleurs que dans le binaire déjà installé — voir
-    // downloadAndLaunchOfficialInstaller) : télécharger et lancer le vrai installeur reste une tentative
-    // garantie de fonctionner, pas juste un message d'erreur.
+    return { success: true, message: t('options.ollama.upToDate', { current: previous.version }) }
   }
-
-  const versionBeforeInstaller = await readLocalOllamaVersion()
-  if (await downloadAndLaunchOfficialInstaller(onProgress)) {
-    // L'installeur se termine plus tard, dans sa propre fenêtre : le bandeau se met à jour tout seul à la fin.
-    void watchOllamaInstallerCompletion(versionBeforeInstaller)
-    return {
-      success: true,
-      installerPending: true,
-      message: t('dep.ollamaInstallerLaunched')
+  const release = await engineRelease(latest)
+  const fresh = await installEngineVersion(release, (progress) => onProgress?.(engineProgressToUpdate(progress)), { root })
+  onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
+  if (previous) await stopEmbeddedProcess()
+  await setCurrentEngine(root, fresh.version)
+  const started = await startEmbedded(fresh, log)
+  if (!started || (await readLocalOllamaVersion()) !== fresh.version) {
+    // La nouvelle version ne démarre pas : retour à ce qui marchait, sans rien avoir effacé.
+    await stopEmbeddedProcess()
+    if (previous) {
+      await setCurrentEngine(root, previous.version)
+      await startEmbedded(previous, log)
+    } else {
+      await rm(join(root, 'current.json'), { force: true }).catch(() => {})
+      embedded = null
+      setOllamaHost(WINDOWS_OLLAMA_HOST)
     }
+    await rm(fresh.dir, { recursive: true, force: true }).catch(() => {})
+    await checkOllamaFreshness()
+    return { success: false, message: t('ollamaEngine.switchFailed', { version: fresh.version }) }
   }
-
-  return new Promise((resolve) => {
-    const proc = spawn(
-      'winget',
-      ['upgrade', '--id', 'Ollama.Ollama', '-e', '--silent', '--accept-package-agreements', '--accept-source-agreements'],
-      { windowsHide: true }
-    )
-    let output = ''
-    proc.stdout?.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-    })
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-    })
-    // Comme pour ensureOllamaRunning : spawn() signale un binaire introuvable (winget absent, machine très
-    // ancienne ou dépouillée) de façon asynchrone via 'error', jamais en levant une exception directement.
-    proc.on('error', (err) => {
-      resolve({
-        success: false,
-        message: t('dep.wingetMissing', { error: err.message })
-      })
-    })
-    proc.on('close', (code) => {
-      if (code === 0) {
-        // Re-vérifie pour de vrai plutôt que de supposer que ça a marché (ex: winget peut sortir en code 0
-        // même sans rien avoir eu à faire) : le bandeau (OptionsMenu.tsx) relit getOllamaVersionStatus juste
-        // après l'appel, ce cache doit donc déjà être à jour à ce moment-là.
-        void checkOllamaFreshness().then(() => resolve({ success: true, message: t('dep.ollamaUpdated') }))
-        return
-      }
-      // APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B, documenté par Microsoft) : winget dit
-      // "aucune mise à jour disponible" alors que checkOllamaFreshness (comparaison à la vraie dernière
-      // version GitHub, seule source fiable) a détecté une version plus récente — pas une contradiction
-      // côté Jaris, juste que winget ne peut rien faire ici, pour deux raisons possibles : le paquet
-      // communautaire winget-pkgs (github.com/microsoft/winget-pkgs, maintenu par des contributeurs
-      // externes, pas Ollama lui-même) met parfois plusieurs jours à suivre une nouvelle sortie GitHub, ou
-      // l'installation actuelle d'Ollama (pas forcément posée par winget à l'origine) ne correspond pas au
-      // "scope"/type d'installeur que winget attend pour appliquer une mise à jour dessus.
-      if (code === 2316632107 || code === -1978335189) {
-        resolve({
-          success: false,
-          message: t('dep.noApplicableUpdate')
-        })
-        return
-      }
-      resolve({
-        success: false,
-        message: t('dep.wingetFailed', { code: String(code), output: output.trim().slice(-500) || t('dep.noDetail') })
-      })
-    })
-  })
+  await removeOtherEngineVersions(root, fresh.version)
+  await checkOllamaFreshness()
+  return {
+    success: true,
+    message: previous
+      ? t('ollamaEngine.updated', { version: fresh.version })
+      : t('ollamaEngine.installedNow', { version: fresh.version })
+  }
 }
 
 /**
- * Lance `ollama serve` si l'API ne répond pas déjà (ex: app Ollama pas encore démarrée au boot
- * Windows). Sans effet si Ollama tourne déjà - la commande échoue juste silencieusement (port pris).
+ * Démarre Ollama s'il ne répond pas déjà. L'Ollama de Jaris dès qu'il est installé ; sinon, comme avant l'étape
+ * 336, `ollama serve` de Windows (sans effet s'il tourne déjà).
  */
 export async function ensureOllamaRunning(log: LogFn): Promise<void> {
+  const found = await installedEngine().catch(() => null)
+  if (found) {
+    if (embedded?.version === found.version && ollamaProcessStartedByJaris && (await isUp(`${ENGINE_HOST}/api/tags`))) {
+      void checkOllamaFreshness()
+      return
+    }
+    log(t('dep.ollamaAutoStart'))
+    const up = await startEmbedded(found, log)
+    log(up ? t('dep.ollamaStarted') : t('ollamaEngine.startFailed'))
+    void checkOllamaFreshness()
+    return
+  }
+
+  embedded = null
+  setOllamaHost(WINDOWS_OLLAMA_HOST)
   const url = `${config.ollama.host}/api/tags`
   if (await isUp(url)) {
-    void warnIfOllamaOutdated(log)
     void checkOllamaFreshness()
     return
   }
@@ -598,19 +361,28 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
 
   const up = await waitUntil(() => isUp(url), 20000)
   log(up ? t('dep.ollamaStarted') : t('dep.ollamaStartManually'))
-  if (up) {
-    void warnIfOllamaOutdated(log)
-    void checkOllamaFreshness()
-  }
+  if (up) void checkOllamaFreshness()
+}
+
+/** Vrai quand Jaris utilise son propre Ollama (il n'a alors rien à corriger dans les réglages de Windows). */
+export function usesEmbeddedOllama(): boolean {
+  return embedded !== null
+}
+
+/**
+ * Relance Ollama (réparation de l'étape 289). L'Ollama de Jaris seul quand c'est lui : l'Ollama de Windows,
+ * qu'un utilisateur peut aussi employer en dehors de Jaris, n'est plus arrêté pour rien.
+ */
+export async function restartOllama(log: LogFn): Promise<void> {
+  if (embedded) await stopEmbeddedProcess()
+  else await stopOllamaCompletely()
+  await ensureOllamaRunning(log)
 }
 
 /**
  * Arrête Ollama uniquement si c'est cette instance de Jaris qui l'a démarré (jamais s'il tournait déjà
- * avant, voir ollamaProcessStartedByJaris) : appelé quand Jaris quitte vraiment (Quitter dans la barre
- * système), pour qu'aucun process ne continue de tourner en arrière-plan une fois Jaris fermé. Sans ça,
- * `ollama serve` reste actif indéfiniment (lancé "detached" pour survivre à Jaris) et peut décharger/
- * recharger un modèle tout seul après quelques minutes d'inactivité, ce qui fait parfois flasher une
- * fenêtre de console Windows même Jaris éteint.
+ * avant, voir ollamaProcessStartedByJaris) : appelé quand Jaris quitte vraiment, pour qu'aucun process ne
+ * continue de tourner en arrière-plan une fois Jaris fermé. L'Ollama de Jaris est toujours démarré par lui.
  */
 export function stopOllamaIfStartedByJaris(): void {
   const pid = ollamaProcessStartedByJaris?.pid
@@ -618,9 +390,8 @@ export function stopOllamaIfStartedByJaris(): void {
   if (pid === undefined) return
 
   try {
-    // .kill() seul ne suffit pas toujours pour un process "detached" sous Windows, et ne fermerait de
-    // toute façon pas les sous-process qu'Ollama a pu lancer pour un modèle chargé (voir /T) : taskkill
-    // est le seul moyen fiable de tout arrêter proprement ici.
+    // .kill() seul ne suffit pas toujours sous Windows, et ne fermerait de toute façon pas les sous-process
+    // qu'Ollama a pu lancer pour un modèle chargé (voir /T) : taskkill est le seul moyen fiable ici.
     if (process.platform === 'win32') {
       execSync(`taskkill /pid ${pid} /T /F`, { windowsHide: true, stdio: 'ignore' })
     } else {
@@ -632,16 +403,15 @@ export function stopOllamaIfStartedByJaris(): void {
 }
 
 /**
- * Arrête TOUT process Ollama en cours (le serveur `ollama.exe`, ET l'appli barre système `ollama app.exe`
- * qui le relancerait sinon tout seul) — nécessaire avant de déplacer le dossier des modèles
- * (Options → Modèles, voir modelsLocation.ts) : tant qu'un fichier de ce dossier est ouvert par Ollama, le
- * déplacer échouerait ou laisserait des données corrompues. `ensureOllamaRunning` (appelé juste après par
- * l'appelant) le relance proprement une fois le déplacement terminé.
+ * Arrête TOUT process Ollama en cours (celui de Jaris, celui de Windows ET son appli barre système, qui le
+ * relancerait sinon tout seul) — nécessaire avant de déplacer le dossier des modèles (« Déplacer ») : tant
+ * qu'un fichier de ce dossier est ouvert, le déplacer échouerait. `ensureOllamaRunning` le relance ensuite.
  */
 export async function stopOllamaCompletely(): Promise<void> {
   ollamaProcessStartedByJaris = null
   await execAsync('taskkill /IM ollama.exe /F', { windowsHide: true }).catch(() => {})
   await execAsync('taskkill /IM "ollama app.exe" /F', { windowsHide: true }).catch(() => {})
+  await stopStrayEngines()
 }
 
 /**

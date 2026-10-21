@@ -44,8 +44,8 @@ const overrides = {
   listAudioInputDevices: async () => [],
   getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }),
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
-  // Étape 170 : l'installeur officiel se termine plus tard ; le test diffuse lui-même le nouveau statut.
-  updateOllama: async () => ({ success: true, message: 'Installeur lancé.', installerPending: true }),
+  // Étape 336 : l'installation de l'Ollama de Jaris dure ; le test décide quand elle se termine.
+  updateOllama: () => new Promise((resolve) => { window.__finishOllama = resolve }),
   onOllamaVersionStatus: (cb) => {
     window.__emitOllamaStatus = cb
     return () => {}
@@ -530,9 +530,10 @@ test('« Tous les modèles » n’a plus de bouton d’analyse, seulement le tab
   })
 })
 
-// Étape 170, Léo : « après la mise à jour le message ne se supprime pas et on peut refaire la mise à jour, faut
-// redémarrer l'appli ».
-test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, puis « à jour » sans redémarrer', options, async () => {
+// Étape 336 : Jaris a son propre Ollama. Tant qu'il utilise celui de Windows, la ligne le dit et propose de
+// l'installer (avec sa taille) ; pendant l'installation, la barre d'avancement remplace le bouton ; à la fin, la
+// ligne dit « intégrée à Jaris » sans redémarrer, et plus aucun bouton tant qu'aucune version plus récente n'existe.
+test('Ollama : installer celui de Jaris depuis Options, puis « intégrée à Jaris · à jour » sans redémarrer', options, async () => {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
@@ -540,22 +541,49 @@ test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, pui
     await page.setViewportSize({ width: 1200, height: 900 })
     await page.setContent(html)
     await page.evaluate(() => {
-      window.__ollamaStatus = { current: '0.34.2', latest: '0.34.4', outdated: true }
+      window.__ollamaStatus = { current: '0.34.2', latest: '0.40.5', outdated: true, embedded: false }
     })
     await page.click('.options-menu__trigger')
     await page.click('.options-menu__tab:has-text("Général")')
     const ollamaRow = page.locator('.options-menu__row', { hasText: 'Ollama' }).first()
-    await ollamaRow.locator('button:has-text("Mettre à jour")').click()
-    await page.waitForSelector('text=Jaris attend la fin de l\'installation')
-    assert.equal(await ollamaRow.locator('button:has-text("Mettre à jour")').count(), 0, 'le bouton ne doit pas revenir pendant l’installeur')
+    await page.waitForSelector("text=Jaris utilise l'Ollama installé sur Windows (0.34.2)")
+    await page.waitForSelector('text=Environ 1,6 Go à télécharger')
+    const install = ollamaRow.locator("button:has-text(\"Installer l'Ollama de Jaris\")")
+    assert.equal(await install.count(), 1, "le bouton d'installation doit être proposé")
+    await install.click()
+    await page.waitForSelector('.options-menu__progress')
+    assert.equal(await page.locator('text=Environ 1,6 Go à télécharger').count(), 0, 'la taille ne reste pas affichée pendant le téléchargement')
+    assert.equal(await ollamaRow.locator('button:has-text("Mise à jour en cours")').isDisabled(), true, 'pas de second clic pendant l’installation')
 
     await page.evaluate(() => {
-      window.__ollamaStatus = { current: '0.34.4', latest: '0.34.4', outdated: false }
-      window.__emitOllamaStatus(window.__ollamaStatus)
+      window.__ollamaStatus = { current: '0.40.5', latest: '0.40.5', outdated: false, embedded: true }
+      window.__finishOllama({ success: true, message: 'Jaris utilise maintenant son propre Ollama (0.40.5). Tes modèles sont les mêmes.' })
     })
-    await page.waitForSelector('text=Ollama est à jour (0.34.4).')
-    assert.match(await ollamaRow.textContent(), /0\.34\.4 installée · à jour/)
-    assert.equal(await page.locator('text=Jaris attend la fin de l\'installation').count(), 0)
+    await page.waitForSelector('text=Jaris utilise maintenant son propre Ollama (0.40.5)')
+    assert.match(await ollamaRow.textContent(), /0\.40\.5, intégrée à Jaris · à jour/)
+    assert.equal(await ollamaRow.locator('button').count(), 0, 'aucun bouton quand l’Ollama de Jaris est à jour')
+    assert.equal(await page.locator('.options-menu__progress').count(), 0)
+  } finally {
+    await browser.close()
+  }
+})
+
+test('Ollama de Jaris : « Mettre à jour » seulement quand une version plus récente est publiée', options, async () => {
+  const html = buildPage()
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1200, height: 900 })
+    await page.setContent(html)
+    await page.evaluate(() => {
+      window.__ollamaStatus = { current: '0.40.4', latest: '0.40.5', outdated: true, embedded: true }
+    })
+    await page.click('.options-menu__trigger')
+    await page.click('.options-menu__tab:has-text("Général")')
+    const ollamaRow = page.locator('.options-menu__row', { hasText: 'Ollama' }).first()
+    await page.waitForSelector('text=Version 0.40.4, intégrée à Jaris · 0.40.5 disponible.')
+    assert.equal(await ollamaRow.locator('button:has-text("Mettre à jour")').count(), 1)
+    assert.equal(await page.locator('text=Environ 1,6 Go à télécharger').count(), 0, "la phrase d'installation ne concerne que l'Ollama de Windows")
   } finally {
     await browser.close()
   }

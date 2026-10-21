@@ -62,7 +62,13 @@ function setup({ binding = '0.0.0.0:8091', jsonStatus = 200 } = {}) {
     child_process: { exec, execSync: () => '', spawn: () => ({ on: () => {} }) },
     fs: { existsSync: () => false },
     'fs/promises': { rm: async () => {} },
-    '../config': { config: { searxng: { host: 'http://127.0.0.1:8091' }, ollama: { host: 'http://127.0.0.1:11434' } } },
+    '../config': {
+      config: { searxng: { host: 'http://127.0.0.1:8091' }, ollama: { host: 'http://127.0.0.1:11434' } },
+      setOllamaHost: () => {},
+      WINDOWS_OLLAMA_HOST: 'http://127.0.0.1:11434'
+    },
+    // Étape 336 : l'Ollama de Jaris (ollamaEngine.ts, testé à part) ; sans rapport avec SearXNG.
+    './ollamaEngine': { ENGINE_HOST: 'http://127.0.0.1:11435', installedEngine: async () => null, engineRoot: async () => '/fake/engine' },
     './appLauncher': { didAppLaunch: () => true, openApp: async () => 'a été lancé.' },
     './download': { downloadToFile: async () => 0 },
     './storageRoot': { downloadsDir: () => '/tmp', getStorageRoot: () => null },

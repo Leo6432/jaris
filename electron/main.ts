@@ -41,11 +41,15 @@ import {
   ensureSearxngRunning,
   installDockerDesktop,
   getOllamaVersionStatus,
+  isOllamaInstalled,
   onOllamaVersionStatus,
+  restartOllama,
   stopOllamaCompletely,
   stopOllamaIfStartedByJaris,
-  updateOllama
+  updateOllama,
+  usesEmbeddedOllama
 } from './services/dependencyServices'
+import { engineModelsDir } from './services/ollamaEngine'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
@@ -1244,16 +1248,16 @@ async function startVoicePipeline(): Promise<void> {
   await reconcileStorage(log, stopOllamaCompletely)
   // Étape 254 : une variable OLLAMA_MODELS qui désigne un autre dossier rend tous les modèles invisibles.
   // Étape 289 : de même qu'un chemin qui passe par une jonction (Ollama 0.40+ ne relit plus rien à travers).
-  await alignOllamaModelsVariable(log, stopOllamaCompletely)
+  // Étape 336 : seulement pour l'Ollama de Windows. Celui de Jaris reçoit directement le vrai chemin des modèles,
+  // il n'y a rien à corriger dans les réglages de Windows (ni d'Ollama de Windows à arrêter pour ça).
+  if (!(await isOllamaInstalled())) await alignOllamaModelsVariable(log, stopOllamaCompletely)
   // Puis le RÉSULTAT est vérifié : l'appli Ollama peut avoir lancé le serveur avec son propre réglage d'emplacement.
   const repairModelsView = (): Promise<boolean> =>
     repairOllamaModelsView(log, {
       ...windowsModelsViewDeps,
+      modelsDir: () => (usesEmbeddedOllama() ? engineModelsDir() : windowsModelsViewDeps.modelsDir()),
       serverModelCount: () => listInstalledModels().then((models) => models.length, () => null),
-      restartOllama: async () => {
-        await stopOllamaCompletely()
-        await ensureOllamaRunning(log)
-      }
+      restartOllama: () => restartOllama(log)
     })
   setModelsViewRepair(repairModelsView)
   const ollamaStarted = ensureOllamaRunning(log).then(repairModelsView)
@@ -1626,13 +1630,16 @@ app.whenReady().then(async () => {
     await saveProfile({ ...profile, contextLength })
   })
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
-  // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : l'installeur
-  // d'Ollama pèse 1,5 Go, soit plusieurs minutes pendant lesquelles le bouton restait muet ("ça bloque
-  // depuis 5m", Léo).
-  // Étape 170 : tout nouveau statut d'Ollama (fin de l'installeur officiel notamment) rafraîchit la page Options.
+  // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : le paquet
+  // d'Ollama pèse 1,6 Go, soit plusieurs minutes pendant lesquelles le bouton ne doit pas rester muet.
+  // Étape 170 : tout nouveau statut d'Ollama rafraîchit la page Options.
   onOllamaVersionStatus((status) => broadcast(IPC_CHANNELS.ollamaVersionStatusChanged, status))
+  // Étape 336 : installe l'Ollama de Jaris (ou le met à jour) et bascule dessus sans redémarrer Jaris.
   ipcMain.handle(IPC_CHANNELS.updateOllama, () =>
-    updateOllama((progress) => broadcast(IPC_CHANNELS.updateProgress, { target: 'ollama', ...progress }))
+    updateOllama(
+      (progress) => broadcast(IPC_CHANNELS.updateProgress, { target: 'ollama', ...progress }),
+      (message) => broadcast(IPC_CHANNELS.log, message)
+    )
   )
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   // `quitting = true` seulement juste avant que updateApp() n'appelle réellement app.quit() (jamais avant, y

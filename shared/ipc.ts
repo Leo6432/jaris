@@ -541,6 +541,8 @@ export interface OllamaVersionStatus {
   /** `null` : dernière version impossible à vérifier (hors ligne, GitHub bloqué ou limite atteinte). */
   latest: string | null
   outdated: boolean
+  /** Étape 336 : vrai quand Jaris utilise son propre Ollama, faux tant qu'il utilise celui installé sur Windows. */
+  embedded: boolean
 }
 
 /**

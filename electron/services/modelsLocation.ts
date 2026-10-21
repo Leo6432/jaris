@@ -50,7 +50,10 @@ export function bricks(): Brick[] {
     // Étape 173 : le moteur et le modèle de dessin (environ 5 Go, voir imageGenerator.ts).
     // Le Montage (étape 189) n'est plus une brique depuis l'étape 200 : retiré, son paquet est effacé au
     // démarrage (legacyCleanup.ts).
-    { label: t('brick.image'), link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' }
+    { label: t('brick.image'), link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' },
+    // Étape 336 : l'Ollama de Jaris (ollamaEngine.ts, même emplacement que engineLink()). Son nom commence par
+    // « ollama » : relocation.ts arrête Ollama avant de le déplacer, comme les autres briques d'Ollama.
+    { label: t('brick.ollamaEngine'), link: join(local, 'Jaris', 'ollama-engine'), subdir: 'ollama-engine' }
   ]
 }
 
