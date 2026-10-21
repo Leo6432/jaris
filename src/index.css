@@ -1011,6 +1011,25 @@ body.body--splash {
   color: var(--hud-text-faint);
 }
 
+/* Étape 341 : futurs modèles, en bas de « Tous les modèles », sur fond rayé — repérés, jamais choisis. */
+.options-menu__model-overview tr.options-menu__model-row--future td {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--hud-line) 75%, transparent) 8px 16px
+  );
+  color: var(--hud-text-faint);
+}
+
+.options-menu__future-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px dashed var(--hud-line);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--hud-text);
+}
+
 .options-menu__badge {
   display: inline-block;
   padding: 1px 9px;

@@ -575,6 +575,8 @@
   "models.usedIn": "Taip — {roles}",
   "common.no": "Ne",
   "models.notPublished": "Nepaskelbta",
+  "models.future": "Būsimas modelis",
+  "models.future.title": "Dar neišbandytas: kol kas Jaris jo nerenka.",
   "setup.done.title": "Konfigūracija baigta",
   "setup.title": "Jaris konfigūracija",
   "setup.intro": "Jaris apžiūrėjo tavo kompiuterį ir kiekvienam vaidmeniui parinko geriausią jame telpantį modelį — štai ką jis įdiegs.",

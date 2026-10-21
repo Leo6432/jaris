@@ -575,6 +575,8 @@
   "models.usedIn": "Jā — {roles}",
   "common.no": "Nē",
   "models.notPublished": "Nav publicēts",
+  "models.future": "Nākotnes modelis",
+  "models.future.title": "Vēl nav pārbaudīts: pagaidām Jaris to neizvēlas.",
   "setup.done.title": "Iestatīšana pabeigta",
   "setup.title": "Jaris iestatīšana",
   "setup.intro": "Jaris apskatīja tavu datoru un katrai lomai izvēlējās labāko modeli, kas tajā ietilpst — lūk, ko tas instalēs.",

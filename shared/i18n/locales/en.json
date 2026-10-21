@@ -565,6 +565,8 @@
   "models.usedIn": "Yes — {roles}",
   "common.no": "No",
   "models.notPublished": "Not published",
+  "models.future": "Future model",
+  "models.future.title": "Not tested yet: Jaris does not pick it for now.",
   "setup.done.title": "Setup complete",
   "setup.title": "Jaris setup",
   "setup.intro": "Jaris looked at your machine and chose, for each role, the best model that fits — here's what it's going to install.",

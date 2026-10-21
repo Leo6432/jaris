@@ -575,6 +575,8 @@
   "models.usedIn": "Áno — {roles}",
   "common.no": "Nie",
   "models.notPublished": "Nezverejnené",
+  "models.future": "Budúci model",
+  "models.future.title": "Zatiaľ neotestovaný: Jaris ho zatiaľ nevyberá.",
   "setup.done.title": "Nastavenie dokončené",
   "setup.title": "Nastavenie Jarisa",
   "setup.intro": "Jaris preskúmal tvoj počítač a pre každú rolu vybral najlepší model, ktorý sa naň zmestí — toto teraz nainštaluje.",

@@ -565,6 +565,8 @@
   "models.usedIn": "Ja — {roles}",
   "common.no": "Nej",
   "models.notPublished": "Ikke offentliggjort",
+  "models.future": "Fremtidig model",
+  "models.future.title": "Ikke testet endnu: Jaris vælger den ikke indtil videre.",
   "setup.done.title": "Konfigurationen er færdig",
   "setup.title": "Konfiguration af Jaris",
   "setup.intro": "Jaris har set på din computer og valgt den bedste model, der kan være der, til hver rolle — det her vil den installere.",

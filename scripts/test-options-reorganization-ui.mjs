@@ -393,7 +393,7 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     assert.equal(await page.$('.options-page--models .options-menu__model-group-title'), null, 'plus aucun tableau par palier')
     assert.equal((await page.$$('.options-page--models table')).length, 1, 'un seul tableau attendu')
 
-    const rows = await page.$$eval('.options-page--models tbody tr', (els) =>
+    const rows = await page.$$eval('.options-page--models tbody tr:not(.options-menu__model-row--future)', (els) =>
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus : ${rows.length}`)
@@ -487,7 +487,7 @@ test('étape 331 : la version compressée s’affiche en entier sous chaque nom,
     }))
     assert.ok(rows.length > 20, `toutes les lignes attendues : ${rows.length}`)
     for (const row of rows) {
-      assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0)$/, `${row.title} : version absente`)
+      assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0|Q2_0)$/, `${row.title} : version absente`)
       assert.ok(row.inside, `${row.title} : version coupée ou cachée`)
       assert.equal(row.border, 'solid', `${row.title} : badge non habillé par le CSS`)
     }
@@ -709,7 +709,7 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const models = () =>
-      page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
+      page.$$eval('.options-page--models tbody tr:not(.options-menu__model-row--future)', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
 
     // Ordre par défaut (aucun tri actif) : celui renvoyé tel quel par getModelOverview.
     assert.deepEqual(await models(), ['ministral-3:3b', 'qwen3:1.7b', 'gemma4:31b'], 'ordre par défaut inattendu')
@@ -743,6 +743,40 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
   })
 })
 
+// Étape 341 (Léo : « ajoute-le dans futur, en bas de tous les modèles, mets en rayure futur modèle »).
+test('« Tous les modèles » : Bonsai 2 en bas, rayé, « Futur modèle », quel que soit le tri, et suit la recherche', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+    const last = () =>
+      page.$$eval('.options-page--models tbody tr', (rows) => {
+        const tr = rows[rows.length - 1]
+        const td = tr.querySelector('td')
+        return {
+          title: tr.querySelector('.options-menu__model-name')?.title,
+          future: tr.classList.contains('options-menu__model-row--future'),
+          badge: tr.querySelector('.options-menu__future-badge')?.textContent,
+          stripes: getComputedStyle(td).backgroundImage
+        }
+      })
+    let row = await last()
+    assert.equal(row.title, 'bonsai-2:27b', 'le futur modèle doit être la dernière ligne')
+    assert.ok(row.future)
+    assert.equal(row.badge, 'Futur modèle')
+    assert.match(row.stripes, /repeating-linear-gradient/, `fond rayé attendu : ${row.stripes}`)
+    // Le tri ne le remonte jamais : il reste en bas, même trié par VRAM décroissante (8,3 Go dépasse 3 Go).
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    assert.equal((await last()).title, 'bonsai-2:27b')
+    // La recherche le trouve seul, sans afficher « aucun modèle ».
+    await page.fill('.options-menu__model-search', 'bonsai')
+    const titles = await page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
+    assert.deepEqual(titles, ['bonsai-2:27b'])
+    assert.equal(await page.$('.options-page--models .options-menu__model-search-empty'), null)
+  })
+})
+
 // Étape 226 (Léo : « ajoute une barre de recherche à côté des filtres dans tous les modèles »).
 test('« Tous les modèles » : la recherche est dans la barre des tris et filtre réellement le tableau', options, async () => {
   await withOptions(async (page) => {
@@ -750,7 +784,7 @@ test('« Tous les modèles » : la recherche est dans la barre des tris et filtr
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const models = () =>
-      page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
+      page.$$eval('.options-page--models tbody tr:not(.options-menu__model-row--future)', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
 
     // À côté des filtres : dans la même barre, sur la même ligne que les pastilles de tri.
     const layout = await page.$eval('.options-page--models .options-menu__sort-bar', (bar) => {

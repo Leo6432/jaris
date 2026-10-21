@@ -565,6 +565,8 @@
   "models.usedIn": "Igen — {roles}",
   "common.no": "Nem",
   "models.notPublished": "Nem közölt",
+  "models.future": "Jövőbeli modell",
+  "models.future.title": "Még nincs tesztelve: a Jaris egyelőre nem választja.",
   "setup.done.title": "A beállítás kész",
   "setup.title": "Jaris beállítása",
   "setup.intro": "Jaris megnézte a gépedet, és minden szerephez kiválasztotta a legjobb, ráférő modellt — ezt fogja most telepíteni.",

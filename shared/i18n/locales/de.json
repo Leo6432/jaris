@@ -565,6 +565,8 @@
   "models.usedIn": "Ja — {roles}",
   "common.no": "Nein",
   "models.notPublished": "Nicht veröffentlicht",
+  "models.future": "Zukünftiges Modell",
+  "models.future.title": "Noch nicht getestet: Jaris wählt es vorerst nicht aus.",
   "setup.done.title": "Einrichtung abgeschlossen",
   "setup.title": "Einrichtung von Jaris",
   "setup.intro": "Jaris hat sich deinen Rechner angesehen und für jede Rolle das beste Modell gewählt, das darauf passt — das wird es jetzt installieren.",

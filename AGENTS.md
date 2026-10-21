@@ -9216,3 +9216,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   elles changent de semaine en semaine.** Un test qui illustre une règle avec de VRAIES vitesses casse dès qu'elles
   bougent : les exemples sont refaits avec les valeurs du jour, la règle testée reste la même. Régression :
   `test-hardwarescan-*.mjs`, `test-my-model-picks-ui.mjs` (« 17,7 tok/s »).
+
+- **Étape 341, futurs modèles (Léo : « ajoute-le dans futur, en bas de tous les modèles, mets en rayure futur
+  modèle »).** Bonsai 2 27B (PrismML, 17/09/2026, Apache 2.0, `bonsai-2:27b`) : qwen3.8:27b compressé à ~1,75 bit
+  par paramètre (−1, 0, +1), 8,26 Go dans le registre d'Ollama (modèle 7,63 + lecture d'images 0,63), aucune fiche
+  Artificial Analysis ; le créateur annonce 98,2 % des scores de qwen3.8:27b (outils 77,6 contre 79,7), non vérifié.
+  Liste `shared/futureModels.ts`, affichée en dernières lignes de « Tous les modèles », sur fond rayé avec
+  « Futur modèle » : toujours en bas quel que soit le tri, mais trouvée par la recherche. Ce n'est PAS un
+  candidat : absent de hardwareScan.ts, jamais choisi ni proposé au test. Pour le tester un jour, le retirer de
+  cette liste et l'ajouter aux candidats comme d'habitude. Régression : `test-options-reorganization-ui.mjs`
+  (dernière ligne, rayures mesurées, tri, recherche ; vérifié en retirant les rayures).

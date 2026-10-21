@@ -565,6 +565,8 @@
   "models.usedIn": "Ja — {roles}",
   "common.no": "Nee",
   "models.notPublished": "Niet gepubliceerd",
+  "models.future": "Toekomstig model",
+  "models.future.title": "Nog niet getest: Jaris kiest het voorlopig niet.",
   "setup.done.title": "Configuratie voltooid",
   "setup.title": "Configuratie van Jaris",
   "setup.intro": "Jaris heeft je computer bekeken en voor elke rol het beste model gekozen dat erop past — dit gaat het installeren.",

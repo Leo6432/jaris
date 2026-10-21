@@ -8,6 +8,7 @@ import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
+import { FUTURE_MODELS } from '../../shared/futureModels'
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
@@ -234,6 +235,8 @@ export default function AllModelsOverview(): JSX.Element {
     () => (overview ? sortEntries(filterModels(overview.entries, query), sort) : null),
     [overview, sort, query]
   )
+  // Étape 341 : les futurs modèles restent en bas, quel que soit le tri, mais suivent la recherche.
+  const futureEntries = useMemo(() => filterModels(FUTURE_MODELS, query), [query])
 
   return (
     <div className="options-menu__all-models">
@@ -265,12 +268,12 @@ export default function AllModelsOverview(): JSX.Element {
                   {overview && (
                     <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} query={query} onQuery={setQuery} />
                   )}
-                  {sortedEntries && sortedEntries.length === 0 && (
+                  {sortedEntries && sortedEntries.length === 0 && futureEntries.length === 0 && (
                     <p className="options-menu__model-search-empty">{t('models.search.none', { query: query.trim() })}</p>
                   )}
                   {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
                       Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}
-                  {sortedEntries && sortedEntries.length > 0 && (
+                  {sortedEntries && sortedEntries.length + futureEntries.length > 0 && (
                     <div className="options-menu__model-overview-scroll">
                       <div className="options-menu__model-group">
                         <table className="options-menu__model-overview">
@@ -333,6 +336,32 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">{entry.omniscience == null ? '—' : formatDecimal(entry.omniscience)}</td>
                                 <td className="options-menu__col-num">{entry.terminalBench == null ? '—' : formatPercent(entry.terminalBench / 100)}</td>
                                 <td className="options-menu__col-num">{typeof entry.artificialAnalysisSpeed === 'number' ? formatDecimal(entry.artificialAnalysisSpeed) : '—'}</td>
+                              </tr>
+                            ))}
+                            {futureEntries.map((entry) => (
+                              <tr key={entry.model} className="options-menu__model-row--future" title={t('models.future.title')}>
+                                <td className="options-menu__model-name" title={entry.model}>
+                                  {formatModelName(entry.model, { quant: false })}
+                                  <span className="options-menu__quant" title={t('models.quant.title')}>
+                                    {entry.quantization}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className="options-menu__future-badge">{t('models.future')}</span>
+                                  {entry.readsImages ? ` · ${t('models.readsImages')}` : ''}
+                                </td>
+                                <td>{t('common.no')}</td>
+                                <td className="options-menu__col-num">{t('unit.gb', { value: formatDecimal(entry.vramGb) })}</td>
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={null} />
+                                </td>
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={null} />
+                                </td>
+                                <td className="options-menu__col-num">{t('models.notPublished')}</td>
+                                <td className="options-menu__col-num">—</td>
+                                <td className="options-menu__col-num">—</td>
+                                <td className="options-menu__col-num">—</td>
                               </tr>
                             ))}
                           </tbody>

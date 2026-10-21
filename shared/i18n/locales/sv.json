@@ -565,6 +565,8 @@
   "models.usedIn": "Ja — {roles}",
   "common.no": "Nej",
   "models.notPublished": "Inte publicerad",
+  "models.future": "Framtida modell",
+  "models.future.title": "Inte testad ännu: Jaris väljer den inte för tillfället.",
   "setup.done.title": "Konfigurationen klar",
   "setup.title": "Konfiguration av Jaris",
   "setup.intro": "Jaris har tittat på din dator och valt, för varje roll, den bästa modellen som får plats — det här kommer den att installera.",

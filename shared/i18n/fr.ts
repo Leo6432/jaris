@@ -575,6 +575,8 @@ export const fr = {
   "models.usedIn": "Oui — {roles}",
   "common.no": "Non",
   "models.notPublished": "Non publié",
+  "models.future": "Futur modèle",
+  "models.future.title": "Pas encore testé : Jaris ne le choisit pas pour l'instant.",
   "setup.done.title": "Configuration terminée",
   "setup.title": "Configuration de Jaris",
   "setup.intro": "Jaris a regardé ta machine et choisi, pour chaque rôle, le meilleur modèle qui y tient — voici ce qu'il va installer.",

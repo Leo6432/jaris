@@ -575,6 +575,8 @@
   "models.usedIn": "Da — {roles}",
   "common.no": "Nu",
   "models.notPublished": "Nepublicat",
+  "models.future": "Model viitor",
+  "models.future.title": "Încă netestat: deocamdată Jaris nu îl alege.",
   "setup.done.title": "Configurare terminată",
   "setup.title": "Configurarea lui Jaris",
   "setup.intro": "Jaris s-a uitat la calculatorul tău și a ales, pentru fiecare rol, cel mai bun model care încape pe el — iată ce va instala.",

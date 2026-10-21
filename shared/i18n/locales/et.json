@@ -565,6 +565,8 @@
   "models.usedIn": "Jah — {roles}",
   "common.no": "Ei",
   "models.notPublished": "Avaldamata",
+  "models.future": "Tulevane mudel",
+  "models.future.title": "Veel testimata: Jaris seda praegu ei vali.",
   "setup.done.title": "Seadistamine lõpetatud",
   "setup.title": "Jarise seadistamine",
   "setup.intro": "Jaris vaatas su arvuti üle ja valis iga rolli jaoks parima mudeli, mis sinna mahub — selle ta nüüd installib.",

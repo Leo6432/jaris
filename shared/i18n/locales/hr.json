@@ -575,6 +575,8 @@
   "models.usedIn": "Da — {roles}",
   "common.no": "Ne",
   "models.notPublished": "Nije objavljeno",
+  "models.future": "Budući model",
+  "models.future.title": "Još nije testiran: Jaris ga zasad ne odabire.",
   "setup.done.title": "Postavljanje dovršeno",
   "setup.title": "Postavljanje Jarisa",
   "setup.intro": "Jaris je pregledao tvoje računalo i za svaku ulogu odabrao najbolji model koji na njega stane — evo što će instalirati.",

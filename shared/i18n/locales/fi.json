@@ -565,6 +565,8 @@
   "models.usedIn": "Kyllä — {roles}",
   "common.no": "Ei",
   "models.notPublished": "Ei julkaistu",
+  "models.future": "Tuleva malli",
+  "models.future.title": "Ei vielä testattu: Jaris ei valitse sitä toistaiseksi.",
   "setup.done.title": "Määritys valmis",
   "setup.title": "Jarisin määritys",
   "setup.intro": "Jaris tutki tietokoneesi ja valitsi jokaiseen rooliin parhaan siihen mahtuvan mallin — nämä se aikoo asentaa.",
