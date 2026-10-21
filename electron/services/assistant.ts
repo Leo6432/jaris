@@ -812,11 +812,11 @@ async function conversation(
       const soundCue = TOOL_SOUND_CUES[call.function.name]
       if (soundCue) onSoundCue?.(soundCue)
 
-      // Un outil qui lève une exception (SearXNG/Ollama/Docker injoignable, erreur réseau...) ne doit
+      // Un outil qui lève une exception (moteur de recherche/Ollama injoignable, erreur réseau...) ne doit
       // jamais faire échouer tout le tour de conversation : sans ce try/catch, l'exception remontait telle
       // quelle jusqu'à converse(), et l'appelant (voicePipeline.ts/chatSession.ts) la remplaçait par le
       // message générique "vérifie qu'Ollama tourne bien" — trompeur quand la vraie cause est ailleurs (ex:
-      // SearXNG pas lancé pour search_web). Le message d'erreur, lui, est déjà clair et actionnable (voir
+      // pas d'internet pour search_web). Le message d'erreur, lui, est déjà clair et actionnable (voir
       // webSearch.ts) : mieux vaut le transmettre au modèle comme un résultat d'outil normal, pour qu'il le
       // relaie fidèlement (voir la consigne "ne jamais inventer de dépannage" plus bas) plutôt que le perdre.
       // Téléphone (étape 214) : un outil interdit que le modèle appelle quand même (il n'en avait pas la liste)

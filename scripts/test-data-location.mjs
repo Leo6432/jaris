@@ -1112,8 +1112,9 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
   const { storageRoot } = loadStorage(userData)
   rmSync(root, { recursive: true, force: true })
   const owned = new Set(storageRoot.OWNED_ENTRIES)
-  // Recopié depuis le programme à chaque démarrage, conteneur recréé s'il pointe ailleurs (searxngHome.ts).
-  const rebuiltAlone = new Set(['searxng-docker'])
+  // Ce que Jaris sait reconstruire seul : plus rien depuis l'étape 337 (l'ancien dossier `searxng-docker` de la recherche
+  // web n'est plus écrit, seulement effacé au démarrage par legacyCleanup.ts).
+  const rebuiltAlone = new Set()
 
   // electron/ ET shared/ : un nom de fichier partagé avec l'écran vit dans shared/ (ex. code-conversations.json).
   const repo = fileURLToPath(new URL('..', import.meta.url))
@@ -1178,7 +1179,9 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
     // Vérifie, mesure et affiche le dossier entier pendant « Déplacer » : n'y écrit rien.
     'electron/services/relocation.ts': { uses: 3, writes: [] },
     // getJournalPath(root = getDataRoot()) puis join(root, 'journal-demandes.txt').
-    'electron/services/requestJournal.ts': { uses: 1, writes: ['journal-demandes.txt'] }
+    'electron/services/requestJournal.ts': { uses: 1, writes: ['journal-demandes.txt'] },
+    // removeLeftoverSearxng(getDataRoot()) : efface l'ancien dossier `searxng-docker` (étape 337), n'y écrit rien.
+    'electron/main.ts': { uses: 1, writes: [] }
   }
   for (const [file, uses] of indirect) {
     assert.ok(
@@ -1196,7 +1199,7 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
     }
   }
 
-  for (const name of ['github-token.bin', 'phone-tunnel', 'phone-devices.json', 'benchmark-nouveaux-modeles.md', 'searxng-docker', 'journal-demandes.txt']) {
+  for (const name of ['github-token.bin', 'phone-tunnel', 'phone-devices.json', 'benchmark-nouveaux-modeles.md', 'journal-demandes.txt']) {
     assert.ok(written.includes(name), `${name} devrait être trouvé par ce contrôle (sinon le contrôle lui-même ne voit plus rien)`)
   }
   for (const name of written) {

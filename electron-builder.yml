@@ -46,13 +46,6 @@ extraResources:
       - benchmark-browser.mjs
       - vision-tests/*.png
       - vision-tests/*.json
-  # Recherche web : la configuration du conteneur SearXNG. Docker Desktop ne s'installe pas en silence,
-  # donc la recherche web reste indisponible sur une machine qui ne l'a pas (voir README) — mais sur une
-  # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.
-  - from: docker-compose.yml
-    to: docker-compose.yml
-  - from: searxng
-    to: searxng
   # Étape 214 : parler à Jaris depuis son téléphone. jaris-tunnel.exe (Tailscale embarqué, compilé par la CI
   # depuis tunnel/) est un vrai programme lancé à côté de Jaris, donc hors de l'archive asar ; la page du
   # téléphone (phone/) est servie telle quelle par le serveur local de Jaris.

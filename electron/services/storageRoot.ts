@@ -37,7 +37,7 @@ import {
  * ou, à la toute première installation sur un autre disque que C, un dossier `Jaris-data` posé À CÔTÉ du
  * dossier du programme (jamais dedans : chaque mise à jour efface le dossier du programme en entier). Tout le
  * reste en découle : données (conversations, profil, mémoire…), cache interne de Chromium, modèles Ollama,
- * programme Ollama, environnement Python, cache de la voix, Docker.
+ * programme Ollama, environnement Python, cache de la voix.
  *
  * Seul ce petit fichier-repère reste obligatoirement dans le dossier par défaut de Windows (%APPDATA%\Jaris) :
  * c'est le seul endroit que Jaris sait retrouver au démarrage AVANT de savoir où est le reste.
@@ -91,9 +91,8 @@ const MODEL_TEST_ENTRIES = [
  * - les trois fichiers du bouton « Tester les modèles sans score » (benchmarkRunner.ts et
  *   scripts/benchmark-models.mjs : résultats, traces brutes, registre des modèles téléchargés par le test) ;
  * - `duel-pilotes` : le rapport du duel des pilotes d'écran (étape 249, fonctionnalité retirée, rapport gardé).
- * Restent volontairement dehors, parce que Jaris les reconstruit seul : `searxng-docker` (recopié depuis le
- * programme à chaque démarrage, conteneur recréé s'il pointe ailleurs : searxngHome.ts) et les réglages de confort
- * de la fenêtre (largeur de l'aperçu, durée et qualité de vidéo, dans le stockage local de Chromium : valeurs par
+ * Restent volontairement dehors : `searxng-docker` (l'ancienne recherche web, effacé au démarrage depuis l'étape 337 :
+ * legacyCleanup.ts) et les réglages de confort de la fenêtre (largeur de l'aperçu, durée et qualité de vidéo, dans le stockage local de Chromium : valeurs par
  * défaut sinon).
  */
 export const OWNED_ENTRIES = [
@@ -805,7 +804,7 @@ export function setStorageRootForTests(root: string | null): void {
 }
 
 /**
- * Où télécharger les gros installeurs (Ollama 1,5 Go, Docker 600 Mo, Jaris 100 Mo) : dans la racine quand
+ * Où télécharger les gros installeurs (Ollama 1,5 Go, Jaris 100 Mo) : dans la racine quand
  * il y en a une, jamais dans le dossier temporaire de Windows (sur C).
  */
 export function downloadsDir(): string {

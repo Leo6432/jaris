@@ -180,7 +180,6 @@ function setupMachine({ latest = '0.40.5', installed = null, broken = [], corrup
     if (id === 'path') return { join, basename: (p) => p.split('/').pop(), dirname: (p) => p.split('/').slice(0, -1).join('/') }
     if (id === 'util') return { promisify: () => async () => ({ stdout: '', stderr: '' }) }
     if (id.endsWith('/storageRoot')) return { downloadsDir: () => root, getStorageRoot: () => null }
-    if (id.endsWith('/dockerLocation')) return { dockerInstallFlags: () => [] }
     if (id.endsWith('/config')) {
       return {
         config: { ollama: { get host() { return machine.host } } },
@@ -190,7 +189,6 @@ function setupMachine({ latest = '0.40.5', installed = null, broken = [], corrup
     }
     if (id.endsWith('/appLauncher')) return { didAppLaunch: () => true, openApp: async () => '' }
     if (id.endsWith('/download')) return { downloadToFile: async () => 0 }
-    if (id.endsWith('/searxngHome')) return {} // SearXNG : sans rapport avec Ollama
     if (id.endsWith('/formatBytes')) return { formatBytes: (n) => `${n} o` }
     throw new Error(`module non simulé (dependencyServices) : ${id}`)
   })

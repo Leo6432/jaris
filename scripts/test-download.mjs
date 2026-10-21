@@ -12,7 +12,7 @@ import ts from 'typescript'
 
 /**
  * electron/services/download.ts (étape 98) — le téléchargement partagé par les trois installeurs de Jaris
- * (Jaris lui-même, Ollama, Docker Desktop).
+ * (Jaris lui-même, Ollama).
  *
  * Écrit après le retour de Léo : "quand on demande une mise à jour on ne sait pas quand c'est terminé et
  * des fois c'est bloqué et ça fait rien". Ce que ce test verrouille, dans l'ordre d'importance :

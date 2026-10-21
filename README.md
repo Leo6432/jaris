@@ -72,8 +72,8 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
 - ⬜ Étape 33 — Firecrawl pour un scraping web plus fiable : en complément de
-  la recherche web (étape 7, basée sur SearXNG en local), auto-héberger
-  Firecrawl (open source, licence AGPL-3.0, conteneur Docker comme SearXNG —
+  la recherche web (étape 7, DuckDuckGo lu dans un navigateur caché), auto-héberger
+  Firecrawl (open source, licence AGPL-3.0, conteneur Docker —
   étapes 7/8) pour extraire le contenu des pages en markdown propre, avec
   rendu JS des sites dynamiques — reste 100% local et gratuit. Limite : la
   version auto-hébergée n'a pas le contournement anti-bot/rotation de proxy
@@ -132,7 +132,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   dépendances inutilisées
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, Parakeet v3 (CC-BY-4.0, attribution à NVIDIA requise), Supertonic HD, SearXNG) avec
+  modèles Qwen, Parakeet v3 (CC-BY-4.0, attribution à NVIDIA requise), Supertonic HD) avec
   une distribution commerciale, avant de passer aux étapes de mise sur le
   marché ci-dessous (mentions légales, protection contre la redistribution,
   publication et monétisation)
@@ -793,11 +793,9 @@ l'étape 20).
     Azure Trusted Signing (~10$/mois, moins cher, mais réservé aux
     particuliers US/Canada — en France il faudrait une société enregistrée,
     de toute façon nécessaire pour facturer un abonnement).
-- **Recherche web sans Docker** : `docker-compose.yml` et la configuration
-  SearXNG sont bien embarqués, donc la recherche web marche sur une machine
-  qui a déjà Docker Desktop. Mais Docker ne s'installe pas en silence : sur
-  une machine qui ne l'a pas, la recherche web reste indisponible. À
-  remplacer par une solution sans Docker.
+- **Recherche web sans Docker** : fait à l'étape 337. Jaris ouvre la page de
+  résultats de DuckDuckGo (Startpage en secours) dans une fenêtre cachée de son
+  propre navigateur (`webSearch.ts`) : plus de SearXNG, plus de Docker.
 
 ## Mise à jour automatique de l'application (étape 20)
 
@@ -821,7 +819,7 @@ Pendant le téléchargement (~98 Mo, soit plusieurs minutes sur une connexion
 modeste), une **barre de progression** affiche le pourcentage et les octets
 reçus (étape 98) : le bouton restait sinon figé sur "Mise à jour en cours…"
 sans que rien ne distingue un téléchargement qui avance d'un blocage. Ce
-téléchargement est partagé avec ceux d'Ollama et de Docker Desktop
+téléchargement est partagé avec celui d'Ollama
 (`electron/services/download.ts`) : il n'a aucun plafond de durée totale —
 seule une connexion muette pendant une minute abandonne, donc une connexion
 lente finit toujours par aboutir — et il vérifie que le fichier reçu est
@@ -1169,37 +1167,20 @@ un modèle séparé du modèle de conversation, dans la famille `qwen3-vl`
 par défaut, sert uniquement de repli si le scan de capacité n'a jamais
 tourné).
 
-## Recherche web (étape 7)
+## Recherche web (étape 7, refaite à l'étape 337)
 
-Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/),
-mais rien à installer à la main : Jaris télécharge et installe Docker Desktop
-tout seul s'il ne le trouve pas (étape 55), le démarre (s'il n'est pas déjà
-lancé) puis démarre l'instance [SearXNG](https://github.com/searxng/searxng)
-locale (aucun compte, aucune clé) au lancement de l'appli — pas besoin de
-lancer `docker compose up -d` à la main. Contrairement à Ollama, cette
-installation n'est pas 100% silencieuse : Windows demande une autorisation
-(élévation) pour activer la virtualisation nécessaire, incontournable même
-pour Jaris — accepte-la pour continuer. Si Docker Desktop ne répond toujours
-pas juste après avoir été installé, un redémarrage de Windows est souvent
-nécessaire. Pour lancer SearXNG manuellement quand même (ou si le démarrage
-auto échoue) :
+Rien à installer, aucun compte, aucune clé. Quand une question demande une info
+récente ou qu'il ne connaît pas, Jaris ouvre la page de résultats de
+[DuckDuckGo](https://duckduckgo.com) dans une fenêtre cachée de son propre
+navigateur (le Chromium déjà intégré à Jaris) et y lit les meilleurs résultats ;
+si DuckDuckGo ne donne rien, il essaie [Startpage](https://www.startpage.com)
+(les résultats de Google, sans pistage). Tes recherches partent vers ces moteurs
+depuis ton PC, comme si tu les tapais toi-même.
 
-```
-docker compose up -d
-```
-
-Ça démarre un moteur de recherche auto-hébergé sur `http://localhost:8091`
-(port volontairement inhabituel plutôt que le 8080 par défaut de SearXNG,
-trop souvent déjà pris par un autre logiciel — voir docker-compose.yml).
-Il n'est joignable que depuis cet ordinateur : le port est publié sur
-`127.0.0.1` uniquement, jamais sur le réseau local — sinon n'importe qui
-sur le même Wi-Fi pourrait faire ses recherches à travers ta connexion.
-La config nécessaire (API JSON activée) est déjà dans `searxng/settings.yml`,
-suivi par Git — rien à configurer à la main. Jaris l'utilise automatiquement
-dès que tu lui poses une question qui demande une info récente ou qu'il ne
-connaît pas ("cherche sur le web...", ou même sans le dire explicitement).
-
-Pour arrêter SearXNG : `docker compose down`.
+Avant l'étape 337, la recherche passait par SearXNG dans Docker Desktop (WSL,
+autorisation de Windows, redémarrage). Le conteneur et son image sont retirés
+automatiquement ; Docker Desktop, lui, n'est jamais désinstallé par Jaris : tu
+peux le désinstaller toi-même si tu ne t'en sers pas.
 
 Aucune clé API payante n'est nécessaire à aucune étape.
 

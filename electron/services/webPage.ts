@@ -1,7 +1,7 @@
 import { t } from '../../shared/i18n'
 /**
  * Lecture d'une page web précise (étape 48) : search_web (webSearch.ts) ne renvoie que 5 courts extraits
- * SearXNG, souvent insuffisants pour une adresse, un horaire ou un détail précis absent du résumé — cet
+ * (DuckDuckGo depuis l'étape 337), souvent insuffisants pour une adresse, un horaire ou un détail précis absent du résumé — cet
  * outil va chercher le contenu réel de la page derrière une des URLs déjà trouvées par search_web.
  *
  * Extraction volontairement simple (regex, pas de vraie dépendance de parsing HTML type cheerio/jsdom) :

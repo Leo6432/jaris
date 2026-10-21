@@ -38,7 +38,8 @@ test('toutes les fenêtres passent par la même garde, et plus aucune n’ouvre 
   assert.ok(guardAt < main.indexOf('\napp.whenReady().then('), 'posée avant la création de la première fenêtre')
   const guard = main.slice(guardAt, main.indexOf('\n})\n', guardAt))
   assert.match(guard, /will-navigate[\s\S]*isSameDocument[\s\S]*event\.preventDefault\(\)/)
-  assert.match(guard, /setWindowOpenHandler[\s\S]*if \(isWebUrl\(url\)\) void shell\.openExternal\(url\)[\s\S]*action: 'deny'/)
+  // Étape 337 : jamais pour une page de recherche cachée (webSearch.ts), même une adresse web.
+  assert.match(guard, /setWindowOpenHandler[\s\S]*if \(!isSearchContents\(contents\.id\) && isWebUrl\(url\)\) void shell\.openExternal\(url\)[\s\S]*action: 'deny'/)
   assert.equal(main.match(/setWindowOpenHandler/g).length, 1, 'un seul gestionnaire, celui de la garde')
   assert.doesNotMatch(main, /shell\.openExternal\(details\.url\)/)
 })

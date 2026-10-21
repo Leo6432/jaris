@@ -87,11 +87,5 @@ export const config = {
      * le code. Application créée par Léo (étape 278), « Enable Device Flow » cochée.
      */
     clientId: readEnv('GITHUB_CLIENT_ID', 'Ov23liHLHAC7tS05Vm9h')
-  },
-  searxng: {
-    // 8091, pas le 8080 par défaut de SearXNG : voir le commentaire dans docker-compose.yml (port bien trop
-    // souvent déjà pris par un autre logiciel sur la machine de l'utilisateur, cause réelle et confirmée
-    // d'un 403 persistant chez Léo qui n'avait rien à voir avec la config de SearXNG elle-même).
-    host: readEnv('SEARXNG_HOST', 'http://127.0.0.1:8091')
   }
 } as const

@@ -104,7 +104,8 @@ test('toutes les commandes internes de dépendances masquent la console Windows'
   }
   ts.forEachChild(n,visit)
  }
- visit(source);assert.ok(count>=8)
+ // Étape 337 : les commandes Docker et SearXNG sont parties ; restent les arrêts d'Ollama.
+ visit(source);assert.ok(count>=3)
 })
 
 test('le lanceur Windows reste suivi et attend son serveur caché',()=>{

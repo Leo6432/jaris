@@ -683,7 +683,8 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
     ],
     'electron/services/reminders.ts': ["`Rappel programmé dans ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''} : ${reminder.message}`", "Je n'ai pas pu programmer ce rappel : message ou délai invalide."],
     'electron/services/memoryStore.ts': ['Noté dans la mémoire ("${title}").', 'Aucune note trouvée pour "${title}".', "const entry = `\\n\\n_${timestamp}_\\n${content}`", '`# ${sanitizeTitle(title)}${entry}`', ".replace(/[\\\\/:*?\"<>|\\x00-\\x1f]/g, '')", ".replace(/[\\s.]+$/, '')", '/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i'],
-    'electron/services/webSearch.ts': ["t('search.noResult', { query })", '`${i + 1}. ${r.title} — ${r.content ?? \'\'} (${r.url})`'],
+    // Étape 337 : la source change (DuckDuckGo au lieu de SearXNG), pas le texte rendu au modèle (extrait vide si absent).
+    'electron/services/webSearch.ts': ["t('search.noResult', { query })", '`${i + 1}. ${r.title} — ${r.content} (${r.url})`', "content: clean(item.content)"],
     'electron/services/webPage.ts': ['URL invalide : "${url}".', 'URL refusée (seuls http/https sont autorisés) : "${url}".', "chargée mais aucun texte lisible n'a pu en être extrait."],
     'electron/services/tools.ts': ["export const IMAGE_DONE_REPLY = 'Voilà ton image.'", 'toolFlag(args.replace)', 'shutdownPc(toolFlag(args.restart))', "value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true')"],
     'electron/services/systemControl.ts': ["t('shutdown.restarting') : t('shutdown.shuttingDown')"],

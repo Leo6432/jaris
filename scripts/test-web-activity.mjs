@@ -58,27 +58,18 @@ test('adresses : le site seul, seules les adresses web deviennent des liens', ()
 })
 
 test('la recherche garde les pages trouvées (adresses web seulement), et le même texte pour le modèle', async () => {
-  const { searchWebDetailed } = load('../electron/services/webSearch.ts', {
-    '../config': { config: { searxng: { host: 'http://127.0.0.1:8091' } } },
-    './dependencyServices': { readSearxngContainerSettings: async () => null }
+  const { searchWebDetailed } = load('../electron/services/webSearch.ts')
+  // Étape 337 : les résultats viennent d'une page de moteur lue dans une fenêtre cachée (simulée ici).
+  const loader = async () => ({
+    bodyText: '',
+    results: [
+      { title: 'Météo Rennes', url: 'https://meteofrance.com/rennes', content: '17 °C' },
+      { title: 'Piège', url: 'javascript:alert(1)', content: 'x' }
+    ]
   })
-  const realFetch = globalThis.fetch
-  globalThis.fetch = async () => ({
-    ok: true,
-    json: async () => ({
-      results: [
-        { title: 'Météo Rennes', url: 'https://meteofrance.com/rennes', content: '17 °C' },
-        { title: 'Piège', url: 'javascript:alert(1)', content: 'x' }
-      ]
-    })
-  })
-  try {
-    const { text, sources } = await searchWebDetailed('météo Rennes')
-    assert.equal(text, '1. Météo Rennes — 17 °C (https://meteofrance.com/rennes)\n2. Piège — x (javascript:alert(1))')
-    assert.equal(JSON.stringify(sources), JSON.stringify([{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }]))
-  } finally {
-    globalThis.fetch = realFetch
-  }
+  const { text, sources } = await searchWebDetailed('météo Rennes', loader)
+  assert.equal(text, '1. Météo Rennes — 17 °C (https://meteofrance.com/rennes)')
+  assert.equal(JSON.stringify(sources), JSON.stringify([{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }]))
 })
 
 test('l’outil signale chaque recherche et page lue au Chat, échecs compris', async () => {
@@ -111,24 +102,4 @@ test('l’outil signale chaque recherche et page lue au Chat, échecs compris', 
       { kind: 'read', url: 'ftp://t.fr', failed: true }
     ])
   )
-})
-
-test('une page d’erreur HTML de la recherche arrive en texte court, sans balises (étape 328)', async () => {
-  const { searchWebDetailed } = load('../electron/services/webSearch.ts', {
-    '../config': { config: { searxng: { host: 'http://127.0.0.1:8091' } } },
-    './dependencyServices': { readSearxngContainerSettings: async () => null }
-  })
-  const realFetch = globalThis.fetch
-  const page = `<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body><h1>Bad Gateway</h1><p>${'x'.repeat(2000)}</p></body></html>`
-  globalThis.fetch = async () => ({ ok: false, status: 502, text: async () => page })
-  try {
-    await assert.rejects(searchWebDetailed('météo Rennes'), (err) => {
-      assert.doesNotMatch(err.message, /<|>/, 'aucune balise dans le message affiché')
-      assert.match(err.message, /502 Bad Gateway Bad Gateway/)
-      assert.ok(err.message.length < 700, `message raccourci (${err.message.length} caractères)`)
-      return true
-    })
-  } finally {
-    globalThis.fetch = realFetch
-  }
 })

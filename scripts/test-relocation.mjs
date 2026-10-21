@@ -20,7 +20,7 @@ const atomicFileModule = loadTsModule('electron/services/atomicFile.ts', { fs: n
 /**
  * relocation.ts — étape 143, Léo : « si il veut changer dans les options ça doit tout déplacer, jamais une
  * partie ». Le vrai enchaînement (storageRoot, dataLocation, modelsLocation RÉELS sur un vrai dossier
- * temporaire) ; seuls Docker, le téléchargement et `mklink` sont simulés. Vérifie que chaque refus ou échec
+ * temporaire) ; seuls le téléchargement et `mklink` sont simulés. Vérifie que chaque refus ou échec
  * laisse la machine EXACTEMENT comme avant, et qu'un succès emporte tout.
  */
 function transpile(path) {
@@ -29,7 +29,7 @@ function transpile(path) {
   }).outputText
 }
 
-function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dockerInstallOk = true, onDockerUninstall = null, dataModules = {} } = {}) {
+function setup({ onSwitch = null, onCleaning = null, dataModules = {} } = {}) {
   const base = mkdtempSync(join(tmpdir(), 'jaris-relocation-'))
   const env = { USERPROFILE: join(base, 'user'), LOCALAPPDATA: join(base, 'local'), SystemDrive: 'C:' }
   const userData = join(base, 'roaming', 'Jaris')
@@ -53,7 +53,6 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dock
     })
     return emitter
   }
-  const calls = { dockerUninstall: 0, dockerInstall: [] }
   const load = (path, modules) => {
     const exports = {}
     vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(path)} })`)(
@@ -73,42 +72,22 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dock
   })
   const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
   const modelsLocation = load('../electron/services/modelsLocation.ts', { child_process: { spawn } })
-  const dockerLocation = {
-    DOCKER_APP_SUBDIR: 'docker',
-    DOCKER_DATA_SUBDIR: 'docker-data',
-    // Même règle que le vrai isInside : séparateur du système (\\ sous Windows, où tourne la CI).
-    isInside: (c, p) => {
-      const rel = nodeRequire('path').relative(p, c)
-      return rel === '' || (!rel.startsWith('..') && !nodeRequire('path').isAbsolute(rel))
-    },
-    planDockerMove: async () => {
-      if (dockerPlan instanceof Error) throw dockerPlan
-      return dockerPlan
-    },
-    uninstallDockerForMove: async () => {
-      calls.dockerUninstall++
-      // La fenêtre d'autorisation de Windows peut rester ouverte des minutes : Jaris, lui, continue d'écrire.
-      onDockerUninstall?.()
-      return dockerUninstallOk
-    }
-  }
   const relocation = load('../electron/services/relocation.ts', {
     electron: { app },
     './storageRoot': storageRoot,
     './dataLocation': dataLocation,
     './modelsLocation': modelsLocation,
-    './dockerLocation': dockerLocation,
     './download': { downloadToFile: async () => 0 }
   })
-  return { base, env, userData, relocation, calls, platform, dockerInstallOk }
+  return { base, env, userData, relocation, platform, onSwitch, onCleaning }
 }
 
+// Jaris reste ouvert pendant tout le déplacement : `onSwitch` écrit dans l'ancien dossier juste après la copie des
+// données (au moment de la bascule), `onCleaning` pendant l'effacement des anciens modèles — avant le rattrapage final.
 const run = (t, newRoot) => t.relocation.relocateEverything(newRoot, {
-  onProgress: () => {},
-  startDocker: async () => {},
-  installDocker: async (root) => {
-    t.calls.dockerInstall.push(root)
-    return t.dockerInstallOk
+  onProgress: (message) => {
+    if (message === 'Bascule vers le nouveau dossier…') t.onSwitch?.()
+    if (message === 'Effacement des anciens emplacements…') t.onCleaning?.()
   }
 })
 
@@ -130,7 +109,7 @@ test('succès : conversations, modèles et programme Ollama partent TOUS, et Jar
   assert.equal(readFileSync(join(newRoot, 'ollama-app', 'ollama.exe'), 'utf8'), 'programme')
   assert.ok(lstatSync(join(t.env.LOCALAPPDATA, 'Programs', 'Ollama')).isSymbolicLink())
   assert.equal(JSON.parse(readFileSync(join(t.userData, 'storage-location.json'), 'utf8')).root, newRoot)
-  assert.equal(result.dockerUninstalled, false)
+  assert.ok(result.dataDir.endsWith('jaris-data'))
   rmSync(t.base, { recursive: true, force: true })
 })
 
@@ -156,8 +135,6 @@ test('les conversations et réglages sont copiés APRÈS les modèles : ce qui e
         writeFileSync(join(t.userData, 'profile.json'), '{"name":"Léo","voix":"M3"}')
       }
     },
-    startDocker: async () => {},
-    installDocker: async () => true
   })
   assert.ok(wroteDuringCopy, 'la copie des modèles n’a pas été vue')
   const lastHeavyCopy = messages.findLastIndex((message) => message.startsWith('Copie') && !isDataCopyMessage(message))
@@ -178,8 +155,6 @@ test('la copie des conversations échoue APRÈS celle des modèles : tout ou rie
         const dest = join(newRoot, 'jaris-data')
         if (message.startsWith('Copie') && !isDataCopyMessage(message) && !existsSync(dest)) writeFileSync(dest, 'bloque')
       },
-      startDocker: async () => {},
-      installDocker: async () => true
     }),
     /copie/i
   )
@@ -188,19 +163,16 @@ test('la copie des conversations échoue APRÈS celle des modèles : tout ou rie
 })
 
 /**
- * Relecture croisée : entre la copie des données et l'effacement de l'ancien dossier, il restait la désinstallation de
- * Docker (fenêtre d'autorisation de Windows, laissée ouverte autant qu'on veut), l'effacement des anciens modèles et la
- * réinstallation de Docker (plusieurs minutes). Jaris écrit toujours dans l'ancien dossier jusqu'à sa relance : un
- * message du Chat envoyé pendant ce temps était effacé avec lui.
+ * Relecture croisée : entre la copie des données et l'effacement de l'ancien dossier, il reste la bascule et
+ * l'effacement des anciens modèles (plusieurs minutes pour des dizaines de Go). Jaris écrit toujours dans l'ancien
+ * dossier jusqu'à sa relance : un message du Chat envoyé pendant ce temps était effacé avec lui.
  */
-const DOCKER_ELSEWHERE = { action: 'uninstall', installDir: 'C:\\Program Files\\Docker\\Docker' }
 
-test('ce qui est écrit pendant la désinstallation puis la réinstallation de Docker part aussi (rattrapage final)', async () => {
+test('ce qui est écrit pendant la bascule puis l’effacement des anciens modèles part aussi (rattrapage final)', async () => {
   let t = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
-      // Pendant la fenêtre d'autorisation : un message du Chat et un réglage modifié.
+    onSwitch: () => {
+      // Pendant la bascule : un message du Chat et un réglage modifié.
       mkdirSync(join(t.userData, 'conversations'), { recursive: true })
       writeFileSync(join(t.userData, 'conversations', 'fil-1.json'), '{"messages":["pendant l’autorisation"]}')
       writeFileSync(join(t.userData, 'profile.json'), '{"name":"Léo","voix":"M3"}')
@@ -208,18 +180,14 @@ test('ce qui est écrit pendant la désinstallation puis la réinstallation de D
   })
   writeFileSync(join(t.userData, 'reminders.json'), '{"rappels":[1]}')
   const newRoot = join(t.base, 'D', 'Jaris')
-  const result = await t.relocation.relocateEverything(newRoot, {
-    onProgress: () => {},
-    startDocker: async () => {},
-    installDocker: async () => {
-      // Pendant la réinstallation de Docker, après la bascule : encore un message.
-      writeFileSync(join(t.userData, 'conversations', 'fil-2.json'), '{"messages":["pendant la réinstallation"]}')
-      // Un fichier qui n'a PAS changé depuis la première copie n'est pas recopié (les vidéos ne repartent pas en
-      // entier) : sa copie, marquée ici, doit rester telle quelle.
-      writeFileSync(join(newRoot, 'jaris-data', 'reminders.json'), '{"rappels":[2]}')
-      return true
-    }
-  })
+  t.onCleaning = () => {
+    // Pendant l'effacement des anciens modèles, après la bascule : encore un message.
+    writeFileSync(join(t.userData, 'conversations', 'fil-2.json'), '{"messages":["pendant la réinstallation"]}')
+    // Un fichier qui n'a PAS changé depuis la première copie n'est pas recopié (les vidéos ne repartent pas en
+    // entier) : sa copie, marquée ici, doit rester telle quelle.
+    writeFileSync(join(newRoot, 'jaris-data', 'reminders.json'), '{"rappels":[2]}')
+  }
+  const result = await run(t, newRoot)
   const data = join(newRoot, 'jaris-data')
   assert.equal(readFileSync(join(data, 'conversations', 'fil-1.json'), 'utf8'), '{"messages":["pendant l’autorisation"]}')
   assert.equal(readFileSync(join(data, 'conversations', 'fil-2.json'), 'utf8'), '{"messages":["pendant la réinstallation"]}')
@@ -235,8 +203,7 @@ test('si ce rattrapage final échoue, l’ancien dossier des données n’est PA
   let t = null
   let newRoot = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
+    onSwitch: () => {
       mkdirSync(join(t.userData, 'conversations'), { recursive: true })
       writeFileSync(join(t.userData, 'conversations', 'fil-1.json'), '{"messages":["dernier message"]}')
       // Un fichier à la place du dossier de destination : la recopie de ce dossier échoue.
@@ -257,8 +224,7 @@ test('si ce rattrapage final échoue, l’ancien dossier des données n’est PA
  * Étape 325 : le rattrapage final ne recopiait que ce qui avait été AJOUTÉ ou MODIFIÉ depuis la première copie des
  * données. Ce que Léo SUPPRIMAIT entre les deux (une conversation du Chat, une application du mode Code, une image, une
  * note de mémoire), pendant la longue copie des modèles, restait dans la nouvelle copie et réapparaissait après la
- * relance. Les changements sont faits pendant la désinstallation de Docker : après la première copie, avant le
- * rattrapage.
+ * relance. Les changements sont faits pendant la bascule : après la première copie, avant le rattrapage.
  */
 function fillData(dir) {
   mkdirSync(join(dir, 'conversations'), { recursive: true })
@@ -279,9 +245,8 @@ function fillData(dir) {
 test('un fichier supprimé dans l’ancien dossier pendant le déplacement ne réapparaît pas dans le nouveau', async () => {
   let t = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
-      // Léo fait le ménage pendant que la fenêtre d'autorisation de Windows attend.
+    onSwitch: () => {
+      // Léo fait le ménage pendant la bascule.
       rmSync(join(t.userData, 'conversations', 'fil-2.json'))
       writeFileSync(join(t.userData, 'conversations', 'index.json'), '{"conversations":["fil-1"]}')
       rmSync(join(t.userData, 'generated-apps', '1760000000000-snake'), { recursive: true })
@@ -313,8 +278,7 @@ test('un fichier supprimé dans l’ancien dossier pendant le déplacement ne r�
 test('un fichier déjà présent à destination AVANT le déplacement n’est jamais retiré par le rattrapage', async () => {
   let t = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
+    onSwitch: () => {
       rmSync(join(t.userData, 'memory', 'Commune.md'))
       rmSync(join(t.userData, 'generated-images', 'chat.png'))
     }
@@ -343,8 +307,7 @@ test('un fichier déjà présent à destination AVANT le déplacement n’est ja
 test('un fichier créé PUIS supprimé entre la copie et le rattrapage reste absent', async () => {
   let t = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
+    onSwitch: () => {
       writeFileSync(join(t.userData, 'conversations', 'fil-3.json'), '{"messages":["éphémère"]}')
       mkdirSync(join(t.userData, 'generated-apps', '1760000000002-essai'), { recursive: true })
       writeFileSync(join(t.userData, 'generated-apps', '1760000000002-essai', 'index.html'), '<html>Essai</html>')
@@ -369,8 +332,7 @@ test('jamais un fichier réécrit à destination depuis la copie (conversations 
   let t = null
   let newRoot = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => {
+    onSwitch: () => {
       // Le fichier d'origine a quitté sa place (mis de côté comme illisible par le magasin)…
       mkdirSync(join(t.userData, 'code-conversations-illisibles'), { recursive: true })
       renameSync(join(t.userData, 'code-conversations.json'), join(t.userData, 'code-conversations-illisibles', 'code-conversations-1.json'))
@@ -391,8 +353,7 @@ test('si le retrait d’un fichier supprimé échoue, l’ancien dossier des don
   let t = null
   let blocked = null
   t = setup({
-    dockerPlan: DOCKER_ELSEWHERE,
-    onDockerUninstall: () => rmSync(join(t.userData, 'memory', 'Voiture.md')),
+    onSwitch: () => rmSync(join(t.userData, 'memory', 'Voiture.md')),
     dataModules: {
       'fs/promises': {
         ...fsPromises,
@@ -412,45 +373,6 @@ test('si le retrait d’un fichier supprimé échoue, l’ancien dossier des don
   assert.equal(readFileSync(join(t.userData, 'profile.json'), 'utf8'), '{"name":"Léo"}', 'ancien dossier effacé malgré l’échec')
   assert.equal(readFileSync(join(t.userData, 'conversations', 'fil-1.json'), 'utf8'), '{"messages":["gardé"]}')
   assert.deepEqual(result.leftovers, ['anciennes conversations'])
-  rmSync(t.base, { recursive: true, force: true })
-})
-
-test('Docker contient autre chose : refus AVANT d’avoir touché à quoi que ce soit', async () => {
-  const t = setup({ dockerPlan: new Error("Docker Desktop contient d'autres projets") })
-  const newRoot = join(t.base, 'D', 'Jaris')
-  await assert.rejects(run(t, newRoot), /autres projets/)
-  assertUntouched(t, newRoot)
-  assert.equal(t.calls.dockerUninstall, 0)
-  rmSync(t.base, { recursive: true, force: true })
-})
-
-test('désinstallation de Docker refusée (autorisation Windows) : TOUT est remis comme avant', async () => {
-  const t = setup({ dockerPlan: { action: 'uninstall', installDir: 'C:\\Program Files\\Docker\\Docker' }, dockerUninstallOk: false })
-  const newRoot = join(t.base, 'D', 'Jaris')
-  await assert.rejects(run(t, newRoot), /remis comme avant/)
-  assertUntouched(t, newRoot)
-  assert.equal(t.calls.dockerUninstall, 1)
-  rmSync(t.base, { recursive: true, force: true })
-})
-
-test('Docker installé ailleurs et ne contenant que Jaris : désinstallé, pour être réinstallé dans le dossier', async () => {
-  const t = setup({ dockerPlan: { action: 'uninstall', installDir: 'C:\\Program Files\\Docker\\Docker' } })
-  const newRoot = join(t.base, 'D', 'Jaris')
-  const result = await run(t, newRoot)
-  assert.equal(result.dockerUninstalled, true)
-  assert.equal(result.dockerReinstalled, true)
-  assert.deepEqual(t.calls.dockerInstall, [newRoot])
-  assert.equal(JSON.parse(readFileSync(join(t.userData, 'storage-location.json'), 'utf8')).root, newRoot)
-  rmSync(t.base, { recursive: true, force: true })
-})
-
-test('si Docker refuse sa réinstallation, le résultat ne prétend pas que tout a été déplacé', async () => {
-  const t = setup({ dockerPlan: { action: 'uninstall', installDir: 'C:\\Program Files\\Docker\\Docker' }, dockerInstallOk: false })
-  const newRoot = join(t.base, 'D', 'Jaris')
-  const result = await run(t, newRoot)
-  assert.equal(result.dockerUninstalled, true)
-  assert.equal(result.dockerReinstalled, false)
-  assert.deepEqual(t.calls.dockerInstall, [newRoot])
   rmSync(t.base, { recursive: true, force: true })
 })
 

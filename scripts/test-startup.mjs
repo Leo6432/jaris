@@ -124,7 +124,7 @@ test('l’écran de démarrage n’existe qu’après la configuration ; au tout
   assert.ok(main.indexOf('splashWindow = createSplashWindow()') < main.indexOf('fullWindow = createFullWindow(!onboardingDone)'))
 })
 
-test('les quatre étapes sont vraiment suivies, et la recherche web (Docker) ne retient jamais l’écran', () => {
+test('les quatre étapes sont vraiment suivies, et la recherche web ne retient jamais l’écran', () => {
   assert.match(main, /startup\.track\('listening', startVoicePipeline\(\)\.then\(\(\) => lastSetupStatus\.ready\)\)/)
   assert.match(main, /startup\.track\('voice', ttsClient\.start\(\)\.then\(\(\) => true\)\)/)
   assert.match(main, /startup\.track\('engine', engineUp\)/)

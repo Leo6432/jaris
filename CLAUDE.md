@@ -1431,9 +1431,8 @@ npm run build       # electron-vite build (rapide, sans générer l'installeur)
 npm run dist        # build complet + installeur .exe (long, normalement laissé à la CI)
 ```
 
-`docker-compose.yml` + `searxng/settings.yml` : recherche web locale (SearXNG). Nécessite Docker Desktop
-lancé ; `searxng/settings.yml` n'est relu par SearXNG qu'au démarrage du conteneur — un changement de config
-nécessite `docker compose restart`, pas seulement `docker compose up -d`.
+Recherche web : `electron/services/webSearch.ts` (DuckDuckGo, puis Startpage, lus dans une fenêtre cachée de
+Jaris, étape 337). Plus de Docker ni de SearXNG.
 
 - **Une réponse passée sans nom technique d’outil échappe aux détecteurs de promesse** : les phrases réelles « L’application Steam a été ouverte » et « L’application Blocnotes a été ouverte » pouvaient être rendues sans outil. Pour les commandes simples et explicites « ouvre [l’application] X », appeler directement open_app dans le canal partagé, sans demander au modèle de décider. Exclure les commandes composées et négatives. Le signal spawn d’explorer.exe prouve seulement l’envoi de la demande à Windows, pas une fenêtre visible : la réponse directe doit refléter cette limite. Régression : test-assistant-history.mjs, voix et chat.
 
@@ -9180,3 +9179,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-ollama-update-progress.mjs` (vrais modules sur un vrai dossier, fausse
   machine : bascule, mise à jour, version qui ne démarre pas, empreinte fausse, déjà à jour, premier lancement ;
   4 défauts réintroduits, tous attrapés), `test-options-reorganization-ui.mjs`, `test-models-location.mjs`.
+
+- **Étape 337 (v0.36.0) : la recherche web passe par DuckDuckGo, Docker et SearXNG sont retirés (Léo : « enlève
+  Docker et mets DuckDuckGo »).** SearXNG ne servait qu'à interroger des moteurs depuis le PC, mais il exigeait
+  Docker Desktop : WSL, autorisation de Windows, redémarrage, 600 Mo, et la saga des 403. **Testé AVANT de coder,
+  et ma première proposition était fausse** : une requête brute (`fetch`) depuis le serveur de développement reçoit
+  une vérification anti-robot de DuckDuckGo, un refus de Mojeek et de Brave, et des résultats sans aucun rapport de
+  Bing (WhatsApp ou des pages chinoises pour « boulangerie lyon »). Le même DuckDuckGo ouvert dans un VRAI Chromium
+  (scripts exécutés, cookies gardés) : 25 recherches d'affilée réussies, Startpage aussi. **Leçon : pour lire un
+  moteur de recherche, une requête HTTP seule passe pour un robot ; un vrai navigateur, non — et Jaris en contient
+  déjà un.** `webSearch.ts` ouvre la page de résultats dans une `BrowserWindow` cachée (partition à part
+  `persist:jaris-websearch`, agent d'un Chrome ordinaire, aucune permission, aucun téléchargement, navigation
+  bornée au domaine du moteur, une recherche à la fois, fenêtre détruite après), lit titre/adresse/extrait par des
+  sélecteurs relevés sur les vraies pages, écarte les liens du moteur lui-même (publicités) et les doublons.
+  DuckDuckGo d'abord, Startpage s'il ne donne rien. Un blocage anti-robot est reconnu au texte de la page et dit tel
+  quel ; « aucun résultat » n'est jamais une panne. Le texte rendu au modèle garde exactement le format d'avant
+  (`1. titre — extrait (url)`) : les scores des tests de modèles restent valables. `main.ts` exempte ces pages de sa
+  règle « une fenêtre ne quitte jamais sa page » mais ne les laisse JAMAIS ouvrir quoi que ce soit dans le
+  navigateur de Windows (une publicité surgissante l'aurait fait).
+  **Vérifié dans le vrai Electron de Jaris** (xvfb) : 5 recherches réelles en 1,5 à 3 s, deux en même temps, aucune
+  fenêtre laissée derrière. Après mes dizaines d'essais, Startpage a fini par bloquer ce serveur (« fort trafic
+  associé à des robots ») : Jaris l'a reconnu et l'a dit. **Non vérifié** : depuis la connexion de Léo (une adresse
+  de particulier devrait être encore moins bloquée qu'un centre de données).
+  **Retrait** : ensureSearxngRunning, installation de WSL et de Docker Desktop, searxngHome.ts, dockerLocation.ts,
+  docker-compose.yml, searxng/, la partie Docker de « Déplacer » (relocation.ts : plus de désinstallation ni
+  réinstallation ; les dossiers `docker`/`docker-data` d'une ancienne racine ne sont JAMAIS effacés, Docker Desktop
+  y vit peut-être encore), ~38 phrases dans les 24 langues. **Docker Desktop n'est jamais désinstallé par Jaris** (il
+  sert peut-être à autre chose, et ça demande une autorisation) : seuls les conteneurs des projets de Jaris
+  (`jaris-searxng`, ancien `resources` service `searxng`), l'image `searxng/searxng` (si plus utilisée) et le
+  dossier `searxng-docker` sont retirés, au démarrage (`removeLeftoverSearxng`, legacyCleanup.ts : Docker arrêté =
+  on réessaie au prochain démarrage) et par l'installeur de la mise à jour (installer/jaris.nsh).
+  Régression : `node --test scripts/test-web-search.mjs` (second moteur, blocage, hors ligne, aucun résultat, liens du
+  moteur écartés, script sans texte de la recherche, vraie structure des deux pages lue par le vrai script dans
+  Chromium, garde de main.ts, retrait du conteneur dans tous les cas de Docker), `test-relocation.mjs` (les écritures
+  pendant le déplacement sont maintenant faites à la bascule et pendant l'effacement, au lieu de la désinstallation
+  de Docker qui n'existe plus).

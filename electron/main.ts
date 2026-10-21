@@ -1,7 +1,7 @@
 import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
-import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
+import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData } from './services/storageRoot'
 import { pickImageModel } from '../shared/imageModel'
 import { PILOT_MODEL, PILOT_MODEL_LABEL, pickPilotModel } from '../shared/pilotModel'
 import {
@@ -31,15 +31,13 @@ import {
   listGeneratedVideos,
   readGeneratedVideo
 } from './services/videoGenerator'
-import { removeLeftoverMontage, removeLeftoverVideoDuel } from './services/legacyCleanup'
+import { removeLeftoverMontage, removeLeftoverSearxng, removeLeftoverVideoDuel } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
 import { copyFile, readFile, rm, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
-  ensureSearxngRunning,
-  installDockerDesktop,
   getOllamaVersionStatus,
   isOllamaInstalled,
   onOllamaVersionStatus,
@@ -56,8 +54,6 @@ import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChos
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { alignOllamaModelsVariable, repairOllamaModelsView, windowsModelsViewDeps } from './services/ollamaModelsVariable'
-import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
-import { openApp } from './services/appLauncher'
 import {
   computeContextLengthOptions,
   getAllCandidateModelIds,
@@ -140,6 +136,7 @@ import {
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import { isPermissionAllowed } from './services/permissions'
 import { isSameDocument, isWebUrl } from './services/navigationGuard'
+import { isSearchContents } from './services/webSearch'
 import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
@@ -1262,8 +1259,7 @@ async function startVoicePipeline(): Promise<void> {
   setModelsViewRepair(repairModelsView)
   const ollamaStarted = ensureOllamaRunning(log).then(repairModelsView)
   // Étape 294 : au premier démarrage seulement, l'écran d'accueil attend le moteur, puis le modèle de conversation
-  // préchargé (sa première réponse n'attend plus son chargement). La recherche web (Docker, parfois plusieurs
-  // minutes, parfois absent) ne le retient jamais : elle continue de démarrer en arrière-plan comme avant.
+  // préchargé (sa première réponse n'attend plus son chargement).
   if (!startupEngineTracked) {
     startupEngineTracked = true
     const engineUp = ollamaStarted.then(
@@ -1273,7 +1269,6 @@ async function startVoicePipeline(): Promise<void> {
     startup.track('engine', engineUp)
     startup.track('brain', engineUp.then((up) => up && warmUpConversationModel()))
   }
-  void ensureSearxngRunning(log)
 
   // Étape 328 : deux redémarrages rapprochés (micro changé deux fois de suite) créaient chacun leur moteur vocal,
   // et le premier n'était jamais arrêté — deux moteurs, deux micros ouverts. Celui qu'on remplace s'arrête ici.
@@ -1418,12 +1413,15 @@ app.on('browser-window-blur', syncWakeShortcutSoon)
 // Ici pour TOUTES les fenêtres (principale, widget, démarrage), y compris celles créées plus tard.
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-navigate', (event, url) => {
+    // Étape 337 : les pages de recherche cachées (webSearch.ts) suivent leurs propres règles, restreintes au moteur.
+    if (isSearchContents(contents.id)) return
     if (isSameDocument(url, contents.getURL())) return
     event.preventDefault()
     if (isWebUrl(url)) void shell.openExternal(url)
   })
   contents.setWindowOpenHandler(({ url }) => {
-    if (isWebUrl(url)) void shell.openExternal(url)
+    // Une page de recherche cachée n'ouvre jamais rien dans le navigateur de Windows (fenêtre surgissante, publicité).
+    if (!isSearchContents(contents.id) && isWebUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 })
@@ -1455,6 +1453,8 @@ app.whenReady().then(async () => {
   void removeObsoleteVideoFiles().catch(() => {})
   // Étape 258 : le duel vidéo est retiré ; son Python et Kandinsky (~31 Go) ne servent plus, ses vidéos restent.
   void removeLeftoverVideoDuel(join(imageEngineRoot(), 'video-duel'))
+  // Étape 337 : la recherche web passe par DuckDuckGo ; le conteneur SearXNG et son image ne servent plus.
+  void removeLeftoverSearxng(getDataRoot())
   registerPreviewHandler()
 
   // Accorde sans demander le micro (noms des périphériques, Options → Voix) et le plein écran (lecteur vidéo) ;
@@ -1657,10 +1657,7 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())
-  ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, async () => {
-    const root = getStorageRoot()
-    return getStorageStatus(await findDockerInstallDir(root ? [join(root, DOCKER_APP_SUBDIR)] : []))
-  })
+  ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getStorageStatus())
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
@@ -1701,15 +1698,9 @@ app.whenReady().then(async () => {
     codeStore.holdWrites()
 
     // Étape 143, Léo : « ça doit tout déplacer, jamais une partie » — programme, conversations, Ollama,
-    // Python, voix, Docker : tout ou rien (relocation.ts).
+    // Python, voix : tout ou rien (relocation.ts).
     try {
-      const outcome = await relocateEverything(newDir, {
-        onProgress: log,
-        startDocker: async () => {
-          log(await openApp('Docker Desktop'))
-        },
-        installDocker: (root) => installDockerDesktop(log, root)
-      })
+      const outcome = await relocateEverything(newDir, { onProgress: log })
       // Le jeton GitHub reste en pause jusqu'à la fermeture, qui suit : rien ne doit plus écrire dans l'ancien dossier.
       try {
         codeStore.releaseWrites(join(outcome.dataDir, CODE_CONVERSATIONS_FILE))
@@ -1737,18 +1728,8 @@ app.whenReady().then(async () => {
       // Laisse la réponse IPC repartir vers l'interface avant de couper : sinon la promesse côté renderer
       // ne se résout jamais et le bouton reste figé sur "Déplacement en cours…" jusqu'à la relance.
       setTimeout(() => app.quit(), 800)
-      const notes = [
-        outcome.dockerUninstalled && !outcome.dockerReinstalled
-          ? t('main.move.dockerFailed')
-          : '',
-        outcome.leftovers.length ? t('main.move.leftovers', { files: outcome.leftovers.join(', ') }) : ''
-      ].filter(Boolean)
-      return { success: true, message: [
-        outcome.dockerUninstalled && !outcome.dockerReinstalled
-          ? t('main.move.doneNoDocker', { dir: newDir })
-          : t('main.move.done', { dir: newDir }),
-        ...notes
-      ].join(' ') }
+      const notes = outcome.leftovers.length ? [t('main.move.leftovers', { files: outcome.leftovers.join(', ') })] : []
+      return { success: true, message: [t('main.move.done', { dir: newDir }), ...notes].join(' ') }
     } catch (err) {
       // Déplacement annulé, l'ancien dossier est intact : tout y repart.
       setGithubDataMoving(false)

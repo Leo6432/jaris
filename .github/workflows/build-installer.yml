@@ -109,7 +109,7 @@ jobs:
       # plantage au démarrage AVANT de publier une Release — sans ce test, une régression qui empêche Jaris
       # de s'ouvrir (dépendance native manquante, exception non rattrapée dans app.whenReady()...) n'était
       # découverte qu'en usage réel, bien après la publication. Aucun service externe requis pour ce test
-      # (Ollama/Docker/SearXNG) : le démarrage de Jaris est déjà conçu pour continuer même s'ils manquent
+      # (Ollama, recherche web) : le démarrage de Jaris est déjà conçu pour continuer même s'ils manquent
       # (voir dependencyServices.ts) et afficher sa fenêtre d'onboarding dans tous les cas.
       - name: Vérifie que l'appli packagée démarre sans planter
         shell: pwsh

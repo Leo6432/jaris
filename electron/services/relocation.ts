@@ -1,9 +1,8 @@
 import { app } from 'electron'
 import { existsSync } from 'fs'
 import { readdir, rm, rmdir } from 'fs/promises'
-import { join, win32 } from 'path'
+import { join, resolve, sep, win32 } from 'path'
 import { copyDataTo, getDataRoot, removeDeletedSinceCopy, removeOldData, switchStorageRoot, type DataCopy } from './dataLocation'
-import { DOCKER_APP_SUBDIR, DOCKER_DATA_SUBDIR, isInside, planDockerMove, uninstallDockerForMove, type DockerMovePlan } from './dockerLocation'
 import { downloadToFile } from './download'
 import {
   bricks,
@@ -27,10 +26,10 @@ import { formatBytes } from '../../shared/formatBytes'
  * Étape 143, Léo : « si il veut changer dans les options ça doit tout déplacer, jamais une partie ».
  *
  * Le bouton « Déplacer » d'Options enchaîne ici, dans cet ordre, TOUT ce que Jaris a écrit sur le disque :
- * dossiers lourds (Ollama, Python, voix), conversations et réglages, Docker, et le programme Jaris lui-même.
+ * dossiers lourds (Ollama, Python, voix), conversations et réglages, et le programme Jaris lui-même.
  *
- * Tout ou rien : tout ce qui peut échouer « pour une raison extérieure » (place disque, Docker qui contient
- * autre chose, installeur introuvable, copie interrompue) est vérifié ou fait AVANT la moindre modification ;
+ * Tout ou rien : tout ce qui peut échouer « pour une raison extérieure » (place disque, installeur introuvable,
+ * copie interrompue) est vérifié ou fait AVANT la moindre modification ;
  * la bascule elle-même se défait entièrement si une étape échoue. Seul l'effacement final des anciens
  * dossiers peut laisser un résidu (fichier verrouillé) — les données, elles, sont déjà toutes à destination
  * (un rattrapage de dernière minute qui échouerait laisse l'ancien dossier des données en place, jamais effacé).
@@ -62,6 +61,19 @@ export function programMoveCommandLine(targetDir: string): string {
 export class RelocationRefused extends Error {}
 
 /**
+ * Où les anciennes versions installaient Docker dans la racine (étape 143). Jaris ne s'en sert plus depuis l'étape 337,
+ * mais Docker Desktop y vit peut-être encore : jamais une destination à l'intérieur, jamais effacés.
+ */
+const LEGACY_DOCKER_APP_SUBDIR = 'docker'
+const LEGACY_DOCKER_DATA_SUBDIR = 'docker-data'
+
+export function isInside(child: string, parent: string): boolean {
+  const c = resolve(child).toLowerCase()
+  const p = resolve(parent).toLowerCase()
+  return c === p || c.startsWith(p.endsWith(sep) ? p : p + sep)
+}
+
+/**
  * Refuse une destination qui ferait perdre des données : DANS le dossier du programme (chaque mise à jour
  * l'efface en entier), ou dans un des dossiers déplacés eux-mêmes (copie d'un dossier dans son propre
  * sous-dossier).
@@ -76,18 +88,12 @@ export function validateNewRoot(newRoot: string, forbiddenParents: string[]): vo
 
 export interface RelocationDeps {
   onProgress: (message: string) => void
-  /** Démarre Docker Desktop s'il ne répond pas (pour vérifier ce qu'il contient). */
-  startDocker: () => Promise<void>
-  /** Réinstalle Docker directement dans la nouvelle racine après sa désinstallation. */
-  installDocker: (root: string) => Promise<boolean>
 }
 
 export interface RelocationResult {
   /** Installeur à lancer une fois Jaris fermé (programme à réinstaller dans la nouvelle racine), sinon `null`. */
   programInstaller: string | null
   programTarget: string | null
-  dockerUninstalled: boolean
-  dockerReinstalled: boolean
   leftovers: string[]
   /** Le nouveau dossier des données (conversations, réglages…), pour y écrire ce qui a été gardé en mémoire pendant le déplacement. */
   dataDir: string
@@ -122,14 +128,14 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     installDir,
     getDataRoot(),
     app.getPath('userData'),
-    ...(previousRoot ? [join(previousRoot, DOCKER_APP_SUBDIR), join(previousRoot, DOCKER_DATA_SUBDIR)] : []),
+    // Étape 337 : un Docker installé par une ancienne version de Jaris peut encore vivre dans l'ancienne racine.
+    ...(previousRoot ? [join(previousRoot, LEGACY_DOCKER_APP_SUBDIR), join(previousRoot, LEGACY_DOCKER_DATA_SUBDIR)] : []),
     ...currentDirs.filter((d): d is string => Boolean(d))
   ])
 
   // --- 1. Vérifications, sans rien modifier ---
   onProgress(t('move.checking'))
   const plans = await planMoves(newRoot)
-  const dockerPlan: DockerMovePlan = await planDockerMove(newRoot, deps.startDocker, previousRoot ? [join(previousRoot, DOCKER_APP_SUBDIR)] : [])
   const programTarget = app.isPackaged && !isInside(exePath, newRoot) ? join(newRoot, PROGRAM_SUBDIR) : null
 
   const needed =
@@ -191,17 +197,6 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     throw new Error(t('move.rolledBack', { error: err instanceof Error ? err.message : String(err) }))
   }
 
-  let dockerUninstalled = false
-  if (dockerPlan.action === 'uninstall') {
-    onProgress(t('move.uninstallingDocker'))
-    dockerUninstalled = await uninstallDockerForMove(dockerPlan.installDir)
-    if (!dockerUninstalled) {
-      await undoSwitches(done)
-      await discardEverything()
-      throw new Error(t('move.dockerUninstallFailed'))
-    }
-  }
-
   try {
     switchStorageRoot(newRoot)
   } catch (err) {
@@ -214,21 +209,9 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   onProgress(t('move.cleaning'))
   const leftovers = await finalizeAll(done)
   if (previousRoot) {
-    for (const sub of [DOWNLOADS_SUBDIR, DOCKER_APP_SUBDIR, DOCKER_DATA_SUBDIR]) {
-      await rm(join(previousRoot, sub), { recursive: true, force: true }).catch(() => {})
-    }
-  }
-
-  // Docker ne peut pas être déplacé par jonction : l'installation officielle doit recréer son programme
-  // ET son disque WSL dans la nouvelle racine. Ne pas reporter cette étape à une future recherche web.
-  let dockerReinstalled = !dockerUninstalled
-  if (dockerUninstalled) {
-    onProgress(t('move.reinstallingDocker'))
-    try {
-      dockerReinstalled = await deps.installDocker(newRoot)
-    } catch {
-      dockerReinstalled = false
-    }
+    // Pas les dossiers d'un Docker installé par une ancienne version (étape 337) : Docker Desktop y tourne peut-être
+    // encore, pour Léo ou pour autre chose — Jaris ne s'en sert plus, mais ne le casse pas.
+    await rm(join(previousRoot, DOWNLOADS_SUBDIR), { recursive: true, force: true }).catch(() => {})
   }
 
   // --- 5. Dernières modifications, puis effacement des anciennes données ---
@@ -255,7 +238,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   // retire aussi l'ancienne racine une fois vide.
   if (previousRoot) await removeIfEmpty(previousRoot)
 
-  return { programInstaller, programTarget, dockerUninstalled, dockerReinstalled, leftovers, dataDir: dataDest }
+  return { programInstaller, programTarget, leftovers, dataDir: dataDest }
 }
 
 let reconciling: Promise<void> | null = null
@@ -304,11 +287,10 @@ export function reconcileStorage(log: (message: string) => void, stopOllama: () 
 }
 
 /** Où vit réellement chaque partie de Jaris, lu sur le disque (Options → Modèles). */
-export async function getStorageStatus(dockerInstallDir: string | null): Promise<{ root: string | null; items: { label: string; path: string }[] }> {
+export async function getStorageStatus(): Promise<{ root: string | null; items: { label: string; path: string }[] }> {
   const items: { label: string; path: string }[] = []
   if (app.isPackaged) items.push({ label: t('brick.program'), path: win32.dirname(app.getPath('exe')) })
   items.push({ label: t('brick.data'), path: getDataRoot() })
   for (const brick of bricks()) items.push({ label: brick.label, path: (await currentRealDir(brick.link)) ?? brick.link })
-  if (dockerInstallDir) items.push({ label: t('brick.docker'), path: dockerInstallDir })
   return { root: getStorageRoot(), items }
 }
