@@ -9291,3 +9291,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   son adresse (`explainOllamaUnreachable`, ollama.ts) ; (4) un Ollama de Jaris qui s'arrête juste après son lancement
   donne son code de sortie dans le journal, seule trace possible de la vraie cause (antivirus, fichier manquant).
   Régression : `scripts/test-ollama-pull-repair.mjs` (vérifié en retirant la traduction : le test échoue).
+
+- **Étape 343, Léo : « fait un chat » → « Le moteur d'images s'est arrêté sans finir l'image (code 0xC0000409) »,
+  dernière ligne « loading tensors completed ».** Même défaut que la vidéo (étape 212), jamais reporté sur l'image.
+  Reproduit ici avec le sd-cli Linux Vulkan du même commit, les trois vrais fichiers et lavapipe : assertion
+  `pre-allocated tensor (text_encoders.llm.model.embed_tokens.weight) in a buffer (Vulkan0) that cannot run the
+  operation`, au moment où le lecteur de description (Qwen3 4B) lit la demande. `--backend te=cpu` ajouté à
+  `buildSdArgs` : même essai, vrai chat dessiné, lecteur sur le processeur en 14 s ici (une fois par image).
+  **Leçon : quand un défaut est corrigé sur un chemin (vidéo), chercher tout de suite les autres chemins qui
+  utilisent le même moteur avec le même type de fichier (image) — ils ont le même défaut, il attend juste une
+  autre carte.** Régression : `test-image-generation.mjs` (lecteur sur le processeur).

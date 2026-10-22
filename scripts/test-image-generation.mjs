@@ -217,6 +217,8 @@ test('la description passe en UN argument (jamais un shell), avec la commande do
   }
   assert.equal(args[args.indexOf('--cfg-scale') + 1], '1.0')
   assert.equal(args[args.indexOf('--steps') + 1], '4')
+  // Étape 343 : sur la carte, la table de vocabulaire du lecteur faisait planter le moteur (0xC0000409).
+  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu', 'lecteur de description sur le processeur')
   t.cleanup()
 })
 

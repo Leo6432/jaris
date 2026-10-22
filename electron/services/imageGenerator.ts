@@ -135,6 +135,12 @@ export function buildSdArgs({ models, prompt, output, seed }: SdArgsInput): stri
     '--offload-to-cpu',
     '--diffusion-fa',
     '--vae-tiling',
+    // Étape 343 (Léo, « fait un chat » : arrêt brutal 0xC0000409 juste après « loading tensors completed ») :
+    // reproduit ici sur un Vulkan émulé, exactement le défaut de la vidéo (étape 212) — la table de vocabulaire
+    // du lecteur de description (Qwen3 4B) est refusée par la carte (« pre-allocated tensor
+    // (text_encoders.llm.model.embed_tokens.weight) … cannot run the operation »). Il ne lit la demande qu'une
+    // fois par image : sur le processeur, plus aucune carte ne peut le refuser. Le dessin reste sur la carte.
+    '--backend', 'te=cpu',
     '-o', output
   ]
 }
