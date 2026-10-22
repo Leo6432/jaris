@@ -9262,3 +9262,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Leçon : quand un défaut est corrigé sur un chemin (vidéo), chercher tout de suite les autres chemins qui
   utilisent le même moteur avec le même type de fichier (image) — ils ont le même défaut, il attend juste une
   autre carte.** Régression : `test-image-generation.mjs` (lecteur sur le processeur).
+
+- **Étape 344, Léo après la v0.36.6 : toujours 0xC0000409, cette fois à « 3/4 ».** Mon diagnostic de l'étape 343
+  ne visait pas SON plantage. La dernière ligne était déjà, les deux fois, le chargement du DÉCODEUR : seule
+  pièce en bf16, il affiche un « convert » non nul (0,05-0,06 s), alors que le dessin et le lecteur affichent 0,00.
+  Le lecteur refusé que j'avais reproduit est un vrai défaut de lavapipe (limite de 128 Mo), mais la carte de Léo
+  plantait plus loin, au décodage de l'image. Décodeur aussi sur le processeur (`--backend te=cpu,vae=cpu`),
+  vérifié ici : dessin sur Vulkan, décodage sur le processeur, image écrite. Mesuré : 1024 px décodés en 4 min 40
+  sur 4 cœurs lents. Sur un PC de bureau, ce sera bien moins, à confirmer chez Léo. Au passage, les tuiles du
+  décodage (« 12/49 - 5.5s/it ») ne s'affichent plus comme « Dessin : 12/49 » : seul le premier compteur compte.
+  **Leçon : avant d'attribuer un plantage à une ligne « chargé », identifier QUEL modèle elle décrit avec ses
+  propres chiffres (taille lue, conversion), pas avec l'ordre supposé des chargements.** Reproduire un plantage
+  sur une autre machine peut trouver un AUTRE défaut réel, sans prouver que c'est celui de l'utilisateur.
+  Régression : `test-image-generation.mjs` (lecteur et décodeur sur le processeur ; tuiles jamais affichées comme
+  étapes de dessin, vérifié en retirant chaque correctif).

@@ -54,6 +54,10 @@ const REAL_OUTPUT = [
   '  |=========================>                        | 2/4 - 79.24s/it',
   '  |=====================================>            | 3/4 - 79.37s/it',
   '  |==================================================| 4/4 - 79.10s/it',
+  // Étape 344 : le décodage par tuiles (sur le processeur) a son propre compteur, à ne pas prendre pour le dessin.
+  '  |=>                                                | 1/49 - 10.38s/it',
+  '  |==>                                               | 2/49 - 5.55s/it',
+  '  |==================================================| 49/49 - 5.58s/it',
   "[INFO   ] main.cpp:497  - save result image 0 to 'out.png' (success)"
 ]
 
@@ -218,7 +222,8 @@ test('la description passe en UN argument (jamais un shell), avec la commande do
   assert.equal(args[args.indexOf('--cfg-scale') + 1], '1.0')
   assert.equal(args[args.indexOf('--steps') + 1], '4')
   // Étape 343 : sur la carte, la table de vocabulaire du lecteur faisait planter le moteur (0xC0000409).
-  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu', 'lecteur de description sur le processeur')
+  // Étape 344 : le décodeur aussi (arrêt brutal pendant le décodage, juste après son chargement).
+  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu,vae=cpu', 'lecteur et décodeur sur le processeur')
   t.cleanup()
 })
 

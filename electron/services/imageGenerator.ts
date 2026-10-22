@@ -140,7 +140,11 @@ export function buildSdArgs({ models, prompt, output, seed }: SdArgsInput): stri
     // du lecteur de description (Qwen3 4B) est refusée par la carte (« pre-allocated tensor
     // (text_encoders.llm.model.embed_tokens.weight) … cannot run the operation »). Il ne lit la demande qu'une
     // fois par image : sur le processeur, plus aucune carte ne peut le refuser. Le dessin reste sur la carte.
-    '--backend', 'te=cpu',
+    // Étape 344 (Léo, même arrêt brutal APRÈS le correctif 343, à « 3/4 ») : la dernière ligne était cette fois
+    // le chargement du DÉCODEUR (seule pièce en bf16, d'où « convert: 0.06s » ; le dessin et le lecteur affichent
+    // 0,00 s). Le plantage tombe donc au décodage de l'image, sur la carte. Décodeur sur le processeur aussi :
+    // mesuré ici, 1024 px en 4 min 40 sur 4 cœurs lents — bien moins sur un PC de bureau, et ça marche partout.
+    '--backend', 'te=cpu,vae=cpu',
     '-o', output
   ]
 }
@@ -336,6 +340,7 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
     const proc = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     const lastLines: string[] = []
     let lastStep = 0
+    let stepTotal = 0
     let settled = false
     let stall: ReturnType<typeof setTimeout>
 
@@ -368,7 +373,10 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
         lastLines.push(line)
         if (lastLines.length > 20) lastLines.shift()
         const progress = parseSdProgress(line)
-        if (progress && progress.step !== lastStep) {
+        // Le décodage par tuiles affiche aussi « 12/49 - 5.5s/it » : seul le premier compteur (les étapes de
+        // dessin) est l'avancement, sinon « Dessin : 12/49 » s'afficherait pendant le décodage (étape 344).
+        if (progress && stepTotal === 0) stepTotal = progress.total
+        if (progress && progress.total === stepTotal && progress.step !== lastStep) {
           lastStep = progress.step
           // « Dessin : 2/4 », « Drawing: 2/4 » : fabriquée par engineStepLine, la fonction qui la reconnaît aussi
           // (engineStepFromLine, téléphone) ; imageStepFromLog lit ses chiffres dans toutes les langues.
