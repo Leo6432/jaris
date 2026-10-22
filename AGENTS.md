@@ -9226,3 +9226,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   candidat : absent de hardwareScan.ts, jamais choisi ni proposé au test. Pour le tester un jour, le retirer de
   cette liste et l'ajouter aux candidats comme d'habitude. Régression : `test-options-reorganization-ui.mjs`
   (dernière ligne, rayures mesurées, tri, recherche ; vérifié en retirant les rayures).
+
+- **Étape 331, Léo : « revoit tous les modèles et doit mettre s'il est Q4 ou pas ».** Seul MiniCPM5-2B affichait
+  « (Q4_K_M) », parce que son nom hf.co/ le contient ; tous les autres étaient aussi compressés, sans le dire. Relevé
+  pour de vrai dans le registre de chaque modèle (`file_type` de la configuration d'Ollama ; pour un import hf.co/, le
+  tag, et pour G9v3-3B sans tag, le fichier par défaut reconnu à sa taille exacte) : Q4_K_M partout, sauf
+  qwen3.5:0.8b et qwen3.5:2b (Q8_0) et gpt-oss:20b (MXFP4, son format de publication). Table `MODEL_QUANTIZATION`
+  (hardwareScan.ts), affichée en petit badge SOUS le nom dans « Tous les modèles » — à côté du nom, elle disparaissait
+  derrière les points de suspension d'un nom long. Infobulle (24 langues) : les scores d'Artificial Analysis sont
+  mesurés sur la version d'origine, pas sur celle-ci. Affichage seulement, aucun choix ne change. Rappel donné à
+  Léo : pour un petit modèle Q4, ces scores sont un peu optimistes, mais le classement reste comparable (tous sont
+  mesurés en original et tournent compressés) ; les tests d'appel d'outils, eux, sont faits sur la vraie version Q4.
+  **Coût** : Léo a interrompu un essai de vérification par plusieurs agents (« arrête de me dépenser des tokens en
+  mettant plein d'agents ») — pour une question ou une recherche simple, répondre directement, sans agents.
+  Régression : `scripts/test-model-note.mjs` (chaque modèle candidat a sa version — un modèle ajouté sans elle fait
+  échouer le test) et `scripts/test-options-reorganization-ui.mjs` (badge entier sous les 26 noms, y compris le plus
+  long, habillé par le CSS ; vérifié en remettant le badge à côté du nom : le test échoue).
+
+- **Étape 342, Léo : « je fais retester la configuration sur mon autre PC et ça met fetch failed ».** Cause exacte
+  sur ce PC inconnue (pas d'accès). Ce qui est sûr : « fetch failed » est le message brut du fetch de Node quand RIEN
+  n'écoute à l'adresse d'Ollama, et « Retester » téléchargeait sans vérifier qu'Ollama tournait. Corrigé : (1) le
+  bouton relance Ollama s'il est arrêté (`ensureOllamaRunning`, main.ts) avant de télécharger ; (2)
+  `ensureOllamaRunning` ne lance plus qu'un démarrage à la fois (deux appels rapprochés lançaient deux serveurs sur
+  le même port, le second échouait) ; (3) « fetch failed » devient une phrase qui dit qu'Ollama ne tourne pas, avec
+  son adresse (`explainOllamaUnreachable`, ollama.ts) ; (4) un Ollama de Jaris qui s'arrête juste après son lancement
+  donne son code de sortie dans le journal, seule trace possible de la vraie cause (antivirus, fichier manquant).
+  Régression : `scripts/test-ollama-pull-repair.mjs` (vérifié en retirant la traduction : le test échoue).

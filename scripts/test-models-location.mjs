@@ -219,7 +219,7 @@ test("le bouton \"Mettre à jour\" d'Ollama ne touche JAMAIS au dossier des mod�
   const updateSectionStart = source.indexOf('export function updateOllama(')
   assert.ok(updateSectionStart !== -1, 'updateOllama introuvable dans dependencyServices.ts')
   // Toute la mise à jour, jusqu'à la prochaine fonction exportée après elle (ensureOllamaRunning).
-  const nextExportStart = source.indexOf('export async function ensureOllamaRunning(', updateSectionStart)
+  const nextExportStart = source.indexOf('export function ensureOllamaRunning(', updateSectionStart)
   assert.ok(nextExportStart !== -1, 'ensureOllamaRunning introuvable après updateOllama')
   const updateFlow = source.slice(updateSectionStart, nextExportStart)
 

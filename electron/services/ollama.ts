@@ -362,8 +362,21 @@ export async function preloadModel(model: string, numCtx: number, timeoutMs = 12
   }
 }
 
+/**
+ * Rien n'écoute à l'adresse d'Ollama (serveur arrêté ou pas encore démarré) : fetch lève alors « fetch failed »,
+ * un message que personne ne comprend (Léo, « Retester la configuration » sur un autre PC). Remplacé par une phrase
+ * qui dit ce qui se passe ; toute autre erreur passe telle quelle.
+ */
+export function explainOllamaUnreachable(err: unknown): unknown {
+  return err instanceof TypeError && err.message === 'fetch failed'
+    ? new Error(t('ollama.unreachable', { host: config.ollama.host }))
+    : err
+}
+
 export async function listInstalledModels(): Promise<string[]> {
-  const response = await fetch(`${config.ollama.host}/api/tags`)
+  const response = await fetch(`${config.ollama.host}/api/tags`).catch((err: unknown) => {
+    throw explainOllamaUnreachable(err)
+  })
   if (!response.ok) throw new Error(t('ollama.listFailed', { status: response.status }))
   const data = (await response.json()) as OllamaTagsResponse
   return (data.models ?? []).map((m) => m.name)
@@ -641,6 +654,8 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: model, stream: true }),
     signal: controller.signal
+  }).catch((err: unknown) => {
+    throw explainOllamaUnreachable(err)
   })
   if (!response.ok || !response.body) {
     throw new Error(t('ollama.pull.httpError', { model, status: response.status }))

@@ -187,9 +187,17 @@ async function startEmbedded(found: InstalledEngine, log: LogFn): Promise<boolea
   const proc = spawnEngine(found.exe, engineEnv(modelsDir))
   // spawn() signale un échec de façon asynchrone : sans ce listener, toute l'application planterait.
   proc.on('error', (err) => log(t('dep.ollamaAutoStartFailed', { error: err.message })))
+  // Un Ollama qui s'arrête tout de suite (fichier retiré par un antivirus, bibliothèque manquante...) ne dit rien
+  // de lui-même : son code de sortie est la seule trace qu'on puisse montrer.
+  let exitCode: number | null | undefined
+  proc.on('exit', (code) => {
+    exitCode = code
+  })
   proc.unref()
   ollamaProcessStartedByJaris = proc
-  return waitUntil(() => isUp(`${ENGINE_HOST}/api/tags`), 30_000, 500)
+  const up = await waitUntil(async () => exitCode === undefined && (await isUp(`${ENGINE_HOST}/api/tags`)), 30_000, 500)
+  if (!up && exitCode !== undefined) log(t('ollamaEngine.exited', { code: String(exitCode) }))
+  return up
 }
 
 function engineProgressToUpdate(progress: EngineInstallProgress): Omit<UpdateProgress, 'target'> {
@@ -302,7 +310,15 @@ async function updateOllamaInner(onProgress: OllamaUpdateProgress | undefined, l
  * Démarre Ollama s'il ne répond pas déjà. L'Ollama de Jaris dès qu'il est installé ; sinon, comme avant l'étape
  * 336, `ollama serve` de Windows (sans effet s'il tourne déjà).
  */
-export async function ensureOllamaRunning(log: LogFn): Promise<void> {
+export function ensureOllamaRunning(log: LogFn): Promise<void> {
+  // Un seul démarrage à la fois : deux appels rapprochés (démarrage de Jaris et « Retester la configuration »)
+  // lançaient chacun leur serveur sur le même port, et le second échouait.
+  if (!ensuring) ensuring = ensureOllamaRunningOnce(log).finally(() => (ensuring = null))
+  return ensuring
+}
+let ensuring: Promise<void> | null = null
+
+async function ensureOllamaRunningOnce(log: LogFn): Promise<void> {
   const found = await installedEngine().catch(() => null)
   if (found) {
     if (embedded?.version === found.version && ollamaProcessStartedByJaris && (await isUp(`${ENGINE_HOST}/api/tags`))) {

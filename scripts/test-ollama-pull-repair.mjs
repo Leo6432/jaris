@@ -9,7 +9,7 @@ import ts from 'typescript'
  * model 'qwen3.8:27b' not found ») : quand Ollama n'annonce AUCUN modèle, Jaris le fait d'abord revoir ses modèles
  * (réparation branchée par main.ts) au lieu de relancer un téléchargement qui ne changerait rien.
  */
-function load({ tagsBefore, tagsAfter = tagsBefore }) {
+function load({ tagsBefore, tagsAfter = tagsBefore, unreachable = false }) {
   const source = ts.transpileModule(readFileSync(new URL('../electron/services/ollama.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
@@ -19,9 +19,12 @@ function load({ tagsBefore, tagsAfter = tagsBefore }) {
     '../config': { config: { ollama: { host: 'http://ollama', model: 'm', numCtx: 8192 } } },
     '../../shared/effort': { parseModelThinking: () => null },
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: () => 100, getDownloadBudgetGb: async () => 100 },
-    './huggingFaceImport': { importHuggingFaceModel: async () => {} }
+    './huggingFaceImport': { importHuggingFaceModel: async () => {} },
+    '../../shared/i18n': { t: (key, vars) => `${key} ${JSON.stringify(vars ?? {})}`, formatDecimal: String }
   }
   const fetch = async (url) => {
+    // Rien n'écoute à l'adresse d'Ollama : c'est exactement ce que lève le fetch de Node.
+    if (unreachable) throw new TypeError('fetch failed')
     if (String(url).endsWith('/api/tags')) {
       const names = state.repaired ? tagsAfter : tagsBefore
       return { ok: true, status: 200, json: async () => ({ models: names.map((name) => ({ name })) }) }
@@ -67,4 +70,19 @@ test('Ollama voit déjà des modèles : aucune réparation tentée', async () =>
   })
   await ollama.pullModelIfMissing('granite4.2:8b')
   assert.deepEqual({ repairs: state.repairs, pulls: state.pulls }, { repairs: 0, pulls: 0 })
+})
+
+test('Ollama ne répond pas du tout : un message qui le dit, jamais « fetch failed » (Léo, Retester la configuration)', async () => {
+  const { ollama } = load({ tagsBefore: [], unreachable: true })
+  await assert.rejects(ollama.pullModelIfMissing('qwen3.8:27b'), (err) => {
+    assert.notEqual(err.message, 'fetch failed')
+    assert.match(err.message, /^ollama\.unreachable .*http:\/\/ollama/)
+    return true
+  })
+})
+
+test('une autre erreur réseau garde son vrai message', async () => {
+  const { ollama } = load({ tagsBefore: [] })
+  const other = new TypeError('Invalid URL')
+  assert.equal(ollama.explainOllamaUnreachable(other), other)
 })

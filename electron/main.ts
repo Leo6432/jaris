@@ -1829,8 +1829,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setThinkChoice, (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => saveThinkChoice(mode, think))
   ipcMain.handle(IPC_CHANNELS.setModelChoice, (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => saveModelChoice(mode, model))
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
+    const onLine = (line: string): void => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line)
+    // Ollama peut s'être arrêté depuis le démarrage de Jaris (ou ne pas avoir encore fini de démarrer) : relancé
+    // ici plutôt que de télécharger vers un serveur absent (« fetch failed », Léo sur un autre PC).
+    await ensureOllamaRunning(onLine)
     return runQuickSetup(
-      (line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line),
+      onLine,
       // Barre de progression de l'écran de configuration (octets reçus / taille du modèle).
       (progress) => event.sender.send(IPC_CHANNELS.modelPullProgress, progress)
     )
