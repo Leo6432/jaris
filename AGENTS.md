@@ -9369,5 +9369,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Premier envoi refusé par la CI Windows (v0.37.0 jamais publiée), à cause d'un test** : `engineRoot` rend le
   chemin RÉEL (`realpath`), et le test le comparait au chemin construit depuis `tmpdir()` — sous Windows, `tmpdir()`
   peut être un nom court 8.3 (« C:\Users\RUNNER~1\… ») que `realpath` déplie en nom long (« runneradmin »).
-  Invisible sous Linux. **Leçon : un test qui compare un chemin passé par `realpath` doit comparer à
-  `realpathSync(attendu)`, jamais au chemin construit depuis `tmpdir()`.** Corrigé en v0.37.1.
+  Invisible sous Linux. La v0.37.1 a encore échoué, dans l'autre sens : `realpathSync` de Node NE déplie PAS les noms courts
+  sous Windows (il recolle les morceaux en JavaScript), alors que `fs/promises.realpath` (et
+  `realpathSync.native`) demande le vrai chemin à Windows. **Leçon : un test qui compare un chemin passé par
+  `realpath` doit le comparer avec la MÊME fonction que le code (ici `fs/promises.realpath`), jamais avec
+  `realpathSync` ni avec le chemin construit depuis `tmpdir()`.** Corrigé en v0.37.2.
