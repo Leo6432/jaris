@@ -13,8 +13,8 @@ export interface FutureModel {
   quantization: string
 }
 
-export const FUTURE_MODELS: FutureModel[] = [
-  // PrismML, 17/09/2026, Apache 2.0 : qwen3.8:27b compressé à ~1,75 bit par paramètre (valeurs −1, 0, +1).
-  // 8,26 Go (modèle 7,63 + lecture d'images 0,63). Aucune fiche Artificial Analysis.
-  { model: 'bonsai-2:27b', vramGb: 8.3, readsImages: true, quantization: 'Q2_0' }
-]
+/**
+ * Vide pour l'instant. Étape 347 (Léo : « enlève bonsai ») : Bonsai 2 27B (PrismML, qwen3.8:27b compressé en Q2_0,
+ * 8,3 Go) retiré. La ligne rayée reste prête pour le prochain modèle à surveiller.
+ */
+export const FUTURE_MODELS: FutureModel[] = []

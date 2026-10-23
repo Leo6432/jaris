@@ -258,7 +258,10 @@ const MIN_OLLAMA_VERSION = {
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': '0.40.4',
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': '0.40.4',
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': '0.40.4',
-  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4'
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4',
+  // Étape 347 : voir MIN_OLLAMA_VERSION dans hardwareScan.ts.
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': '0.40.5',
+  'nemotron-3.5-bolt:e4b': '0.40.10'
 }
 
 /** Même lecture que Jaris : « 0.40.4-rc1 » compte comme 0.40.4 (la pré-version charge déjà K2 Horizon). */
@@ -403,6 +406,10 @@ const MODELS = [
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M',
+  // Étape 347 (Léo) : Spark-X2.6-4B (GGUF officiel de XHToken, Ollama 0.40.5) et Nemotron 3.5 Bolt E4B (tag officiel
+  // d'Ollama, 0.40.10). Voir FLASH_CANDIDATES et MEDIUM_CANDIDATES dans hardwareScan.ts.
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M',
+  'nemotron-3.5-bolt:e4b',
   // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
   // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
@@ -468,6 +475,8 @@ const VISION_CANDIDATES = [
   { model: 'gemma4:e4b', vramGb: 6.6 },
   { model: 'qwen3-vl:8b', vramGb: 6.1 },
   { model: 'gemma4:12b', vramGb: 8.0 },
+  // Étape 347 : Nemotron 3.5 Bolt E4B, vision native (voir VISION_CANDIDATES dans hardwareScan.ts).
+  { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 7.1 },
   // ministral-3:8b (voir MEDIUM_CANDIDATES/VISION_CANDIDATES dans hardwareScan.ts) : nativement multimodal.
   { model: 'ministral-3:8b', vramGb: 6.0 },
@@ -487,6 +496,9 @@ const CODE_CANDIDATES = [
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   // Étape 316 : Phi-4-mini (voir CODE_CANDIDATES dans hardwareScan.ts).
   { model: 'phi4-mini', vramGb: 2.5 },
+  // Étape 347 : Nemotron 3.5 Bolt E4B et Spark-X2.6-4B (voir CODE_CANDIDATES dans hardwareScan.ts).
+  { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
+  { model: 'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', vramGb: 3.5 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
@@ -544,6 +556,8 @@ const MODEL_SIZE_HINTS = {
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 3.2,
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 5.6,
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 21.1,
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': 3.5,
+  'nemotron-3.5-bolt:e4b': 7.9,
   'qwen3.5:35b': 22.1,
   'ornith-1.5:35b': 22.6,
   'qwen3.6:35b': 22.6,
@@ -594,6 +608,8 @@ const MEDIUM_TIER_MODELS = new Set([
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',
+  'nemotron-3.5-bolt:e4b',
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M',
   'phi4-mini',
   'qwen3.5:4b',
   'qwen3.5:2b',

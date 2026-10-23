@@ -68,6 +68,14 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // Les quatre tailles denses sont candidates partout où leur poids les place (Rapide/Médium, Puissant pour la
   // 32B, Code pour toutes) ; jamais choisies ni testées tant qu'Ollama est plus ancien que 0.40.4 (voir
   // MIN_OLLAMA_VERSION). Poids = fichiers Q4_K_M publiés : 0,67 / 3,16 / 5,59 / 21,08 Go.
+  // Étape 347, Léo : « on va ajouter les nouveaux modèles XHToken/Spark-X2.6-4B-FP8 et Nemotron 3.5 Bolt E4B ».
+  // Spark-X2.6-4B (XHToken, Apache 2.0, 20/10/2026), 4,45 milliards de paramètres, texte seul, réflexion réglable.
+  // La version FP8 demandée ne se charge pas dans Ollama (safetensors + code Python maison) : Jaris prend le GGUF
+  // OFFICIEL du même créateur, en Q4_K_M (3,54 Go, empreinte figée par Hugging Face). Architecture `spark2_5`,
+  // chargée par llama.cpp : essayé pour de vrai ici avec Ollama 0.40.5 (réponse) et 0.40.10 (outils + réflexion
+  // annoncés, open_app appelé). 0.40.5 est la plus ancienne version vérifiée (voir MIN_OLLAMA_VERSION). Aucune fiche
+  // Artificial Analysis : rien de publié, donc aucune note inventée. Candidat Rapide, Médium et Code.
+  { model: 'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', vramGb: 3.5 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'ministral-3:3b', vramGb: 3.0 },
   // Étape 316, Léo : « ajoute Phi-4-mini-instruct pour le test aussi ». Microsoft (MIT), 3,8 milliards de paramètres,
@@ -163,6 +171,15 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // antérieurs et non reconfirmés sur les tailles ajoutées ici.
   { model: 'ministral-3:14b', vramGb: 9.1 },
   { model: 'gemma4:12b', vramGb: 8.0 },
+  // Étape 347 : Nemotron 3.5 Bolt E4B (NVIDIA, licence OpenMDW 1.1 : usage commercial libre ; tag e4b ajouté à
+  // Ollama le 23/10/2026), Gemma 4 E4B réentraîné par NVIDIA pour le code, la réflexion et l'appel d'outils.
+  // Le « 4GB » de son nom est la fiche
+  // Q4_K_M de NVIDIA ; le tag OFFICIEL d'Ollama `nemotron-3.5-bolt:e4b` pèse 7,91 Go réels (manifeste : modèle 6,18
+  // + lecture d'images 0,99 + petit modèle d'accélération 0,74), Q4_K_M. Exige Ollama 0.40.10 (champ `requires`
+  // de sa configuration). Essayé pour de vrai ici avec 0.40.10 : vision + outils + réflexion annoncés,
+  // set_reminder (20 min) et open_app appelés correctement. Pas encore de note chez Artificial Analysis (fiche
+  // mise en ligne le 23/10/2026, intelligence vide) : rien d'inventé. Candidat Médium, Vision et Code.
+  { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   // Ornith 1.5 9B (ornith-ai, MIT, étape 333) : Qwen3.5 9B réentraîné par son créateur, tag OFFICIEL
   // ornith-1.5:9b sur Ollama (6,6 Go réels : modèle 5,63 + projecteur 0,92 ; Q4_K_M). Essayé pour de vrai
@@ -187,6 +204,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // - Intelligence Index Artificial Analysis 11 (variante Reasoning, la seule publiée), 58 tokens/s.
   // Ne gagne pas tout seul : choisi seulement d'après son score d'appel d'outils (verified-tool-scores.md).
   { model: 'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', vramGb: 4.8 },
+  // Spark-X2.6-4B : voir la note de l'étape 347 dans FLASH_CANDIDATES.
+  { model: 'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', vramGb: 3.5 },
   { model: 'qwen3.5:4b', vramGb: 3.3 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
@@ -367,6 +386,8 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour gemma4:12b (déjà dans
   // MEDIUM_CANDIDATES, tag réel confirmé sur ollama.com/library/gemma4).
   { model: 'gemma4:12b', vramGb: 8.0 },
+  // Nemotron 3.5 Bolt E4B : vision native (voir la note de l'étape 347 dans MEDIUM_CANDIDATES).
+  { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
   // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
   // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
   // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
@@ -432,8 +453,12 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   // Palier intermédiaire entre 32b et 7b ci-dessous, absent jusqu'ici (relecture Codex, étape 46) : taille
   // vérifiée sur ollama.com/library/qwen2.5-coder:14b (9 Go).
   { model: 'qwen2.5-coder:14b', vramGb: 9 },
+  // Étape 347 : Nemotron 3.5 Bolt E4B et Spark-X2.6-4B, présentés tous deux pour le code par leur créateur (voir
+  // MEDIUM_CANDIDATES et FLASH_CANDIDATES).
+  { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
   { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 },
+  { model: 'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', vramGb: 3.5 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   // Phi-4-mini : voir la note de l'étape 316 dans FLASH_CANDIDATES.
   { model: 'phi4-mini', vramGb: 2.5 },
@@ -504,7 +529,11 @@ export const MIN_OLLAMA_VERSION: Record<string, string> = {
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': '0.40.4',
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': '0.40.4',
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': '0.40.4',
-  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4'
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4',
+  // Étape 347 : architecture `spark2_5`, chargée par Ollama 0.40.5 (essayé pour de vrai ; aucune version plus
+  // ancienne vérifiée) ; Bolt E4B déclare lui-même « requires 0.40.10 » dans sa configuration Ollama.
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': '0.40.5',
+  'nemotron-3.5-bolt:e4b': '0.40.10'
 }
 
 /** Version d'Ollama installée, branchée par main.ts sur le dernier contrôle (dependencyServices.ts). */
@@ -1503,6 +1532,7 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'qwen2.5-coder:14b': 'Q4_K_M',
   'qwen3-vl:8b': 'Q4_K_M',
   'gemma4:12b': 'Q4_K_M',
+  'nemotron-3.5-bolt:e4b': 'Q4_K_M',
   'qwen3.5:9b': 'Q4_K_M',
   'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M': 'Q4_K_M',
   'ministral-3:8b': 'Q4_K_M',
@@ -1512,6 +1542,7 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'qwen3-vl:4b': 'Q4_K_M',
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 'Q4_K_M',
   'qwen2.5-coder:7b': 'Q4_K_M',
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': 'Q4_K_M',
   'qwen3.5:4b': 'Q4_K_M',
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 'Q4_K_M',
   'ministral-3:3b': 'Q4_K_M',

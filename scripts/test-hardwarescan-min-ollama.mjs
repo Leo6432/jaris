@@ -26,6 +26,10 @@ const K2 = {
   large: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'
 }
 const ALL_K2 = Object.values(K2)
+// Étape 347 : deux autres modèles exigent une version d'Ollama (vérifiée pour de vrai, voir hardwareScan.ts).
+const SPARK = 'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M'
+const BOLT = 'nemotron-3.5-bolt:e4b'
+const onlyK2 = (models) => [...models].filter((m) => ALL_K2.includes(m)).sort()
 
 function setup({ scores, vramMib, ramGb = 32, ollamaVersion }) {
   // Même marque que les autres tests de ce module : sans elle, promisify(exec) résout vers un tableau et la VRAM
@@ -55,13 +59,24 @@ const picked = (result) => [result.models.flash, result.models.medium, result.mo
 
 test('les quatre K2 Horizon exigent Ollama 0.40.4 ; la pré-version rc1 suffit', () => {
   const { modelsNeedingNewerOllama } = setup({ scores: '', vramMib: 8192 })
-  assert.deepEqual([...modelsNeedingNewerOllama('0.40.3')].sort(), [...ALL_K2].sort())
-  assert.deepEqual([...modelsNeedingNewerOllama('0.34.2')].sort(), [...ALL_K2].sort())
-  assert.equal(modelsNeedingNewerOllama('0.40.4-rc1').size, 0)
-  assert.equal(modelsNeedingNewerOllama('0.40.4').size, 0)
+  assert.deepEqual(onlyK2(modelsNeedingNewerOllama('0.40.3')), [...ALL_K2].sort())
+  assert.deepEqual(onlyK2(modelsNeedingNewerOllama('0.34.2')), [...ALL_K2].sort())
+  assert.deepEqual(onlyK2(modelsNeedingNewerOllama('0.40.4-rc1')), [])
+  assert.deepEqual(onlyK2(modelsNeedingNewerOllama('0.40.4')), [])
   assert.equal(modelsNeedingNewerOllama('0.41.0').size, 0)
   // Version inconnue (Ollama pas encore interrogé) : prudence, rien de K2 Horizon.
-  assert.deepEqual([...modelsNeedingNewerOllama(null)].sort(), [...ALL_K2].sort())
+  assert.deepEqual(onlyK2(modelsNeedingNewerOllama(null)), [...ALL_K2].sort())
+})
+
+test('Spark-X2.6 exige Ollama 0.40.5 et Nemotron 3.5 Bolt E4B 0.40.10 (versions vérifiées pour de vrai)', () => {
+  const { modelsNeedingNewerOllama } = setup({ scores: '', vramMib: 8192 })
+  const needs = (version) => [...modelsNeedingNewerOllama(version)]
+  assert.ok(needs('0.40.4').includes(SPARK) && needs('0.40.4').includes(BOLT))
+  assert.ok(!needs('0.40.5').includes(SPARK) && needs('0.40.5').includes(BOLT))
+  assert.ok(needs('0.40.9').includes(BOLT), '0.40.9 < 0.40.10 : la comparaison doit être numérique, pas alphabétique')
+  assert.deepEqual(needs('0.40.10'), [])
+  // Version inconnue : prudence, les deux restent de côté.
+  assert.ok(needs(null).includes(SPARK) && needs(null).includes(BOLT))
 })
 
 test('Ollama 0.40.3 : aucun rôle ne tombe sur K2 Horizon, quelle que soit la carte', async () => {
@@ -102,6 +117,17 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
   const offered = [...recent.getUnscoredModels()]
   // 3.7B a déjà ses trois scores (mesurés à l'étape 312) ; les trois autres tailles restent à mesurer.
   assert.deepEqual(ALL_K2.filter((m) => offered.includes(m)).sort(), [K2.tiny, K2.mid, K2.large].sort())
+})
+
+// Étape 347 : avec un Ollama assez récent, le bouton propose les deux nouveaux modèles — et eux seuls — mais aucun rôle
+// ne les choisit tant qu'ils n'ont pas de score (jamais un modèle non testé à la place d'un modèle mesuré).
+test('Ollama 0.40.10 : Spark-X2.6 et Bolt E4B proposés au test, jamais choisis sans score', async () => {
+  const offered = [...setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
+  assert.deepEqual(offered.sort(), [BOLT, SPARK].sort())
+  for (const vramMib of [0, 4096, 6144, 8192, 12288, 24576]) {
+    const roles = picked(await setup({ scores: REAL_SCORES, vramMib, ollamaVersion: '0.40.10' }).pickBestModelsFromBenchmark())
+    assert.ok(!roles.includes(SPARK) && !roles.includes(BOLT), `${vramMib} Mio : ${roles.join(', ')}`)
+  }
 })
 
 // Étape 346 : la version d'Ollama compte dans le choix des modèles — elle est relue AVANT « Retester la configuration »,

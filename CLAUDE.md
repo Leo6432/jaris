@@ -9413,3 +9413,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `realpathSync.native`) demande le vrai chemin à Windows. **Leçon : un test qui compare un chemin passé par
   `realpath` doit le comparer avec la MÊME fonction que le code (ici `fs/promises.realpath`), jamais avec
   `realpathSync` ni avec le chemin construit depuis `tmpdir()`.** Corrigé en v0.37.2.
+
+- **Étape 347, Léo : « enlève bonsai, et on va ajouter les nouveaux modèles XHToken/Spark-X2.6-4B-FP8 et Nemotron 3.5
+  Bolt E4B 4GB ».** Bonsai 2 retiré des futurs modèles : la liste est vide, la ligne rayée reste prête, et son test
+  passe désormais par un faux modèle ajouté dans le test seul (`exemple-futur:8b`). Les deux modèles ont été
+  vérifiés à la source et lancés pour de vrai ici avant d'être ajoutés, et ce qui avait été demandé ne correspondait
+  pas tel quel à ce qui marche :
+  - **Spark-X2.6-4B** (XHToken, Apache 2.0) : la version **FP8** demandée ne tourne pas dans Ollama (safetensors +
+    code Python maison). Jaris prend le GGUF OFFICIEL du même créateur, `hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M`
+    (3,5 Go, texte seul). Architecture nouvelle `spark2_5`, chargée par Ollama 0.40.5 et 0.40.10 (essayé : réponse,
+    puis `open_app` appelé). 0.40.5 est la plus ancienne version vérifiée, d'où `MIN_OLLAMA_VERSION`. Sans
+    réflexion, il a annoncé un rappel sans le programmer : c'est ce que le test d'outils mesurera.
+  - **Nemotron 3.5 Bolt E4B** (NVIDIA, Gemma 4 E4B réentraîné, licence OpenMDW 1.1, usage commercial libre) : le
+    « 4GB » est le nom de la fiche Q4_K_M de NVIDIA, pas sa taille. Le tag officiel `nemotron-3.5-bolt:e4b` pèse
+    **7,9 Go** dans le registre (modèle 6,18 + lecture d'images 0,99 + petit modèle d'accélération 0,74), et sa
+    configuration exige **Ollama 0.40.10** (champ `requires`). Essayé avec 0.40.10 : rappel de 20 min et
+    Bloc-notes appelés correctement. Candidat Moyen, Vision et Code.
+  - **Aucune note Artificial Analysis pour les deux** : Spark n'y figure pas, et la fiche de Bolt, mise en ligne le
+    23/10/2026, a encore une intelligence vide. Rien d'inventé, ils seront départagés par leurs tests.
+  Avec Ollama 0.40.10, le bouton « Tester les modèles » propose exactement ces deux modèles. Aucun rôle ne les
+  choisit tant qu'ils n'ont pas de score (vérifié de 0 à 24 Go de carte). **Leçon générale : le
+  nom d'un modèle demandé (« FP8 », « 4GB ») ne dit ni ce qu'Ollama sait charger ni ce que pèse vraiment le
+  téléchargement — lire le registre (manifeste, `requires`) et le lancer avant de l'ajouter.** Régression :
+  `node --test scripts/test-hardwarescan-min-ollama.mjs` (versions minimales, proposés au test et jamais choisis
+  sans score), `scripts/test-options-reorganization-ui.mjs` (futur modèle), `test-benchmark-candidates-sync.mjs`.

@@ -241,6 +241,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).
   const visionModels = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
+  // Étape 347 : Nemotron 3.5 Bolt E4B (vision) exige Ollama 0.40.10 — version inconnue ici, donc jamais proposé.
+  for (const model of setup({ vramMib: 8 * 1024 }).modelsNeedingNewerOllama(null)) visionModels.delete(model)
   for (const model of visionModels) assert.ok(unscored.includes(model), `${model} doit repasser le test de vision`)
   // Étape 232 : le test de code a changé aussi (sur 5) — les modèles de code seuls repassent eux aussi.
   assert.equal(unscored.length, new Set([...conversationModels, ...visionModels, ...codeOnly]).size)
@@ -391,7 +393,9 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   const scores = REAL_SCORES.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
   assert.notEqual(scores, REAL_SCORES, 'section « À remesurer » introuvable dans le vrai fichier')
   const scan = setup({ vramMib: 6 * 1024, ramGb: 16, scores })
-  scan.setOllamaVersionSource(() => '0.40.5')
+  // 0.40.4 : la version qui charge K2 Horizon, mais pas encore Spark-X2.6 (0.40.5) ni Bolt E4B (0.40.10), ajoutés
+  // sans score à l'étape 347 — ce test ne porte que sur le modèle à remesurer.
+  scan.setOllamaVersionSource(() => '0.40.4')
   assert.ok(scan.parseModelsToRemeasure().has(k2))
   assert.match(REAL_SCORES, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m, 'ses scores restent dans le fichier')
   assert.deepEqual(notAwaiting(scan.getUnscoredModels()), [k2], 'seul modèle proposé')

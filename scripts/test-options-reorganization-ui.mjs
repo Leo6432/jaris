@@ -34,6 +34,11 @@ const entryPath = join(projectRoot, 'tmp-options-reorg-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import OptionsMenu from './src/components/OptionsMenu'
+import { FUTURE_MODELS } from './shared/futureModels'
+
+// Étape 347 : la vraie liste des futurs modèles est vide (Bonsai 2 retiré) ; un faux modèle, ajouté ici seulement,
+// garde la ligne rayée vérifiée.
+FUTURE_MODELS.push({ model: 'exemple-futur:8b', vramGb: 8.3, readsImages: true, quantization: 'Q2_0' })
 
 window.__orbClicks = 0
 
@@ -744,7 +749,7 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
 })
 
 // Étape 341 (Léo : « ajoute-le dans futur, en bas de tous les modèles, mets en rayure futur modèle »).
-test('« Tous les modèles » : Bonsai 2 en bas, rayé, « Futur modèle », quel que soit le tri, et suit la recherche', options, async () => {
+test('« Tous les modèles » : un futur modèle reste en bas, rayé, « Futur modèle », quel que soit le tri, et suit la recherche', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
@@ -761,18 +766,18 @@ test('« Tous les modèles » : Bonsai 2 en bas, rayé, « Futur modèle », que
         }
       })
     let row = await last()
-    assert.equal(row.title, 'bonsai-2:27b', 'le futur modèle doit être la dernière ligne')
+    assert.equal(row.title, 'exemple-futur:8b', 'le futur modèle doit être la dernière ligne')
     assert.ok(row.future)
     assert.equal(row.badge, 'Futur modèle')
     assert.match(row.stripes, /repeating-linear-gradient/, `fond rayé attendu : ${row.stripes}`)
     // Le tri ne le remonte jamais : il reste en bas, même trié par VRAM décroissante (8,3 Go dépasse 3 Go).
     await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
     await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
-    assert.equal((await last()).title, 'bonsai-2:27b')
+    assert.equal((await last()).title, 'exemple-futur:8b')
     // La recherche le trouve seul, sans afficher « aucun modèle ».
-    await page.fill('.options-menu__model-search', 'bonsai')
+    await page.fill('.options-menu__model-search', 'exemple-futur')
     const titles = await page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
-    assert.deepEqual(titles, ['bonsai-2:27b'])
+    assert.deepEqual(titles, ['exemple-futur:8b'])
     assert.equal(await page.$('.options-page--models .options-menu__model-search-empty'), null)
   })
 })
