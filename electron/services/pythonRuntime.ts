@@ -1,12 +1,12 @@
 import { spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readdirSync } from 'fs'
-import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, readlink, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { getStorageRoot } from './storageRoot'
-import { downloadToFile } from './download'
+import { describeDownloadFailure, downloadToFile } from './download'
 import { t } from '../../shared/i18n'
 
 /**
@@ -132,9 +132,16 @@ const PYTHON_SERIES = '3.12'
  * les fichiers de compilation dont Jaris n'a aucun usage).
  */
 async function findPythonArchiveUrl(): Promise<string> {
-  const response = await fetch(PYTHON_RELEASES_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(30_000) })
+  let response: Response
+  let release: { assets?: { name: string; browser_download_url: string }[] } = {}
+  try {
+    response = await fetch(PYTHON_RELEASES_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(30_000) })
+    if (response.ok) release = (await response.json()) as typeof release
+  } catch (err) {
+    // Étape 346 : sans internet, « fetch failed » s'affichait tel quel au premier lancement.
+    throw new Error(describeDownloadFailure(err, { receivedBytes: 0, totalBytes: null, stalledAfterMs: null }))
+  }
   if (!response.ok) throw new Error(pythonListError(response.status, response.headers.get('x-ratelimit-remaining')))
-  const release = (await response.json()) as { assets?: { name: string; browser_download_url: string }[] }
   const pattern = new RegExp(`^cpython-${PYTHON_SERIES.replace('.', '\\.')}\\.\\d+\\+.*-x86_64-pc-windows-msvc-install_only\\.tar\\.gz$`)
   const asset = release.assets?.find((a) => pattern.test(a.name))
   if (!asset) throw new Error(t('py.noRelease', { series: PYTHON_SERIES }))
@@ -175,11 +182,23 @@ async function installDependencies(python: string, onProgress: InstallProgress):
 }
 
 /**
+ * Étape 346 : un dossier qui est une jonction vers un disque débranché (données rangées sur D:, disque externe) faisait
+ * échouer l'installation avec « ENOENT » — incompréhensible. La phrase dit quel disque rebrancher.
+ */
+async function assertJunctionTargetPresent(link: string): Promise<void> {
+  const target = await readlink(link).catch(() => null)
+  if (!target || existsSync(target)) return
+  const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(target)?.[1] ?? target
+  throw new Error(t('storage.diskMissing', { drive }))
+}
+
+/**
  * Installe Python et ses dépendances de bout en bout. Rejette avec un message lisible en cas d'échec : il
  * est affiché tel quel à l'utilisateur, qui n'a aucun terminal où aller lire une erreur.
  */
 export async function installPythonRuntime(onProgress: InstallProgress): Promise<void> {
   const dir = runtimeDir()
+  await assertJunctionTargetPresent(dir)
   // Repart d'un dossier propre : une installation précédente interrompue en plein milieu laisserait une
   // arborescence à moitié extraite, dont on ne peut rien conclure de fiable. On vide son CONTENU sans
   // supprimer le dossier lui-même : quand il est une jonction vers le dossier de Jaris (étape 143, autre

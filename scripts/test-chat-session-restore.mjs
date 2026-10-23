@@ -297,3 +297,47 @@ test('un message envoyé pendant la lecture du fil reste affiché après elle', 
   ])
   assert.deepEqual(JSON.parse(JSON.stringify(messages)).map((m) => m.content), ['ancienne', 'ancienne réponse', 'nouvelle', 'réponse test'])
 })
+
+// Étape 346 (« ce qui a été dit à la voix n'apparaît pas dans le Chat ») : un échange dit à voix haute rejoint le fil
+// déjà affiché, une seule fois, et rien n'est ajouté tant que le fil n'a jamais été chargé (il sera lu du disque).
+test('étape 346 : un échange dit à voix haute rejoint le fil du Chat déjà affiché, sans doublon', async () => {
+  const { chatSession } = setup([{ id: '1', timestamp: 't1', transcript: 'ancien', reply: 'vieille réponse' }])
+  assert.equal(await chatSession.addSpokenExchange('quelle heure ?', 'Il est 10 h.'), false, 'fil pas encore chargé')
+  await chatSession.getVisibleMessages()
+  assert.equal(await chatSession.addSpokenExchange('quelle heure ?', 'Il est 10 h.'), true)
+  assert.equal(await chatSession.addSpokenExchange('quelle heure ?', 'Il est 10 h.'), false, 'déjà présent')
+  const messages = await chatSession.getVisibleMessages()
+  assert.equal(
+    JSON.stringify(messages.slice(-2)),
+    JSON.stringify([{ role: 'user', content: 'quelle heure ?' }, { role: 'assistant', content: 'Il est 10 h.' }])
+  )
+  assert.equal(messages.length, 4)
+})
+
+// Étape 346 : le Chat (ouvert pendant qu'une question posée depuis le widget réfléchit) doit savoir qu'une réponse
+// arrive — annoncé dès que la question est affichée, et terminé même quand la réponse échoue.
+test('une réponse en cours est annoncée (question affichée), puis sa fin — même après un échec', async () => {
+  let release
+  const { chatSession } = setup([], {
+    onConverse: (prompt) => {
+      if (prompt === 'échec') throw new Error('Ollama ne répond pas')
+      return new Promise((resolve) => (release = () => resolve('ok')))
+    }
+  })
+  const seen = []
+  chatSession.onBusyChange((busy) => seen.push(busy))
+  assert.equal(chatSession.busy, false)
+  const pending = chatSession.send('attente longue', () => {}, () => {})
+  for (let i = 0; i < 50 && !release; i++) await new Promise((done) => setTimeout(done, 5))
+  assert.equal(chatSession.busy, true)
+  assert.deepEqual(seen, [true])
+  const shown = await chatSession.getVisibleMessages()
+  assert.equal(shown.at(-1).content, 'attente longue', 'annoncé avant que la question soit dans le fil')
+  release()
+  await pending
+  assert.equal(chatSession.busy, false)
+  assert.equal(JSON.stringify(seen), '[true,false]')
+  await chatSession.send('échec', () => {}, () => {})
+  assert.equal(chatSession.busy, false)
+  assert.equal(JSON.stringify(seen), '[true,false,true,false]')
+})

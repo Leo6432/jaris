@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 resources = Path(sys.argv[1]).resolve()
-for name in ('voice_server.py', 'wake_confirmation.py', 'tts_server.py', 'requirements.txt'):
+for name in ('voice_server.py', 'wake_confirmation.py', 'mic_stream.py', 'tts_server.py', 'requirements.txt'):
     if not (resources / name).is_file():
         raise RuntimeError(f'Fichier absent de l’installeur : {resources / name}')
 leftovers = sorted(p.name for p in resources.rglob('*.onnx'))
@@ -19,4 +19,7 @@ sys.path.insert(0, str(resources))
 from wake_confirmation import WakeSegmenter, contains_wake_name
 assert contains_wake_name('Jaris, bonjour.') and not contains_wake_name('Voici la météo à Paris.')
 WakeSegmenter()
+# Étape 346 : l'ouverture du micro (retrouvé par son nom, rouvert s'il disparaît) vit dans son propre fichier.
+from mic_stream import Microphone, find_input_device
+assert find_input_device([{'name': 'Micro', 'max_input_channels': 1}], [], 'micro') == 0
 print('Écoute du mot Jaris par transcription : fichiers présents, aucun ancien modèle livré.')

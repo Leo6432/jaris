@@ -37,8 +37,10 @@ export const RESOURCE_SAFETY_MARGIN_GB = 16
  */
 export async function detectVramGb(): Promise<number | null> {
   try {
+    // Étape 346 : un pilote NVIDIA bloqué faisait attendre nvidia-smi sans fin — et Jaris avec.
     const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits', {
-      windowsHide: true
+      windowsHide: true,
+      timeout: NVIDIA_SMI_TIMEOUT_MS
     })
     const mib = parseInt(stdout.trim().split('\n')[0], 10)
     return Number.isFinite(mib) ? mib / 1024 : null
@@ -71,8 +73,11 @@ export const DISK_SAFETY_MARGIN_GB = 5
  * `~/.ollama/models` une fois créé. `null` si `fs.statfsSync` échoue (plateforme non supportée, permissions) :
  * l'appelant doit alors ignorer ce filtre plutôt que de bloquer tout téléchargement sur une valeur inconnue.
  */
-export function detectFreeDiskGb(): number | null {
-  const candidates = [process.env.OLLAMA_MODELS?.trim(), join(homedir(), '.ollama', 'models'), homedir()].filter(
+export async function detectFreeDiskGb(): Promise<number | null> {
+  // Étape 346 : le dossier que l'Ollama de Jaris utilise VRAIMENT (il reçoit son propre chemin, pas la variable de
+  // Windows) — sinon la place libre pouvait être mesurée sur un autre disque que celui qui reçoit le modèle.
+  const engineDir = await modelsDirSource().catch(() => null)
+  const candidates = [engineDir, process.env.OLLAMA_MODELS?.trim(), join(homedir(), '.ollama', 'models'), homedir()].filter(
     (dir): dir is string => Boolean(dir)
   )
   for (const dir of candidates) {
@@ -89,6 +94,13 @@ export function detectFreeDiskGb(): number | null {
   return null
 }
 
+/** Étape 346 : branché par main.ts sur le dossier des modèles de l'Ollama de Jaris (`null` = Ollama de Windows). */
+let modelsDirSource: () => Promise<string | null> = async () => null
+
+export function setModelsDirSource(source: () => Promise<string | null>): void {
+  modelsDirSource = source
+}
+
 /**
  * Budget "peut tourner du tout" avant de télécharger un modèle : VRAM + RAM combinées (Ollama répartit
  * automatiquement les deux quand un modèle ne tient pas entièrement en VRAM), moins le minimum pour Windows. Sert de
@@ -100,8 +112,23 @@ export function detectFreeDiskGb(): number | null {
  * quelle que soit la vitesse acceptée.
  */
 export async function getDownloadBudgetGb(): Promise<number> {
-  return downloadBudgetGb(await detectVramGb(), detectRamGb())
+  return downloadBudgetGb(await vramSource(), detectRamGb())
 }
+
+/**
+ * Étape 346 : sur une carte AMD ou Intel, nvidia-smi n'existe pas — le filet voyait « 0 Go de carte » et refusait de
+ * télécharger les modèles que Jaris venait de choisir avec la VRAM lue dans le registre (detectGpu, hardwareScan.ts).
+ * Les deux lisent maintenant la MÊME mesure : main.ts branche ici detectGpu (un import direct ferait une boucle,
+ * hardwareScan.ts important déjà ce fichier). Sans branchement (tests, script), nvidia-smi seul, comme avant.
+ */
+let vramSource: () => Promise<number | null> = detectVramGb
+
+export function setVramSource(source: () => Promise<number | null>): void {
+  vramSource = source
+}
+
+/** Étape 346 : au-delà, nvidia-smi est considéré bloqué (pilote planté) — la carte est alors « inconnue ». */
+export const NVIDIA_SMI_TIMEOUT_MS = 3_000
 
 /**
  * Ce que Windows garde pour lui au strict minimum quand un modèle occupe le reste : la limite de FAISABILITÉ

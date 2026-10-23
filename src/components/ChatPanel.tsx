@@ -28,6 +28,13 @@ export default function ChatPanel(): JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  /**
+   * Étape 346 : une réponse est en cours pour une question posée AILLEURS (petit widget, téléphone) dans la même
+   * conversation. Sans ça, le Chat ouvert pendant la réflexion montrait la question seule, sans « réfléchit », et la
+   * réponse n'apparaissait qu'au prochain changement de fenêtre.
+   */
+  const [externalBusy, setExternalBusy] = useState(false)
+  const ownSendRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [streamingReply, setStreamingReply] = useState('')
@@ -52,7 +59,7 @@ export default function ChatPanel(): JSX.Element {
    * Étape 325 : « Jaris réfléchit… » sans durée paraissait figé pendant qu'un modèle se charge ou réfléchit 1 à 2 min
    * (mesuré : granite4.2:8b, 2 min 06, étape 245). Le temps écoulé s'affiche à côté, après une dizaine de secondes.
    */
-  const elapsedMs = useElapsedMs(sending)
+  const elapsedMs = useElapsedMs(sending || externalBusy)
 
   const saveImage = async (dataUrl: string, index: number): Promise<void> => {
     const result = await window.jaris.saveGeneratedImage(dataUrl)
@@ -76,7 +83,9 @@ export default function ChatPanel(): JSX.Element {
    */
   useEffect(() => {
     const refresh = (): void => {
-      if (document.visibilityState !== 'visible') return
+      // Pendant une réponse demandée d'ici, le fil affiché est tenu à jour par send() (avec la vignette de l'image
+      // jointe, que le fil du main n'a pas) : une relecture le remplacerait.
+      if (document.visibilityState !== 'visible' || ownSendRef.current) return
       void window.jaris.getChatHistory().then(setMessages)
       void window.jaris.listConversations().then(setConversations)
     }
@@ -84,9 +93,18 @@ export default function ChatPanel(): JSX.Element {
     // Étape 214 : un message envoyé depuis le téléphone rejoint la conversation active pendant que le Chat
     // est peut-être affiché : il doit apparaître tout de suite, pas au prochain changement de fenêtre.
     const unsubscribe = window.jaris.onChatHistoryChanged?.(refresh)
+    const followBusy = (busy: boolean): void => {
+      if (ownSendRef.current) return
+      setExternalBusy(busy)
+      // L'étape affichée (« Recherche sur internet… ») était celle de cette réponse : elle ne doit pas rester.
+      if (!busy) setProgress(null)
+    }
+    void window.jaris.getChatBusy?.().then(followBusy)
+    const unsubscribeBusy = window.jaris.onChatBusy?.(followBusy)
     return () => {
       document.removeEventListener('visibilitychange', refresh)
       unsubscribe?.()
+      unsubscribeBusy?.()
     }
   }, [])
 
@@ -158,6 +176,8 @@ export default function ChatPanel(): JSX.Element {
       setInput('')
       setAttachment(null)
     }
+    ownSendRef.current = true
+    setExternalBusy(false)
     setSending(true)
     setProgress(null)
     setStreamingReply('')
@@ -179,6 +199,7 @@ export default function ChatPanel(): JSX.Element {
     } catch (err) {
       if (answerIsHere()) setError(err instanceof Error ? err.message : String(err))
     } finally {
+      ownSendRef.current = false
       sendingIn.current = null
       setSending(false)
       setProgress(null)
@@ -204,7 +225,7 @@ export default function ChatPanel(): JSX.Element {
     >
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
-          {messages.length === 0 && !(sending && answerIsHere()) && (
+          {messages.length === 0 && !(sending && answerIsHere()) && !externalBusy && (
             <EmptyState
               title={t('app.voice.prompt')}
               description={t('chat.empty.hint')}
@@ -249,7 +270,7 @@ export default function ChatPanel(): JSX.Element {
             </div>
           ))}
 
-          {sending && answerIsHere() && (
+          {((sending && answerIsHere()) || (externalBusy && !sending)) && (
             <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
               <img className="chat-panel__avatar" src={logo} alt="" />
               <div className="chat-panel__body">

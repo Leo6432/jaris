@@ -29,7 +29,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/ass
 }).outputText
 
 const modules = {
-  './notepad': { requestedNotepadText: () => undefined },
+  './notepad': { notepadRequest: () => undefined, requestedNotepadText: () => undefined },
     '../config': { config: { ollama: {} } },
   './ollama': {},
   './systemPrompt': systemPromptModule,

@@ -9330,3 +9330,78 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   qui marche jamais retenue, panne aussi au processeur jamais retenue, nouveau moteur qui réessaie, arrêt jamais
   réessayé ; chaque garde vérifiée en la retirant). **Non vérifié sur Windows** : quelle partie choisit la carte
   de Léo — à voir à sa première image (la ligne « nouvel essai » apparaît ou non).
+
+- **Étape 346, chasse aux bugs puis correction de TOUT (Léo : « ouvre bloc note… il m'a écrit blocknote… je n'ai pas
+  trouvé d'application, et après Jaris ne répond pas », puis « Règle TOUT grave / moyen / mineur »).** Recherche faite en
+  lisant le code sous plusieurs angles (matériels différents : carte AMD, portable sans pavé numérique, micro USB,
+  deux écrans, antivirus, disque externe), puis 43 bugs confirmés corrigés à la main (Léo : pas d'agents, trop cher).
+  **Cause exacte du « Jaris ne répond pas » de Léo NON établie** (journal des demandes demandé) ; plusieurs causes
+  plausibles corrigées. Ce qui a été corrigé, par famille :
+  - **Ouvrir une application** (appLauncher.ts) : « blocknote », « bloque note » (graphies réelles de la
+    transcription) retrouvent le Bloc-notes par une forme « sonore » puis une distance d'édition bornée ; l'article
+    (« le bloc note ») ne fait plus partie du nom ; « Notepad++ » ne vole plus « bloc note » (« + » se dit « plus ») ;
+    un nom proche est PROPOSÉ (jamais ouvert à l'aveugle) ; « ouvre YouTube » sans application ouvre le site ; Jaris
+    annonce le nom de l'application vraiment ouverte. « Ouvre le bloc-notes et écris un poème » fait rédiger le poème
+    au lieu de recopier « un poème sur la mer ». Avant de taper, Jaris vérifie que l'application est AU PREMIER PLAN
+    (`tool.typeText.notForeground`) : sinon le texte partait dans la fenêtre qui avait le focus.
+  - **Relances qui sur-réagissent** (assistant.ts, copie dans benchmark-scenarios.mjs) : une question à Jaris
+    lui-même, une salutation avec son prénom, ou une demande déjà ACCOMPLIE par un outil qui agit ne forcent plus de
+    recherche web ; une recherche imposée qui échoue ne remplace plus une bonne réponse (`reply.unverified`) ;
+    l'envoi de mail exige un mail ou un message (« envoie-moi un rappel » n'en est pas un) ; ces filets écrits en
+    français ne jouent plus dans les autres langues.
+  - **Voix** : « arobase » remplacé seulement dans une adresse (plus « arabe », « robuste »…) ; reparler pendant la
+    réflexion ne relance plus tout si une action a déjà eu lieu, et « tu m'entends ? » ne relance rien ; l'écoute du
+    nom est coupée PENDANT que Jaris parle (il se réveillait sur sa propre voix) ; « J'écoute » ne reste plus bloqué
+    (suspension, phrase reçue pendant la suspension, programme d'écoute en échec, « + » sans réponse en 4 s) ; un
+    programme d'écoute qui s'arrête APRÈS avoir marché est relancé (au plus une fois par minute, jamais un échec au
+    démarrage) ; ce qui est dit à voix haute apparaît dans le Chat ; le haut-parleur choisi sert aussi à la voix ;
+    le widget n'accumule plus un lecteur audio par passage ; après un passage par le Chat, Jaris reparle (le lecteur
+    audio n'existait que sous la forme vocale du widget) ; l'orbe ne « s'endort » plus après 3 min de réflexion (le
+    retour au repos vient toujours du processus principal, plus d'un minuteur de l'écran).
+  - **Micro** (python/mic_stream.py, testé sans micro) : retenu par son NOM, plus par son numéro PortAudio qui change
+    quand on branche un casque ; un micro débranché (plus aucun bloc de son en 3 s) est rouvert toutes les 5 s, et la
+    boucle d'écoute ne reste plus jamais bloquée (la touche « + » et le téléphone continuent de marcher) ; sans micro,
+    état `noMic` (« Aucun micro ne répond »), et les messages vocaux du téléphone restent transcrits ; un casque
+    Bluetooth en mode « mains libres » n'est plus gardé ouvert hors du mode vocal (tout le son du PC passait en
+    qualité téléphone).
+  - **Ollama** : une requête sans streaming était coupée par undici au bout de 5 min d'attente des en-têtes, puis
+    affichée « Ollama n'est pas lancé ». Toutes les demandes passent maintenant en streaming (relayé ou non), et une
+    coupure dit sa vraie nature (`ollama.tooSlow`, `ollama.connectionLost`, injoignable). **Leçon générale : avec le
+    fetch de Node, une réponse qui met plus de 5 min à commencer est coupée — streamer, et ne jamais traduire une
+    coupure en « service arrêté ».** Le modèle de vision et le pilote demandent la MÊME fenêtre de contexte que la
+    conversation (sinon rechargement, étape 294), et la correction de la voix / la mémoire prennent le modèle déjà
+    chargé (`preferLoadedModel`) au lieu d'en charger un second à chaque phrase.
+  - **Annulation** : « Arrêter » ou une nouvelle phrase n'attendaient pas la fin d'un outil (regarder l'écran,
+    recherche web, ouvrir une appli) ; l'outil est mis en concurrence avec le signal (`raceAbort`), et la recherche
+    web cachée s'arrête aussi (fenêtre détruite) au lieu de pouvoir rester bloquée.
+  - **Matériel et choix des modèles** : carte AMD/Intel détectée (étape 208) mais le budget de téléchargement lisait
+    seulement nvidia-smi → Jaris refusait les modèles qu'il avait choisis : une seule source (`setVramSource`, branchée
+    sur `detectGpu`) ; nvidia-smi borné à 3 s (pilote bloqué = Jaris figé) ; un modèle qui n'a pas pu être téléchargé
+    n'est plus choisi (exclu, choix recalculé, l'ancien gardé en service) ; « Retester » relit la version d'Ollama
+    avant de choisir ; la place libre se mesure sur le disque des modèles ; le curseur de mémoire affiche la valeur
+    réellement utilisée (plus « 8k » à la place de 11k).
+  - **Installation et disque** : l'antivirus qui retient un fichier fait réessayer le renommage du moteur (jusqu'à
+    ~30 s) au lieu d'échouer ; une archive déjà vérifiée n'est pas retéléchargée ; `OLLAMA_NOPRUNE=1` : un modèle
+    dont le téléchargement a été interrompu reprend où il en était au lieu de repartir de 0 % ; coupures d'internet dites en
+    français (`dl.cutAfter`, `dl.serverSilent`) ; un disque externe débranché est signalé au démarrage
+    (`storage.diskMissing`, notification) et une jonction vers un dossier absent n'est jamais « réparée » en
+    recréant un dossier vide sur C.
+  - **Écrans** : double-clic sur la dictée → un seul micro ouvert (état « starting », bouton désactivé) et mémoire
+    bornée à la durée maximale ; une question posée depuis le petit widget s'affiche dans le Chat avec « réfléchit »
+    puis sa réponse (`chatBusy`, annoncé par `ChatSession` APRÈS que la question est dans le fil) ; **Ctrl+Alt+J**
+    ouvre la barre du Chat (et l'écoute) sur un portable sans pavé numérique, mêmes règles que « + » ; Échap ferme la
+    réponse du widget même quand le champ n'existe plus (le bouton « Fermer » reste absent : décision antérieure
+    gardée par un test) ; le widget est recentré quand un écran est ajouté/retiré ou l'échelle change ; la boîte de
+    réponse du widget vocal ne dépasse plus le bas de la fenêtre (460 px) et défile jusqu'à la fin.
+  **Leçons générales** : (1) un test structurel qui découpe le code entre deux noms de fonctions casse dès qu'on
+  extrait une fonction — le relire, pas l'assouplir à l'aveugle (trois cas ici) ; (2) quand un test d'interface
+  défend une décision (« seul Ouvrir le Chat »), chercher son origine avant d'ajouter ce qu'il interdit ; (3) une
+  réordonnance automatique d'un fichier de traductions fait un énorme diff pour rien : insérer les clés en place.
+  Régression (chacun vérifié en réintroduisant son défaut) : `test-app-launcher`, `test-assistant-history`,
+  `test-voice-pipeline-346`, `test-voice-listening-status`, `python scripts/test-wake-confirmation.py`,
+  `test-ollama-chat-stream`, `test-engine-install-retry`, `test-nvidia-timeout`, `test-input-device-choice`,
+  `test-download-budget`, `test-hardwarescan-small-machines`, `test-context-length`, `test-model-preload`,
+  `test-dictation-ui`, `test-chat-conversations-ui`, `test-chat-session-restore`, `test-chat-widget-ui`,
+  `test-widget-mode`, `test-main-guards`, `test-web-search`, `test-data-location`. **Non vérifié en usage réel**
+  (pas de Windows ici) : le micro rouvert après débranchement, Ctrl+Alt+J, la détection AMD pour le budget, et
+  le recentrage sur deux écrans.

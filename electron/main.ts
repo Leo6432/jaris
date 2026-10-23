@@ -1,7 +1,7 @@
 import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
-import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData } from './services/storageRoot'
+import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getMissingStorageRoot } from './services/storageRoot'
 import { pickImageModel } from '../shared/imageModel'
 import { PILOT_MODEL, PILOT_MODEL_LABEL, pickPilotModel } from '../shared/pilotModel'
 import {
@@ -39,6 +39,8 @@ import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './serv
 import {
   ensureOllamaRunning,
   getOllamaVersionStatus,
+  getLocalOllamaVersion,
+  refreshLocalOllamaVersion,
   isOllamaInstalled,
   onOllamaVersionStatus,
   restartOllama,
@@ -60,8 +62,10 @@ import {
   getModelOverview,
   getMyModelPicks,
   isUnusedInstalledModel,
-  setOllamaVersionSource
+  setOllamaVersionSource,
+  detectGpu
 } from './services/hardwareScan'
+import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
@@ -193,13 +197,20 @@ registerPreviewScheme()
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 // Étape 312 : les choix de modèles écartent ce que la version d'Ollama installée ne sait pas charger (K2 Horizon).
-setOllamaVersionSource(() => getOllamaVersionStatus()?.current ?? null)
+setOllamaVersionSource(() => getLocalOllamaVersion())
+// Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
+setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
+// Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).
+setModelsDirSource(async () => (usesEmbeddedOllama() ? engineModelsDir() : null))
 if (!gotSingleInstanceLock) {
   app.quit()
 }
 
 const isDev = !app.isPackaged
 let pipeline: VoicePipeline | null = null
+/** Étape 346 : dernière relance automatique du programme d'écoute après un arrêt imprévu (voir 'crashed'). */
+let lastVoiceRestartAt = 0
+const VOICE_RESTART_MIN_INTERVAL_MS = 60_000
 let fullWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -643,7 +654,21 @@ function revealAfterStartup(revealAtLogin: boolean): void {
     }
     // Seulement maintenant : le premier plan est déjà passé à la fenêtre de Jaris.
     if (splash && !splash.isDestroyed()) splash.destroy()
+    warnIfStorageDiskMissing()
   }, SPLASH_EXIT_MS)
+}
+
+/**
+ * Étape 346 : données rangées sur un disque externe débranché — Jaris démarre sur l'emplacement par défaut (rien n'est
+ * recréé vide sur le disque), et le dit au lieu de laisser croire que conversations et modèles ont disparu.
+ */
+function warnIfStorageDiskMissing(): void {
+  const missing = getMissingStorageRoot()
+  if (!missing) return
+  const drive = /^([A-Za-z]:)/.exec(missing)?.[1] ?? missing
+  const message = t('storage.diskMissing', { drive })
+  broadcast(IPC_CHANNELS.log, message)
+  if (Notification.isSupported()) new Notification({ title: 'Jaris', body: message }).show()
 }
 
 function createWidgetWindow(): BrowserWindow {
@@ -827,6 +852,23 @@ function watchWidgetPresence(): void {
     widgetWindow.setAlwaysOnTop(true, 'floating')
     widgetWindow.webContents.invalidate()
   }, WIDGET_WATCHDOG_MS)
+}
+
+/** Le widget affiché est-il déplié ? Barre Chat ouverte, ou widget vocal en activité. */
+function widgetExpandedNow(): boolean {
+  if (displayedWidgetMode === 'chat') return true
+  if (displayedWidgetMode === 'chat-idle') return false
+  return lastEmotion !== 'idle'
+}
+
+/**
+ * Étape 346 : la place du widget (haut, au centre) n'était calculée qu'à son affichage. Un second écran branché ou
+ * retiré, ou une échelle changée (100 % → 150 %), le laissait décalé, voire hors de l'écran, jusqu'au prochain
+ * changement d'état. Il est recentré dès que Windows annonce un changement d'écran.
+ */
+function recenterWidget(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) return
+  positionWidgetWindow(widgetWindow, widgetExpandedNow())
 }
 
 function showWidgetWindow(forceExpanded = false): void {
@@ -1308,6 +1350,10 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('activity', (text: string | null) => broadcast(IPC_CHANNELS.voiceActivity, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
+  // Étape 346 : ce qui est dit à voix haute apparaît aussi dans le Chat, sans attendre un changement de fenêtre.
+  pipeline.on('exchange', ({ transcript, reply }: { transcript: string; reply: string }) => {
+    void chatSession.addSpokenExchange(transcript, reply).then(() => broadcast(IPC_CHANNELS.chatHistoryChanged))
+  })
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
   pipeline.on('soundCue', (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue))
   // Étape 173 : une image dessinée à la voix s'ouvre dans la visionneuse de Windows (pas de Chat à l'écran).
@@ -1319,6 +1365,15 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('listeningStatus', (reason: string | null) =>
     broadcast(IPC_CHANNELS.wakeAvailability, { reason, attempt: false } satisfies WakeAvailabilityPayload)
   )
+  // Étape 346 : le programme d'écoute s'est arrêté tout seul après avoir marché — relancé, au plus une fois par minute
+  // (un plantage qui se répète ne doit pas relancer en boucle ; la raison reste alors affichée près de « Parler »).
+  pipeline.on('crashed', () => {
+    if (pipeline !== current || quitting || Date.now() - lastVoiceRestartAt < VOICE_RESTART_MIN_INTERVAL_MS) return
+    lastVoiceRestartAt = Date.now()
+    broadcast(IPC_CHANNELS.log, t('voice.restarting'))
+    current.stop()
+    void startVoicePipeline()
+  })
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
   // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
   pipeline.on('shutdown', () => {
@@ -1329,7 +1384,7 @@ async function startVoicePipeline(): Promise<void> {
 
   try {
     const profile = await getProfile()
-    await current.start(profile?.audioInputDeviceIndex, profile?.activationWakeWordEnabled !== false)
+    await current.start(profile?.audioInputDeviceIndex, profile?.activationWakeWordEnabled !== false, profile?.audioInputDeviceName)
     // Remplacé pendant son démarrage : c'est le suivant qui dira si l'écoute est prête.
     if (pipeline !== current) return
     lastSetupStatus = { ready: true, missing: [] }
@@ -1364,35 +1419,45 @@ async function startVoicePipeline(): Promise<void> {
  * il laisse écrire + dans un champ de saisie.
  */
 const WAKE_SHORTCUT = 'numadd'
+/**
+ * Étape 346 : un portable n'a souvent PAS de pavé numérique — la petite barre du Chat (et l'écoute) ne pouvait alors
+ * s'ouvrir que par la voix. Ctrl+Alt+J (J comme Jaris) existe sur tous les claviers et ne sert à rien sous Windows ;
+ * mêmes règles que « + » : réglage d'Options, et rendue tant qu'une fenêtre de Jaris a le focus.
+ */
+const WAKE_SHORTCUTS = [WAKE_SHORTCUT, 'Control+Alt+J']
 let wakeShortcutWanted = false
-let wakeShortcutRegistered = false
+const registeredWakeShortcuts = new Set<string>()
+
+function onWakeShortcut(accelerator: string): void {
+  console.log(`[jaris] Raccourci global ${accelerator} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
+  // Relu à chaque pression : un réglage changé ailleurs ne doit jamais laisser la touche active.
+  void getProfile()
+    .catch(() => null)
+    .then((profile) => {
+      if (profile?.activationKeyEnabled === false) return
+      triggerVisibleWake()
+    })
+}
 
 function syncWakeShortcut(): void {
   const wanted = wakeShortcutWanted && BrowserWindow.getFocusedWindow() === null
-  if (wanted === wakeShortcutRegistered) return
-  if (!wanted) {
-    globalShortcut.unregister(WAKE_SHORTCUT)
-    wakeShortcutRegistered = false
-    return
-  }
-  try {
-    wakeShortcutRegistered = globalShortcut.register(WAKE_SHORTCUT, () => {
-      console.log(`[jaris] Raccourci global ${WAKE_SHORTCUT} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
-      // Relu à chaque pression : un réglage changé ailleurs ne doit jamais laisser la touche active.
-      void getProfile()
-        .catch(() => null)
-        .then((profile) => {
-          if (profile?.activationKeyEnabled === false) return
-          triggerVisibleWake()
-        })
-    })
-    if (!wakeShortcutRegistered) {
-      console.warn(
-        `[jaris] Impossible de réserver le raccourci global ${WAKE_SHORTCUT} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
-      )
+  for (const accelerator of WAKE_SHORTCUTS) {
+    if (wanted === registeredWakeShortcuts.has(accelerator)) continue
+    if (!wanted) {
+      globalShortcut.unregister(accelerator)
+      registeredWakeShortcuts.delete(accelerator)
+      continue
     }
-  } catch (err) {
-    console.warn(`[jaris] Raccourci global ${WAKE_SHORTCUT} invalide sur ce clavier : ${err instanceof Error ? err.message : String(err)}`)
+    try {
+      if (globalShortcut.register(accelerator, () => onWakeShortcut(accelerator))) registeredWakeShortcuts.add(accelerator)
+      else {
+        console.warn(
+          `[jaris] Impossible de réserver le raccourci global ${accelerator} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
+        )
+      }
+    } catch (err) {
+      console.warn(`[jaris] Raccourci global ${accelerator} invalide sur ce clavier : ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 }
 
@@ -1549,7 +1614,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setAudioInputDevice, async (_event, deviceIndex: number | null): Promise<void> => {
     const profile = await getProfile()
     if (!profile) return
-    await saveProfile({ ...profile, audioInputDeviceIndex: deviceIndex })
+    // Étape 346 : le nom est gardé avec le numéro — c'est lui qui retrouve le micro quand la liste change.
+    const devices = deviceIndex === null ? [] : await listAudioInputDevices().catch(() => [] as AudioInputDevice[])
+    const deviceName = devices.find((device) => device.index === deviceIndex)?.name ?? null
+    await saveProfile({ ...profile, audioInputDeviceIndex: deviceIndex, audioInputDeviceName: deviceName })
     pipeline?.stop()
     await startVoicePipeline()
   })
@@ -1619,9 +1687,10 @@ app.whenReady().then(async () => {
   // pourquoi), jamais un modèle choisi par le renderer — recalculé à chaque ouverture de l'onglet.
   ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async () => {
     const profile = await getProfile()
-    const model = profile?.models?.large ?? config.ollama.model
+    // Étape 346 : les trois modèles de conversation — la référence est le plus gros qui tourne sur la carte.
+    const models = profile?.models ? [profile.models.flash, profile.models.medium, profile.models.large] : [config.ollama.model]
     const currentContext = profile?.contextLength ?? config.ollama.numCtx
-    return computeContextLengthOptions(model, currentContext)
+    return computeContextLengthOptions(models, currentContext)
   })
   ipcMain.handle(IPC_CHANNELS.setContextLength, async (_event, contextLength: number | undefined) => {
     const profile = await getProfile()
@@ -1833,6 +1902,8 @@ app.whenReady().then(async () => {
     // Ollama peut s'être arrêté depuis le démarrage de Jaris (ou ne pas avoir encore fini de démarrer) : relancé
     // ici plutôt que de télécharger vers un serveur absent (« fetch failed », Léo sur un autre PC).
     await ensureOllamaRunning(onLine)
+    // Étape 346 : la version d'Ollama compte dans le choix (étape 312) — relue AVANT de choisir, jamais devinée.
+    await refreshLocalOllamaVersion()
     return runQuickSetup(
       onLine,
       // Barre de progression de l'écran de configuration (octets reçus / taille du modèle).
@@ -1865,6 +1936,14 @@ app.whenReady().then(async () => {
     return (await transcribeWav(wav)).trim()
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
+  // Étape 346 : une question posée depuis le petit widget (ou le téléphone) part dans la même conversation, mais le
+  // Chat n'en savait rien — ni « réfléchit », ni réponse avant le prochain changement de fenêtre. Chaque début et fin
+  // de réponse est donc annoncé à toutes les fenêtres, et le fil relu.
+  chatSession.onBusyChange((busy) => {
+    broadcast(IPC_CHANNELS.chatBusy, busy)
+    broadcast(IPC_CHANNELS.chatHistoryChanged)
+  })
+  ipcMain.handle(IPC_CHANNELS.getChatBusy, (): boolean => chatSession.busy)
 
   // Téléphone (étape 214) : Options → Téléphone.
   ipcMain.handle(IPC_CHANNELS.getPhoneAccess, (): Promise<PhoneAccessStatus> => getPhoneAccess().status())
@@ -2267,6 +2346,9 @@ app.whenReady().then(async () => {
   }
 
   watchWidgetPresence()
+  screen.on('display-metrics-changed', recenterWidget)
+  screen.on('display-added', recenterWidget)
+  screen.on('display-removed', recenterWidget)
   // Les rappels en attente sont réarmés UNE fois, ici — plus à chaque redémarrage du moteur vocal (changement de
   // micro, mot d'activation...), qui les faisait sonner en double (étape 234).
   void restoreReminders(fireReminder)

@@ -20,6 +20,8 @@ export interface OllamaMessage {
    * soit (voir onThinking plus bas, étape 99).
    */
   thinking?: string
+  /** Images jointes (base64), pour un modèle de vision. */
+  images?: string[]
 }
 
 export interface OllamaTool {
@@ -132,7 +134,10 @@ async function requestChat(
   onThinking?: (delta: string) => void,
   onMetrics?: (metrics: ChatMetrics) => void
 ): Promise<OllamaMessage> {
-  const streaming = Boolean(onToken || onThinking)
+  // Étape 346 : TOUJOURS en flux côté Ollama, même quand l'appelant attend la réponse entière (voix, mémoire). Sans flux,
+  // Ollama ne répond qu'à la toute fin : au-delà de 5 minutes de réflexion (PC sans carte graphique), Node coupait la
+  // connexion et Jaris affirmait à tort qu'Ollama n'était pas lancé. En flux, chaque fragment garde la connexion vivante.
+  const relays = Boolean(onToken || onThinking)
   const options = body.options as { num_ctx?: number } | undefined
   // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
   const numCtx = await fitToModelContext(model, options?.num_ctx ?? config.ollama.numCtx)
@@ -141,19 +146,18 @@ async function requestChat(
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx } } : {}), stream: streaming }),
+      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx } } : {}), stream: true }),
       signal
     })
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') throw err
-    throw new Error(t('ollama.unreachable', { host: config.ollama.host }))
+    throw describeChatFailure(err)
   }
 
   if (!response.ok) {
     throw new Error(t('ollama.httpError', { status: response.status, body: await response.text() }))
   }
 
-  if (!streaming) {
+  if (!response.body) {
     const data = (await response.json()) as OllamaChatResponse
     if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) {
       throw new ContextFullError(model, numCtx)
@@ -163,7 +167,6 @@ async function requestChat(
     return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
   }
 
-  if (!response.body) throw new Error(t('ollama.noStreamBody', { model }))
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -173,58 +176,92 @@ async function requestChat(
   let toolCalls: OllamaToolCall[] | undefined
   let role: OllamaMessage['role'] = 'assistant'
   let doneReason: string | undefined
-  let thinkingChars = 0
+  let thinking = ''
   let finalChunk: OllamaChatResponse | undefined
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    let newlineIndex: number
-    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      if (!line) continue
-
-      let chunk: OllamaChatResponse
-      try {
-        chunk = JSON.parse(line)
-      } catch {
-        continue
-      }
-      if (chunk.message?.content) {
-        content += chunk.message.content
-        if (onToken) {
-          // Une balise arrivée APRÈS du texte déjà affiché ne peut plus l'effacer à l'écran : la réponse finale
-          // (sans la réflexion) le remplace de toute façon à la fin du tour.
-          const visible = visibleReplySoFar(content)
-          if (visible.length > shown.length && visible.startsWith(shown)) {
-            onToken(visible.slice(shown.length))
-            shown = visible
-          }
+  const handleLine = (raw: string): void => {
+    const line = raw.trim()
+    if (!line) return
+    let chunk: OllamaChatResponse
+    try {
+      chunk = JSON.parse(line)
+    } catch {
+      return
+    }
+    if (chunk.message?.content) {
+      content += chunk.message.content
+      if (onToken) {
+        // Une balise arrivée APRÈS du texte déjà affiché ne peut plus l'effacer à l'écran : la réponse finale
+        // (sans la réflexion) le remplace de toute façon à la fin du tour.
+        const visible = visibleReplySoFar(content)
+        if (visible.length > shown.length && visible.startsWith(shown)) {
+          onToken(visible.slice(shown.length))
+          shown = visible
         }
       }
-      // Jamais accumulé dans la réponse rendue : sert uniquement de signe de vie pendant la réflexion
-      // (mode Code, étape 99), où plusieurs minutes peuvent s'écouler avant le premier caractère de code.
-      if (chunk.message?.thinking) {
-        thinkingChars += chunk.message.thinking.length
-        onThinking?.(chunk.message.thinking)
-      }
-      if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
-      if (chunk.message?.role) role = chunk.message.role
-      if (chunk.done_reason) doneReason = chunk.done_reason
-      if (chunk.eval_count !== undefined || chunk.load_duration !== undefined) finalChunk = chunk
+    }
+    // Jamais accumulé dans la réponse rendue : sert de signe de vie pendant la réflexion (mode Code, étape 99), où
+    // plusieurs minutes peuvent s'écouler avant le premier caractère de code.
+    if (chunk.message?.thinking) {
+      thinking += chunk.message.thinking
+      onThinking?.(chunk.message.thinking)
+    }
+    if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
+    if (chunk.message?.role) role = chunk.message.role
+    if (chunk.done_reason) doneReason = chunk.done_reason
+    if (chunk.eval_count !== undefined || chunk.load_duration !== undefined) finalChunk = chunk
+  }
+
+  for (;;) {
+    let read: Awaited<ReturnType<typeof reader.read>>
+    try {
+      read = await reader.read()
+    } catch (err) {
+      throw describeChatFailure(err)
+    }
+    if (read.done) break
+    buffer += decoder.decode(read.value, { stream: true })
+    let newlineIndex: number
+    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+      handleLine(buffer.slice(0, newlineIndex))
+      buffer = buffer.slice(newlineIndex + 1)
     }
   }
+  // Une dernière ligne sans retour à la ligne final n'est jamais perdue.
+  handleLine(buffer + decoder.decode())
 
   content = stripLeakedThinking(content)
   if (!content && !toolCalls) {
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(t('ollama.empty', { model }))
   }
-  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinkingChars))
-  return { role, content, tool_calls: toolCalls }
+  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinking.length))
+  // Sans relais (voix, mémoire), la forme d'avant le flux : la réflexion reste jointe au message, comme une réponse
+  // d'un bloc — le canal voix la garde entre deux appels d'outils (étape 233).
+  return { role, content, tool_calls: toolCalls, ...(!relays && thinking ? { thinking } : {}) }
+}
+
+/**
+ * Étape 346 : une connexion coupée par un DÉLAI (modèle très lent sur cette machine) n'est pas un Ollama arrêté. Seul
+ * un refus de connexion (rien n'écoute) dit « pas lancé » ; un délai dit que le modèle est trop lent ; le reste garde
+ * son vrai message. Une annulation demandée repart telle quelle.
+ */
+export class OllamaTooSlowError extends Error {
+  constructor() {
+    super(t('ollama.tooSlow'))
+    this.name = 'OllamaTooSlowError'
+  }
+}
+
+function describeChatFailure(err: unknown): unknown {
+  if ((err as { name?: string } | null)?.name === 'AbortError') return err
+  const cause = (err as { cause?: { code?: string } } | null)?.cause
+  const code = cause?.code ?? (err as { code?: string } | null)?.code
+  if (code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT') return new OllamaTooSlowError()
+  if (!code || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EADDRNOTAVAIL') {
+    return new Error(t('ollama.unreachable', { host: config.ollama.host }))
+  }
+  return new Error(t('ollama.connectionLost', { detail: code }))
 }
 
 /**
@@ -275,6 +312,8 @@ export async function chatWithOllama(
     // Même fenêtre, même modèle : sans `think`, qwen3.5/3.6 réfléchissent quand même (c'est leur mode par
     // défaut) et rempliraient la fenêtre exactement pareil. C'est à l'appelant d'en demander une plus grande.
     if ((firstErr as { name?: string } | null)?.name === 'ContextFullError') throw firstErr
+    // Étape 346 : après un délai dépassé, un second essai referait attendre aussi longtemps pour rien.
+    if ((firstErr as { name?: string } | null)?.name === 'OllamaTooSlowError') throw firstErr
     try {
       // Sans `think`, aucun fragment de raisonnement n'arrivera : onThinking est quand même
       // transmis, il ne sera simplement jamais appelé.
@@ -645,7 +684,7 @@ export async function pullModelIfMissing(
 async function pullWithOllama(model: string, onStatus?: (message: string) => void, onProgress?: PullProgressListener): Promise<void> {
 
   const budgetGb = await getDownloadBudgetGb()
-  const freeDiskGb = detectFreeDiskGb()
+  const freeDiskGb = await detectFreeDiskGb()
 
   onStatus?.(t('ollama.pull.start', { model }))
   const controller = new AbortController()
@@ -775,6 +814,34 @@ export async function isModelLoaded(model: string): Promise<boolean | null> {
   } catch {
     return null
   }
+}
+
+/** Modèles qu'Ollama garde chargés (`/api/ps`), avec la mémoire vidéo qu'ils occupent. `null` si Ollama ne répond pas. */
+export async function loadedOllamaModels(): Promise<{ model: string; vramGb: number }[] | null> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/ps`, { signal: AbortSignal.timeout(2000) })
+    if (!response.ok) return null
+    const data = (await response.json()) as { models?: { name?: string; model?: string; size_vram?: number }[] }
+    return (data.models ?? [])
+      .map((m) => ({ model: m.model ?? m.name ?? '', vramGb: Math.max(0, Number(m.size_vram) || 0) / 1024 ** 3 }))
+      .filter((m) => m.model)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Étape 346 (« chaque phrase dite à voix haute recharge deux modèles ») : parmi les modèles de Jaris, celui qu'Ollama a
+ * déjà en mémoire — sinon `preferred`. Sur une carte où le Rapide et le Moyen ne tiennent pas ensemble, utiliser le
+ * Rapide pour corriger la phrase puis le Moyen pour répondre les rechargeait tous les deux à chaque phrase.
+ */
+export async function preferLoadedModel(candidates: string[], preferred: string): Promise<string> {
+  const loaded = await loadedOllamaModels()
+  if (!loaded?.length) return preferred
+  const wanted = new Set(candidates.map(withTag))
+  if (loaded.some((m) => withTag(m.model) === withTag(preferred))) return preferred
+  const hit = loaded.find((m) => wanted.has(withTag(m.model)))
+  return hit ? (candidates.find((c) => withTag(c) === withTag(hit.model)) ?? preferred) : preferred
 }
 
 /**

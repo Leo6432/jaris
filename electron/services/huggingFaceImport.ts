@@ -179,7 +179,7 @@ export async function importHuggingFaceModel(model: string, onStatus?: (message:
   const requiredGb = ggufLayers.reduce((sum, l) => sum + l.size, 0) / 1024 ** 3
   const budgetGb = await getDownloadBudgetGb()
   if (requiredGb > budgetGb) throw new ModelTooLargeError(model, requiredGb, budgetGb)
-  const freeDiskGb = detectFreeDiskGb()
+  const freeDiskGb = await detectFreeDiskGb()
   if (freeDiskGb !== null) {
     const diskBudgetGb = Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB)
     if (requiredGb > diskBudgetGb) throw new DiskFullError(model, requiredGb, diskBudgetGb)

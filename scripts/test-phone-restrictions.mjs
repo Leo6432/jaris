@@ -31,8 +31,8 @@ function setup(chat, execute, writeNote = async () => assert.fail('aucun documen
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => null },
-    './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
-    './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.') },
+    './notepad': { notepadRequest: noteExports.notepadRequest, requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
+    './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.'), launchedAppName: (result) => (result.endsWith(' a été lancé.') ? result.slice(0, -' a été lancé.'.length) : undefined) },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
     // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.

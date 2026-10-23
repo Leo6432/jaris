@@ -1,12 +1,12 @@
 import type { OllamaTool } from './ollama'
-import { openApp } from './appLauncher'
+import { launchedAppName, openApp } from './appLauncher'
 import { computerUseTask } from './computerUse'
 import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWebDetailed } from './webSearch'
 import { readWebPage } from './webPage'
-import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
+import { clickMouse, mediaKey, pressKey, typeText, waitForForegroundApp } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
 import { generateImage, type GeneratedImage } from './imageGenerator'
 import type { WebActivity } from '../../shared/ipc'
@@ -333,14 +333,19 @@ export function createToolExecutor(
   onImage?: ImageHandler,
   onWebActivity?: WebActivityHandler
 ) {
+  // Étape 346 : l'application ouverte pendant CETTE demande, tant qu'aucun texte n'y a été tapé.
+  let openedApp: string | undefined
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
-      case 'open_app':
-        return openApp(String(args.app_name ?? ''))
+      case 'open_app': {
+        const result = await openApp(String(args.app_name ?? ''))
+        openedApp = launchedAppName(result) ?? openedApp
+        return result
+      }
       case 'set_reminder':
         return scheduleReminder(String(args.message ?? ''), Number(args.delay_minutes ?? 0), onReminderFire)
       case 'look_at_screen':
-        return lookAtScreen(String(args.question ?? ''), visionModel)
+        return lookAtScreen(String(args.question ?? ''), visionModel, signal)
       // Étape 273 : chaque recherche et chaque page lue sont aussi signalées au Chat (bloc dépliable), en
       // échec compris — une recherche qui n'a rien donné doit se voir autant qu'une recherche réussie.
       // Étape 274 : une première fois dès le début (`pending`), pour que la question cherchée s'affiche tout de
@@ -349,7 +354,7 @@ export function createToolExecutor(
         const query = String(args.query ?? '')
         onWebActivity?.({ kind: 'search', query, results: [], pending: true })
         try {
-          const { text, sources } = await searchWebDetailed(query)
+          const { text, sources } = await searchWebDetailed(query, undefined, signal)
           onWebActivity?.({ kind: 'search', query, results: sources })
           return text
         } catch (err) {
@@ -376,8 +381,16 @@ export function createToolExecutor(
         return recallNote(String(args.title ?? ''))
       case 'computer_use_task':
         return computerUseTask(String(args.goal ?? ''), visionModel, onLog, signal)
-      case 'type_text':
+      case 'type_text': {
+        // Étape 346 : juste après une ouverture, attendre que l'application soit au premier plan — jamais taper dans la
+        // fenêtre au hasard qui a le focus. Non confirmée : rien n'est tapé, et Jaris le dit.
+        if (openedApp) {
+          const app = openedApp
+          if (!(await waitForForegroundApp(app))) throw new Error(t('tool.typeText.notForeground', { app }))
+          openedApp = undefined
+        }
         return typeText(String(args.text ?? ''))
+      }
       case 'press_key':
         return pressKey(String(args.key ?? ''))
       case 'click_mouse': {

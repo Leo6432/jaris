@@ -192,6 +192,19 @@ test('les messages d\'échec sont rédigés pour Léo, pas pour un développeur'
   )
 })
 
+// Étape 346 : une coupure d'internet en plein téléchargement s'affichait « terminated » ou « fetch failed ».
+test('coupure d’internet ou serveur muet : une phrase en français, jamais le message brut de Node', () => {
+  const base = { receivedBytes: 0, totalBytes: null, stalledAfterMs: null }
+  const cut = Object.assign(new TypeError('terminated'), { cause: { code: 'UND_ERR_SOCKET' } })
+  const cutMessage = describeDownloadFailure(cut, { ...base, receivedBytes: 300 * 1024 * 1024 })
+  assert.match(cutMessage, /coupée après 300 Mo/)
+  assert.doesNotMatch(cutMessage, /terminated/)
+  assert.match(describeDownloadFailure(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } }), base), /pas de connexion internet/i)
+  const silent = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+  assert.match(describeDownloadFailure(silent, base), /ne répond pas pour l'instant/)
+  assert.match(describeDownloadFailure(Object.assign(new TypeError('fetch failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }), base), /ne répond pas/)
+})
+
 test('les tailles sont affichées en français, jamais en octets bruts', () => {
   assert.equal(sharedFormat.formatBytes(102_711_850), '98 Mo')
   assert.equal(sharedFormat.formatBytes(1_574_272_976), '1,5 Go')

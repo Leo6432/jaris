@@ -66,3 +66,33 @@ test('le filet de téléchargement ne garde que le minimum pour Windows, pas la 
   assert.equal(resources.downloadBudgetGb(8, 32), 36)
   assert.equal(resources.downloadBudgetGb(null, 2), 0)
 })
+
+// Étape 346 : carte AMD ou Intel (pas de nvidia-smi) — le choix des modèles lit la VRAM dans le registre, le filet de
+// téléchargement doit lire la MÊME mesure, sinon il refuse les modèles que Jaris vient de choisir.
+test('carte AMD de 16 Go + 16 Go de RAM : le filet compte la carte lue par detectGpu (28 Go), pas 0 Go', async () => {
+  const noNvidia = (_cmd, opts, cb) => (typeof opts === 'function' ? opts : cb)(new Error('nvidia-smi introuvable'), '', '')
+  noNvidia[promisify.custom] = () => Promise.reject(new Error('nvidia-smi introuvable'))
+  const os = nodeRequire('node:os')
+  const amd = load('electron/services/systemResources.ts', {
+    child_process: { exec: noNvidia },
+    os: { ...os, totalmem: () => 16 * 1024 ** 3 }
+  })
+  assert.equal(await amd.getDownloadBudgetGb(), 12, 'sans branchement : nvidia-smi seul, comme avant')
+  amd.setVramSource(async () => 16)
+  assert.equal(await amd.getDownloadBudgetGb(), 28)
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.match(main, /setVramSource\(\(\) => detectGpu\(\)\.then\(\(gpu\) => gpu\.vramGb\)\)/, 'main.ts branche la détection complète')
+})
+
+test('la place libre se mesure sur le disque des modèles de l’Ollama de Jaris, pas sur celui de la variable de Windows', async () => {
+  const freeGb = { '/jaris-data/ollama-models': 10 }
+  const disk = load('electron/services/systemResources.ts', {
+    fs: { statfsSync: (dir) => ({ bavail: ((freeGb[dir] ?? 900) * 1024 ** 3) / 4096, bsize: 4096 }) }
+  })
+  assert.equal(await disk.detectFreeDiskGb(), 900, 'Ollama de Windows : emplacement habituel, comme avant')
+  disk.setModelsDirSource(async () => '/jaris-data/ollama-models')
+  assert.equal(await disk.detectFreeDiskGb(), 10)
+  for (const path of ['electron/services/ollama.ts', 'electron/services/huggingFaceImport.ts']) {
+    assert.match(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), /await detectFreeDiskGb\(\)/, path)
+  }
+})

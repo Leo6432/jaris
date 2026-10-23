@@ -1,6 +1,6 @@
 import { config } from '../config'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
-import { listInstalledModels } from './ollama'
+import { fitToModelContext, listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import type { NativeImage } from 'electron'
 import { clickMouse, pressKey, typeText } from './inputControl'
@@ -397,7 +397,7 @@ async function nextStep(
           { role: 'user', content: buildStepPrompt(goal, history, capture.marks), images: [capture.imageBase64] }
         ],
         think: false,
-        options: { num_ctx: config.ollama.numCtx }
+        options: { num_ctx: await sharedNumCtx(model) }
       },
       signal
     )
@@ -410,6 +410,20 @@ async function nextStep(
   if (!step) return { action: 'fail', result: t('pilot.visionBadAction', { model, content: content.slice(0, 300) }) }
   // Positions sur 0–1000 ramenées aux pixels de l'image ; toScreenCoord les porte ensuite à l'écran réel.
   return { ...step, ...fromThousandths(step.x, step.y, capture.width, capture.height) }
+}
+
+/**
+ * Étape 346 : la MÊME fenêtre de contexte que la conversation (réglage d'Options, ramené au maximum du modèle). Le
+ * modèle de vision est souvent aussi celui de la conversation (qwen3.8:27b : Élevé, Vision et Code) : une fenêtre
+ * différente obligeait Ollama à le recharger entièrement à chaque regard sur l'écran (étape 294).
+ */
+async function sharedNumCtx(model: string): Promise<number> {
+  const wanted = (await getProfile().catch(() => null))?.contextLength ?? config.ollama.numCtx
+  try {
+    return await fitToModelContext(model, wanted)
+  } catch {
+    return wanted
+  }
 }
 
 /**
@@ -434,7 +448,7 @@ async function nextTextStep(
         ],
         think: false,
         format: TEXT_STEP_FORMAT,
-        options: { num_ctx: config.ollama.numCtx, temperature: 0 }
+        options: { num_ctx: await sharedNumCtx(model), temperature: 0 }
       },
       signal
     )

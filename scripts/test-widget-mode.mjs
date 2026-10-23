@@ -260,7 +260,9 @@ test('hors Agent vocal ou Options ouvertes : le sidecar ne transcrit plus rien, 
   assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.setOptionsOpen,[\s\S]{0,120}?optionsOpen = open;?\s*applyListeningForActiveMode\(\)/,
     'ouvrir ou fermer les Options doit remettre l’écoute à jour')
   const pipelineSource = sourceWithoutComments('electron/services/voicePipeline.ts')
-  assert.match(pipelineSource, /setListeningSuspended\(suspended\)\s*\{[\s\S]{0,120}?this\.voice\.setWakePaused\(suspended\)/)
+  assert.match(pipelineSource, /setListeningSuspended\(suspended\)\s*\{[\s\S]{0,120}?this\.applyWakePause\(\)/)
+  // Étape 346 : coupée aussi pendant que Jaris parle (il ne se réveille plus par sa propre voix).
+  assert.match(pipelineSource, /applyWakePause\(\)\s*\{\s*this\.voice\.setWakePaused\(this\.suspended \|\| this\.speaking\)/)
   const clientSource = sourceWithoutComments('electron/services/voiceClient.ts')
   assert.match(clientSource, /this\.proc = proc;?\s*if \(this\.wakePaused\)\s*proc\.stdin\.write\(['"]pause-wake\\n['"]\)/,
     'un sidecar redémarré (changement de micro…) doit repartir en pause s’il l’était')
@@ -313,4 +315,19 @@ test('un clic sur le petit indicateur du Chat ramène l’application, + ouvre l
   assert.match(wake, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/, '+ ouvre la barre du Chat')
   const preload = sourceWithoutComments('electron/preload.ts')
   assert.doesNotMatch(preload, /openChatWidget/, 'plus aucun canal pour ouvrir la barre au clic')
+})
+
+// Étape 346 : second écran branché ou retiré, échelle changée — le widget n'était recentré qu'à son affichage.
+test('changement d’écran : le widget visible est recentré, dans l’état où il est (déplié ou non)', () => {
+  const ready = mainSource.slice(mainSource.indexOf('app.whenReady()'))
+  for (const event of ['display-metrics-changed', 'display-added', 'display-removed']) {
+    assert.match(ready, new RegExp(`screen\\.on\\('${event}', recenterWidget\\)`), event)
+  }
+  const recenter = /function recenterWidget\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(recenter, /!widgetWindow\.isVisible\(\)\)\s*return/, 'un widget caché n’est pas affiché par un changement d’écran')
+  assert.match(recenter, /positionWidgetWindow\(widgetWindow, widgetExpandedNow\(\)\)/)
+  const expanded = /function widgetExpandedNow\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(expanded, /displayedWidgetMode === 'chat'\)\s*return true/)
+  assert.match(expanded, /displayedWidgetMode === 'chat-idle'\)\s*return false/)
+  assert.match(expanded, /return lastEmotion !== 'idle'/)
 })

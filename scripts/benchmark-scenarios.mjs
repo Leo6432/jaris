@@ -52,7 +52,9 @@ const isTrue = (v) => v === true || (typeof v === 'string' && v.trim().toLowerCa
 // ---------------------------------------------------------------------------------------------------------------
 // Copies exactes de assistant.ts (vérifiées par le test croisé avec le vrai converse())
 
-const SOCIAL_CHECK_IN = /^(?:salut[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)\s*[?!.]*$/i
+// Étape 346 : aussi avec une salutation et le prénom (« Salut Jaris, ça va ? »), qui partait sinon chercher sur internet.
+const SOCIAL_CHECK_IN =
+  /^(?:(?:salut|bonjour|bonsoir|coucou|hey|hello)[, !]*)?(?:jaris[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)(?:[, !]*jaris)?\s*[?!.]*$/i
 const SIMPLE_GREETING = /^(?:salut|bonjour|bonsoir|coucou|hello|hey)(?:\s+jaris)?\s*[!?.,]*$/iu
 
 export function directSocialReply(prompt) {
@@ -65,6 +67,11 @@ export function directSocialReply(prompt) {
 // Étape 261 : un VERBE d'envoi, plus le seul mot « mail » — « Reformule ce mail : … » n'est pas une demande d'envoi.
 const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expédier)\b/i
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
+// Étape 346 : l'envoi doit porter sur un mail ou un message (« envoie-moi un rappel » n'en est pas un), et ni un rappel,
+// ni une note, ni un envoi déjà fait, ni une question sur la façon d'envoyer ne demandent d'envoyer quoi que ce soit.
+const MAIL_OBJECT = /\b(?:mail|mails|e-mail|e-mails|email|emails|courriel|courriels|message|messages)\b/i
+const NOT_A_SEND_REQUEST =
+  /^\s*(?:rappelle[- ]moi|retiens|n['’]oublie pas|mémorise|memorise|note que|(?:est-ce que )?tu sais|sais-tu|comment|explique(?:[- ]moi)?)\b|\b(?:viens|vient|venons|venez|viennent) d['’]envoyer\b/i
 
 /**
  * Étape 262 : la demande est-elle de RÉDIGER un texte (reformuler, corriger, répondre à un client…) ? Le texte rédigé
@@ -85,6 +92,7 @@ export function hasUnnegatedMailIntent(prompt) {
   // Seule la CONSIGNE compte, pas le texte collé après « : » ou « « » : « Reformule ce mail : … merci de m'envoyer le
   // devis » ne demande aucun envoi (étape 261, mesuré : la relance renvoyait le modèle vers l'envoi par le pilote).
   const instruction = prompt.split(/[:«\n]/)[0]
+  if (!MAIL_OBJECT.test(instruction) || NOT_A_SEND_REQUEST.test(instruction)) return false
   const match = SEND_MAIL_VERBS.exec(instruction)
   if (!match) return false
   const windowStart = Math.max(0, match.index - 20)
@@ -97,6 +105,11 @@ const QUESTION_START_WORDS =
 const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|recherche|dis[- ]moi|donne[- ]moi)\b/i
 const NOT_A_KNOWLEDGE_QUESTION =
   /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
+// Étape 346 : une question adressée à Jaris lui-même (« tu m'entends ? »), sur ce qui a déjà été dit (« je t'ai dit
+// quoi ? »), sur la date, ou une demande explicite de ne pas chercher : aucune donnée du monde à aller lire sur internet.
+// Pas de \b après un mot accentué (« là ») : en JavaScript, \b ne connaît que les lettres sans accent.
+const ABOUT_THIS_CONVERSATION =
+  /(?:^|[\s,;:!?.'’])(?:tu m['’](?:entends|écoutes|ecoutes)|tu es là|tu es la|t['’]es là|t['’]es la|tu sais faire|tu peux faire|tu fais quoi|que sais-tu faire|qu['’]est-ce que tu (?:sais|peux) faire|tu es qui|t['’]es qui|tu te souviens|tu as compris|t['’]as compris|je t['’]ai dit|je t['’]avais dit|mon prénom|mon prenom|le combien|on est quel jour|la date d['’]aujourd['’]hui|ne cherche pas|cherche pas|sans chercher|sans internet|sans recherche|de m[ée]moire(?=\s*[,.!?;:]|\s*$)|pas besoin de chercher)/i
 
 /** Copie de isScreenQuestion (hardwareScan.ts, étape 242) : seule une question sur l'écran s'arrête sur sa description. */
 export function isScreenQuestion(prompt) {
@@ -159,7 +172,13 @@ export function isPureCalculation(prompt) {
 
 export function looksLikeKnowledgeQuestion(prompt) {
   const trimmed = prompt.trim()
-  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed) || isPureCalculation(trimmed)) return false
+  if (
+    !trimmed ||
+    NOT_A_KNOWLEDGE_QUESTION.test(trimmed) ||
+    ABOUT_THIS_CONVERSATION.test(trimmed) ||
+    SOCIAL_CHECK_IN.test(trimmed) ||
+    isPureCalculation(trimmed)
+  ) return false
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 
@@ -554,6 +573,10 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
     const wantsWebInfo = looksLikeKnowledgeQuestion(userText)
     let computerUseCalled = false
     let searchCalled = false
+    // Copie de l'étape 346 (assistant.ts) : action réussie, rappel/note, réponse gardée avant la relance « recherche ».
+    let actionCalled = false
+    let reminderOrNote = false
+    let draftBeforeSearch
     let toolCalled = false
     let reply = null
     try {
@@ -577,13 +600,14 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           if (data.done_reason === 'length' && !content) {
             throw new ScenarioStop(`réponse coupée : fenêtre de contexte pleine (${data.prompt_eval_count ?? '?'} tokens de demande)`)
           }
-          if (wantsEmailSent && !computerUseCalled && !turn.nudges.includes('mail')) {
+          if (wantsEmailSent && !computerUseCalled && !turn.nudges.includes('mail') && !reminderOrNote) {
             turn.nudges.push('mail')
             messages.push(message, { role: 'user', content: NUDGE_MAIL })
             continue
           }
-          if (wantsWebInfo && !searchCalled && !turn.nudges.includes('recherche')) {
+          if (wantsWebInfo && !searchCalled && !actionCalled && !turn.nudges.includes('recherche')) {
             turn.nudges.push('recherche')
+            draftBeforeSearch = content
             messages.push({ role: 'system', content: NUDGE_SEARCH })
             continue
           }
@@ -607,13 +631,18 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           calls.push({ turn: turnIndex, name, args, result })
           onEvent?.({ kind: 'outil', turn: turnIndex, round, name, args, result })
           if (failure) {
-            reply = finalizeReply(`Échec de l'outil : ${result}`, userText)
+            const nudgedLookupFailed = turn.nudges.includes('recherche') && (name === 'search_web' || name === 'read_web_page')
+            reply = nudgedLookupFailed && draftBeforeSearch?.trim() && !draftBeforeSearch.trim().startsWith("Échec de l'outil :")
+              ? finalizeReply(`Je n'ai pas pu vérifier sur internet. De mémoire : ${draftBeforeSearch.trim()}`, userText)
+              : finalizeReply(`Échec de l'outil : ${result}`, userText)
             turn.shortCircuit = true
             break
           }
           if (name === 'computer_use_task') computerUseCalled = true
           // Copie de LOOKUP_TOOLS (assistant.ts) : lire la mémoire ou l'état du PC compte comme vérifier.
           if (LOOKUP_TOOLS.has(name)) searchCalled = true
+          else actionCalled = true
+          if (name === 'set_reminder' || name === 'remember') reminderOrNote = true
           // Copie de l'étape 242 (assistant.ts) : regarder l'écran ne clôt la demande que si c'est la question posée,
           // en tout premier outil ; en pleine tâche, le résultat repart au modèle.
           const screenAnswer = name === 'look_at_screen' && calls.filter((c) => c.turn === turnIndex).length === 1 && isScreenQuestion(userText)

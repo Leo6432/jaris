@@ -50,6 +50,22 @@ class ChatSession {
    */
   private running = new Set<AbortController>()
 
+  /**
+   * Étape 346 : questions affichées dont la réponse n'est pas encore là. Une question posée depuis le petit widget
+   * est dans le fil, mais le Chat ne savait pas qu'une réponse arrivait (pas de « réfléchit », réponse absente).
+   */
+  private inFlight = 0
+  private busyListener: ((busy: boolean) => void) | null = null
+
+  /** Prévenu quand une réponse commence (question affichée) et quand plus aucune n'est attendue. */
+  onBusyChange(listener: (busy: boolean) => void): void {
+    this.busyListener = listener
+  }
+
+  get busy(): boolean {
+    return this.inFlight > 0
+  }
+
   /** Arrête les réponses du Chat en cours ; le texte déjà écrit est gardé (voir send()). */
   cancel(): void {
     for (const controller of this.running) controller.abort()
@@ -147,6 +163,34 @@ class ChatSession {
     prompt: string,
     onReminderFire: (message: string) => void,
     onLog: (message: string) => void,
+    onSoundCue?: (cue: SoundCue) => void,
+    onToken?: (delta: string) => void,
+    imageBase64?: string,
+    restrictions?: ConverseRestrictions,
+    channel: 'chat' | 'voice' = 'chat',
+    onWebActivity?: (activity: WebActivity) => void
+  ): Promise<ChatMessage> {
+    let shown = false
+    const markShown = (): void => {
+      shown = true
+      this.inFlight += 1
+      this.busyListener?.(true)
+    }
+    try {
+      return await this.answer(markShown, prompt, onReminderFire, onLog, onSoundCue, onToken, imageBase64, restrictions, channel, onWebActivity)
+    } finally {
+      if (shown) {
+        this.inFlight -= 1
+        this.busyListener?.(this.inFlight > 0)
+      }
+    }
+  }
+
+  private async answer(
+    markShown: () => void,
+    prompt: string,
+    onReminderFire: (message: string) => void,
+    onLog: (message: string) => void,
     // Étape 31 : contrairement à la Voix (qui tire ses cues ambiants de ses propres transitions
     // d'émotion, voir voicePipeline.ts), le Chat n'a pas d'état "émotion" — il émet lui-même ses cues
     // ambiants (réflexion/succès/échec) autour de converse(), et lui transmet le même callback pour ses
@@ -171,13 +215,19 @@ class ChatSession {
     const epoch = this.epoch
     const conversationId = await getActiveConversationId()
     this.pushVisible({ role: 'user', content: prompt })
+    markShown()
     onSoundCue?.('thinking')
+
+    // Étape 346 : « Arrêter » marche dès l'envoi — y compris pendant le relevé de la carte graphique qui suit.
+    const controller = new AbortController()
+    if (!restrictions) this.running.add(controller)
 
     // Même sécurité thermique qu'à la voix : inutile de lancer une inférence sur un GPU déjà trop chaud.
     // Le relevé est réutilisé par converse() plus bas au lieu d'en relancer un second.
     const live = await getLiveGpuStatus()
     const gpuStatus = checkGpuTempSafety(live.tempC)
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
+      this.running.delete(controller)
       onLog(t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))
       onSoundCue?.('error')
       return this.pushIfSameThread(epoch, { role: 'assistant', content: gpuStatus.message as string })
@@ -186,8 +236,6 @@ class ChatSession {
     let reply: string
     // Étape 173 : image dessinée pendant ce tour (generate_image), affichée sous la réponse et gardée sur le disque.
     let generated: GeneratedImage | null = null
-    const controller = new AbortController()
-    if (!restrictions) this.running.add(controller)
     // Ce qui s'est déjà affiché : gardé si Léo arrête la réponse en route, comme ChatGPT.
     let streamed = ''
     const relayToken = (delta: string): void => {
@@ -306,6 +354,27 @@ class ChatSession {
       stopped: true,
       ...(web.length ? { web } : {})
     })
+  }
+
+  /**
+   * Étape 346 (« ce qui a été dit à la voix n'apparaît pas dans le Chat ») : un échange dit à voix haute rejoint le fil
+   * affiché, déjà enregistré dans la conversation active par la voix. Fil pas encore chargé : rien à faire, il sera lu
+   * du disque. Déjà présent (lecture faite juste après l'enregistrement) : pas de doublon.
+   */
+  async addSpokenExchange(transcript: string, reply: string): Promise<boolean> {
+    if (!this.loading) return false
+    const epoch = this.epoch
+    try {
+      await this.loading
+    } catch {
+      return false
+    }
+    if (epoch !== this.epoch) return false
+    const [question, answer] = this.visible.slice(-2)
+    if (question?.content === transcript && answer?.content === reply) return false
+    this.pushVisible({ role: 'user', content: transcript })
+    this.pushVisible({ role: 'assistant', content: reply })
+    return true
   }
 
   /** Ajoute au fil affiché seulement s'il n'a pas changé depuis la question (étape 328) ; rend le message dans tous les cas. */

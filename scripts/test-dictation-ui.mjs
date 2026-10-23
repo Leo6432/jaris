@@ -149,3 +149,33 @@ test('dictée : une erreur de transcription s’affiche en clair, sans le préfi
     assert.equal(await page.inputValue('.composer__input'), 'Écris', 'le champ a changé malgré l’échec')
   })
 })
+
+// Étape 346 : un double-clic ouvrait le micro deux fois (l'état n'avait pas encore changé au second clic) ; le premier
+// enregistreur restait allumé pour toujours, sans plus aucun moyen de l'arrêter.
+test('dictée : un double-clic n’ouvre le micro qu’une fois, et tout est éteint à la fin', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.__streams = []
+      const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+      navigator.mediaDevices.getUserMedia = async (constraints) => {
+        await new Promise((done) => setTimeout(done, 300))
+        const stream = await real(constraints)
+        window.__streams.push(stream)
+        return stream
+      }
+    })
+    const mic = page.locator('.composer__mic')
+    await mic.dblclick()
+    assert.equal(await mic.isDisabled(), true, 'le bouton reste cliquable pendant l’ouverture du micro')
+    await page.waitForSelector('.composer__mic--recording')
+    await page.waitForTimeout(600)
+    await mic.click()
+    await page.waitForFunction(() => document.querySelector('.composer__input').value === 'Écris un mail à Paul')
+    const state = await page.evaluate(() => ({
+      opened: window.__streams.length,
+      live: window.__streams.flatMap((s) => s.getTracks()).filter((track) => track.readyState === 'live').length
+    }))
+    assert.equal(state.opened, 1, 'le micro a été ouvert deux fois')
+    assert.equal(state.live, 0, 'un micro est resté allumé')
+  })
+})

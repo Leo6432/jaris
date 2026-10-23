@@ -2113,6 +2113,10 @@ p.capacity-scan__tier-missing {
   max-width: 270px;
   max-height: 380px;
   overflow-y: auto;
+  /* Étape 346 : la boîte ne dépasse jamais le bas de la fenêtre (460 px) — sans ça, la fin d'une longue réponse
+     tombait hors de l'écran, impossible à faire défiler. Elle prend la place restante sous le statut. */
+  min-height: 0;
+  flex: 0 1 auto;
 }
 
 .app__conversation--widget p {
@@ -3019,6 +3023,7 @@ p.capacity-scan__tier-missing {
   top: 186px;
   left: 14px;
   right: 14px;
+  bottom: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;

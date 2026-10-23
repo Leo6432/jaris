@@ -178,6 +178,8 @@ test('un dossier disparu (disque débranché) n’est JAMAIS recréé vide : Jar
   assert.equal(setPathCalls.length, 0)
   assert.ok(!existsSync(gone))
   assert.ok(existsSync(join(userData, 'profile.json')))
+  // Étape 346 : le disque absent est connu, pour le dire à Léo au démarrage (main.ts, warnIfStorageDiskMissing).
+  assert.equal(storageRoot.getMissingStorageRoot(), gone)
   rmSync(root, { recursive: true, force: true })
 })
 

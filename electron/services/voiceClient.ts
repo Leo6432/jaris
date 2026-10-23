@@ -19,6 +19,7 @@ type VoiceServerEvent =
   | { event: 'log'; message: string }
   | { event: 'error'; message: string }
   | { event: 'fatal'; message: string }
+  | { event: 'mic_status'; available: boolean; message?: string }
   | { event: 'mic_test_started' }
   | { event: 'mic_test_level'; level: number }
   | { event: 'mic_test_done'; detected: boolean; silentStream?: boolean }
@@ -35,6 +36,11 @@ export type VoiceListeningStatus =
   | { state: 'off' }
   | { state: 'loading' }
   | { state: 'ready' }
+  /**
+   * Étape 346 : programme d'écoute lancé, mais aucun micro ne s'ouvre (débranché, coupé dans Windows). Il reste en vie
+   * pour les messages vocaux du téléphone et réessaie tout seul : le micro revenu, l'état repasse à 'ready'.
+   */
+  | { state: 'noMic'; message: string }
   | { state: 'failed'; message: string }
 
 /**
@@ -47,6 +53,8 @@ export function listeningUnavailableReason(status: VoiceListeningStatus): string
       return null
     case 'loading':
       return t('voice.starting')
+    case 'noMic':
+      return status.message ? `${t('voice.noMic')} (${status.message})` : t('voice.noMic')
     case 'failed':
       return t('voice.startFailed', { message: status.message ?? '' })
     case 'off':
@@ -74,7 +82,8 @@ const SIDECAR_MESSAGES: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
   [/^impossible d'ouvrir le micro : (.*)$/su, (m) => t('voice.py.micFailed', { detail: m[1] })],
   [/^Ce micro n'accepte pas 16 kHz directement, ré-échantillonnage depuis (\d+) Hz/u, (m) => t('voice.py.resampling', { rate: m[1] })],
   [/^Test du mot Jaris : transcription impossible \((.*)\)$/su, (m) => t('voice.py.wakeTestFailed', { detail: m[1] })],
-  [/^Écoute du mot Jaris impossible : (.*)$/su, (m) => t('voice.py.wakeFailed', { detail: m[1] })]
+  [/^Écoute du mot Jaris impossible : (.*)$/su, (m) => t('voice.py.wakeFailed', { detail: m[1] })],
+  [/^aucun micro ne renvoie de son$/u, () => t('voice.noMic')]
 ]
 
 export function translateSidecarMessage(message: string): string {
@@ -110,7 +119,7 @@ export class VoiceClient extends EventEmitter {
    * passe `--wakeword-disabled` à voice_server.py, qui ne transcrit alors plus chaque phrase entendue en
    * attendant le mot "Jaris" (étape 179) — rien à calculer pour un utilisateur qui préfère la touche "+"/l'orbe.
    */
-  start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
+  start(inputDeviceIndex?: number | null, wakewordEnabled = true, inputDeviceName?: string | null): Promise<void> {
     if (this.ready) return this.ready
 
     this.setStatus({ state: 'loading' })
@@ -121,6 +130,10 @@ export class VoiceClient extends EventEmitter {
         args.push('--input-device', String(inputDeviceIndex))
       } else if (config.voice.inputDevice !== '') {
         args.push('--input-device', config.voice.inputDevice)
+      }
+      // Étape 346 : le NOM du micro choisi — son numéro change dès qu'on branche un casque ou un autre micro.
+      if (inputDeviceName) {
+        args.push('--input-device-name', inputDeviceName)
       }
       if (!wakewordEnabled) {
         args.push('--wakeword-disabled')
@@ -155,6 +168,11 @@ export class VoiceClient extends EventEmitter {
             rejectReady(new Error(message))
             break
           }
+          case 'mic_status':
+            // Étape 346 : micro perdu (débranché) ou retrouvé — l'écoute dit pourquoi elle n'entend rien, puis repart seule.
+            if (this.proc !== proc || this.status.state === 'failed' || this.status.state === 'off') break
+            this.setStatus(payload.available ? { state: 'ready' } : { state: 'noMic', message: translateSidecarMessage(payload.message ?? '') })
+            break
           case 'wake':
             this.emit('wake')
             break
@@ -232,7 +250,8 @@ export class VoiceClient extends EventEmitter {
    * pour le micro : aucune seconde copie du modèle en mémoire. Le chemin est écrit par Jaris lui-même.
    */
   transcribeFile(path: string, timeoutMs = 120_000): Promise<string> {
-    const reason = listeningUnavailableReason(this.status)
+    // Sans micro (étape 346), le programme d'écoute tourne quand même : les messages du téléphone restent transcrits.
+    const reason = this.status.state === 'noMic' ? null : listeningUnavailableReason(this.status)
     if (reason || !this.proc) return Promise.reject(new Error(reason ?? t('voice.notRunningPc')))
     const id = randomUUID()
     return new Promise((resolve, reject) => {

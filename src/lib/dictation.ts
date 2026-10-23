@@ -79,7 +79,11 @@ export class DictationRecorder {
     private readonly stream: MediaStream,
     private readonly nodes: { source: MediaStreamAudioSourceNode; processor: ScriptProcessorNode }
   ) {
+    // Étape 346 : au plus la durée maximale de la dictée (plus une marge) est gardée en mémoire — même si l'arrêt
+    // automatique ne venait jamais, la mémoire ne grossit plus sans fin.
+    const maxFrames = Math.ceil((ctx.sampleRate * (DICTATION_MAX_MS + 2_000)) / 1000)
     nodes.processor.onaudioprocess = (event) => {
+      if (this.frames >= maxFrames) return
       const data = event.inputBuffer.getChannelData(0)
       this.chunks.push(new Float32Array(data))
       this.frames += data.length

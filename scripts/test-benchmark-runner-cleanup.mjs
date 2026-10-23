@@ -173,6 +173,22 @@ test("un nouveau modèle ignoré (trop gros) garde l'ancien modèle du rôle, ja
   assert.equal(result.skippedModels?.[0]?.model, 'qwen3.5:35b')
 })
 
+test('étape 346 : un modèle trop gros est remplacé par le meilleur suivant, et le profil ne garde jamais un modèle absent', async () => {
+  const picked = { flash: 'ministral-3:3b', medium: 'qwen3.5:9b', large: 'qwen3.5:35b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const before = { models: { flash: 'ministral-3:3b', medium: 'qwen3.5:9b', large: 'qwen3.5:27b' }, visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const repick = (exclude) => ({ ...picked, large: exclude.has('qwen3.5:35b') ? 'granite4.2:30b' : picked.large })
+  const t = setup(picked, before, new Set(['qwen3.5:35b']), new Set(), { repick })
+  await t.run()
+  assert.deepEqual(t.pickCalls.at(-1), ['qwen3.5:35b'], 'le modèle trop gros est écarté du nouveau choix')
+  assert.ok(t.pulledModels.includes('granite4.2:30b'), 'le remplaçant est téléchargé')
+  assert.equal(t.getProfile().models.large, 'granite4.2:30b')
+
+  // Pas de remplaçant possible : le profil garde l'ancien modèle du rôle, celui qui est réellement installé.
+  const stuck = setup(picked, before, new Set(['qwen3.5:35b']))
+  await stuck.run()
+  assert.equal(stuck.getProfile().models.large, 'qwen3.5:27b', 'jamais un modèle choisi mais absent du disque')
+})
+
 test('aucun profil existant (tout premier lancement) : aucune tentative de suppression', async () => {
   const picked = { flash: 'ministral-3:3b', medium: 'qwen3.5:9b', large: 'qwen3.5:27b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
   const t = setup(picked, null)

@@ -31,3 +31,8 @@ test('Python se télécharge avec le téléchargeur commun (délai d’inactivit
   assert.match(source, /await downloadToFile\(await findPythonArchiveUrl\(\), archivePath, \{\s*onProgress:/)
   assert.ok(!/async function download\(/.test(source), 'l’ancienne copie sans délai a disparu')
 })
+
+test('étape 346 : sans internet, la liste des versions de Python dit pourquoi, jamais « fetch failed »', () => {
+  const lookup = source.slice(source.indexOf('async function findPythonArchiveUrl'), source.indexOf('export function pythonListError'))
+  assert.match(lookup, /catch \(err\) \{[\s\S]*describeDownloadFailure\(err/)
+})

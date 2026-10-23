@@ -52,8 +52,12 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
   const failedHuggingFace = new Set<string>()
   const blockedReasons = new Map<string, string>()
   const pulledOk = new Set<string>()
-  // Borné : chaque tour exclut au moins un modèle de plus, et il n'y a que quelques imports hf.co/.
-  for (let round = 0; round < 4; round++) {
+  // Étape 346 : un modèle trop gros pour ce PC ou sans place sur le disque est AUSSI écarté puis remplacé par le meilleur
+  // suivant — avant, il restait choisi dans le profil sans être installé, et toutes les phrases qui en dépendaient
+  // échouaient (« modèle introuvable »).
+  const excluded = new Set<string>()
+  // Borné : chaque tour exclut au moins un modèle de plus.
+  for (let round = 0; round < 8; round++) {
     // Mode Code (étape 46) : le meilleur candidat qui tient dans la VRAM+RAM de cette machine
     // (picked.codeModel, même logique que flash/médium/puissant/vision) est installé d'avance ici aussi,
     // plutôt que de surprendre l'utilisateur en pleine génération de code.
@@ -67,9 +71,14 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
         if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
           if (!skippedModels.has(model)) onLine(t('bench.skipped', { model, error: err.message }))
           skippedModels.set(model, err.message)
+          if (!excluded.has(model)) {
+            excluded.add(model)
+            newFailure = true
+          }
         } else if (model.startsWith('hf.co/') && !failedHuggingFace.has(model)) {
           onLine(t('bench.hfFailed', { model, error: err instanceof Error ? err.message : String(err) }))
           failedHuggingFace.add(model)
+          excluded.add(model)
           // Phrase courte pour Léo (affichée dans Options → Modèles) ; l'erreur brute reste dans le journal ci-dessus.
           blockedReasons.set(model, t('bench.hfBlocked'))
           newFailure = true
@@ -79,7 +88,7 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
       }
     }
     if (!newFailure) break
-    picked = await pickBestModelsFromBenchmark(failedHuggingFace)
+    picked = await pickBestModelsFromBenchmark(excluded)
   }
 
   // Étape 175, Léo : le modèle d'image « doit s'installer dans la page modèles comme tous les modèles » —
@@ -138,9 +147,11 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
       [profile.visionModel, picked.visionModel],
       [profile.codeModel, picked.codeModel]
     ]
-    for (const [before, after] of roles) {
-      keep.add(skipped.has(after) && before ? before : after)
-    }
+    // Ce qui reste VRAIMENT en service par rôle : le nouveau choix s'il est installé, sinon l'ancien (étape 346 : c'est
+    // aussi ce qui est enregistré dans le profil, jamais un modèle absent du disque).
+    const inService = ([before, after]: [string | undefined, string]): string =>
+      (skipped.has(after) || failedHuggingFace.has(after)) && before ? before : after
+    for (const role of roles) keep.add(inService(role))
     // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
     for (const chosen of Object.values(profile.modelChoices ?? {})) if (chosen) keep.add(chosen)
     const oldModels = roles.map(([before]) => before).filter((m): m is string => Boolean(m))
@@ -167,9 +178,9 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
 
     await saveProfile({
       ...profile,
-      models: picked.models,
-      visionModel: picked.visionModel,
-      codeModel: picked.codeModel,
+      models: { flash: inService(roles[0]), medium: inService(roles[1]), large: inService(roles[2]) },
+      visionModel: inService(roles[3]),
+      codeModel: inService(roles[4]),
       pilotModel,
       capacityScanDone: true,
       knownModelCandidates: getAllCandidateModelIds(),

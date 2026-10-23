@@ -34,6 +34,9 @@ Une ligne JSON par événement sur stdout :
   {"event": "log", "message": "..."}       (non bloquant, ex: overrun micro)
   {"event": "error", "message": "..."}     (une transcription a échoué)
   {"event": "fatal", "message": "..."}     (démarrage impossible)
+  {"event": "mic_status", "available": true|false, "message": "..."}
+                                           (étape 346 : micro perdu ou retrouvé — sans micro, le programme reste en vie
+                                            pour les messages vocaux du téléphone, et réessaie d'ouvrir un micro)
   {"event": "mic_test_started"}
   {"event": "mic_test_level", "level": 0.0-1.0}
   {"event": "mic_test_done", "detected": true|false, "silentStream": true|false}
@@ -56,6 +59,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from math import gcd
 
 import numpy as np
@@ -75,6 +79,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 sys.stdin.reconfigure(encoding="utf-8")
 
 from wake_confirmation import WakeSegmenter, contains_wake_name, remove_wake_prefix
+from mic_stream import RETRY_SECONDS, Microphone
 
 SAMPLE_RATE = 16000
 CHUNK_SAMPLES = 1280  # 80 ms : le pas du découpage des phrases (voir WakeSegmenter, wake_confirmation.py)
@@ -192,6 +197,8 @@ def remove_old_stt_model() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-device", type=int, default=None)
+    # Étape 346 : le NOM du micro choisi — son numéro change quand on branche un casque ou un autre micro.
+    parser.add_argument("--input-device-name", default=None)
     parser.add_argument("--list-devices", action="store_true")
     # Options → Activation (étape 81) : quand Léo préfère la touche "+"/le clic sur l'orbe, aucune raison de
     # transcrire chaque phrase entendue en attendant le nom.
@@ -319,49 +326,28 @@ def main() -> None:
     threading.Thread(target=stdin_listener, daemon=True).start()
 
     emit({"event": "log", "message": "Ouverture du microphone…"})
-    try:
-        stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=1,
-            dtype="int16",
-            blocksize=CHUNK_SAMPLES,
-            device=args.input_device,
-            callback=make_audio_callback(SAMPLE_RATE),
-        )
-        stream.start()
-    except sd.PortAudioError as exc:
-        # PaErrorCode -9997 : certains micros (USB, Bluetooth...) n'exposent que leur propre débit natif
-        # (souvent 44100/48000 Hz) et refusent qu'on leur demande directement du 16 kHz. Retombe sur le
-        # débit par défaut du périphérique plutôt que d'abandonner : make_audio_callback ré-échantillonne
-        # en 16 kHz avant de mettre en file, donc le reste du pipeline ne voit jamais la différence.
-        if "Invalid sample rate" not in str(exc):
-            emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
-            sys.exit(1)
-        try:
-            device_index = args.input_device if args.input_device is not None else sd.default.device[0]
-            native_rate = int(round(sd.query_devices(device_index, "input")["default_samplerate"]))
-            emit({"event": "log", "message": f"Ce micro n'accepte pas 16 kHz directement, ré-échantillonnage depuis {native_rate} Hz…"})
-            blocksize = max(1, round(CHUNK_SAMPLES * native_rate / SAMPLE_RATE))
-            stream = sd.InputStream(
-                samplerate=native_rate,
-                channels=1,
-                dtype="int16",
-                blocksize=blocksize,
-                device=args.input_device,
-                callback=make_audio_callback(native_rate),
-            )
-            stream.start()
-        except Exception as exc2:
-            emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc2}"})
-            sys.exit(1)
-    except Exception as exc:
-        emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
-        sys.exit(1)
+    # Étape 346 : le micro est retrouvé par son nom, et un micro introuvable ne fait plus quitter le programme — il
+    # reste en vie pour les messages vocaux du téléphone, dit qu'il n'y a pas de micro, et réessaie régulièrement.
+    mic = Microphone(sd, make_audio_callback, SAMPLE_RATE, CHUNK_SAMPLES, debug, args.input_device, args.input_device_name)
+    mic_available = mic.open()
 
     # Étape 179 : plus de détecteur à charger — le mot d'activation passe par la transcription déjà chargée.
     listen_for_name = not args.wakeword_disabled
 
     emit({"event": "ready"})
+    if not mic_available:
+        emit({"event": "mic_status", "available": False, "message": mic.last_error})
+    next_mic_retry = time.monotonic() + RETRY_SECONDS
+    # Casque Bluetooth fermé exprès pendant la pause (Chat, Code, Options) : il revient en qualité normale pour tout le PC.
+    closed_for_pause = False
+
+    def reopen_mic() -> None:
+        nonlocal mic_available, next_mic_retry
+        ok = mic.open()
+        next_mic_retry = time.monotonic() + RETRY_SECONDS
+        if ok != mic_available:
+            emit({"event": "mic_status", "available": ok, "message": "" if ok else mic.last_error})
+        mic_available = ok
 
     segmenter = WakeSegmenter()
     voice_activated = False
@@ -381,8 +367,12 @@ def main() -> None:
     mic_test_chunks = 0  # un test arrêté avant 400 ms n'a pas assez écouté pour conclure au silence total
 
     while True:
-        chunk = audio_queue.get()
-        chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
+        # Étape 346 : jamais une attente sans fin — un micro débranché n'envoie plus rien, et la touche « + » comme les
+        # messages du téléphone doivent quand même être traités.
+        try:
+            chunk = audio_queue.get(timeout=0.5)
+        except queue.Empty:
+            chunk = None
 
         # Message vocal du téléphone (étape 214) : traité ici, dans la boucle qui possède déjà le modèle, plutôt
         # que dans un second fil qui l'utiliserait en même temps que l'écoute du micro.
@@ -394,6 +384,39 @@ def main() -> None:
                 emit({"event": "file_transcript", "id": request["id"], "text": "" if is_hallucination(text) else text})
             except Exception as exc:
                 emit({"event": "file_transcript", "id": request["id"], "error": str(exc)})
+
+        # Étape 346 : casque Bluetooth (« mains libres ») fermé pendant la pause, rouvert dès qu'on en a besoin.
+        wants_closed = (
+            wake_paused.is_set()
+            and mic.hands_free
+            and mode == "wake"
+            and not mic_test_active
+            and not wake_test_on.is_set()
+            and not manual_trigger.is_set()
+            and not mic_test_start_requested.is_set()
+        )
+        if wants_closed and mic.is_open:
+            mic.close()
+            closed_for_pause = True
+            debug("Casque Bluetooth : micro fermé pendant la pause, le son du PC reprend sa qualité normale.")
+        elif closed_for_pause and not wants_closed:
+            closed_for_pause = False
+            reopen_mic()
+
+        # Micro ouvert mais muet depuis quelques secondes (débranché) : rouvert, sinon le micro par défaut.
+        if mic.went_silent():
+            debug("Le micro ne renvoie plus de son : réouverture.")
+            reopen_mic()
+        elif not mic.is_open and not closed_for_pause and time.monotonic() >= next_mic_retry:
+            reopen_mic()
+
+        if chunk is None:
+            if manual_trigger.is_set() and not mic.is_open and not closed_for_pause:
+                manual_trigger.clear()
+                emit({"event": "error", "message": "aucun micro ne renvoie de son"})
+            continue
+
+        chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
 
         # Lit le même flux que la détection de déclenchement, sans jamais interagir avec `mode` : le test
         # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du mot d'activation.

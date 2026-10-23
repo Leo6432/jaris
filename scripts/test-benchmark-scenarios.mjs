@@ -129,8 +129,9 @@ const CASES = {
       calls(['computer_use_task', { goal: "Envoyer un mail à accueil@plelan-le-grand.fr pour demander les horaires d'ouverture de la mairie" }]),
       text("C'est envoyé à accueil@plelan-le-grand.fr.")
     ],
-    // Sans recherche : Jaris relance (question de connaissance), le modèle répond pareil.
-    bad: [calls(['computer_use_task', { goal: 'Envoyer un mail à mairie@plelan.fr pour demander les horaires' }]), text('Mail envoyé.'), text('Mail envoyé.')],
+    // Sans recherche : mail envoyé à une adresse inventée. Étape 346 : après une action réussie, Jaris ne relance plus
+    // vers une recherche (la demande était une action, et le mail est déjà parti).
+    bad: [calls(['computer_use_task', { goal: 'Envoyer un mail à mairie@plelan.fr pour demander les horaires' }]), text('Mail envoyé.')],
     // Recherche faite, puis un simple résumé au lieu d'envoyer : Jaris relance (mail demandé) — toujours rien.
     alsoBad: [[calls(['search_web', { query: 'mail mairie Plélan-le-Grand' }]), text("L'adresse est accueil@plelan-le-grand.fr."), text("L'adresse est accueil@plelan-le-grand.fr.")]],
     // Même situation, mais le modèle obéit à la relance : la demande est faite.
@@ -723,7 +724,7 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
 // --- (4) Aucune demande ne passe par un raccourci de Jaris --------------------------------------------------
 test('aucune phrase de demande n’est prise par un raccourci de Jaris (la réponse viendrait du code, pas du modèle)', () => {
   const { directAppRequest } = loadTs('electron/services/assistant.ts')
-  const { requestedNotepadText } = loadTs('electron/services/notepad.ts')
+  const { requestedNotepadText, notepadRequest } = loadTs('electron/services/notepad.ts')
   const { directBrowserSearch } = loadTs('electron/services/browserSearch.ts')
   // Étape 248 : « Va sur YouTube et cherche un tuto… » est désormais ouvert directement dans le navigateur par Jaris,
   // sans passer par le modèle. La demande reste dans le test (scores déjà mesurés) : elle mesure la délégation au
@@ -738,6 +739,7 @@ test('aucune phrase de demande n’est prise par un raccourci de Jaris (la répo
       assert.equal(directAppRequest(turn), undefined, `« ${turn} » est ouvert directement par Jaris`)
       assert.equal(directSocialReply(turn), undefined, `« ${turn} » reçoit une réponse toute faite`)
       assert.equal(requestedNotepadText(turn), undefined, `« ${turn} » passe par le Bloc-notes direct`)
+      assert.equal(notepadRequest(turn), undefined, `« ${turn} » passe par le Bloc-notes direct (étape 346)`)
       if (BYPASSED.has(scenario.id)) assert.ok(directBrowserSearch(turn), `« ${turn} » devrait être ouvert dans le navigateur`)
       else assert.equal(directBrowserSearch(turn), undefined, `« ${turn} » est ouvert directement dans le navigateur`)
     }

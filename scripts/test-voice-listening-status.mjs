@@ -17,8 +17,9 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/voi
 }).outputText
 
 let lastProc = null
-function fakeSpawn() {
+function fakeSpawn(_bin, args) {
   const proc = new EventEmitter()
+  proc.args = args
   proc.stdout = new PassThrough()
   proc.stderr = new PassThrough()
   proc.stdin = { written: [], write(line) { this.written.push(line) } }
@@ -142,3 +143,60 @@ test('chaque changement d’état de l’écoute est annoncé (chargement, prêt
   client.stop()
   assert.deepEqual(seen, ['loading', 'prête', 'failed', 'loading', 'prête', 'off'])
 })
+
+// Étape 346 : micro débranché ou coupé — le programme d'écoute reste en vie (téléphone) et dit pourquoi il n'entend rien.
+test('aucun micro : la raison s’affiche, les messages du téléphone passent, et le micro revenu efface la raison', async () => {
+  const client = new VoiceClient()
+  const statuses = []
+  client.on('status', (status) => statuses.push(status.state))
+  const ready = client.start()
+  emitLine({ event: 'ready' })
+  emitLine({ event: 'mic_status', available: false, message: 'Error querying device -1' })
+  await ready
+  await tick()
+  const reason = listeningUnavailableReason(client.getStatus())
+  assert.match(reason, /Aucun micro ne répond/)
+  assert.match(reason, /Error querying device -1/, 'le vrai détail est gardé')
+  const transcript = client.transcribeFile('/tmp/message.wav')
+  await tick()
+  const sent = lastProc.stdin.written.find((line) => line.startsWith('transcribe-file '))
+  assert.ok(sent, 'le message du téléphone est envoyé malgré l’absence de micro')
+  emitLine({ event: 'file_transcript', id: JSON.parse(sent.slice('transcribe-file '.length)).id, text: 'bonjour' })
+  assert.equal(await transcript, 'bonjour')
+  emitLine({ event: 'mic_status', available: true })
+  await tick()
+  assert.equal(listeningUnavailableReason(client.getStatus()), null)
+  assert.deepEqual(statuses, ['loading', 'ready', 'noMic', 'ready'])
+})
+
+test('« aucun micro ne renvoie de son » (touche + sans micro) est traduit', () => {
+  const { translateSidecarMessage } = module.exports
+  assert.match(translateSidecarMessage('aucun micro ne renvoie de son'), /Aucun micro ne répond/)
+})
+
+test('le micro est passé par son NOM au programme d’écoute', async () => {
+  const client = new VoiceClient()
+  const ready = client.start(4, true, 'Micro USB (Blue Yeti)')
+  emitLine({ event: 'ready' })
+  await ready
+  const args = lastProc.args
+  assert.equal(args[args.indexOf('--input-device-name') + 1], 'Micro USB (Blue Yeti)')
+  const plain = new VoiceClient()
+  const plainReady = plain.start(4, true, null)
+  emitLine({ event: 'ready' })
+  await plainReady
+  assert.ok(!lastProc.args.includes('--input-device-name'), 'sans nom (ancien profil), seul le numéro part')
+})
+
+test('un mic_status d’un programme déjà remplacé ou arrêté ne change rien', async () => {
+  const client = new VoiceClient()
+  const ready = client.start()
+  emitLine({ event: 'ready' })
+  await ready
+  const old = lastProc
+  client.stop()
+  old.stdout.write(`${JSON.stringify({ event: 'mic_status', available: false, message: 'x' })}\n`)
+  await tick()
+  assert.equal(client.getStatus().state, 'off')
+})
+

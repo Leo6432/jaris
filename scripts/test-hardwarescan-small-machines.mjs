@@ -92,3 +92,16 @@ test('étape 332 : sans carte graphique mais avec beaucoup de RAM, Élevé et Co
   assert.equal(chosen.large, 'gpt-oss:20b')
   assert.equal(chosen.code, 'devstral-small-2:24b')
 })
+
+// Étape 346 : « Retester la configuration » choisissait d'autres modèles quand la version d'Ollama n'était pas encore
+// connue (démarrage en cours) — K2 Horizon 0.9B, écarté faute de version, changeait le gabarit des « petits ».
+test('petite machine : même choix que la version d’Ollama soit connue ou pas encore', async () => {
+  const pick = async (vramMib, ramGb, ollamaVersion) => {
+    const { pickBestModelsFromBenchmark } = setup({ scores: REAL_SCORES, vramMib, ramGb, ollamaVersion })
+    const r = await pickBestModelsFromBenchmark()
+    return [r.models.flash, r.models.medium, r.models.large, r.visionModel, r.codeModel].join(' | ')
+  }
+  for (const [vramMib, ramGb] of [[0, 8], [0, 16], [1024, 16], [2048, 16], [3072, 16], [4096, 16]]) {
+    assert.equal(await pick(vramMib, ramGb, null), await pick(vramMib, ramGb, '0.40.5'), `${vramMib / 1024} Go de carte, ${ramGb} Go de RAM`)
+  }
+})

@@ -136,6 +136,11 @@ export interface Profile {
   knownModelCandidates?: string[]
   /** Index PortAudio (sounddevice) du micro choisi dans Options → Voix, `undefined`/`null` = défaut système. */
   audioInputDeviceIndex?: number | null
+  /**
+   * Étape 346 : NOM du micro choisi. Son numéro change quand on branche un casque ou un autre micro : c'est le nom qui
+   * le retrouve (voir mic_stream.py) ; le numéro ne sert plus que pour un profil enregistré avant cette version.
+   */
+  audioInputDeviceName?: string | null
   /** deviceId MediaDevices (WebRTC) du haut-parleur choisi dans Options → Voix, vide = sortie par défaut du système. */
   audioOutputDeviceId?: string
   /**
@@ -193,11 +198,11 @@ export interface Profile {
 
 /** Résultat de getContextLengthOptions (hardwareScan.ts) : voir son commentaire pour le calcul du plafond. */
 export interface ContextLengthOptions {
-  /** Palier actuellement retenu (profil ou repli .env), toujours l'un de CONTEXT_LENGTH_STEPS. */
+  /** Valeur réellement utilisée (profil ou repli .env), toujours montrée telle quelle (étape 346). */
   current: number
   /** Palier maximum sûr pour la VRAM libre actuelle et le modèle du palier Puissant. */
   max: number
-  /** Uniquement les paliers de CONTEXT_LENGTH_STEPS qui ne dépassent pas `max`, pour peupler le curseur. */
+  /** Les crans jusqu'à `max`, plus `current` s'il est au-dessus (la valeur utilisée n'est jamais cachée). */
   availableSteps: number[]
 }
 
@@ -1266,6 +1271,12 @@ export const IPC_CHANNELS = {
   phoneAccessChanged: 'jaris:phone-access-changed',
   /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
   chatHistoryChanged: 'jaris:chat-history-changed',
+  /**
+   * Étape 346 : main -> renderer, une réponse du Chat est en cours (true) ou plus aucune (false) — y compris pour une
+   * question posée depuis le petit widget, que le Chat doit montrer en train de « réfléchir ».
+   */
+  chatBusy: 'jaris:chat-busy',
+  getChatBusy: 'jaris:get-chat-busy',
   /** Une image ou une vidéo a été créée depuis le téléphone : les galeries du PC se rechargent. */
   studioGalleryChanged: 'jaris:studio-gallery-changed',
   /** Modèle ou réflexion changé depuis le téléphone : le sélecteur du PC se remet à jour. */

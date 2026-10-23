@@ -156,6 +156,26 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     setProgress(null)
   }
 
+  /** Ferme la réponse ET la fenêtre : la barre retourne tout de suite au petit indicateur. */
+  const close = (): void => {
+    dismiss()
+    window.jaris.setChatWidgetKeepOpen(false)
+    window.jaris.collapseChatWidget()
+  }
+
+  /**
+   * Étape 346 : une fois la réponse affichée, le champ (et son écoute d'Échap) n'existe plus — Échap ne faisait plus
+   * rien, et une erreur restait ouverte sans aucun moyen de la fermer au clavier. Écouté ici pour toute la fenêtre.
+   */
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expanded])
+
   /**
    * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit
    * varier selon la longueur de la réponse" — la réponse se referme donc TOUTE SEULE après un délai de
@@ -169,14 +189,10 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
    */
   useEffect(() => {
     if (inactive || sending || error || !reply || hovering || input.length > 0) return
-    const timer = setTimeout(() => {
-      dismiss()
-      // Le repli doit arriver APRÈS le délai de lecture, jamais dès la fin de génération. Relâcher d'abord
-      // la protection est indispensable : `expanded` est encore vrai dans ce rendu et le main refuserait
-      // sinon de remettre la fenêtre en mode inactif.
-      window.jaris.setChatWidgetKeepOpen(false)
-      window.jaris.collapseChatWidget()
-    }, computeReplyDismissDelayMs(reply))
+    // Le repli doit arriver APRÈS le délai de lecture, jamais dès la fin de génération. close() relâche d'abord la
+    // protection : `expanded` est encore vrai dans ce rendu et le main refuserait sinon de remettre la fenêtre en
+    // mode inactif.
+    const timer = setTimeout(close, computeReplyDismissDelayMs(reply))
     return () => clearTimeout(timer)
   }, [inactive, sending, error, reply, hovering, input])
 

@@ -85,6 +85,14 @@ export function describeDownloadFailure(
   }
 
   const message = error instanceof Error ? error.message : String(error)
+  // Étape 346 : une coupure d'internet en plein téléchargement arrivait en anglais (« terminated », « fetch failed »).
+  const causeCode = (error as { cause?: { code?: string } } | null)?.cause?.code ?? code ?? ''
+  if (message === 'terminated' || ['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE', 'ECONNABORTED'].includes(causeCode)) {
+    return receivedBytes > 0 ? t('dl.cutAfter', { received: formatBytes(receivedBytes) }) : t('dl.unreachable')
+  }
+  if ((error as { name?: string } | null)?.name === 'TimeoutError' || ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(causeCode)) {
+    return t('dl.serverSilent')
+  }
   // Message exact de fetch quand la connexion ne s'établit pas du tout — incompréhensible tel quel.
   if (message === 'fetch failed') {
     return t('dl.unreachable')

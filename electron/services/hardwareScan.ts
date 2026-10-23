@@ -4,7 +4,7 @@ import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import { getInstalledModelSizeBytes, getModelInfo, listInstalledModels } from './ollama'
+import { getInstalledModelSizeBytes, getModelInfo, listInstalledModels, loadedOllamaModels } from './ollama'
 import type {
   CapacityScanResult,
   ContextLengthOptions,
@@ -573,7 +573,8 @@ function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
 export async function detectGpu(): Promise<{ name: string | null; vramGb: number | null }> {
   try {
     const { stdout } = await execAsync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', {
-      windowsHide: true
+      windowsHide: true,
+      timeout: 3_000
     })
     const firstLine = stdout.trim().split('\n')[0] ?? ''
     const [name, mibRaw] = firstLine.split(',').map((s) => s.trim())
@@ -663,8 +664,10 @@ export interface LiveGpuStatus {
  */
 export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
   try {
+    // Étape 346 : appelé avant CHAQUE réponse — un pilote NVIDIA bloqué ne doit jamais bloquer Jaris avec lui.
     const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.free,temperature.gpu --format=csv,noheader,nounits', {
-      windowsHide: true
+      windowsHide: true,
+      timeout: 3_000
     })
     const firstLine = stdout.trim().split('\n')[0] ?? ''
     const [freeRaw, tempRaw] = firstLine.split(',').map((s) => s.trim())
@@ -867,30 +870,43 @@ export function computeAvailableSteps(max: number): number[] {
  * mieux : proposer plus de marge sans preuve serait exactement le genre d'hypothèse non vérifiée que ce
  * dépôt a appris à ses dépens à ne jamais présenter comme un fait (voir la saga SearXNG, CLAUDE.md).
  */
-export async function computeContextLengthOptions(model: string, currentContext: number): Promise<ContextLengthOptions> {
-  const fallbackMax = roundDownToContextStep(currentContext)
-  const fallback: ContextLengthOptions = {
-    current: fallbackMax,
-    max: fallbackMax,
-    availableSteps: computeAvailableSteps(fallbackMax)
+export async function computeContextLengthOptions(models: string | string[], currentContext: number): Promise<ContextLengthOptions> {
+  // Étape 346 : la valeur du profil est TOUJOURS montrée telle quelle (11k restait affiché « 8k » à la réouverture, et
+  // un curseur bloqué sur 8k cachait la valeur réellement utilisée par Jaris) — elle fait partie des crans proposés.
+  const withCurrent = (max: number): ContextLengthOptions => {
+    const steps = computeAvailableSteps(max)
+    const current = Math.max(currentContext, CONTEXT_LENGTH_STEPS[0])
+    const availableSteps = steps.includes(current) ? steps : [...steps, current].sort((a, b) => a - b)
+    return { current, max, availableSteps }
   }
+  const fallback = withCurrent(roundDownToContextStep(currentContext))
 
-  const [{ freeVramGb }, modelInfo, weightBytes] = await Promise.all([
+  const names = [...new Set(Array.isArray(models) ? models : [models])].filter(Boolean)
+  const [{ freeVramGb }, loaded, infos] = await Promise.all([
     getLiveGpuStatus(),
-    getModelInfo(model).catch(() => null),
-    getInstalledModelSizeBytes(model).catch(() => null)
+    Promise.resolve()
+      .then(() => loadedOllamaModels())
+      .catch(() => null),
+    Promise.all(
+      names.map(async (model) => ({
+        arch: parseModelArchInfo(await getModelInfo(model).catch(() => null)),
+        weightBytes: await getInstalledModelSizeBytes(model).catch(() => null)
+      }))
+    )
   ])
-  const arch = parseModelArchInfo(modelInfo)
-  if (freeVramGb === null || !arch || weightBytes === null) return fallback
-
-  const modelWeightVramGb = weightBytes / 1024 ** 3
-  const maxSafe = roundDownToContextStep(computeMaxSafeContext(arch, modelWeightVramGb, freeVramGb))
-  const max = Math.max(maxSafe, CONTEXT_LENGTH_STEPS[0])
-  return {
-    current: Math.min(fallbackMax, max),
-    max,
-    availableSteps: computeAvailableSteps(max)
-  }
+  if (freeVramGb === null) return fallback
+  // Étape 346 : ce que les modèles de Jaris occupent déjà sur la carte est libéré quand le modèle de référence se
+  // charge — sans ça, le modèle déjà en mémoire faisait croire à une carte presque pleine (curseur bloqué sur 8k).
+  const ownGb = (loaded ?? []).reduce((sum, entry) => sum + entry.vramGb, 0)
+  const usableGb = freeVramGb + ownGb
+  const known = infos.filter((info): info is { arch: ModelArchInfo; weightBytes: number } => info.arch !== null && info.weightBytes !== null)
+  if (!known.length) return fallback
+  // Référence : le plus gros modèle de conversation qui tourne SUR la carte. Un modèle qui déborde déjà sur la RAM
+  // (Élevé sur une petite carte) donnait toujours le plancher, quelle que soit la place réelle des autres.
+  const onCard = known.filter((info) => info.weightBytes / 1024 ** 3 + LIVE_SAFETY_MARGIN_GB < usableGb)
+  const reference = (onCard.length ? onCard : known).reduce((a, b) => (b.weightBytes > a.weightBytes ? b : a))
+  const maxSafe = roundDownToContextStep(computeMaxSafeContext(reference.arch, reference.weightBytes / 1024 ** 3, usableGb))
+  return withCurrent(Math.max(maxSafe, CONTEXT_LENGTH_STEPS[0]))
 }
 
 /**
@@ -1889,12 +1905,13 @@ function computeModelPicks(
    * eux, la meilleure note. Réservé à ce repli : quand des modèles tiennent, c'est la note seule qui décide.
    */
   const SMALL_CLASS_FACTOR = 2
-  const bestOfLightest = (scored: Scored[], chain: number): Scored[] => {
-    const lightest = Math.min(...scored.map((c) => c.vramGb))
-    return bestNote(
-      scored.filter((c) => c.vramGb <= lightest * SMALL_CLASS_FACTOR),
-      chain
-    )
+  // Étape 346 : `anchor` = le plus léger des modèles notés AVANT d'écarter ceux qu'Ollama ne sait pas encore charger —
+  // sans lui, une version d'Ollama pas encore connue changeait le gabarit des « petits », donc le modèle choisi.
+  const bestOfLightest = (scored: Scored[], chain: number, anchor?: number): Scored[] => {
+    const own = Math.min(...scored.map((c) => c.vramGb))
+    const inClass = (lightest: number): Scored[] => scored.filter((c) => c.vramGb <= lightest * SMALL_CLASS_FACTOR)
+    const anchored = anchor !== undefined ? inClass(anchor) : []
+    return bestNote(anchored.length ? anchored : inClass(own), chain)
   }
 
   /**
@@ -1939,7 +1956,10 @@ function computeModelPicks(
     // demandes) : il était choisi partout, alors qu'un petit modèle à peine plus lourd (qwen3:1.7b, 1,4 Go) fait
     // bien mieux en débordant de quelques centaines de Mo.
     const knownCandidates = candidates.filter((c) => resultOf(c)?.toolCalling != null)
-    const lightestKnown = Math.min(...knownCandidates.map((c) => c.vramGb))
+    // Étape 346 : le gabarit des « petits » se mesure AVANT d'écarter les modèles trop récents pour Ollama — sinon une
+    // version d'Ollama pas encore connue (démarrage en cours) changeait ce gabarit, et donc le choix sur une petite machine.
+    const knownInPool = pool.filter((c) => !exclude.has(c.model) && resultOf(c)?.toolCalling != null)
+    const lightestKnown = Math.min(...(knownInPool.length ? knownInPool : knownCandidates).map((c) => c.vramGb))
     // Les deux conditions : la carte est trop petite ET rien de plus gros ne tient (Puissant et Code peuvent déborder
     // sur la RAM : sans carte graphique, gpt-oss:20b reste le bon choix pour eux).
     const tinyClass = lightestKnown * SMALL_CLASS_FACTOR
@@ -1951,7 +1971,7 @@ function computeModelPicks(
         const ranked = known
           .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) as LocalBenchmarkEntry, strength: strengthOf(c.model) }))
           .map((c) => (withDemands ? { ...c, demands: demandsFactor(currentDemandScore(verifiedToolScores, c.model), c.result.toolCalling).value } : c))
-        const best = bestOfLightest(ranked, chain)[0]
+        const best = bestOfLightest(ranked, chain, lightestKnown)[0]
         return entryOf(best.model, best.vramGb, best.result)
       }
       const model = pickForBudget(candidates, budgetGb)

@@ -169,6 +169,7 @@ const api = {
   cancelChat: (): void => ipcRenderer.send(IPC_CHANNELS.cancelChat),
   transcribeDictation: (wav: Uint8Array): Promise<string> => invoke(IPC_CHANNELS.transcribeDictation, wav),
   getChatHistory: (): Promise<ChatMessage[]> => invoke(IPC_CHANNELS.getChatHistory),
+  getChatBusy: (): Promise<boolean> => invoke(IPC_CHANNELS.getChatBusy),
   // Conversations du Chat (étape 96) : les trois canaux qui modifient la liste la renvoient à jour, pour
   // éviter un second aller-retour juste pour la relire.
   listConversations: (): Promise<ConversationList> => invoke(IPC_CHANNELS.listConversations),
@@ -287,6 +288,7 @@ const api = {
   openPhoneAccessLink: (): Promise<void> => invoke(IPC_CHANNELS.openPhoneAccessLink),
   onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => subscribe(IPC_CHANNELS.phoneAccessChanged, cb),
   onChatHistoryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.chatHistoryChanged, cb),
+  onChatBusy: (cb: (busy: boolean) => void) => subscribe<boolean>(IPC_CHANNELS.chatBusy, cb),
   onStudioGalleryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.studioGalleryChanged, cb),
   onModelChoiceChanged: (cb: () => void) => subscribe(IPC_CHANNELS.modelChoiceChanged, cb)
 }

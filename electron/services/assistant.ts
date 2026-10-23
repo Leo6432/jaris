@@ -1,12 +1,12 @@
 import { resolveChosenModel } from './modelChoice'
-import { requestedNotepadText, openNotepadText } from './notepad'
+import { notepadRequest, openNotepadText } from './notepad'
 import { config } from '../config'
-import { chatWithOllama, getModelThinking, listInstalledModels, type ChatMetrics, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelThinking, listInstalledModels, loadedOllamaModels, type ChatMetrics, type OllamaMessage, type ThinkLevel } from './ollama'
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor, type ImageHandler, type WebActivityHandler } from './tools'
-import { didAppLaunch } from './appLauncher'
+import { didAppLaunch, launchedAppName } from './appLauncher'
 import { GPU_TEMP_LIMIT_C, isScreenQuestion, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
@@ -33,8 +33,9 @@ const TOOL_SOUND_CUES: Partial<Record<string, SoundCue>> = {
 export function directAppRequest(prompt: string): string | undefined {
   const match = prompt.trim().match(/^ouvre\s+(?:l[’']application\s+)?([\p{L}\p{N}][\p{L}\p{N} .’'_-]{0,79}?)[.!]?$/iu)
   const name = match?.[1].trim()
-  // Les demandes composées, négations et explications restent dans la conversation normale.
-  if (!name || /\b(?:et|puis|ensuite|mais|sans|pas|jamais|si|pour|avec)\b/i.test(name)) return undefined
+  // Les demandes composées, négations et explications restent dans la conversation normale. Étape 346 : une seconde
+  // phrase aussi (« ouvre le bloc-notes. Écris bonjour ») — sinon tout passait pour un nom d'application.
+  if (!name || /\b(?:et|puis|ensuite|mais|sans|pas|jamais|si|pour|avec)\b/i.test(name) || /\.\s/.test(name)) return undefined
   return name
 }
 
@@ -84,6 +85,11 @@ const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare',
 // Étape 261 : un VERBE d'envoi, plus le seul mot « mail » — « Reformule ce mail : … » n'est pas une demande d'envoi.
 const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expédier)\b/i
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
+// Étape 346 : l'envoi doit porter sur un mail ou un message (« envoie-moi un rappel » n'en est pas un), et ni un rappel,
+// ni une note, ni un envoi déjà fait, ni une question sur la façon d'envoyer ne demandent d'envoyer quoi que ce soit.
+const MAIL_OBJECT = /\b(?:mail|mails|e-mail|e-mails|email|emails|courriel|courriels|message|messages)\b/i
+const NOT_A_SEND_REQUEST =
+  /^\s*(?:rappelle[- ]moi|retiens|n['’]oublie pas|mémorise|memorise|note que|(?:est-ce que )?tu sais|sais-tu|comment|explique(?:[- ]moi)?)\b|\b(?:viens|vient|venons|venez|viennent) d['’]envoyer\b/i
 
 /**
  * Étape 262 : la demande est-elle de RÉDIGER un texte (reformuler, corriger, répondre à un client…) ? Le texte rédigé
@@ -111,6 +117,7 @@ function hasUnnegatedMailIntent(prompt: string): boolean {
   // Seule la CONSIGNE compte, pas le texte collé après « : » ou « « » : « Reformule ce mail : … merci de m'envoyer le
   // devis » ne demande aucun envoi (étape 261, mesuré : la relance renvoyait le modèle vers l'envoi par le pilote).
   const instruction = prompt.split(/[:«\n]/)[0]
+  if (!MAIL_OBJECT.test(instruction) || NOT_A_SEND_REQUEST.test(instruction)) return false
   const match = SEND_MAIL_VERBS.exec(instruction)
   if (!match) return false
   const windowStart = Math.max(0, match.index - 20)
@@ -132,10 +139,17 @@ const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|r
 // (fonctionnement, mémoire locale) — une relance search_web y serait à la fois inutile et hors sujet.
 const NOT_A_KNOWLEDGE_QUESTION =
   /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
+// Étape 346 : une question adressée à Jaris lui-même (« tu m'entends ? »), sur ce qui a déjà été dit (« je t'ai dit
+// quoi ? »), sur la date, ou une demande explicite de ne pas chercher : aucune donnée du monde à aller lire sur internet.
+// Pas de \b après un mot accentué (« là ») : en JavaScript, \b ne connaît que les lettres sans accent.
+const ABOUT_THIS_CONVERSATION =
+  /(?:^|[\s,;:!?.'’])(?:tu m['’](?:entends|écoutes|ecoutes)|tu es là|tu es la|t['’]es là|t['’]es la|tu sais faire|tu peux faire|tu fais quoi|que sais-tu faire|qu['’]est-ce que tu (?:sais|peux) faire|tu es qui|t['’]es qui|tu te souviens|tu as compris|t['’]as compris|je t['’]ai dit|je t['’]avais dit|mon prénom|mon prenom|le combien|on est quel jour|la date d['’]aujourd['’]hui|ne cherche pas|cherche pas|sans chercher|sans internet|sans recherche|de m[ée]moire(?=\s*[,.!?;:]|\s*$)|pas besoin de chercher)/i
 // Les petites questions sociales adressées à Jaris ne demandent aucune donnée extérieure. Le motif est
 // volontairement ancré sur la phrase entière : « Pourquoi ça va mal dans l'économie ? » reste ainsi une
 // vraie question factuelle, tandis que « tu vas bien ? » ne déclenche plus une recherche web absurde.
-const SOCIAL_CHECK_IN = /^(?:salut[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)\s*[?!.]*$/i
+// Étape 346 : aussi avec une salutation et le prénom (« Salut Jaris, ça va ? »), qui partait sinon chercher sur internet.
+const SOCIAL_CHECK_IN =
+  /^(?:(?:salut|bonjour|bonsoir|coucou|hey|hello)[, !]*)?(?:jaris[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)(?:[, !]*jaris)?\s*[?!.]*$/i
 const SIMPLE_GREETING = /^(?:salut|bonjour|bonsoir|coucou|hello|hey)(?:\s+jaris)?\s*[!?.,]*$/iu
 
 /**
@@ -206,6 +220,36 @@ export function isPureCalculation(prompt: string): boolean {
 }
 
 /**
+ * Étape 346 : `work` mis en concurrence avec l'annulation — rejette aussitôt avec une AbortError quand `signal` est
+ * annulé, sans attendre `work` (qui continue en arrière-plan ; son résultat ou son erreur sont alors ignorés).
+ */
+export function raceAbort<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work
+  const aborted = (): Error => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
+  if (signal.aborted) {
+    work.catch(() => undefined)
+    return Promise.reject(aborted())
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      work.catch(() => undefined)
+      reject(aborted())
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(err)
+      }
+    )
+  })
+}
+
+/**
  * true si la phrase RESSEMBLE à une demande d'information (question de connaissance générale — fait,
  * personne, entreprise, définition, événement... — ou demande à l'impératif du même genre) plutôt qu'une
  * commande d'action ou une question sur Jaris/l'utilisateur lui-même — sert uniquement à décider s'il faut
@@ -215,7 +259,13 @@ export function isPureCalculation(prompt: string): boolean {
  */
 export function looksLikeKnowledgeQuestion(prompt: string): boolean {
   const trimmed = prompt.trim()
-  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed) || isPureCalculation(trimmed)) return false
+  if (
+    !trimmed ||
+    NOT_A_KNOWLEDGE_QUESTION.test(trimmed) ||
+    ABOUT_THIS_CONVERSATION.test(trimmed) ||
+    SOCIAL_CHECK_IN.test(trimmed) ||
+    isPureCalculation(trimmed)
+  ) return false
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 
@@ -309,6 +359,44 @@ function normalizeProse(text: string, userUsedEmoji: boolean): string {
     : decoded.replace(/\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?)*/gu, '')
 
   return withoutUnrequestedEmoji.replace(/(\S)[ \t]{2,}/g, '$1 ').replace(/[ \t]+\n/g, '\n')
+}
+
+/**
+ * Rédige le texte demandé pour le Bloc-notes (« un poème sur la mer ») : le modèle moyen, sans outils ni réflexion —
+ * il n'y a rien à décider, seulement à écrire. Le texte rendu est mis tel quel dans un nouveau document.
+ */
+async function composeNotepadText(
+  request: string,
+  profile: Awaited<ReturnType<typeof getProfile>>,
+  signal: AbortSignal | undefined,
+  journal: JournalEntry
+): Promise<string> {
+  const model = profile?.models?.medium ?? config.ollama.model
+  const askedAt = Date.now()
+  let metrics: ChatMetrics | undefined
+  const message = await chatWithOllama(
+    [
+      {
+        role: 'system',
+        content:
+          `Write exactly the text the user asks for, in ${languageInfo(currentLanguage()).english}, ready to be pasted into a ` +
+          'document: no introduction, no comment before or after, no Markdown, no title unless asked.'
+      },
+      { role: 'user', content: request }
+    ],
+    undefined,
+    model,
+    false,
+    signal,
+    profile?.contextLength ?? config.ollama.numCtx,
+    undefined,
+    undefined,
+    (measured) => (metrics = measured)
+  )
+  journal.timed(describeModelCall(model, message, metrics), askedAt)
+  const text = message.content.trim()
+  if (!text) throw new Error(t('reply.empty'))
+  return text
 }
 
 const MAX_TOOL_ROUNDS = 10
@@ -534,14 +622,18 @@ async function conversation(
   }
   const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
 
-  const noteText = requestedNotepadText(prompt)
+  const note = notepadRequest(prompt)
   // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).
-  if (noteText !== undefined && restrictions) return restrictions.refusal
-  if (noteText !== undefined) {
+  if (note && restrictions) return restrictions.refusal
+  if (note) {
     onLog?.(t('log.notepad.preparing'))
     try {
-      return await openNotepadText(noteText, signal)
+      // Étape 346 : « écris un poème sur la mer » — le texte est d'abord rédigé par le modèle, puis ouvert par le même
+      // chemin sûr (un nouveau fichier, jamais une frappe dans la fenêtre qui a le focus).
+      const text = note.kind === 'literal' ? note.text : await composeNotepadText(note.request, profile, signal, journal)
+      return await openNotepadText(text, signal)
     } catch (err) {
+      if (signal?.aborted) throw err
       return t('reply.notepad.failed', { error: err instanceof Error ? err.message : String(err) })
     }
   }
@@ -578,10 +670,10 @@ async function conversation(
     onLog?.(t('log.opening', { app: requestedApp }))
     try {
       const result = await executeTool('open_app', { app_name: requestedApp })
-      // Explorer accuse réception avant que l'application ait nécessairement une fenêtre visible.
-      return didAppLaunch(result)
-        ? t('reply.openSent', { app: requestedApp })
-        : result
+      // Explorer accuse réception avant que l'application ait nécessairement une fenêtre visible. Étape 346 : le nom
+      // de l'application réellement lancée, pas celui qui a été dit (« Blocknote » → « Bloc-notes »).
+      const launched = launchedAppName(result)
+      return launched ? t('reply.openSent', { app: launched }) : result
     } catch (err) {
       return toolFailure(err)
     }
@@ -618,14 +710,32 @@ async function conversation(
     onLog?.(t('log.chosenModelGone', { model: profile.modelChoices[channel] ?? '' }))
   }
 
+  // Étape 346 : la mémoire vidéo que les modèles déjà chargés par Ollama occupent est rendue dès qu'un autre modèle en
+  // a besoin — la compter comme « prise » faisait remplacer le modèle du rôle par un plus petit à presque chaque phrase
+  // (le modèle de la réponse précédente reste chargé quelques minutes). Et un modèle déjà chargé n'a rien à charger.
+  const ownLoaded = live.freeVramGb !== null ? await loadedOllamaModels() : null
+  const usableVramGb = live.freeVramGb === null ? null : live.freeVramGb + (ownLoaded ?? []).reduce((sum, m) => sum + m.vramGb, 0)
+  const sameModel = (a: string, b: string): boolean => a.replace(/:latest$/, '') === b.replace(/:latest$/, '')
+  const isInstalled = (name: string): boolean => installedModels.some((installed) => sameModel(installed, name))
+
   /** Résout modèle + effort de réflexion pour un palier donné, avec le même repli VRAM temps réel que ci-dessus. */
   const resolveModelForTier = (t: Tier): { model: string; think: ThinkLevel | ThinkValue } => {
     if (chosenModel) return { model: chosenModel, think: THINK_LEVEL[t] }
     let m = models[t]
-    if (live.freeVramGb !== null) {
-      const safeModel = pickSafeModel(live.freeVramGb, installedModels, m)
+    // Étape 346 : le modèle du rôle n'est pas installé (téléchargement refusé : disque plein, trop gros…) — un autre
+    // modèle de Jaris déjà installé plutôt qu'une erreur « modèle introuvable » à chaque phrase.
+    if (installedModels.length && !isInstalled(m)) {
+      const fallback =
+        [models.medium, models.flash, models.large].find(isInstalled) ?? pickSafeModel(Number.MAX_SAFE_INTEGER, installedModels, m)
+      if (fallback !== m && isInstalled(fallback)) {
+        onLog?.(`Modèle ${m} pas installé : repli sur ${fallback}.`)
+        m = fallback
+      }
+    }
+    if (usableVramGb !== null && !ownLoaded?.some((loaded) => sameModel(loaded.model, m))) {
+      const safeModel = pickSafeModel(usableVramGb, installedModels, m)
       if (safeModel !== m) {
-        onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${m}) : repli sur ${safeModel}.`)
+        onLog?.(`VRAM utilisable actuelle : ${usableVramGb.toFixed(1)} Go (insuffisant pour ${m}) : repli sur ${safeModel}.`)
         m = safeModel
       }
     }
@@ -698,16 +808,24 @@ async function conversation(
   // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
   // Sans computer_use_task (téléphone), relancer vers lui pousserait le modèle vers un outil absent.
-  const wantsEmailSent = isToolAllowed('computer_use_task') && hasUnnegatedMailIntent(prompt)
+  // Étape 346 : ces deux filets lisent du français ; dans une autre langue, ils se tromperaient.
+  const french = currentLanguage() === 'fr'
+  const wantsEmailSent = french && isToolAllowed('computer_use_task') && hasUnnegatedMailIntent(prompt)
   const writingRequest = isWritingRequest(prompt)
   // Contrairement à wantsEmailSent (recalculé sur la seule phrase actuelle, jamais l'historique), cette
   // relance n'a de sens que pour la question posée à CE tour : sinon une conversation qui a déjà cherché une
   // fois relancerait sans arrêt sur une intention d'un tour précédent déjà traité.
-  const wantsWebInfo = looksLikeKnowledgeQuestion(prompt)
+  const wantsWebInfo = french && looksLikeKnowledgeQuestion(prompt)
   let computerUseCalled = false
   // Outils lancés dans CETTE demande : « regarder l'écran » ne clôt la demande que s'il est le tout premier (étape 242).
   let toolsRunThisTurn = 0
   let searchCalledThisTurn = false
+  // Étape 346 : un outil qui AGIT (ouvrir, taper, rappel…) a réussi : la demande était une action, pas une question.
+  let actionToolThisTurn = false
+  // Un rappel ou une note ont répondu à la demande : « rappelle-moi d'envoyer le mail » n'est pas un envoi.
+  let reminderOrNoteThisTurn = false
+  // La réponse du modèle AVANT la relance vers la recherche : gardée si la recherche imposée échoue.
+  let draftBeforeSearch: string | undefined
   let nudgedForEmail = false
   let nudgedForSearch = false
   let toolCalledThisTurn = false
@@ -734,7 +852,7 @@ async function conversation(
     )
     journal.timed(describeModelCall(model, message, metrics), askedAt)
     if (!message.tool_calls?.length) {
-      if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
+      if (wantsEmailSent && !computerUseCalled && !nudgedForEmail && !reminderOrNoteThisTurn) {
         nudgedForEmail = true
         onLog?.("Mail demandé mais jamais envoyé : relance corrective d'un tour.")
         messages.push(message)
@@ -749,8 +867,9 @@ async function conversation(
         })
         continue
       }
-      if (wantsWebInfo && !searchCalledThisTurn && !nudgedForSearch) {
+      if (wantsWebInfo && !searchCalledThisTurn && !actionToolThisTurn && !nudgedForSearch) {
         nudgedForSearch = true
+        draftBeforeSearch = message.content
         onLog?.("Question de connaissance sans recherche web : relance corrective d'un tour.")
         // Étape 217 (Léo, « Comment faire du pain » depuis le téléphone) : le brouillon de mémoire n'est PAS
         // remis au modèle, et la consigne n'est ni un reproche ni un message de l'utilisateur. Avec le brouillon
@@ -830,8 +949,11 @@ async function conversation(
       let toolFailed = false
       toolsRunThisTurn++
       try {
-        result = await executeTool(call.function.name, call.function.arguments)
+        // Étape 346 : « Arrêter » ou une nouvelle phrase interrompent tout de suite, même un outil qui ne sait pas
+        // s'arrêter lui-même (il finit alors en arrière-plan, son résultat est ignoré).
+        result = await raceAbort(executeTool(call.function.name, call.function.arguments), signal)
       } catch (err) {
+        if (signal?.aborted) throw err
         result = toolFailure(err)
         toolFailed = true
       }
@@ -846,6 +968,15 @@ async function conversation(
       // d'espérer qu'une consigne suffise à empêcher l'invention — même logique que le court-circuit
       // look_at_screen ci-dessous, qui évite déjà un aller-retour LLM inutile.
       if (toolFailed) {
+        // Étape 346 : une recherche imposée par la relance qui échoue (pas d'internet…) ne remplace jamais une
+        // réponse déjà donnée — « Combien d'habitants à Lyon ? » gardait sinon « Échec de l'outil » à la place.
+        const nudgedLookupFailed = nudgedForSearch && (call.function.name === 'search_web' || call.function.name === 'read_web_page')
+        if (nudgedLookupFailed && draftBeforeSearch?.trim() && !isToolFailureText(draftBeforeSearch)) {
+          // Dit tel quel : la réponse vient de la mémoire du modèle, pas d'une vérification.
+          const finalText = finalize(t('reply.unverified', { answer: draftBeforeSearch.trim() }))
+          if (holdKnowledgeStream) onToken?.(finalText)
+          return finalText
+        }
         return finalize(result)
       }
 
@@ -855,6 +986,8 @@ async function conversation(
       // ma mère ? », « combien de RAM j'utilise ? »…), toujours plus lentes, et 11 fois une bonne réponse
       // (« le 14 mars ») remplacée par « aucun résultat sur internet ». Consulter une source compte comme vérifier.
       if (LOOKUP_TOOLS.has(call.function.name)) searchCalledThisTurn = true
+      else actionToolThisTurn = true
+      if (call.function.name === 'set_reminder' || call.function.name === 'remember') reminderOrNoteThisTurn = true
 
       // Constaté en usage réel (Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit
       // c'est lancé mais il lance pas ») : quand open_app échoue (aucune application de ce nom installée,

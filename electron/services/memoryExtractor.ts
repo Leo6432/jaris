@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { chatWithOllama, type OllamaMessage } from './ollama'
+import { chatWithOllama, preferLoadedModel, type OllamaMessage } from './ollama'
 import { TOOLS, toolFlag } from './tools'
 import { listMemoryTitles, rememberNote } from './memoryStore'
 import { getProfile } from './profileStore'
@@ -134,7 +134,10 @@ async function runExtraction(signal: AbortSignal, onLog?: (message: string) => v
   try {
     const [memoryTitles, profile] = await Promise.all([listMemoryTitles(), getProfile()])
     if (signal.aborted) return
-    const model = profile?.models?.medium ?? config.ollama.model
+    // Étape 346 : le modèle de Jaris déjà chargé (celui qui vient de répondre), sinon le Moyen — jamais un rechargement
+    // de plus juste pour relire l'échange.
+    const model = await preferLoadedModel(Object.values(profile?.models ?? {}), profile?.models?.medium ?? config.ollama.model)
+    if (signal.aborted) return
 
     const systemPrompt =
       'Tu es le module de mémoire de Jaris, un assistant vocal. On te donne le ou les derniers échanges de ' +

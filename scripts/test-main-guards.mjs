@@ -47,7 +47,10 @@ test('toutes les fenêtres passent par la même garde, et plus aucune n’ouvre 
 test('la touche + n’est réservée que si elle est activée, et jamais quand Jaris a le focus', () => {
   const sync = main.slice(main.indexOf('function syncWakeShortcut('), main.indexOf('function setWakeShortcutWanted('))
   assert.match(sync, /const wanted = wakeShortcutWanted && BrowserWindow\.getFocusedWindow\(\) === null/)
-  assert.match(sync, /globalShortcut\.unregister\(WAKE_SHORTCUT\)/)
+  assert.match(sync, /globalShortcut\.unregister\(accelerator\)/)
+  assert.match(sync, /for \(const accelerator of WAKE_SHORTCUTS\)/)
+  // Étape 346 : un portable sans pavé numérique ouvre la barre du Chat par Ctrl+Alt+J, avec les mêmes règles.
+  assert.match(main, /const WAKE_SHORTCUTS = \[WAKE_SHORTCUT, 'Control\+Alt\+J'\]/)
   const code = main.split('\n').filter((line) => !/^\s*(\*|\/\/)/.test(line)).join('\n')
   assert.equal(code.match(/globalShortcut\.register\(/g).length, 1, 'enregistrée à un seul endroit, sous condition')
   assert.match(main, /app\.on\('browser-window-focus', syncWakeShortcutSoon\)/)

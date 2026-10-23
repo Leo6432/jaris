@@ -1,5 +1,6 @@
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
+import { shell } from 'electron'
 import { allTranslations, t } from '../../shared/i18n'
 
 const execAsync = promisify(exec)
@@ -11,6 +12,11 @@ interface StartApp {
 }
 
 let cache: { apps: StartApp[]; fetchedAt: number } | null = null
+
+/** Oublie la liste gardée en mémoire (tests). */
+export function clearInstalledAppsCache(): void {
+  cache = null
+}
 
 /** Liste les applications connues du menu Démarrer Windows (classiques et Store) — aucune curation manuelle. */
 async function listInstalledApps(): Promise<StartApp[]> {
@@ -48,8 +54,54 @@ function normalizeAppName(value: string): string {
     // Plage des diacritiques combinants, écrite en échappements plutôt qu'en caractères littéraux :
     // des accents combinants nus dans le source sont invisibles à la relecture et faciles à casser.
     .replace(/[\u0300-\u036f]/g, '')
+    // Étape 346 : « + » se dit « plus ». Avant, « Notepad++ » devenait « notepad », héritait de l'alias « bloc notes »
+    // et, plus court que « Bloc-notes », gagnait sur « ouvre bloc note » ; « notepad++ » ouvrait le Bloc-notes.
+    .replace(/\+/g, ' plus ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
+}
+
+/**
+ * Étape 346 (bug « ouvre bloc note ») : les mots qui précèdent le nom dans une demande dite à voix haute ne font pas
+ * partie du nom — « le bloc note », « l'explorateur », « mon calendrier ». Retirés de la DEMANDE seulement.
+ */
+const LEADING_DETERMINERS = /^(?:(?:l|le|la|les|un|une|des|du|mon|ma|mes|ton|ta|tes|the|my)\s+)+/
+
+function withoutDeterminers(normalized: string): string {
+  return normalized.replace(LEADING_DETERMINERS, '').trim() || normalized
+}
+
+/**
+ * Forme « sonore » d'un nom sans espaces, pour la dernière chance : la transcription écrit « blocknote », « bloque
+ * note », « blocnotes » pour « Bloc-notes ». ck/k/qu → c, ph → f, y → i, lettres doublées simplifiées, s/x final retiré.
+ */
+function phonetic(normalized: string): string {
+  return normalized
+    .replace(/ /g, '')
+    .replace(/ck/g, 'c')
+    .replace(/qu/g, 'c')
+    .replace(/k/g, 'c')
+    .replace(/ph/g, 'f')
+    .replace(/y/g, 'i')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/[sx]$/, '')
+}
+
+/** Distance de Levenshtein, bornée : au-delà de `max`, la valeur exacte ne compte pas. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i]
+    let best = i
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+      best = Math.min(best, current[j])
+    }
+    if (best > max) return max + 1
+    previous = current
+  }
+  return previous[b.length]
 }
 
 /**
@@ -62,8 +114,9 @@ function normalizeAppName(value: string): string {
  * les deux libellés possibles d'une même application Windows. Les alias jouent dans les DEUX sens.
  */
 const LOCALIZED_ALIASES: string[][] = [
-  ['bloc notes', 'notepad'],
-  ['calculatrice', 'calculator'],
+  // Étape 346 : les graphies que la transcription donne vraiment (« Blocknote » dans le cas de Léo).
+  ['bloc notes', 'notepad', 'bloc note', 'blocnote', 'blocnotes', 'block note', 'block notes', 'blocknote', 'blocknotes'],
+  ['calculatrice', 'calculator', 'calculette'],
   ['parametres', 'settings'],
   ['explorateur de fichiers', 'file explorer'],
   ['invite de commandes', 'command prompt'],
@@ -110,13 +163,19 @@ function containsWords(haystack: string, needle: string): boolean {
   for (let start = 0; start + want.length <= hay.length; start++) {
     const matches = want.every((word, index) => {
       const candidate = hay[start + index]
-      if (word === candidate) return true
+      if (word === candidate || sameWordStem(word, candidate)) return true
       const isLastWord = index === want.length - 1
       return isLastWord && word.length >= MIN_FRAGMENT_LENGTH && candidate.startsWith(word)
     })
     if (matches) return true
   }
   return false
+}
+
+/** Singulier et pluriel d'un même mot (« note »/« notes », « parametre »/« parametres ») — au moins 3 lettres. */
+function sameWordStem(a: string, b: string): boolean {
+  const stem = (word: string): string => (word.length > 3 ? word.replace(/[sx]$/, '') : word)
+  return a.length >= MIN_FRAGMENT_LENGTH && b.length >= MIN_FRAGMENT_LENGTH && stem(a) === stem(b)
 }
 
 /** Même question, mais en ignorant complètement les espaces : "blocnotes" doit trouver "Bloc-notes". */
@@ -152,22 +211,31 @@ function appCoversQuery(appName: string, query: string): boolean {
  * désormais de mentir sur un échec).
  */
 export function findBestMatch(apps: StartApp[], query: string): StartApp | undefined {
-  const q = normalizeAppName(query)
-  if (!q) return undefined
+  const raw = normalizeAppName(query)
+  if (!raw) return undefined
+  // Étape 346 : « le bloc note », « l'explorateur » — l'article n'est pas une partie du nom.
+  const q = withoutDeterminers(raw)
 
   const normalized = apps.map((app) => ({ app, name: normalizeAppName(app.Name) }))
-  const wanted = aliasesFor(q)
+  const wanted = Array.from(new Set([...aliasesFor(q), ...aliasesFor(raw)]))
 
-  const exact = normalized.find((entry) => wanted.includes(entry.name))
+  // Le nom de l'application elle-même avant un alias de langue : « notepad plus plus » est Notepad++, pas le
+  // Bloc-notes, même si les deux pourraient se rejoindre par un alias.
+  const exact = normalized.find((entry) => entry.name === q || entry.name === raw) ?? normalized.find((entry) => wanted.includes(entry.name))
   if (exact) return exact.app
+
+  /** 0 : correspondance par le nom propre de l'application ; 1 : seulement grâce à un alias de langue. */
+  const viaAlias = (entry: { name: string }, test: (alias: string, want: string) => boolean): number =>
+    test(entry.name, q) || test(entry.name, raw) ? 0 : 1
 
   // Le nom de l'application couvre TOUTE la demande ("chrome" -> "Google Chrome") : la meilleure
   // correspondance est alors la plus courte, celle qui ajoute le moins de mots à ce qui a été demandé.
+  const covers = (alias: string, want: string): boolean => appCoversQuery(alias, want)
   const covering = normalized.filter((entry) =>
-    aliasesFor(entry.name).some((alias) => wanted.some((want) => appCoversQuery(alias, want)))
+    aliasesFor(entry.name).some((alias) => wanted.some((want) => covers(alias, want)))
   )
   if (covering.length) {
-    return covering.sort((a, b) => a.app.Name.length - b.app.Name.length)[0].app
+    return covering.sort((a, b) => viaAlias(a, covers) - viaAlias(b, covers) || a.app.Name.length - b.app.Name.length)[0].app
   }
 
   // Sinon, l'inverse : la demande contient le nom de l'application ("le bloc-notes" -> "Bloc-notes"). Ici
@@ -176,7 +244,80 @@ export function findBestMatch(apps: StartApp[], query: string): StartApp | undef
   const contained = normalized.filter((entry) =>
     aliasesFor(entry.name).some((alias) => wanted.some((want) => appCoversQuery(want, alias)))
   )
-  return contained.sort((a, b) => b.app.Name.length - a.app.Name.length)[0]?.app
+  if (contained.length) return contained.sort((a, b) => b.app.Name.length - a.app.Name.length)[0].app
+
+  return closestByEar(normalized, wanted)?.app
+}
+
+/**
+ * Dernière chance (étape 346) : la demande ne diffère d'un nom que par la façon dont la transcription l'a écrit —
+ * « blocknote », « bloque note », « calculatrise ». Même forme sonore, ou une lettre d'écart (deux au-delà de
+ * 8 lettres). Jamais sous 4 lettres : un nom court se confondrait avec n'importe quoi.
+ */
+function closestByEar<T extends { name: string }>(entries: T[], wanted: string[], maxRatio = 0): T | undefined {
+  let best: { entry: T; distance: number } | undefined
+  for (const want of wanted) {
+    const sound = phonetic(want)
+    if (sound.length < 4) continue
+    const max = maxRatio ? Math.max(2, Math.floor(sound.length * maxRatio)) : sound.length > 8 ? 2 : 1
+    for (const entry of entries) {
+      for (const alias of aliasesFor(entry.name)) {
+        const candidate = phonetic(alias)
+        if (candidate.length < 4) continue
+        const distance = editDistance(sound, candidate, max)
+        if (distance <= max && (!best || distance < best.distance)) best = { entry, distance }
+      }
+    }
+  }
+  return best?.entry
+}
+
+/**
+ * Nom le plus proche, pour le proposer quand rien ne correspond (étape 346) : plus large que la dernière chance de
+ * findBestMatch (jusqu'à 40 % de lettres différentes), donc jamais ouvert sans que l'utilisateur le redemande.
+ */
+export function suggestApp(apps: StartApp[], query: string): StartApp | undefined {
+  const raw = normalizeAppName(query)
+  if (!raw) return undefined
+  const q = withoutDeterminers(raw)
+  const normalized = apps.map((app) => ({ app, name: normalizeAppName(app.Name) }))
+  return closestByEar(normalized, aliasesFor(q), 0.4)?.app
+}
+
+/**
+ * Sites courants qu'on demande d'« ouvrir » comme une application (étape 346, « ouvre YouTube ») : quand aucune
+ * application de ce nom n'est installée, l'adresse s'ouvre dans le navigateur au lieu d'un « introuvable ».
+ */
+const WEBSITES: Array<[string[], string, string]> = [
+  [['youtube'], 'YouTube', 'https://www.youtube.com'],
+  [['gmail'], 'Gmail', 'https://mail.google.com'],
+  [['google'], 'Google', 'https://www.google.com'],
+  [['internet', 'le navigateur', 'navigateur', 'mon navigateur', 'navigateur internet', 'le web', 'web'], 'Internet', 'https://www.google.com'],
+  [['netflix'], 'Netflix', 'https://www.netflix.com'],
+  [['facebook'], 'Facebook', 'https://www.facebook.com'],
+  [['instagram'], 'Instagram', 'https://www.instagram.com'],
+  [['twitter'], 'X', 'https://x.com'],
+  [['tiktok', 'tik tok'], 'TikTok', 'https://www.tiktok.com'],
+  [['wikipedia', 'wiki'], 'Wikipédia', 'https://www.wikipedia.org'],
+  [['amazon'], 'Amazon', 'https://www.amazon.com'],
+  [['linkedin'], 'LinkedIn', 'https://www.linkedin.com'],
+  [['reddit'], 'Reddit', 'https://www.reddit.com'],
+  [['twitch'], 'Twitch', 'https://www.twitch.tv'],
+  [['chatgpt', 'chat gpt'], 'ChatGPT', 'https://chatgpt.com'],
+  [['whatsapp', 'whats app'], 'WhatsApp', 'https://web.whatsapp.com'],
+  [['outlook', 'hotmail'], 'Outlook', 'https://outlook.live.com'],
+  [['google maps', 'maps'], 'Google Maps', 'https://www.google.com/maps'],
+  [['le bon coin', 'leboncoin'], 'Leboncoin', 'https://www.leboncoin.fr'],
+  [['deezer'], 'Deezer', 'https://www.deezer.com'],
+  [['spotify'], 'Spotify', 'https://open.spotify.com'],
+  [['discord'], 'Discord', 'https://discord.com/app']
+]
+
+export function websiteFor(query: string): { name: string; url: string } | undefined {
+  const raw = normalizeAppName(query)
+  const q = withoutDeterminers(raw)
+  const site = WEBSITES.find(([names]) => names.includes(q) || names.includes(raw))
+  return site ? { name: site[1], url: site[2] } : undefined
 }
 
 /**
@@ -196,10 +337,18 @@ export const APP_LAUNCHED_SUFFIX = 'a été lancé.'
  * l'application pouvant être n'importe où dans la phrase selon la grammaire.
  */
 export function didAppLaunch(result: string): boolean {
-  return allTranslations('app.launched').some((template) => {
+  return launchedAppName(result) !== undefined
+}
+
+/** Nom de l'application VRAIMENT lancée, lu dans le message de succès de `openApp` (étape 346, bug du nom annoncé). */
+export function launchedAppName(result: string): string | undefined {
+  for (const template of allTranslations('app.launched')) {
     const [before, after] = template.split('{name}').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    return after !== undefined && new RegExp(`^${before}.+${after}$`, 'su').test(result.trim())
-  })
+    if (after === undefined) continue
+    const match = new RegExp(`^${before}(.+)${after}$`, 'su').exec(result.trim())
+    if (match) return match[1]
+  }
+  return undefined
 }
 
 function launch(command: string, args: string[]): Promise<string | null> {
@@ -228,7 +377,18 @@ export async function openApp(name: string): Promise<string> {
 
   const match = findBestMatch(apps, name)
   if (!match) {
-    return t('app.notFound', { name })
+    // Étape 346 : « ouvre YouTube » sans application YouTube installée — le site, dans le navigateur.
+    const site = websiteFor(name)
+    if (site) {
+      try {
+        await shell.openExternal(site.url)
+        return t('app.siteOpened', { name: site.name })
+      } catch (err) {
+        return t('app.launchFailed', { name: site.name, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    const suggestion = suggestApp(apps, name)
+    return suggestion ? t('app.notFoundSuggest', { name, suggestion: suggestion.Name }) : t('app.notFound', { name })
   }
 
   const error = await launch('explorer.exe', [`shell:appsFolder\\${match.AppID}`])

@@ -131,9 +131,13 @@ export default function Composer({
   // Étape 276 (Léo : « quand on clique sur le micro dans le Chat, ça ne doit pas aller en vocal, ça doit
   // enregistrer et transcrire en texte ») : le micro de la barre est une DICTÉE — un clic enregistre, un second
   // arrête ; le texte transcrit s'ajoute à ce qui est déjà écrit, sans rien envoyer tout seul.
-  const [dictation, setDictation] = useState<'idle' | 'recording' | 'transcribing'>('idle')
+  const [dictation, setDictation] = useState<'idle' | 'starting' | 'recording' | 'transcribing'>('idle')
   const [dictationSeconds, setDictationSeconds] = useState(0)
   const recorderRef = useRef<DictationRecorder | null>(null)
+  // Étape 346 : un double-clic lançait deux ouvertures du micro (l'état React n'a pas encore changé au second clic) ;
+  // le premier enregistreur restait ouvert, micro allumé, sans plus personne pour l'arrêter.
+  const startingRef = useRef(false)
+  const mountedRef = useRef(true)
   const dictationTimers = useRef<{ stop?: number; tick?: number }>({})
   const valueRef = useRef(value)
   valueRef.current = value
@@ -147,14 +151,15 @@ export default function Composer({
   }
 
   // Écran quitté en pleine dictée : le micro est rendu à Windows, rien n'est transcrit.
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
       clearDictationTimers()
       recorderRef.current?.cancel()
       recorderRef.current = null
-    },
-    []
-  )
+    }
+  }, [])
 
   const finishDictation = async (): Promise<void> => {
     const recorder = recorderRef.current
@@ -180,14 +185,31 @@ export default function Composer({
   }
 
   const toggleDictation = async (): Promise<void> => {
-    if (dictation === 'recording') return finishDictation()
-    if (dictation !== 'idle') return
+    if (dictation === 'recording' && recorderRef.current) return finishDictation()
+    if (dictation !== 'idle' || startingRef.current) return
+    startingRef.current = true
+    setDictation('starting')
+    let recorder: DictationRecorder
     try {
-      recorderRef.current = await DictationRecorder.start()
+      recorder = await DictationRecorder.start()
     } catch (err) {
-      onError(err instanceof Error ? err.message : String(err))
+      startingRef.current = false
+      if (mountedRef.current) {
+        setDictation('idle')
+        onError(err instanceof Error ? err.message : String(err))
+      }
       return
     }
+    startingRef.current = false
+    // Écran fermé pendant l'ouverture du micro : on le referme aussitôt, rien ne doit rester allumé.
+    if (!mountedRef.current) {
+      recorder.cancel()
+      return
+    }
+    // Un enregistreur oublié (ne devrait plus arriver) est fermé avant d'en garder un autre.
+    recorderRef.current?.cancel()
+    clearDictationTimers()
+    recorderRef.current = recorder
     setDictation('recording')
     setDictationSeconds(0)
     const startedAt = Date.now()
@@ -373,12 +395,12 @@ export default function Composer({
             type="button"
             className={`composer__mic${dictation === 'recording' ? ' composer__mic--recording' : ''}`}
             onClick={() => void toggleDictation()}
-            disabled={dictation === 'transcribing'}
+            disabled={dictation === 'transcribing' || dictation === 'starting'}
             aria-pressed={dictation === 'recording'}
             title={dictation === 'recording' ? t('composer.dictation.finish') : t('composer.dictation.start.title')}
             aria-label={dictation === 'recording' ? t('composer.dictation.finish') : t('composer.dictation.start')}
           >
-            {dictation === 'transcribing' ? <span className="composer__spinner" aria-hidden="true" /> : <MicIcon />}
+            {dictation === 'transcribing' || dictation === 'starting' ? <span className="composer__spinner" aria-hidden="true" /> : <MicIcon />}
           </button>
         )}
 

@@ -188,6 +188,7 @@ function drawCore(ctx: CanvasRenderingContext2D, radius: number, angleY: number,
 
 interface AudioAnalysis {
   analyser: AnalyserNode
+  context: AudioContext
 }
 
 /**
@@ -209,9 +210,23 @@ function getOrCreateAudioAnalysis(audioEl: HTMLAudioElement): AudioAnalysis {
   analyser.connect(audioCtx.destination)
   if (audioCtx.state === 'suspended') void audioCtx.resume()
 
-  const result: AudioAnalysis = { analyser }
+  const result: AudioAnalysis = { analyser, context: audioCtx }
   audioAnalysisCache.set(audioEl, result)
   return result
+}
+
+type WithSinkId = { setSinkId?: (id: string) => Promise<void> }
+
+/**
+ * Étape 346 (« le haut-parleur choisi dans les Options n'est pas utilisé ») : une fois relié à l'orbe par
+ * createMediaElementSource, l'élément <audio> ne sort plus lui-même — c'est l'AudioContext qui joue le son. La sortie
+ * choisie s'applique donc aux deux (l'élément seul, tant qu'aucun orbe ne l'a relié). `''` = sortie par défaut.
+ */
+export async function setVoiceOutputDevice(audioEl: HTMLAudioElement, sinkId: string): Promise<void> {
+  const targets: WithSinkId[] = [audioEl as HTMLAudioElement & WithSinkId]
+  const analysis = audioAnalysisCache.get(audioEl)
+  if (analysis) targets.push(analysis.context as AudioContext & WithSinkId)
+  await Promise.all(targets.map((target) => (target.setSinkId ? target.setSinkId.call(target, sinkId).catch(() => {}) : undefined)))
 }
 
 /** Niveau sonore moyen courant (0-1) ; le lissage vient de smoothingTimeConstant sur l'AnalyserNode lui-même. */

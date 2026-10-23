@@ -82,6 +82,18 @@ window.__renderChatWidget = (inactive) => root.render(
   </div>
 )
 window.__renderChatWidget(false)
+// Étape 346 : même balisage que le widget vocal déplié d'App.tsx (statut puis conversation).
+window.__renderVoiceLong = (reply) => root.render(
+  <div className="app app--widget">
+    <div className="widget-details">
+      <div className="app__status app__status--widget">Je réponds</div>
+      <div className="app__conversation app__conversation--widget">
+        <p className="app__transcript">« Raconte-moi l'histoire de Rome »</p>
+        <p className="app__reply">{reply}</p>
+      </div>
+    </div>
+  </div>
+)
 window.__renderVoiceRest = () => root.render(
   <div className="app app--widget app--widget-collapsed">
     <div className="widget-rest">
@@ -501,5 +513,42 @@ test('survoler le widget suspend la disparition automatique tant que la souris r
     const wanted = await page.evaluate(() => window.__computeReplyDismissDelayMs('Il fait 18 degrés à Paris, ciel couvert.'))
     await page.waitForTimeout(wanted + 700)
     assert.ok(await page.$('.chat-widget__answer'), 'le survol continu n’a pas empêché la disparition automatique')
+  })
+})
+
+// Étape 346 : une fois la réponse affichée, le champ (et son écoute d'Échap) n'existe plus — Échap ne fermait plus
+// rien, et une erreur restait affichée sans aucun moyen de la fermer au clavier.
+test('Échap ferme la réponse affichée, et rend la fenêtre au petit indicateur', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.fill('.chat-widget__input', 'bonjour')
+    await page.click('.chat-widget__send')
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
+    assert.equal(await page.evaluate(() => window.__collapsed), 0)
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.chat-widget__answer', { state: 'detached' })
+    assert.equal(await page.evaluate(() => window.__keepOpen), false, 'la protection n’est pas relâchée')
+    assert.equal(await page.evaluate(() => window.__collapsed), 1, 'la fenêtre ne revient pas au petit indicateur')
+  })
+})
+
+// Étape 346 : dans la fenêtre du widget vocal (320 x 460, main.ts), la fin d'une très longue réponse tombait sous le
+// bas de la fenêtre — coupée, et impossible à faire défiler puisque la boîte croyait avoir 380 px de place.
+test('widget vocal : une très longue réponse reste dans la fenêtre et défile jusqu’à sa fin', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 320, height: 460 })
+    await page.evaluate(() => window.__renderVoiceLong('Rome fut fondée, dit la légende, par Romulus. '.repeat(60)))
+    await page.waitForSelector('.app__conversation--widget')
+    const box = await page.$eval('.app__conversation--widget', (el) => {
+      const rect = el.getBoundingClientRect()
+      return { bottom: rect.bottom, scroll: el.scrollHeight, client: el.clientHeight }
+    })
+    assert.ok(box.bottom <= 460, `la boîte sort de la fenêtre (bas à ${Math.round(box.bottom)} px)`)
+    assert.ok(box.scroll > box.client, 'la réponse ne défile pas : sa fin est inaccessible')
+    const end = await page.$eval('.app__conversation--widget', (el) => {
+      el.scrollTop = el.scrollHeight
+      return el.getBoundingClientRect().bottom
+    })
+    assert.ok(end <= 460)
   })
 })

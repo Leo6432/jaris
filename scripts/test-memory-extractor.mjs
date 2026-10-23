@@ -44,6 +44,7 @@ function load(respond, { name = 'Léo' } = {}) {
   const module = loadTsModule('electron/services/memoryExtractor.ts', {
     '../config': { config: { ollama: { model: 'modele-par-defaut', numCtx: 8192 } } },
     './ollama': {
+      preferLoadedModel: async (_candidates, preferred) => preferred,
       chatWithOllama: async (messages, tools, model, think, signal, numCtx) => {
         calls.push({ messages, tools, model, think, signal, numCtx })
         return respond(messages, signal)

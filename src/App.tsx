@@ -8,7 +8,7 @@ import ImagePanel from '@/components/ImagePanel'
 import VideoPanel from '@/components/VideoPanel'
 import KeepAlive from '@/components/KeepAlive'
 import RuntimeSetup from '@/components/RuntimeSetup'
-import JarisOrb from '@/components/JarisOrb'
+import JarisOrb, { setVoiceOutputDevice } from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
@@ -366,11 +366,10 @@ export default function App(): JSX.Element {
           // de réglages sont deux fenêtres/process renderer séparés (voir App.tsx en tête de fichier), donc
           // un changement de haut-parleur fait depuis Options (fenêtre réglages) n'apparaîtrait jamais ici
           // sans le relire. Peu fréquent (une seule fois par réponse parlée), le coût est négligeable.
+          // Étape 346 : la voix passe par l'AudioContext de l'orbe (qui l'analyse pour la faire vibrer) : c'est LUI qui
+          // doit sortir sur le haut-parleur choisi, la sortie de l'élément <audio> seule n'avait aucun effet.
           void window.jaris.getProfile().catch(() => null).then((profile) => {
-            const sinkId = profile?.audioOutputDeviceId
-            const setSinkId = (el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId
-            const applySink = sinkId && setSinkId ? setSinkId.call(el, sinkId) : Promise.resolve()
-            void applySink.catch(() => {}).then(() => el.play())
+            void setVoiceOutputDevice(el, profile?.audioOutputDeviceId ?? '').then(() => el.play())
           })
         }
       }),
@@ -831,10 +830,24 @@ export default function App(): JSX.Element {
   // ChatWidget.tsx). Rendu à part plutôt qu'en variante du widget vocal : les deux n'ont ni le même contenu,
   // ni la même mécanique (l'un suit l'émotion du pipeline vocal, l'autre ce que l'utilisateur tape), et les
   // mélanger dans un seul arbre aurait fait cohabiter deux logiques de dépliage sur les mêmes éléments.
+  // Étape 346 : le lecteur de la voix reste monté quelle que soit la forme du widget. Avant, il n'existait que dans la
+  // forme « voix » : après un passage par le Chat, la réponse parlée arrivait sans lecteur (Jaris ne parlait plus), et
+  // chaque retour à la voix créait un nouveau lecteur — donc un nouvel AudioContext jamais fermé.
+  const widgetAudio = (
+    <audio
+      key="widget-audio"
+      ref={audioRef}
+      hidden
+      onEnded={() => window.jaris.notifyAudioEnded()}
+      onError={() => window.jaris.notifyAudioEnded()}
+    />
+  )
+
   if (widgetMode === 'chat' || widgetMode === 'chat-idle') {
     return (
       <div className={`app app--widget app--widget-chat${widgetMode === 'chat-idle' ? ' app--widget-chat-idle' : ''}${widgetInstant ? ' app--widget-instant' : ''}`}>
         <ChatWidget inactive={widgetMode === 'chat-idle'} />
+        {widgetAudio}
       </div>
     )
   }
@@ -869,12 +882,7 @@ export default function App(): JSX.Element {
         )}
       </div>
 
-      <audio
-        ref={audioRef}
-        hidden
-        onEnded={() => window.jaris.notifyAudioEnded()}
-        onError={() => window.jaris.notifyAudioEnded()}
-      />
+      {widgetAudio}
     </div>
   )
 }

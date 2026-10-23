@@ -120,3 +120,40 @@ test('toutes les demandes au modèle de conversation utilisent LA MÊME fenêtre
   assert.ok(read('electron/services/memoryExtractor.ts').includes(same), 'la mémoire automatique')
   assert.ok(read('electron/main.ts').includes(`preloadModel(model, ${same})`), 'le préchargement au démarrage')
 })
+
+// Étape 346 : le modèle de vision est souvent aussi celui de la conversation — une autre fenêtre le faisait recharger.
+test('regarder l’écran et piloter utilisent la même fenêtre que la conversation, ramenée au modèle', () => {
+  const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+  for (const path of ['electron/services/vision.ts', 'electron/services/computerUse.ts']) {
+    const source = read(path)
+    assert.ok(!source.includes('num_ctx: config.ollama.numCtx'), `${path} : plus de fenêtre fixe`)
+    // vision.ts passe par chatWithOllama (annulable, en streaming) : la fenêtre y est le dernier argument.
+    assert.ok(source.includes('num_ctx: await sharedNumCtx(model)') || /chatWithOllama\([\s\S]{0,400}?await sharedNumCtx\(model\)\s*\)/.test(source), path)
+    const helper = source.slice(source.indexOf('async function sharedNumCtx'), source.indexOf('async function sharedNumCtx') + 400)
+    assert.ok(helper.includes('getProfile()') && helper.includes('contextLength ?? config.ollama.numCtx'), path)
+    assert.ok(helper.includes('fitToModelContext(model, wanted)'), path)
+  }
+})
+
+// Étape 346 (« sur ton PC, chaque phrase dite à voix haute recharge deux modèles ») : la correction de la phrase et la
+// mémoire automatique prennent le modèle de Jaris déjà chargé, au lieu d'en charger un autre à chaque phrase.
+test('étape 346 : le modèle de Jaris déjà chargé est préféré, sinon le modèle prévu', async () => {
+  respond = async (url) =>
+    url.endsWith('/api/ps')
+      ? new Response(JSON.stringify({ models: [{ model: 'qwen3.5:9b', size_vram: 7 * 1024 ** 3 }] }), { status: 200 })
+      : new Response('{}', { status: 200 })
+  assert.equal(await ollama.preferLoadedModel(['ministral-3:3b', 'qwen3.5:9b'], 'ministral-3:3b'), 'qwen3.5:9b')
+  assert.equal(await ollama.preferLoadedModel(['ministral-3:3b'], 'ministral-3:3b'), 'ministral-3:3b', 'un modèle étranger chargé ne compte pas')
+  const loaded = await ollama.loadedOllamaModels()
+  assert.equal(loaded[0].model, 'qwen3.5:9b')
+  assert.equal(Math.round(loaded[0].vramGb), 7)
+  respond = async () => { throw new Error('ECONNREFUSED') }
+  assert.equal(await ollama.preferLoadedModel(['qwen3.5:9b'], 'ministral-3:3b'), 'ministral-3:3b', 'Ollama muet : le modèle prévu')
+})
+
+test('étape 346 : la correction (voix) et la mémoire passent bien par le modèle déjà chargé', () => {
+  const voice = readFileSync(new URL('../electron/services/voicePipeline.ts', import.meta.url), 'utf8')
+  const memory = readFileSync(new URL('../electron/services/memoryExtractor.ts', import.meta.url), 'utf8')
+  assert.match(voice, /const model = await preferLoadedModel\(\s*Object\.values\(profile\?\.models \?\? \{\}\),\s*profile\?\.models\?\.flash/)
+  assert.match(memory, /const model = await preferLoadedModel\(Object\.values\(profile\?\.models \?\? \{\}\), profile\?\.models\?\.medium/)
+})

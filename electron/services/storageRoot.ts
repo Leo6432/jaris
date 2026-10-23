@@ -762,7 +762,11 @@ function bootstrap(): string | null {
     // Une racine enregistrée mais introuvable (disque externe débranché) : on ne la recrée surtout pas vide,
     // Jaris repart sur l'emplacement par défaut au lieu de faire croire que tout a disparu.
     if (!existsSync(root)) {
-      if (!isNewAutoRoot) return null
+      if (!isNewAutoRoot) {
+        // Étape 346 : dit à Léo, au démarrage, quel disque rebrancher (voir getMissingStorageRoot).
+        missingStorageRoot = root
+        return null
+      }
       mkdirSync(root, { recursive: true })
     }
     const electronDir = join(root, ELECTRON_SUBDIR)
@@ -789,6 +793,13 @@ function bootstrap(): string | null {
     console.error('[jaris] Racine de stockage inutilisable, emplacement par défaut conservé :', err)
     return null
   }
+}
+
+/** Étape 346 : la racine enregistrée mais introuvable au démarrage (disque externe débranché), `null` sinon. */
+let missingStorageRoot: string | null = null
+
+export function getMissingStorageRoot(): string | null {
+  return missingStorageRoot
 }
 
 let storageRoot: string | null = bootstrap()

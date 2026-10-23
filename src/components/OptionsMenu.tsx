@@ -26,6 +26,7 @@ import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
 import { migrateLegacyCodeConversations } from '../lib/codeConversations'
+import { selectedInputDevice } from '../lib/inputDeviceChoice'
 import { currentLocale, t, tn } from '../lib/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
@@ -648,7 +649,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     try {
       const deviceIndex = value === '' ? null : Number(value)
       await window.jaris.setAudioInputDevice(deviceIndex)
-      setProfile((prev) => (prev ? { ...prev, audioInputDeviceIndex: deviceIndex } : prev))
+      const deviceName = inputDevices?.find((device) => device.index === deviceIndex)?.name ?? null
+      setProfile((prev) => (prev ? { ...prev, audioInputDeviceIndex: deviceIndex, audioInputDeviceName: deviceName } : prev))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -948,7 +950,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               >
                 <select
                   className="options-menu__select"
-                  value={profile?.audioInputDeviceIndex ?? ''}
+                  value={selectedInputDevice(profile, inputDevices)}
                   onChange={(e) => void chooseInputDevice(e.target.value)}
                   disabled={inputDevices === null || savingAudioDevice}
                 >

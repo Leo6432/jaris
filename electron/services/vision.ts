@@ -2,12 +2,9 @@ import { desktopCapturer, screen, type NativeImage } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
-import { listInstalledModels } from './ollama'
+import { chatWithOllama, fitToModelContext, listInstalledModels } from './ollama'
+import { getProfile } from './profileStore'
 import { replyLanguageName, replyLanguageRule, t } from '../../shared/i18n'
-
-interface OllamaVisionResponse {
-  message?: { content?: string }
-}
 
 const VISION_SYSTEM_PROMPT =
   "Tu es Jaris, un assistant vocal qui décrit ce qui est affiché à l'écran de l'utilisateur. Réponds en " +
@@ -121,13 +118,28 @@ export function localizeReplyLanguage(prompt: string): string {
  * toutes au scan de capacité (VRAM totale) peut ne plus tenir dans la VRAM *libre* à l'instant présent
  * (conversation déjà chargée, jeu en parallèle...).
  */
+/**
+ * Étape 346 : la MÊME fenêtre de contexte que la conversation (réglage d'Options, ramené au maximum du modèle). Le
+ * modèle de vision est souvent aussi celui de la conversation (qwen3.8:27b : Élevé, Vision et Code) : une fenêtre
+ * différente obligeait Ollama à le recharger entièrement à chaque regard sur l'écran (étape 294).
+ */
+async function sharedNumCtx(model: string): Promise<number> {
+  const wanted = (await getProfile().catch(() => null))?.contextLength ?? config.ollama.numCtx
+  try {
+    return await fitToModelContext(model, wanted)
+  } catch {
+    return wanted
+  }
+}
+
 export async function describeImage(
   imageBase64: string,
   question: string,
   visionModel: string,
   // Défaut = le prompt "lu à voix haute" d'origine : look_at_screen garde donc EXACTEMENT le comportement
   // qu'il avait avant l'étape 91, seuls les nouveaux appelants (chat/code) passent un prompt différent.
-  systemPrompt: string = VISION_SYSTEM_PROMPT
+  systemPrompt: string = VISION_SYSTEM_PROMPT,
+  signal?: AbortSignal
 ): Promise<string> {
   let model = visionModel
   try {
@@ -137,33 +149,21 @@ export async function describeImage(
     // Pas grave si le check échoue : on garde le modèle normalement configuré.
   }
 
-  let response: Response
-  try {
-    response = await fetch(`${config.ollama.host}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [
-          // Étape 293 : la réponse dans la langue de Jaris (rien d'ajouté en français).
-          { role: 'system', content: localizeReplyLanguage(systemPrompt) + replyLanguageRule() },
-          { role: 'user', content: question, images: [imageBase64] }
-        ],
-        stream: false,
-        think: false,
-        options: { num_ctx: config.ollama.numCtx }
-      })
-    })
-  } catch {
-    throw new Error(t('ollama.unreachable', { host: config.ollama.host }))
-  }
-
-  if (!response.ok) {
-    throw new Error(t('vision.httpError', { status: response.status, body: await response.text() }))
-  }
-
-  const data = (await response.json()) as OllamaVisionResponse
-  const content = data.message?.content?.trim()
+  // Étape 346 : en flux (une réflexion de plusieurs minutes ne coupe plus la connexion), et interrompu par « Arrêter »
+  // ou une nouvelle phrase. Même chemin que la conversation : mêmes messages d'erreur, même délai bien expliqué.
+  const message = await chatWithOllama(
+    [
+      // Étape 293 : la réponse dans la langue de Jaris (rien d'ajouté en français).
+      { role: 'system', content: localizeReplyLanguage(systemPrompt) + replyLanguageRule() },
+      { role: 'user', content: question, images: [imageBase64] }
+    ],
+    undefined,
+    model,
+    false,
+    signal,
+    await sharedNumCtx(model)
+  )
+  const content = message.content?.trim()
   if (!content) throw new Error(t('vision.empty', { model }))
   return content
 }
@@ -176,11 +176,11 @@ export async function describeImage(
  * modèle de vision, qui prend plusieurs secondes), pas la capture elle-même (quasi instantanée) — dans le
  * `finally` pour ne jamais rester affichée en cas d'erreur.
  */
-export async function lookAtScreen(question: string, visionModel: string): Promise<string> {
+export async function lookAtScreen(question: string, visionModel: string, signal?: AbortSignal): Promise<string> {
   const { imageBase64 } = await captureScreenshotBase64()
   showScanOverlay()
   try {
-    return await describeImage(imageBase64, question || "Décris ce qui est affiché à l'écran.", visionModel)
+    return await describeImage(imageBase64, question || "Décris ce qui est affiché à l'écran.", visionModel, VISION_SYSTEM_PROMPT, signal)
   } finally {
     hideScanOverlay()
   }

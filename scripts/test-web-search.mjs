@@ -259,3 +259,75 @@ test('plus aucun reste de SearXNG ni de Docker dans le programme livré', () => 
     assert.ok(!existsSync(new URL(gone, import.meta.url)), `${gone} existe encore`)
   }
 })
+
+// Étape 346 : une recherche ne bloque plus Jaris — ni « Arrêter » ignoré, ni page qui ne finit jamais de se charger.
+test('« Arrêter » pendant une recherche : rien de plus n’est demandé, l’autre moteur n’est jamais essayé', async () => {
+  const calls = []
+  const loader = (engine, _url, signal) => {
+    calls.push(engine.name)
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+  }
+  const controller = new AbortController()
+  const search = searchWebDetailed('météo', loader, controller.signal)
+  setTimeout(() => controller.abort(), 10)
+  await assert.rejects(search, { name: 'AbortError' })
+  assert.deepEqual(calls, ['DuckDuckGo'])
+})
+
+function fakeElectron({ read }) {
+  const windows = []
+  class BrowserWindow {
+    constructor() {
+      this.destroyed = false
+      this.webContents = {
+        id: windows.length + 1,
+        setAudioMuted() {},
+        on() {},
+        isLoading: () => true,
+        executeJavaScript: read
+      }
+      windows.push(this)
+    }
+    loadURL() {
+      return Promise.resolve()
+    }
+    isDestroyed() {
+      return this.destroyed
+    }
+    destroy() {
+      this.destroyed = true
+    }
+  }
+  const session = { fromPartition: () => ({ setUserAgent() {}, setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, on() {} }) }
+  return { electron: { BrowserWindow, session }, windows }
+}
+
+test('une page qui ne finit jamais de se charger : abandon à la limite de temps, fenêtre détruite, file libérée', async (t) => {
+  const fake = fakeElectron({ read: () => new Promise(() => {}) }) // executeJavaScript attend la fin d'un chargement sans fin
+  const hidden = loadTsModule('electron/services/webSearch.ts', { electron: fake.electron })
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  const first = hidden.loadInHiddenWindow(hidden.SEARCH_ENGINES[0], 'https://duckduckgo.com/html/?q=x')
+  first.catch(() => undefined)
+  for (let i = 0; i < 200 && !fake.windows.length; i++) await new Promise(setImmediate)
+  for (let i = 0; i < 100; i++) {
+    t.mock.timers.tick(500)
+    await new Promise(setImmediate)
+  }
+  await assert.rejects(first, /timeout/)
+  assert.ok(fake.windows[0].destroyed, 'la fenêtre cachée est détruite')
+  // La suivante n'attend pas une recherche bloquée.
+  const second = hidden.loadInHiddenWindow(hidden.SEARCH_ENGINES[0], 'https://duckduckgo.com/html/?q=y')
+  second.catch(() => undefined)
+  for (let i = 0; i < 200 && fake.windows.length < 2; i++) await new Promise(setImmediate)
+  assert.equal(fake.windows.length, 2)
+  const controller = new AbortController()
+  const third = hidden.loadInHiddenWindow(hidden.SEARCH_ENGINES[0], 'https://duckduckgo.com/html/?q=z', controller.signal)
+  controller.abort()
+  for (let i = 0; i < 100; i++) {
+    t.mock.timers.tick(500)
+    await new Promise(setImmediate)
+  }
+  await assert.rejects(second, /timeout/)
+  await assert.rejects(third, { name: 'AbortError' })
+  assert.equal(fake.windows.length, 2, 'annulée en attendant son tour : aucune fenêtre ouverte pour rien')
+})

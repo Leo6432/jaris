@@ -89,6 +89,7 @@ const THREADS = {
   ],
   b: [{ role: 'user', content: 'recette de crêpes' }]
 }
+window.__threads = THREADS
 
 window.__state = {
   activeId: 'a',
@@ -127,6 +128,16 @@ window.jaris = {
     return () => {}
   },
   onChatStreamToken: () => () => {},
+  // Étape 346 : le test annonce lui-même une réponse en cours ailleurs (petit widget), comme le main.
+  getChatBusy: () => Promise.resolve(false),
+  onChatBusy: (cb) => {
+    window.__busy = cb
+    return () => {}
+  },
+  onChatHistoryChanged: (cb) => {
+    window.__historyChanged = cb
+    return () => {}
+  },
   // Étape 273 : le test envoie lui-même les recherches web « en direct » (window.__web).
   onChatWebActivity: (cb) => {
     window.__web = cb
@@ -471,5 +482,28 @@ test('pendant une réponse, le temps écoulé s’affiche après une dizaine de 
     await page.waitForTimeout(1_500)
     assert.equal(await page.locator('.chat-panel__elapsed').count(), 0, 'le compteur n’est pas reparti de zéro')
     await page.click('.composer__send--stop')
+  })
+})
+
+// Étape 346 : une question posée depuis le petit widget part dans la même conversation ; le Chat ouvert pendant la
+// réflexion doit la montrer en train de « réfléchir », puis afficher la réponse dès qu'elle arrive.
+test('question posée depuis le widget : le Chat montre « réfléchit », puis la réponse sans changer de fenêtre', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.chat-panel__message')
+    assert.equal(await page.locator('.chat-panel__message--pending').count(), 0)
+    await page.evaluate(() => {
+      window.__threads.a.push({ role: 'user', content: 'question du widget' })
+      window.__busy(true)
+      window.__historyChanged()
+    })
+    await page.waitForSelector('.chat-panel__message--pending .chat-panel__thinking')
+    assert.ok((await page.textContent('.chat-panel__thread')).includes('question du widget'))
+    await page.evaluate(() => {
+      window.__threads.a.push({ role: 'assistant', content: 'réponse arrivée' })
+      window.__busy(false)
+      window.__historyChanged()
+    })
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('réponse arrivée'))
+    assert.equal(await page.locator('.chat-panel__message--pending').count(), 0, '« réfléchit » reste affiché après la réponse')
   })
 })

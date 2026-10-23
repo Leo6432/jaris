@@ -4,14 +4,14 @@ import type { JarisEmotion, MicTestDonePayload, SoundCue, VoiceReplyPayload, Wak
 import { VoiceClient, listeningUnavailableReason } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry, getActiveConversationId } from './conversationStore'
-import { converse } from './assistant'
+import { LOOKUP_TOOLS, converse } from './assistant'
 import { VOICE_CONTEXT_MAX_AGE_MS, clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
 import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
-import { structuredChat } from './ollama'
+import { preferLoadedModel, structuredChat } from './ollama'
 import { config } from '../config'
 import { appendJournal, formatElapsed } from './requestJournal'
 import { activityFromLog, formatActivity, thinkingActivity } from '../../shared/voiceActivity'
@@ -80,20 +80,57 @@ function fixSpokenEmailAt(text: string): string {
   )
 }
 
-/**
- * La transcription du mot "arobase" varie parfois d'une fois sur l'autre (rubaze, arobaz...) plutôt
- * que de donner le symbole : une correspondance figée ne suffit pas, on compare chaque mot par
- * distance d'édition à "arobase"/"arrobase" pour tolérer ces variations.
- */
-function normalizeSpokenSymbols(text: string): string {
-  const withEmailFixed = fixSpokenEmailAt(text)
-  return withEmailFixed.replace(/[^\s.,!?;:]+/g, (word) => {
-    const cleaned = word.toLowerCase()
-    if (cleaned.length < 5 || cleaned.length > 9) return word
-    const closeEnough = AROBASE_VARIANTS.some((variant) => levenshteinDistance(cleaned, variant) <= 3)
-    return closeEnough ? '@' : word
-  })
+/** Graphies de « arobase » vues dans les transcriptions (étape 346 : une liste fermée, plus une distance large). */
+const AROBASE_SPELLINGS = new Set(['arobase', 'arrobase', 'arobas', 'arrobas', 'robase', 'arobaz', 'arrobaz', 'arobaze', 'arobace', 'rubaze'])
+
+function looksLikeArobase(word: string): boolean {
+  const cleaned = word.toLowerCase()
+  if (AROBASE_SPELLINGS.has(cleaned)) return true
+  return cleaned.length >= 6 && cleaned.length <= 9 && AROBASE_VARIANTS.some((variant) => levenshteinDistance(cleaned, variant) <= 1)
 }
+
+/** Le mot qui suit « arobase » continue-t-il une adresse ? Un fournisseur, un domaine (« exemple.fr »), ou « point » après. */
+function continuesAddress(next: string | undefined, afterNext: string | undefined): boolean {
+  if (!next) return false
+  const bare = next.toLowerCase().replace(/[,;:!?]+$/, '')
+  return EMAIL_PROVIDERS.includes(bare.split('.')[0]) || /^[\w-]+\.[a-z]{2,}/.test(bare) || /^(?:point|\.)$/i.test(afterNext ?? '')
+}
+
+/**
+ * La transcription du mot "arobase" varie parfois d'une fois sur l'autre (rubaze, arobaz...) plutôt que de donner le
+ * symbole. Étape 346 : seulement DANS une adresse — avant, tout mot de 5 à 9 lettres « assez proche » devenait « @ » :
+ * « la cuisine arabe », « un arbre », « c'est probable », « une grosse » perdaient un mot à la voix.
+ */
+export function normalizeSpokenSymbols(text: string): string {
+  const parts = fixSpokenEmailAt(text).split(/(\s+)/)
+  const words = parts.map((part, index) => ({ part, index })).filter(({ part }) => part && !/^\s+$/.test(part))
+  for (let i = 0; i < words.length; i++) {
+    if (looksLikeArobase(words[i].part) && continuesAddress(words[i + 1]?.part, words[i + 2]?.part)) parts[words[i].index] = '@'
+  }
+  return parts.join('')
+}
+
+/**
+ * Étape 346 : « tu m'entends ? », « allô », « Jaris » seul — dits pendant que Jaris réfléchit, ce sont des vérifications,
+ * pas une suite à la question : la réflexion continue, sans repartir de zéro.
+ */
+const PRESENCE_CHECK =
+  /^(?:(?:jaris|allo|allô|hé|eh|hey|ho|oh)[\s,!?.]*)*(?:tu m['’]entends|tu es (?:toujours )?l[àa]|t['’]es (?:toujours )?l[àa]|tu m['’]écoutes|tu m['’]ecoutes)?(?:[\s,!?.]*jaris)?[\s,!?.]*$/i
+
+export function isPresenceCheck(text: string): boolean {
+  const trimmed = text.trim()
+  return trimmed.length > 0 && PRESENCE_CHECK.test(trimmed)
+}
+
+/** Au-delà de ce temps de réflexion, une nouvelle phrase est une nouvelle demande, plus une suite à fusionner. */
+const MERGE_WINDOW_MS = 15_000
+/** « J'écoute » sans aucune phrase reçue (micro muet, programme d'écoute bloqué) : retour au repos. */
+const LISTENING_WATCHDOG_MS = 45_000
+/**
+ * Étape 346 : après « + », le programme d'écoute répond « wake » en une fraction de seconde. Sans réponse (micro
+ * débranché entre-temps, programme figé), le widget restait déplié pour rien : retour au repos au bout de ce délai.
+ */
+const WAKE_ACK_MS = 4_000
 
 /**
  * Orchestre le cycle complet : déclenchement (mot d'activation "Jaris" ou manuel) -> capture -> transcription ->
@@ -116,6 +153,18 @@ export class VoicePipeline extends EventEmitter {
    */
   private busy = false
   private pendingAdditions: string[] = []
+  /**
+   * Étape 346 : phrases arrivées pendant la réflexion mais qui ne s'y fusionnent pas (réflexion déjà longue, ou action
+   * déjà faite sur le PC) — traitées comme nouvelles demandes une fois la réponse en cours donnée. Avant, tout était
+   * fusionné et RELANCÉ depuis le début : un rappel déjà posé l'était une seconde fois.
+   */
+  private queuedRequests: string[] = []
+  /** Début de la réflexion en cours, et vrai dès qu'un outil qui agit sur le PC y a tourné (pas une lecture). */
+  private turnStartedAt = 0
+  private effectfulToolRan = false
+  /** Étape 346 : Jaris parle — l'écoute du nom est coupée, pour qu'il ne se réveille pas en s'entendant dire « Jaris ». */
+  private speaking = false
+  private listeningWatchdog: ReturnType<typeof setTimeout> | null = null
   private abortController: AbortController | null = null
   /** Étape 252 : ce que Jaris fait pendant qu'il réfléchit, affiché sous la phrase entendue (voiceActivity.ts). */
   private activity: { text: string; since: number; timer: ReturnType<typeof setInterval> } | null = null
@@ -132,6 +181,7 @@ export class VoicePipeline extends EventEmitter {
    * profil), il ne doit plus lancer son moteur : sinon un second micro restait ouvert, que plus rien n'arrêtait.
    */
   private stopped = false
+  private everReady = false
 
   /**
    * @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env.
@@ -139,18 +189,36 @@ export class VoicePipeline extends EventEmitter {
    * côté sidecar Python (voir VoiceClient.start) — la touche "+" et le clic sur l'orbe restent
    * disponibles quoi qu'il arrive, ce drapeau ne concerne QUE l'écoute passive du micro.
    */
-  async start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
+  async start(inputDeviceIndex?: number | null, wakewordEnabled = true, inputDeviceName?: string | null): Promise<void> {
     if (this.stopped) return
     this.voice.on('wake', () => {
+      this.clearWakeAck()
       if (this.suspended) return
       this.clearIdleTimer()
       this.setEmotion('listening')
+      this.armListeningWatchdog()
     })
     this.voice.on('transcript', (text: string) => {
-      if (this.suspended) return
+      this.clearListeningWatchdog()
+      // Étape 346 : une phrase arrivée alors que l'écoute vient d'être suspendue (passage au Chat pendant que Jaris
+      // écoutait) — ignorée, mais l'émotion repasse au repos : avant, « J'écoute » restait affiché pour toujours, et
+      // la grande zone invisible du widget déplié continuait de capter les clics en haut de l'écran.
+      if (this.suspended) {
+        if (!this.busy) this.scheduleIdle(0)
+        return
+      }
       const addition = normalizeSpokenSymbols(text.trim())
       if (!addition) {
         if (!this.busy) void this.runTranscript('')
+        return
+      }
+      if (this.busy && isPresenceCheck(addition)) {
+        this.emit('log', `Vérification de présence pendant la réflexion, sans relancer : « ${addition} »`)
+        return
+      }
+      if (this.busy && (this.effectfulToolRan || Date.now() - this.turnStartedAt > MERGE_WINDOW_MS)) {
+        this.queuedRequests.push(addition)
+        this.emit('log', `Phrase captée pendant la réflexion, gardée pour juste après la réponse : « ${addition} »`)
         return
       }
       if (this.busy) {
@@ -176,15 +244,29 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestDone', (done: MicTestDonePayload) => this.emit('micTestDone', done))
     this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
     // Étape 325 : la raison affichée près de « Parler à Jaris » suit l'état réel (effacée quand l'écoute est prête).
-    this.voice.on('status', () => this.emit('listeningStatus', this.listeningUnavailable()))
+    // Étape 346 : un programme d'écoute arrêté ou en échec pendant « J'écoute » ramène au repos.
+    this.voice.on('status', (status: { state: string }) => {
+      this.emit('listeningStatus', this.listeningUnavailable())
+      const reason = this.listeningUnavailable()
+      // Étape 346 : un programme d'écoute qui s'arrête tout seul APRÈS avoir marché (plantage) est relancé par main.ts.
+      // Un échec au démarrage (dépendance manquante) ne l'est pas : il échouerait pareil, en boucle.
+      if (status?.state === 'ready' || status?.state === 'noMic') this.everReady = true
+      else if (status?.state === 'failed' && this.everReady && !this.stopped) this.emit('crashed')
+      if (reason !== null && !this.busy) {
+        this.clearListeningWatchdog()
+        this.scheduleIdle(0)
+      }
+    })
 
-    await this.voice.start(inputDeviceIndex, wakewordEnabled)
+    await this.voice.start(inputDeviceIndex, wakewordEnabled, inputDeviceName)
     this.setEmotion('idle')
   }
 
   stop(): void {
     this.stopped = true
     this.clearIdleTimer()
+    this.clearWakeAck()
+    this.clearListeningWatchdog()
     this.voice.stop()
   }
 
@@ -194,7 +276,21 @@ export class VoicePipeline extends EventEmitter {
   }
 
   triggerWake(): void {
+    this.clearWakeAck()
+    this.wakeAck = setTimeout(() => {
+      this.wakeAck = null
+      if (this.busy) return
+      this.emit('log', "Aucune réponse du programme d'écoute après « + » : retour au repos.")
+      this.scheduleIdle(0)
+    }, WAKE_ACK_MS)
     this.voice.triggerWake()
+  }
+
+  private wakeAck: ReturnType<typeof setTimeout> | null = null
+
+  private clearWakeAck(): void {
+    if (this.wakeAck) clearTimeout(this.wakeAck)
+    this.wakeAck = null
   }
 
   /**
@@ -214,7 +310,39 @@ export class VoicePipeline extends EventEmitter {
     this.suspended = suspended
     // Étape 183 : ignorer ne suffisait pas — le sidecar transcrivait toujours chaque phrase entendue en Chat,
     // Code et Options. Il ne le fait plus du tout tant que l'écoute est suspendue.
-    this.voice.setWakePaused(suspended)
+    this.applyWakePause()
+    // Étape 346 : suspendue en pleine écoute, plus rien n'arrivera — retour au repos tout de suite.
+    if (suspended && !this.busy) {
+      this.clearListeningWatchdog()
+      this.scheduleIdle(0)
+    }
+  }
+
+  /** L'écoute du nom est coupée en Chat/Code/Options ET pendant que Jaris parle (étape 346). */
+  private applyWakePause(): void {
+    this.voice.setWakePaused(this.suspended || this.speaking)
+  }
+
+  private setSpeaking(speaking: boolean): void {
+    if (this.speaking === speaking) return
+    this.speaking = speaking
+    this.applyWakePause()
+  }
+
+  private armListeningWatchdog(): void {
+    this.clearListeningWatchdog()
+    this.listeningWatchdog = setTimeout(() => {
+      this.listeningWatchdog = null
+      if (!this.busy) {
+        this.emit('log', "Aucune phrase reçue après « J'écoute » : retour au repos.")
+        this.scheduleIdle(0)
+      }
+    }, LISTENING_WATCHDOG_MS)
+  }
+
+  private clearListeningWatchdog(): void {
+    if (this.listeningWatchdog) clearTimeout(this.listeningWatchdog)
+    this.listeningWatchdog = null
   }
 
   /**
@@ -316,6 +444,8 @@ export class VoicePipeline extends EventEmitter {
 
       const controller = new AbortController()
       this.abortController = controller
+      this.turnStartedAt = Date.now()
+      this.effectfulToolRan = false
       this.startActivity()
 
       let reply = ''
@@ -327,7 +457,12 @@ export class VoicePipeline extends EventEmitter {
       try {
         const profile = await getProfile()
         if (profile?.voiceCorrectionEnabled !== false) {
-          const model = profile?.models?.flash ?? config.ollama.model
+          // Étape 346 : le modèle déjà chargé par Ollama s'il fait partie de ceux de Jaris — sinon, sur une carte où le
+          // Rapide et le Moyen ne tiennent pas ensemble, chaque phrase rechargeait les deux (correction, puis réponse).
+          const model = await preferLoadedModel(
+            Object.values(profile?.models ?? {}),
+            profile?.models?.flash ?? config.ollama.model
+          )
           // Étape 294 : la fenêtre de la conversation, pour que le modèle rapide reste chargé entre la correction et
           // la réponse — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
           const numCtx = profile?.contextLength ?? config.ollama.numCtx
@@ -365,6 +500,9 @@ export class VoicePipeline extends EventEmitter {
           (message) => {
             this.emit('log', message)
             this.noteActivity(message)
+            // Étape 346 : un outil qui agit sur le PC a tourné — une phrase de plus ne relancera plus tout.
+            const tool = /^Outil appelé : ([a-z_]+)\(/.exec(message)?.[1]
+            if (tool && !LOOKUP_TOOLS.has(tool)) this.effectfulToolRan = true
           },
           history,
           controller.signal,
@@ -426,9 +564,10 @@ export class VoicePipeline extends EventEmitter {
 
     // Une phrase captée pendant la synthèse/lecture audio de la réponse qui vient d'être donnée : trop
     // tard pour la fusionner avec une réponse déjà dite, elle démarre son propre nouvel échange à la
-    // suite, automatiquement.
-    if (this.pendingAdditions.length > 0) {
-      const queued = this.pendingAdditions.join('. ')
+    // suite, automatiquement. Étape 346 : comme celles gardées pendant une longue réflexion (queuedRequests).
+    if (this.queuedRequests.length > 0 || this.pendingAdditions.length > 0) {
+      const queued = [...this.queuedRequests, ...this.pendingAdditions].join('. ')
+      this.queuedRequests = []
       this.pendingAdditions = []
       this.emit('log', `Phrase captée trop tard pour être fusionnée (réponse déjà donnée), nouvel échange : « ${queued} »`)
       void this.runTranscript(queued)
@@ -468,6 +607,9 @@ export class VoicePipeline extends EventEmitter {
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
 
       const payload: VoiceReplyPayload = { transcript, reply, audio: audioBuffer }
+      // Étape 346 : l'écoute du nom est coupée pendant que Jaris parle (sa propre voix dit parfois « Jaris »). Reprise
+      // au retour au repos, juste après la fin de la lecture (notifyAudioEnded) ou par le filet de 20 s.
+      this.setSpeaking(true)
       this.emit('reply', payload)
       this.setEmotion('happy')
 
@@ -479,6 +621,8 @@ export class VoicePipeline extends EventEmitter {
           reply,
           ...(image ? { image } : {})
         })
+        // Étape 346 : le Chat (s'il est ouvert) montre aussi ce qui a été dit à voix haute (main.ts).
+        this.emit('exchange', { transcript, reply })
       }
 
       this.scheduleIdle(AUDIO_FALLBACK_IDLE_MS)
@@ -496,6 +640,7 @@ export class VoicePipeline extends EventEmitter {
    * plus bas), pas d'ici, puisque cette méthode ne sait rien des outils appelés.
    */
   private setEmotion(emotion: JarisEmotion): void {
+    if (emotion === 'idle') this.setSpeaking(false)
     this.emit('emotion', emotion)
     const cue: Partial<Record<JarisEmotion, SoundCue>> = { listening: 'listening', thinking: 'thinking', happy: 'success', surprised: 'error' }
     if (cue[emotion]) this.emit('soundCue', cue[emotion])

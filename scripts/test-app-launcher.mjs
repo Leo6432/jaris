@@ -18,13 +18,27 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/app
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
+// Étape 346 : la liste des applications, l'ouverture d'un site et le lancement sont réglables par test.
+let installedApps = null
+let launched = []
+const opened = []
 const modules = {
-  child_process: { exec: () => {}, spawn: () => {} },
-  util: { promisify: (fn) => fn }
+  child_process: {
+    exec: async () => {
+      if (!installedApps) throw new Error('pas de liste')
+      return { stdout: JSON.stringify(installedApps) }
+    },
+    spawn: (_cmd, args) => {
+      launched.push(args[0])
+      return { on: (event, fn) => event === 'spawn' && setImmediate(fn) }
+    }
+  },
+  util: { promisify: (fn) => fn },
+  electron: { shell: { openExternal: async (url) => void opened.push(url) } }
 }
 const exports = {}
 vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports }, process }, {})
-const { findBestMatch, openApp, didAppLaunch } = exports
+const { findBestMatch, openApp, didAppLaunch, launchedAppName, suggestApp, websiteFor, clearInstalledAppsCache } = exports
 
 const REAL_WORLD_APPS = [
   { Name: 'Bloc-notes', AppID: 'notepad' },
@@ -140,4 +154,89 @@ test('sous Windows, la même entrée de commande rend bien les accents à Node',
     "powershell -NoProfile -Command \"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; @{ Name = 'Param' + [char]0x00E8 + 'tres' } | ConvertTo-Json -Compress\""
   const { stdout } = await promisify(exec)(command, { windowsHide: true })
   assert.equal(JSON.parse(stdout.trim()).Name, 'Paramètres')
+})
+
+// --- Étape 346 : « Ouvre bloc note » (Léo : « il m'a écrit Blocknote et il ne trouve pas l'application ») -------------
+
+const FRENCH_WINDOWS = [
+  ...REAL_WORLD_APPS,
+  { Name: 'Explorateur de fichiers', AppID: 'explorer' },
+  { Name: 'Calculatrice', AppID: 'calc2' },
+  { Name: 'Spotify', AppID: 'spotify' }
+]
+
+for (const spoken of ['Blocknote', 'blocknote', 'block note', 'Block-notes', 'bloque note', 'le bloc note', 'le Blocknote', 'un bloc note', 'mon bloc-notes', 'le bloque note']) {
+  test(`étape 346 : la transcription réelle trouve le Bloc-notes : ${JSON.stringify(spoken)}`, () => {
+    assert.equal(findBestMatch(FRENCH_WINDOWS, spoken)?.Name, 'Bloc-notes')
+  })
+}
+
+for (const [spoken, expected] of [
+  ["l'explorateur", 'Explorateur de fichiers'],
+  ['le paramètre', 'Paramètres'],
+  ['les paramètres', 'Paramètres'],
+  ['calculette', 'Calculatrice'],
+  ['la calculatrise', 'Calculatrice']
+]) {
+  test(`étape 346 : article et singulier ne bloquent plus : ${JSON.stringify(spoken)} → ${expected}`, () => {
+    assert.equal(findBestMatch(FRENCH_WINDOWS, spoken)?.Name, expected)
+  })
+}
+
+test('étape 346 : la dernière chance « à l’oreille » ne réveille pas les faux positifs déjà connus', () => {
+  for (const query of ['ouvre explorateur fantome', 'excel', 'le fichier texte', 'luxe', 'youtube', 'word']) {
+    assert.equal(findBestMatch(REAL_WORLD_APPS, query), undefined, query)
+  }
+})
+
+test('étape 346 : avec Notepad++ installé, « bloc note » ouvre le Bloc-notes et « notepad++ » ouvre Notepad++', () => {
+  const apps = [{ Name: 'Notepad++', AppID: 'npp' }, ...REAL_WORLD_APPS]
+  assert.equal(findBestMatch(apps, 'bloc note')?.Name, 'Bloc-notes')
+  assert.equal(findBestMatch(apps, 'Blocknote')?.Name, 'Bloc-notes')
+  assert.equal(findBestMatch(apps, 'notepad++')?.Name, 'Notepad++')
+  assert.equal(findBestMatch(apps, 'notepad plus plus')?.Name, 'Notepad++')
+  assert.equal(findBestMatch(apps, 'notepad')?.Name, 'Bloc-notes')
+})
+
+test('étape 346 : le nom de l’application vraiment lancée se relit dans le message de succès', () => {
+  assert.equal(launchedAppName('Bloc-notes a été lancé.'), 'Bloc-notes')
+  assert.equal(launchedAppName("Je n'ai trouvé aucune application nommée « x »."), undefined)
+})
+
+test('étape 346 : « ouvre YouTube » sans application YouTube ouvre le site dans le navigateur', async () => {
+  installedApps = REAL_WORLD_APPS
+  clearInstalledAppsCache()
+  opened.length = 0
+  launched = []
+  const result = await openApp('YouTube')
+  assert.deepEqual(opened, ['https://www.youtube.com'])
+  assert.equal(launched.length, 0)
+  assert.match(result, /YouTube/)
+  assert.equal(didAppLaunch(result), false)
+  assert.equal(websiteFor('internet')?.url, 'https://www.google.com')
+  assert.equal(websiteFor('le navigateur')?.name, 'Internet')
+  // Une application installée passe avant le site du même nom.
+  installedApps = [...REAL_WORLD_APPS, { Name: 'YouTube', AppID: 'yt-pwa' }]
+  clearInstalledAppsCache()
+  opened.length = 0
+  assert.equal(await openApp('YouTube'), 'YouTube a été lancé.')
+  assert.equal(opened.length, 0)
+  installedApps = null
+})
+
+test('étape 346 : un nom inconnu propose le nom le plus proche, sans jamais l’ouvrir', async () => {
+  installedApps = FRENCH_WINDOWS
+  clearInstalledAppsCache()
+  launched = []
+  const result = await openApp('spotifaille')
+  assert.match(result, /Spotify/)
+  assert.equal(launched.length, 0)
+  assert.equal(suggestApp(FRENCH_WINDOWS, 'logiciel-imaginaire-9999'), undefined)
+  installedApps = null
+})
+
+test('étape 346 : le nom propre d’une application passe avant une correspondance par alias de langue', () => {
+  // « Notepad » (Windows en anglais) ne couvre « bloc » que par son alias « bloc notes » ; « Bloc Party » par son nom.
+  const apps = [{ Name: 'Notepad', AppID: 'np' }, { Name: 'Bloc Party Game', AppID: 'game' }]
+  assert.equal(findBestMatch(apps, 'bloc')?.Name, 'Bloc Party Game')
 })

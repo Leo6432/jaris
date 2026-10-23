@@ -96,10 +96,27 @@ async function readLocalOllamaVersion(): Promise<string | null> {
   try {
     const response = await fetch(`${config.ollama.host}/api/version`)
     if (!response.ok) return null
-    return ((await response.json()) as { version?: string }).version ?? null
+    const version = ((await response.json()) as { version?: string }).version ?? null
+    if (version) knownLocalVersion = version
+    return version
   } catch {
     return null
   }
+}
+
+/**
+ * Étape 346 : la version en service, connue dès qu'Ollama a répondu — SANS attendre GitHub (lent, ou injoignable). Les
+ * choix de modèles en dépendent (étape 312) : ils variaient selon que la comparaison avec GitHub avait fini ou non.
+ */
+let knownLocalVersion: string | null = null
+
+export function getLocalOllamaVersion(): string | null {
+  return knownLocalVersion ?? cachedOllamaVersionStatus?.current ?? null
+}
+
+/** Relit la version en service maintenant (avant un choix de modèles), sans interroger GitHub. */
+export async function refreshLocalOllamaVersion(): Promise<string | null> {
+  return (await readLocalOllamaVersion()) ?? getLocalOllamaVersion()
 }
 
 /**
@@ -278,14 +295,17 @@ async function updateOllamaInner(onProgress: OllamaUpdateProgress | undefined, l
   const release = await engineRelease(latest)
   const fresh = await installEngineVersion(release, (progress) => onProgress?.(engineProgressToUpdate(progress)), { root })
   onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
-  if (previous) await stopEmbeddedProcess()
+  // Étape 346 : la nouvelle version est notée AVANT d'arrêter l'ancienne. Un refus de Windows (antivirus) laisse alors
+  // l'ancienne tourner, au lieu de laisser Jaris sans Ollama.
   await setCurrentEngine(root, fresh.version)
-  const started = await startEmbedded(fresh, log)
+  if (previous) await stopEmbeddedProcess()
+  const started = await startEmbedded(fresh, log).catch(() => false)
   if (!started || (await readLocalOllamaVersion()) !== fresh.version) {
     // La nouvelle version ne démarre pas : retour à ce qui marchait, sans rien avoir effacé.
     await stopEmbeddedProcess()
     if (previous) {
-      await setCurrentEngine(root, previous.version)
+      // Même si Windows refuse encore d'écrire current.json, l'ancienne version est relancée maintenant.
+      await setCurrentEngine(root, previous.version).catch(() => {})
       await startEmbedded(previous, log)
     } else {
       await rm(join(root, 'current.json'), { force: true }).catch(() => {})

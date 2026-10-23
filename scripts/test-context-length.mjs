@@ -20,7 +20,7 @@ const nodeRequire = createRequire(import.meta.url)
  * avec `assert.deepEqual`, et `vm.runInNewContext` leur donnerait des prototypes différents — piège déjà
  * documenté dans ce dépôt (voir test-ollama-update-progress.mjs, même technique reprise ici).
  */
-function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes }) {
+function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes, loaded = [], sizes = {} }) {
   const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
@@ -48,7 +48,8 @@ function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes }) {
     './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => 32 },
     './ollama': {
       getModelInfo: async () => modelInfo ?? null,
-      getInstalledModelSizeBytes: async () => sizeBytes ?? null
+      getInstalledModelSizeBytes: async (model) => sizes[model] ?? sizeBytes ?? null,
+      loadedOllamaModels: async () => loaded
     }
   }
   const exports = {}
@@ -143,14 +144,38 @@ test('computeContextLengthOptions ne propose JAMAIS plus que le palier déjà en
   assert.deepEqual(result, { current: 8192, max: 8192, availableSteps: [8192] })
 })
 
-test('computeContextLengthOptions redescend le palier actuel si la VRAM libre ne le permet plus', async () => {
-  // Le curseur avait été monté à 32k lors d'un lancement précédent (plus de VRAM libre alors) ; cette
-  // fois-ci, seul 16384 tient encore réellement — `current` doit suivre, jamais rester au-dessus de `max`.
+test('étape 346 : la valeur réellement utilisée est toujours montrée, même au-dessus du maximum conseillé', async () => {
+  // Le curseur avait été monté à 32k lors d'un lancement précédent (plus de VRAM libre alors). Jaris utilise TOUJOURS
+  // 32k (le profil) : l'afficher « 16k » cachait la vraie valeur. Elle reste montrée, et l'on peut redescendre.
   const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
   const result = await computeContextLengthOptions('qwen3.5:9b', 32768)
   assert.equal(result.max, 16384)
-  assert.equal(result.current, 16384, `current ne doit jamais dépasser max, reçu ${JSON.stringify(result)}`)
-  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384])
+  assert.equal(result.current, 32768, `la valeur du profil, reçu ${JSON.stringify(result)}`)
+  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384, 32768])
+})
+
+test('étape 346 : un cran intermédiaire (11k) reste 11k à la réouverture, jamais ramené à 8k', async () => {
+  const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
+  assert.equal((await computeContextLengthOptions('qwen3.5:9b', 11264)).current, 11264)
+  const offline = loadHardwareScan({ freeVramMib: 8000, modelInfo: null, sizeBytes: null })
+  const fallback = await offline.computeContextLengthOptions('qwen3.5:9b', 11264)
+  assert.equal(fallback.current, 11264, 'sans donnée fiable non plus')
+  assert.ok(fallback.availableSteps.includes(11264))
+})
+
+test('étape 346 : la place prise par les modèles de Jaris déjà chargés compte comme libre', async () => {
+  // 3 Go libres seulement, mais 5 Go occupés par le modèle de Jaris lui-même : il cède sa place au modèle de référence.
+  const busy = loadHardwareScan({ freeVramMib: 3000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3, loaded: [{ model: 'qwen3.5:9b', vramGb: 5 }] })
+  assert.equal((await busy.computeContextLengthOptions('qwen3.5:9b', 8192)).max, 16384)
+  const alone = loadHardwareScan({ freeVramMib: 3000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
+  assert.equal((await alone.computeContextLengthOptions('qwen3.5:9b', 8192)).max, 8192, 'sans modèle chargé : vraiment pleine')
+})
+
+test('étape 346 : la référence est le plus gros modèle qui tourne SUR la carte, pas un modèle qui déborde sur la RAM', async () => {
+  const sizes = { 'petit:3b': 2 * 1024 ** 3, 'moyen:8b': 5 * 1024 ** 3, 'enorme:27b': 17 * 1024 ** 3 }
+  const scan = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizes })
+  const result = await scan.computeContextLengthOptions(['petit:3b', 'moyen:8b', 'enorme:27b'], 8192)
+  assert.equal(result.max, 16384, 'calculé pour moyen:8b (5 Go), le plus gros qui tient sur 8 Go — jamais bloqué à 8k par le 27b')
 })
 
 test('computeAvailableSteps garantit au moins 4 paliers dès que la VRAM laisse un peu de marge', () => {

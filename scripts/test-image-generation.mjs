@@ -362,8 +362,8 @@ function loadConverse(chat, execute, onExecutorArgs) {
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => null },
-    './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: async () => '' },
-    './appLauncher': { didAppLaunch: (r) => r.endsWith('a été lancé.') },
+    './notepad': { notepadRequest: noteExports.notepadRequest, requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: async () => '' },
+    './appLauncher': { didAppLaunch: (r) => r.endsWith('a été lancé.'), launchedAppName: (r) => (r.endsWith(' a été lancé.') ? r.slice(0, -' a été lancé.'.length) : undefined) },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
     // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.

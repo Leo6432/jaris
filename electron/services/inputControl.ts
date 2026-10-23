@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { t } from '../../shared/i18n'
 
 /**
@@ -185,6 +185,62 @@ export async function typeText(text: string): Promise<string> {
     JARIS_TYPE_TEXT: text
   })
   return error ? t('input.typeFailed', { error }) : `Texte tapé.`
+}
+
+/**
+ * Titre et programme de la fenêtre au premier plan (étape 346). Aucune donnée de l'utilisateur dans le script.
+ */
+const FOREGROUND_SCRIPT = [
+  '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+  "Add-Type -Namespace JarisFg -Name W -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);'",
+  '$h = [JarisFg.W]::GetForegroundWindow()',
+  '$sb = New-Object System.Text.StringBuilder 512',
+  '[void][JarisFg.W]::GetWindowText($h, $sb, 512)',
+  '$procId = 0',
+  '[void][JarisFg.W]::GetWindowThreadProcessId($h, [ref]$procId)',
+  '$name = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName',
+  'Write-Output ($sb.ToString() + "`t" + $name)'
+].join('; ')
+
+function readForeground(): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], { windowsHide: true, timeout: 4000 }, (err, stdout) =>
+      resolve(err ? null : String(stdout).trim())
+    )
+  })
+}
+
+function comparable(value: string): string {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+/** Vrai si le titre ou le programme de la fenêtre au premier plan évoque l'application (un mot d'au moins 4 lettres). */
+export function foregroundMatchesApp(foreground: string, appName: string): boolean {
+  const seen = ` ${comparable(foreground)} `
+  const words = comparable(appName).split(' ').filter((word) => word.length >= 4)
+  const whole = comparable(appName)
+  return (whole.length >= 2 && seen.includes(` ${whole} `)) || words.some((word) => seen.includes(` ${word} `) || seen.includes(word))
+}
+
+/**
+ * Étape 346 (« ouvre un bloc-notes et écris bonjour ») : après une ouverture d'application, le texte ne doit partir
+ * que si cette application est bien au premier plan — sinon il serait tapé dans la fenêtre au hasard qui a le focus
+ * (Jaris lui-même, le navigateur…). Attend jusqu'à `timeoutMs` qu'elle s'affiche. Hors Windows : rien à vérifier.
+ */
+export async function waitForForegroundApp(
+  appName: string,
+  timeoutMs = 6000,
+  read: () => Promise<string | null> = readForeground,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms))
+): Promise<boolean> {
+  if (process.platform !== 'win32' && read === readForeground) return true
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const foreground = await read()
+    if (foreground !== null && foregroundMatchesApp(foreground, appName)) return true
+    if (Date.now() >= deadline) return false
+    await wait(400)
+  }
 }
 
 /** Appuie sur une touche spéciale nommée (entrée, tab, échap...), whitelist fixe dans KEY_CODES. */

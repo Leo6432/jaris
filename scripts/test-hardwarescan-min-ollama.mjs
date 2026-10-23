@@ -103,3 +103,16 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
   // 3.7B a déjà ses trois scores (mesurés à l'étape 312) ; les trois autres tailles restent à mesurer.
   assert.deepEqual(ALL_K2.filter((m) => offered.includes(m)).sort(), [K2.tiny, K2.mid, K2.large].sort())
 })
+
+// Étape 346 : la version d'Ollama compte dans le choix des modèles — elle est relue AVANT « Retester la configuration »,
+// et connue dès qu'Ollama répond, sans attendre la comparaison avec GitHub.
+test('la version d’Ollama est relue avant de choisir, sans attendre GitHub', async () => {
+  const { readFileSync: read } = await import('node:fs')
+  const main = read(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.match(main, /setOllamaVersionSource\(\(\) => getLocalOllamaVersion\(\)\)/)
+  const handler = main.slice(main.indexOf('IPC_CHANNELS.runQuickSetup, async'))
+  assert.ok(handler.indexOf('await refreshLocalOllamaVersion()') < handler.indexOf('return runQuickSetup('))
+  const deps = read(new URL('../electron/services/dependencyServices.ts', import.meta.url), 'utf8')
+  const local = deps.slice(deps.indexOf('async function readLocalOllamaVersion'), deps.indexOf('export function getLocalOllamaVersion'))
+  assert.match(local, /knownLocalVersion = version/, 'gardée dès la lecture locale, avant tout appel à GitHub')
+})

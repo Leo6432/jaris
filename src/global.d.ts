@@ -139,6 +139,7 @@ declare global {
       cancelChat: () => void
       transcribeDictation: (wav: Uint8Array) => Promise<string>
       getChatHistory: () => Promise<ChatMessage[]>
+      getChatBusy: () => Promise<boolean>
       listConversations: () => Promise<ConversationList>
       createConversation: () => Promise<ConversationList>
       selectConversation: (id: string) => Promise<ConversationList>
@@ -235,6 +236,7 @@ declare global {
       openPhoneAccessLink: () => Promise<void>
       onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => () => void
       onChatHistoryChanged: (cb: () => void) => () => void
+      onChatBusy: (cb: (busy: boolean) => void) => () => void
       onStudioGalleryChanged?: (cb: () => void) => () => void
       onModelChoiceChanged?: (cb: () => void) => () => void
     }

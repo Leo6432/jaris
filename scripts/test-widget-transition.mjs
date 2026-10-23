@@ -85,8 +85,10 @@ test('après l’onboarding, la fenêtre de Jaris s’ouvre après le démarrage
 
 test('la touche + ouvre la forme active et idle replie le widget vocal sans le cacher',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
- const shortcut=source.slice(source.indexOf('function syncWakeShortcut'),source.indexOf('function setWakeShortcutWanted'))
- assert.match(shortcut,/triggerVisibleWake\(\)/,'le raccourci global ne montre pas la barre avant l’écoute')
+ // Étape 346 : le geste commun à « + » et Ctrl+Alt+J vit dans onWakeShortcut, branché par syncWakeShortcut.
+ const shortcut=source.slice(source.indexOf('function onWakeShortcut'),source.indexOf('function setWakeShortcutWanted'))
+ assert.match(shortcut,/function onWakeShortcut[\s\S]*triggerVisibleWake\(\)[\s\S]*function syncWakeShortcut/,'le raccourci global ne montre pas la barre avant l’écoute')
+ assert.match(shortcut,/globalShortcut\.register\(accelerator, \(\) => onWakeShortcut\(accelerator\)\)/)
  const wake=source.slice(source.indexOf('function triggerVisibleWake'),source.indexOf('/** Envoie un évènement'))
  assert.match(wake,/activeMode\s*===\s*['"]chat['"][\s\S]*showWidgetWindow\(true\)[\s\S]*return/,'+ ne montre pas la barre du Chat')
  const emotion=source.slice(source.indexOf("pipeline.on('emotion'"),source.indexOf("pipeline.on('transcript'"))

@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { execFile, spawn, type ChildProcess } from 'child_process'
 import { createReadStream, existsSync } from 'fs'
-import { mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'fs/promises'
+import { mkdir, readFile, readdir, readlink, realpath, rename, rm, writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { downloadToFile, type DownloadProgress } from './download'
@@ -51,8 +51,20 @@ export function engineLink(): string {
   return join(local, 'Jaris', 'ollama-engine')
 }
 
+/**
+ * Étape 346 : un dossier qui est une jonction vers un disque débranché (données rangées sur D:, disque externe) faisait
+ * échouer l'installation avec « ENOENT » — incompréhensible. La phrase dit quel disque rebrancher.
+ */
+async function assertJunctionTargetPresent(link: string): Promise<void> {
+  const target = await readlink(link).catch(() => null)
+  if (!target || existsSync(target)) return
+  const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(target)?.[1] ?? target
+  throw new Error(t('storage.diskMissing', { drive }))
+}
+
 /** Le vrai dossier du moteur (jonction suivie) : Ollama et tar.exe le reçoivent toujours sous ce chemin-là. */
 export async function engineRoot(link: string = engineLink()): Promise<string> {
+  await assertJunctionTargetPresent(link)
   await mkdir(link, { recursive: true })
   return realpath(link).catch(() => link)
 }
@@ -82,7 +94,33 @@ export async function setCurrentEngine(root: string, version: string): Promise<v
   const target = join(root, 'current.json')
   const temporary = `${target}.tmp`
   await writeFile(temporary, JSON.stringify({ version }), 'utf-8')
-  await rename(temporary, target)
+  await renameWithRetries(temporary, target)
+}
+
+/**
+ * Étape 346 : un antivirus qui inspecte le nouveau moteur (plusieurs Go de fichiers .exe et .dll) le tient ouvert
+ * quelques secondes — Windows refuse alors le renommage (EPERM, EACCES, EBUSY). Réessayé ~30 s avant d'abandonner,
+ * avec une phrase qui dit pourquoi au lieu du code brut de Windows.
+ */
+export const ENGINE_RENAME_RETRY_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15000]
+
+export async function renameWithRetries(
+  from: string,
+  to: string,
+  delays: number[] = ENGINE_RENAME_RETRY_DELAYS_MS,
+  move: (from: string, to: string) => Promise<void> = rename
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await move(from, to)
+      return
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code ?? ''
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(code)) throw err
+      if (attempt >= delays.length) throw new Error(t('ollamaEngine.locked'))
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]))
+    }
+  }
 }
 
 /** Ligne `<empreinte>  ./ollama-windows-amd64.zip` du fichier sha256sum.txt publié avec chaque version. */
@@ -161,6 +199,9 @@ export interface EngineInstallDeps {
   download: (url: string, destination: string, onProgress: (progress: DownloadProgress) => void) => Promise<unknown>
   hash: (path: string) => Promise<string>
   extract: (zip: string, destination: string) => Promise<void>
+  /** Tests : le renommage final et ses délais d'essai (antivirus), voir renameWithRetries. */
+  move?: (from: string, to: string) => Promise<void>
+  renameDelays?: number[]
 }
 
 const defaultInstallDeps: EngineInstallDeps = {
@@ -196,11 +237,16 @@ export async function installEngineVersion(
   const zip = join(downloads, `ollama-${release.version}.zip`)
   const versions = join(root, 'versions')
   const staging = join(versions, `${release.version}.partial`)
+  // Étape 346 : un paquet déjà téléchargé ET vérifié est gardé si seule sa mise en place échoue (antivirus) — le
+  // prochain essai repart de lui au lieu de retélécharger 1,6 Go.
+  let keepZip = false
   try {
-    await deps.download(release.url, zip, (progress) => onProgress({ phase: 'download', ...progress }))
+    const already = existsSync(zip) && (await deps.hash(zip).catch(() => '')).toLowerCase() === release.sha256.toLowerCase()
+    if (!already) await deps.download(release.url, zip, (progress) => onProgress({ phase: 'download', ...progress }))
     onProgress({ phase: 'verify' })
     const digest = (await deps.hash(zip)).toLowerCase()
     if (digest !== release.sha256.toLowerCase()) throw new Error(t('ollamaEngine.badChecksum', { version: release.version }))
+    keepZip = true
     onProgress({ phase: 'extract' })
     await rm(staging, { recursive: true, force: true })
     await mkdir(staging, { recursive: true })
@@ -213,11 +259,13 @@ export async function installEngineVersion(
     if (!exeDir) throw new Error(t('ollamaEngine.noExe'))
     const final = join(versions, release.version)
     await rm(final, { recursive: true, force: true })
-    await rename(exeDir, final)
+    await renameWithRetries(exeDir, final, deps.renameDelays, deps.move)
+    keepZip = false
     return { version: release.version, dir: final, exe: join(final, 'ollama.exe') }
   } finally {
-    // Le paquet (1,6 Go) et un dossier à moitié décompressé ne servent plus à rien, réussite ou échec.
-    await rm(zip, { force: true }).catch(() => {})
+    // Le paquet (1,6 Go) ne sert plus une fois le moteur en place, ni s'il est faux ; un dossier à moitié décompressé
+    // ne sert jamais.
+    if (!keepZip) await rm(zip, { force: true }).catch(() => {})
     await rm(staging, { recursive: true, force: true }).catch(() => {})
   }
 }
@@ -252,7 +300,9 @@ export async function engineModelsDir(
 
 /** Variables passées au moteur : son port, ses modèles. Le reste de l'environnement de Jaris est gardé. */
 export function engineEnv(modelsDir: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return { ...base, OLLAMA_HOST: `127.0.0.1:${ENGINE_PORT}`, OLLAMA_MODELS: modelsDir }
+  // Étape 346 : OLLAMA_NOPRUNE — sans lui, Ollama efface au démarrage les morceaux d'un modèle dont le téléchargement a
+  // été interrompu : relancé le lendemain, un modèle de 20 Go repartait de 0 %.
+  return { ...base, OLLAMA_HOST: `127.0.0.1:${ENGINE_PORT}`, OLLAMA_MODELS: modelsDir, OLLAMA_NOPRUNE: '1' }
 }
 
 /**

@@ -21,7 +21,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/ass
 }).outputText
 
 const modules = {
-  './notepad': { requestedNotepadText: () => undefined },
+  './notepad': { notepadRequest: () => undefined, requestedNotepadText: () => undefined },
   '../config': { config: { ollama: {} } },
   './ollama': {},
   './systemPrompt': systemPromptModule,
@@ -148,3 +148,28 @@ test('un nombre seul, ou une opération sans nombre, n’est pas un calcul', () 
     assert.ok(!isPureCalculation(prompt), JSON.stringify(prompt))
   }
 })
+
+// Étape 346 : questions adressées à Jaris, sur la conversation, sur la date, ou demande explicite de ne pas chercher.
+for (const prompt of [
+  "Tu m'entends ?",
+  'Tu es là ?',
+  "T'es là Jaris ?",
+  'Salut Jaris, ça va ?',
+  'Bonjour, comment vas-tu ?',
+  "Qu'est-ce que tu sais faire ?",
+  "Je t'ai dit quoi tout à l'heure ?",
+  'Quel est mon prénom ?',
+  'On est le combien ?',
+  'Qui a écrit Les Misérables ? Réponds de mémoire.',
+  'Ne cherche pas, qui a peint la Joconde ?'
+]) {
+  test(`étape 346 : pas de recherche forcée pour : ${JSON.stringify(prompt)}`, () => {
+    assert.ok(!looksLikeKnowledgeQuestion(prompt))
+  })
+}
+
+for (const prompt of ['Combien de mémoire vive faut-il pour un jeu ?', 'Qui est le président du Brésil ?', 'Tu connais la population de Lyon ?']) {
+  test(`étape 346 : reste une question de connaissance : ${JSON.stringify(prompt)}`, () => {
+    assert.ok(looksLikeKnowledgeQuestion(prompt))
+  })
+}

@@ -64,7 +64,7 @@ export interface EnginePage {
 }
 
 /** Ouvre la page de recherche d'un moteur et en lit les résultats. Remplacé dans les tests. */
-export type EngineLoader = (engine: SearchEngine, url: string) => Promise<EnginePage>
+export type EngineLoader = (engine: SearchEngine, url: string, signal?: AbortSignal) => Promise<EnginePage>
 
 const MAX_RESULTS = 5
 
@@ -120,15 +120,19 @@ function failureReason(err: unknown): string {
  */
 export async function searchWebDetailed(
   query: string,
-  loader: EngineLoader = loadInHiddenWindow
+  loader: EngineLoader = loadInHiddenWindow,
+  signal?: AbortSignal
 ): Promise<{ text: string; sources: WebSource[] }> {
   const failures: string[] = []
   let answered = false
   for (const engine of SEARCH_ENGINES) {
+    // Étape 346 : « Arrêter » ou une nouvelle phrase : on ne passe pas au moteur suivant.
+    signal?.throwIfAborted()
     let page: EnginePage
     try {
-      page = await loader(engine, engine.searchUrl(query))
+      page = await loader(engine, engine.searchUrl(query), signal)
     } catch (err) {
+      if (signal?.aborted) throw err
       failures.push(t('common.labelValue', { label: engine.name, value: failureReason(err) }))
       continue
     }
@@ -203,13 +207,28 @@ async function prepareSession(): Promise<Electron.Session> {
   return ses
 }
 
-export function loadInHiddenWindow(engine: SearchEngine, url: string): Promise<EnginePage> {
-  const run = queue.then(() => loadNow(engine, url))
+export function loadInHiddenWindow(engine: SearchEngine, url: string, signal?: AbortSignal): Promise<EnginePage> {
+  const run = queue.then(() => loadNow(engine, url, signal))
   queue = run.catch(() => undefined)
   return run
 }
 
-async function loadNow(engine: SearchEngine, url: string): Promise<EnginePage> {
+/** Résolue à `deadline`, ou tout de suite si `signal` est annulé (étape 346). */
+function waitUntil(deadline: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, Math.max(0, deadline - Date.now()))
+    function done(): void {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    signal?.addEventListener('abort', done, { once: true })
+  })
+}
+
+async function loadNow(engine: SearchEngine, url: string, signal?: AbortSignal): Promise<EnginePage> {
+  // Annulée pendant qu'elle attendait son tour : aucune fenêtre ouverte pour rien.
+  signal?.throwIfAborted()
   const { BrowserWindow } = await import('electron')
   const ses = await prepareSession()
   const win = new BrowserWindow({
@@ -237,13 +256,19 @@ async function loadNow(engine: SearchEngine, url: string): Promise<EnginePage> {
       // Une page qui se remplace elle-même pendant le chargement (redirection) n'est pas un échec.
       if (!/ERR_ABORTED/.test(err.message)) loadError = err
     })
-    await Promise.race([loading, new Promise((resolve) => setTimeout(resolve, PAGE_TIMEOUT_MS))])
+    await Promise.race([loading, waitUntil(deadline, signal)])
     let last: EnginePage = { results: [], bodyText: '' }
     while (Date.now() < deadline) {
+      signal?.throwIfAborted()
       if (loadError) throw loadError
       if (win.isDestroyed()) throw new Error('window closed')
       try {
-        last = (await contents.executeJavaScript(script, true)) as EnginePage
+        // Étape 346 : jamais une attente sans fin — executeJavaScript attend la fin du chargement, qui peut ne jamais
+        // venir (page qui charge en boucle) : il est borné par le temps restant, et la fenêtre détruite ensuite.
+        const read = contents.executeJavaScript(script, true) as Promise<EnginePage>
+        read.catch(() => undefined)
+        const page = await Promise.race([read, waitUntil(deadline, signal).then(() => null)])
+        if (page) last = page
       } catch {
         // Page encore en train de se charger : on relit un peu plus tard.
       }

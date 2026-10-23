@@ -32,8 +32,8 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => profile },
-    './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
-    './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
+    './notepad': { notepadRequest: noteExports.notepadRequest, requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
+    './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.'), launchedAppName: result => (result.endsWith(' a été lancé.') ? result.slice(0, -' a été lancé.'.length) : undefined) },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
     // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.
@@ -221,7 +221,9 @@ test('contre-épreuve : une question qui demande une donnée du monde garde sa r
   const reply = await converse('Combien coûtent 2 kg de pommes ?', null, () => {}, undefined, [], undefined, undefined, 'chat')
   assert.equal(calls.relaunched, true)
   assert.equal(calls.search, 1)
-  assert.match(reply, /^Échec de l'outil : La recherche web locale/)
+  // Étape 346 : la réponse déjà donnée n'est plus remplacée par l'échec de la recherche imposée — elle est gardée, et
+  // dite pour ce qu'elle est (non vérifiée).
+  assert.equal(reply, "Je n'ai pas pu vérifier sur internet. De mémoire : Environ 3 € le kilo.")
 })
 
 for (const channel of ['voice', 'chat']) {
@@ -428,4 +430,139 @@ test('une vraie action annoncée sans outil garde sa relance', async () => {
   const converse = setup(async () => { calls++; return { role: 'assistant', content: 'Je vais monter le volume.' } }, async () => 'ok')
   await converse('Mets le volume plus fort', null, () => {}, undefined, [], undefined, undefined, 'chat')
   assert.equal(calls, 2)
+})
+
+// --- Étape 346 ---------------------------------------------------------------------------------------------------
+import { i18nModule } from './i18n-test-module.mjs'
+
+test('étape 346 : après une action réussie (ouvrir une application), aucune relance vers une recherche web', async () => {
+  let model = 0
+  let relaunched = false
+  const converse = setup(async (messages) => {
+    model++
+    if (messages.some((m) => m.role === 'system' && /appelle d'abord search_web/.test(m.content))) relaunched = true
+    if (model === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'media_control', arguments: { action: 'volume_up' } } }] }
+    return { role: 'assistant', content: 'Le son est monté.' }
+  }, async (name) => (name === 'media_control' ? 'Action "volume_up" effectuée.' : assert.fail(`outil inattendu : ${name}`)))
+  assert.equal(await converse('Tu peux monter le son ?', null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Le son est monté.')
+  assert.equal(relaunched, false)
+  assert.equal(model, 2)
+})
+
+test('étape 346 : dans une autre langue que le français, les filets français (recherche, mail) ne relancent pas', async () => {
+  const before = i18nModule.currentLanguage()
+  i18nModule.setLanguage('en')
+  try {
+    let model = 0
+    const converse = setup(async () => {
+      model++
+      return { role: 'assistant', content: 'Paris.' }
+    }, async () => assert.fail('aucun outil'))
+    assert.equal(await converse('Quelle est la capitale de la France ?', null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Paris.')
+    assert.equal(model, 1)
+  } finally {
+    i18nModule.setLanguage(before)
+  }
+})
+
+for (const prompt of [
+  "Rappelle-moi d'envoyer un mail à Paul dans une heure",
+  "Je viens d'envoyer un mail à Paul",
+  'Comment envoyer un mail avec Gmail ?',
+  'Envoie-moi un rappel dans 10 minutes',
+  'Retiens que je dois envoyer un mail à Paul',
+  "Programme l'envoi d'un mail à Paul pour dans une heure, rappel compris"
+]) {
+  test(`étape 346 : pas de relance « envoie le mail » pour : ${prompt}`, async () => {
+    let model = 0
+    const converse = setup(async (messages) => {
+      model++
+      assert.ok(!messages.some((m) => /appelé computer_use_task alors qu'un envoi de mail/.test(m.content)), 'relance mail inattendue')
+      if (model === 1 && /rappel/i.test(prompt)) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: { message: 'Mail', delay_minutes: 10 } } }] }
+      if (model === 1 && /retiens/i.test(prompt)) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'remember', arguments: { title: 'Paul', content: 'mail' } } }] }
+      return { role: 'assistant', content: "D'accord." }
+    }, async () => 'Fait.')
+    assert.equal(await converse(prompt, null, () => {}, undefined, [], undefined, undefined, 'chat'), "D'accord.")
+  })
+}
+
+test('étape 346 : une vraie demande d’envoi garde sa relance, même avec « tu sais » plus loin', async () => {
+  let relaunched = false
+  let model = 0
+  const converse = setup(async (messages) => {
+    model++
+    if (messages.some((m) => /appelé computer_use_task alors qu'un envoi de mail/.test(m.content))) relaunched = true
+    return { role: 'assistant', content: model === 1 ? 'Quel est son adresse ?' : 'Il me faut son adresse.' }
+  }, async () => assert.fail('aucun outil'))
+  await converse('Envoie un mail à Paul, tu sais celui de la compta', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(relaunched, true)
+})
+
+for (const [prompt, text] of [
+  ['Ouvre un bloc-notes et écris bonjour', 'bonjour'],
+  ['Ouvre le bloc note, écris bonjour', 'bonjour'],
+  ['Ouvre le blocknote. Écris bonjour', 'bonjour'],
+  ['Ouvre-moi le bloc-notes et écris-moi : une liste de courses', 'une liste de courses'],
+  ['Écris bonjour dans le bloc-notes', 'bonjour'],
+  ['Lance un nouveau bloc-notes et tape « salut »', 'salut']
+]) {
+  test(`étape 346 : Bloc-notes reconnu : ${prompt}`, () => {
+    assert.deepEqual(JSON.parse(JSON.stringify(noteExports.notepadRequest(prompt))), { kind: 'literal', text })
+  })
+}
+
+for (const prompt of ['Ouvre le bloc-notes et écris bonjour puis enregistre-le', 'Ouvre le bloc-notes et écris bonjour et ferme-le']) {
+  test(`étape 346 : une autre action après le texte reste au modèle : ${prompt}`, () => {
+    assert.equal(noteExports.notepadRequest(prompt), undefined)
+  })
+}
+
+test('étape 346 : « écris un poème sur la mer » fait rédiger le texte, puis l’ouvre par le chemin sûr', async () => {
+  assert.equal(noteExports.notepadRequest('Ouvre le bloc-notes et écris un poème sur la mer').kind, 'compose')
+  assert.equal(noteExports.notepadRequest('Ouvre le bloc-notes et écris une lettre à ma mère').kind, 'compose')
+  let written = null
+  const converse = setup(async (messages, tools) => {
+    assert.equal(tools, undefined, 'aucun outil pour rédiger')
+    assert.equal(messages.at(-1).content, 'un poème sur la mer')
+    return { role: 'assistant', content: 'La mer chante\nsous la lune.' }
+  }, async () => assert.fail('aucune frappe'), async (text) => {
+    written = text
+    return 'Document ouvert'
+  })
+  assert.equal(await converse('Ouvre le bloc-notes et écris un poème sur la mer', null, () => {}), 'Document ouvert')
+  assert.equal(written, 'La mer chante\nsous la lune.')
+})
+
+// Étape 346 : « Arrêter » ou une nouvelle phrase n'interrompaient pas un outil en cours (regarder l'écran, chercher sur
+// internet) — Jaris restait bloqué jusqu'à la fin de l'outil, parfois des minutes.
+test('un outil qui ne s’arrête pas tout seul est quand même interrompu tout de suite par l’annulation', async () => {
+  let toolStarted
+  const started = new Promise((resolve) => (toolStarted = resolve))
+  const converse = setup(
+    async () => ({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'look_at_screen', arguments: {} } }] }),
+    () => {
+      toolStarted()
+      return new Promise(() => {}) // ne répond jamais
+    }
+  )
+  const controller = new AbortController()
+  const reply = converse('regarde mon écran', null, () => {}, undefined, [], controller.signal)
+  await started
+  const before = Date.now()
+  controller.abort()
+  await assert.rejects(reply, { name: 'AbortError' })
+  assert.ok(Date.now() - before < 1000, 'sans attendre la fin de l’outil')
+})
+
+test('sans annulation, un outil lent va jusqu’au bout comme avant', async () => {
+  const converse = setup(
+    async (messages) =>
+      messages.at(-1).role === 'tool'
+        ? { role: 'assistant', content: 'C’est noté, je te le rappelle dans 5 minutes.' }
+        : { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: { message: 'thé', delay_minutes: 5 } } }] },
+    () => new Promise((resolve) => setTimeout(() => resolve('Rappel programmé.'), 30))
+  )
+  const controller = new AbortController()
+  const reply = await converse('rappelle-moi le thé dans 5 minutes', null, () => {}, undefined, [], controller.signal)
+  assert.equal(reply, 'C’est noté, je te le rappelle dans 5 minutes.')
 })
