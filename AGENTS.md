@@ -9366,3 +9366,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-widget-mode`, `test-main-guards`, `test-web-search`, `test-data-location`. **Non vérifié en usage réel**
   (pas de Windows ici) : le micro rouvert après débranchement, Ctrl+Alt+J, la détection AMD pour le budget, et
   le recentrage sur deux écrans.
+  **Premier envoi refusé par la CI Windows (v0.37.0 jamais publiée), à cause d'un test** : `engineRoot` rend le
+  chemin RÉEL (`realpath`), et le test le comparait au chemin construit depuis `tmpdir()` — sous Windows, `tmpdir()`
+  peut être un nom court 8.3 (« C:\Users\RUNNER~1\… ») que `realpath` déplie en nom long (« runneradmin »).
+  Invisible sous Linux. **Leçon : un test qui compare un chemin passé par `realpath` doit comparer à
+  `realpathSync(attendu)`, jamais au chemin construit depuis `tmpdir()`.** Corrigé en v0.37.1.

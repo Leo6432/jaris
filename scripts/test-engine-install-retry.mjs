@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -105,8 +105,11 @@ test('dossier du moteur relié à un disque débranché : une phrase qui dit quo
       return true
     })
     assert.ok(!existsSync(gone), 'rien n’est recréé à la place du disque absent')
+    // engineRoot rend le chemin RÉEL : sous Windows, tmpdir() peut être un nom court (« RUNNER~1 »)
+    // que realpath déplie en nom long — on compare donc au chemin réel du dossier créé.
     const plain = join(base, 'normal')
-    assert.equal(await engine.engineRoot(plain), plain)
+    const got = await engine.engineRoot(plain)
+    assert.equal(got, realpathSync(plain))
   } finally {
     rmSync(base, { recursive: true, force: true })
   }
