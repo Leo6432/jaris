@@ -446,6 +446,49 @@ export interface MyModelPicks {
  * Plus aucune vitesse LOCALE ici depuis l'étape 131 : les deux écrans qui affichent une vitesse montrent
  * désormais `artificialAnalysisSpeed` (voir plus bas), une mesure publiée identique pour tout le monde.
  */
+/**
+ * Étape 349 : le test Terminal-Bench 2.1 lancé sur le PC (terminalBench.ts). Ses résultats restent à part : ils
+ * n'entrent jamais dans le choix des modèles ni dans les colonnes d'Artificial Analysis.
+ */
+/** Nombre de tâches de Terminal-Bench 2.1 (89, comme la 2.0 dont elle corrige les tâches). */
+export const TERMINAL_BENCH_TASK_COUNT = 89
+
+export interface TerminalBenchRun {
+  model: string
+  /** 1, ou 3 comme Artificial Analysis. */
+  attempts: number
+  startedAt: string
+  finishedAt: string | null
+  /** Temps passé sur les tâches finies, en secondes. */
+  seconds: number
+  /** Par tâche finie : essais réussis, essais joués, durée. */
+  tasks: Record<string, { passed: number; trials: number; seconds: number }>
+}
+
+export interface TerminalBenchProgress {
+  model: string
+  attempts: number
+  phase: 'preparing' | 'running' | 'done' | 'stopped' | 'error'
+  /** Ce qui se passe en ce moment, déjà traduit. */
+  step: string
+  tasksDone: number
+  tasksTotal: number
+  /** Essais réussis et joués jusqu'ici (score en direct). */
+  passed: number
+  trials: number
+  currentTask: string | null
+  elapsedMs: number
+  /** Null tant qu'aucune tâche n'est finie : il n'y a encore rien pour estimer. */
+  remainingMs: number | null
+  error: string | null
+}
+
+export interface TerminalBenchStatus {
+  docker: 'ready' | 'notInstalled' | 'notRunning'
+  runs: TerminalBenchRun[]
+  progress: TerminalBenchProgress | null
+}
+
 export interface ModelOverviewEntry {
   model: string
   vramGb: number
@@ -1025,6 +1068,14 @@ export const IPC_CHANNELS = {
   showUnscoredResults: 'jaris:show-unscored-results',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
+  /** renderer <-> main : état du test Terminal-Bench 2.1 (Docker, résultats, test en cours), étape 349. */
+  getTerminalBenchStatus: 'jaris:get-terminal-bench-status',
+  /** renderer -> main : lance Terminal-Bench 2.1 pour un modèle (1 essai, ou 3 comme Artificial Analysis). */
+  startTerminalBench: 'jaris:start-terminal-bench',
+  /** renderer -> main : arrête le test (il reprendra à la tâche en cours). */
+  stopTerminalBench: 'jaris:stop-terminal-bench',
+  /** main -> renderer : avancement du test, à chaque tâche finie et chaque minute (temps restant). */
+  terminalBenchProgress: 'jaris:terminal-bench-progress',
   /** main -> renderer : octets reçus d'un modèle en cours de téléchargement (ModelPullProgress), `null` à la fin. */
   modelPullProgress: 'jaris:model-pull-progress',
   /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,

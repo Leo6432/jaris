@@ -42,6 +42,8 @@ import type {
   WakeAvailabilityPayload,
   WakeTestHeardPayload,
   ModelOverviewResult,
+  TerminalBenchProgress,
+  TerminalBenchStatus,
   ModelsLocationStatus,
   OllamaVersionStatus,
   PickedImageFile,
@@ -130,6 +132,10 @@ declare global {
       testUnscoredModels: () => Promise<{ models: string[]; resultsPath: string }>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
+      getTerminalBenchStatus: () => Promise<TerminalBenchStatus>
+      startTerminalBench: (model: string, attempts: number) => Promise<void>
+      stopTerminalBench: () => Promise<void>
+      onTerminalBenchProgress: (cb: (progress: TerminalBenchProgress) => void) => () => void
       onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>

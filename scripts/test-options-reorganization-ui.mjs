@@ -114,6 +114,14 @@ const overrides = {
     window.__testCalls = (window.__testCalls ?? 0) + 1
     return new Promise((resolve) => (window.__finishTest = () => resolve({ models: [], resultsPath: 'x' })))
   },
+  // Étape 349 : test Terminal-Bench 2.1, en bas de « Tous les modèles ».
+  getTerminalBenchStatus: async () => window.__tbenchStatus ?? { docker: 'ready', runs: [], progress: null },
+  startTerminalBench: async (model, attempts) => { window.__tbenchStart = { model, attempts } },
+  stopTerminalBench: async () => {},
+  onTerminalBenchProgress: (cb) => {
+    window.__tbenchProgress = cb
+    return () => {}
+  },
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
@@ -982,5 +990,110 @@ test('Voix : un flux de silence total désigne Windows (micro coupé ou bloqué)
     await page.evaluate(() => window.__emitMicDone({ detected: true, silentStream: false }))
     await page.waitForSelector('.options-menu__mic-result--ok')
     assert.match(await page.textContent('.options-menu__mic-result--ok'), /Micro détecté/)
+  })
+})
+
+// Étape 349, Léo : « ajoute un bouton test, en bas, faut pas que ça mélange tout, un bouton test avec le score, le
+// temps estimé ». Une carte à part, APRÈS le tableau des modèles, jamais dedans.
+async function openTerminalBench(page) {
+  await page.click('.options-menu__tab:has-text("Modèles")')
+  await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+  await page.waitForSelector('.options-page--models .tbench .tbench__title')
+}
+
+test('Terminal-Bench : une carte à part, tout en bas, qui lance le test avec le modèle et les essais choisis', options, async () => {
+  await withOptions(async (page) => {
+    await openTerminalBench(page)
+    const place = await page.evaluate(() => {
+      const card = document.querySelector('.options-page--models .tbench')
+      const table = document.querySelector('.options-page--models .options-menu__model-overview')
+      const s = getComputedStyle(card)
+      return {
+        afterTable: !!(table.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING),
+        insideTable: !!card.closest('.options-menu__model-group, table'),
+        border: s.borderTopStyle,
+        radius: s.borderTopLeftRadius,
+        title: card.querySelector('.tbench__title').textContent
+      }
+    })
+    assert.ok(place.afterTable, 'la carte doit venir après le tableau des modèles')
+    assert.ok(!place.insideTable, 'la carte ne doit pas être mélangée au tableau')
+    assert.equal(place.border, 'solid', 'carte non habillée par le CSS de Jaris')
+    assert.equal(place.radius, '10px')
+    assert.match(place.title, /Terminal-Bench 2\.1/)
+
+    // Score d'Artificial Analysis du modèle choisi, pour comparer.
+    await page.selectOption('.tbench__field select >> nth=0', 'gemma4:31b')
+    assert.match(await page.textContent('.tbench__aa'), /43,4\s?%/)
+    await page.selectOption('.tbench__field select >> nth=0', 'qwen3:1.7b')
+    assert.match(await page.textContent('.tbench__aa'), /n'a pas mesuré/)
+
+    // Rien ne part sans confirmation.
+    await page.selectOption('.tbench__field select >> nth=0', 'gemma4:31b')
+    await page.click('.tbench__start')
+    assert.equal(await page.evaluate(() => window.__tbenchStart ?? null), null)
+    assert.match(await page.textContent('.tbench__confirm'), /89 tâches/)
+    await page.click('.tbench__confirm button:has-text("Lancer")')
+    await page.waitForFunction(() => window.__tbenchStart)
+    assert.deepEqual(await page.evaluate(() => window.__tbenchStart), { model: 'gemma4:31b', attempts: 3 })
+  })
+})
+
+test('Terminal-Bench : sans Docker, la carte le dit et le test ne peut pas partir', options, async () => {
+  await withOptions(async (page) => {
+    await page.evaluate(() => { window.__tbenchStatus = { docker: 'notInstalled', runs: [], progress: null } })
+    await openTerminalBench(page)
+    await page.waitForSelector('.tbench__warning a')
+    assert.equal(await page.getAttribute('.tbench__warning a', 'href'), 'https://www.docker.com/products/docker-desktop/')
+    assert.equal(await page.isDisabled('.tbench__start'), true)
+  })
+})
+
+test('Terminal-Bench : pendant le test, score en direct et temps restant, puis le résultat comparé au leur', options, async () => {
+  await withOptions(async (page) => {
+    await openTerminalBench(page)
+    const progress = {
+      model: 'gemma4:31b', attempts: 3, phase: 'running', step: 'Tâche en cours : fix-git', tasksDone: 0, tasksTotal: 89,
+      passed: 0, trials: 0, currentTask: 'fix-git', elapsedMs: 4 * 60_000, remainingMs: null, error: null
+    }
+    await page.evaluate((p) => window.__tbenchProgress(p), progress)
+    await page.waitForSelector('.tbench__progress')
+    // Avant la première tâche : jamais un temps inventé.
+    assert.match(await page.textContent('.tbench__stats'), /calculé après la première tâche/)
+    assert.equal(await page.$('.tbench__form'), null, 'le formulaire est caché pendant le test')
+    await page.evaluate((p) => window.__tbenchProgress(p), {
+      ...progress, tasksDone: 12, passed: 5, trials: 36, elapsedMs: 3 * 3_600_000, remainingMs: 22 * 3_600_000 + 15 * 60_000
+    })
+    await page.waitForFunction(() => document.querySelector('.tbench__stats')?.textContent.includes('12 / 89'))
+    const stats = await page.textContent('.tbench__stats')
+    assert.match(stats, /13,9\s?%/)
+    assert.match(stats, /\(5\/36\)/)
+    assert.match(stats, /22 h 15/)
+    const fill = await page.$eval('.tbench .options-menu__progress-bar-fill', (el) => el.style.width)
+    assert.equal(fill, '13%')
+    assert.ok(await page.$('.tbench__progress button:has-text("Arrêter")'))
+
+    // Fin : la carte relit les résultats enregistrés et les compare à Artificial Analysis.
+    const tasks = Object.fromEntries(Array.from({ length: 89 }, (_, i) => [`t${i}`, { passed: i < 40 ? 3 : 0, trials: 3, seconds: 600 }]))
+    await page.evaluate((t) => {
+      window.__tbenchStatus = {
+        docker: 'ready',
+        runs: [
+          { model: 'gemma4:31b', attempts: 3, startedAt: 'x', finishedAt: 'y', seconds: 89 * 600, tasks: t },
+          { model: 'qwen3:1.7b', attempts: 1, startedAt: 'x', finishedAt: null, seconds: 600, tasks: { a: { passed: 1, trials: 1, seconds: 600 } } }
+        ],
+        progress: null
+      }
+    }, tasks)
+    await page.evaluate((p) => window.__tbenchProgress(p), { ...progress, phase: 'done', tasksDone: 89, step: 'Test terminé.' })
+    await page.waitForSelector('.tbench__results tbody tr')
+    const rows = await page.$$eval('.tbench__results tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim())))
+    assert.equal(rows.length, 2)
+    assert.match(rows[0][2], /44,9\s?%/, `score de ce PC : ${rows[0]}`)
+    assert.match(rows[0][3], /43,4\s?%/, `score d'Artificial Analysis : ${rows[0]}`)
+    assert.equal(rows[0][4], '89 / 89')
+    assert.equal(rows[1][3], '—')
+    assert.match(rows[1][4], /en pause/)
+    assert.ok(await page.$('.tbench__form'), 'le formulaire revient à la fin du test')
   })
 })

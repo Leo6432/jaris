@@ -70,6 +70,7 @@ import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
 import { getModelsToTest, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { getTerminalBenchStatus, onTerminalBenchProgress, startTerminalBench, stopTerminalBench } from './services/terminalBench'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
@@ -1754,6 +1755,7 @@ app.whenReady().then(async () => {
     // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic). Attendus
     // jusqu'à leur sortie : sous Windows, un fichier encore ouvert ne s'efface pas de l'ancien dossier.
     await stopModelTest()
+    await stopTerminalBench()
     await phoneAccess?.disable().catch(() => {})
 
     // Pendant la copie (souvent des dizaines de minutes), le mode Code reste utilisable. Tout ce qu'il écrirait dans
@@ -1884,6 +1886,15 @@ app.whenReady().then(async () => {
     testUnscoredModels((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   )
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
+  // Étape 349 : test Terminal-Bench 2.1 sur le PC (terminalBench.ts). Le modèle vient de l'écran : seul un modèle de
+  // Jaris est accepté (jamais un nom arbitraire à télécharger).
+  ipcMain.handle(IPC_CHANNELS.getTerminalBenchStatus, () => getTerminalBenchStatus())
+  ipcMain.handle(IPC_CHANNELS.startTerminalBench, (_event, model: unknown, attempts: unknown) => {
+    if (typeof model !== 'string' || !getAllCandidateModelIds().includes(model)) throw new Error(t('tbench.unknownModel'))
+    startTerminalBench(model, Number(attempts))
+  })
+  ipcMain.handle(IPC_CHANNELS.stopTerminalBench, () => stopTerminalBench())
+  onTerminalBenchProgress((progress) => broadcast(IPC_CHANNELS.terminalBenchProgress, progress))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
   ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {
@@ -2389,6 +2400,7 @@ async function readProfileAtStartup(): Promise<Profile | null | undefined> {
 app.on('before-quit', () => {
   // Étape 230 : un test de modèles (des heures) ne doit jamais continuer après Jaris : il reprendra au relancement.
   stopModelTest()
+  void stopTerminalBench()
   stopOllamaIfStartedByJaris()
   // Étape 153 : app.quit() (mise à jour, croix, « Quitter ») ne déclenche PAS 'window-all-closed' — seul
   // endroit où les deux programmes Python (écoute, voix) étaient arrêtés. Ils survivaient donc à Jaris, micro

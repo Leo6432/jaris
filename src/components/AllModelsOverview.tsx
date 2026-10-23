@@ -4,6 +4,7 @@ import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
+import TerminalBenchTest from './TerminalBenchTest'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
@@ -368,6 +369,11 @@ export default function AllModelsOverview(): JSX.Element {
                         </table>
                       </div>
                     </div>
+                  )}
+                  {/* Étape 349 : test Terminal-Bench 2.1 sur ce PC, tout en bas et à part — ses scores ne vont jamais
+                      dans le tableau au-dessus ni dans le choix des modèles. */}
+                  {overview && (
+                    <TerminalBenchTest models={overview.entries.map((entry) => ({ model: entry.model, terminalBench: entry.terminalBench ?? null }))} />
                   )}
                 </div>
               </main>

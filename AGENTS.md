@@ -9420,3 +9420,42 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Moyen. Un test qui fige une vitesse réelle casse à chaque relevé : écrire les tests de règle avec des vitesses
   fictives, et les vraies seulement dans les tests « machine de Léo ».** Les cinq tests touchés ont été mis aux
   valeurs du jour ; leurs règles restent les mêmes. Régression : `node --test scripts/test-hardwarescan-*.mjs`.
+
+- **Étape 349, Léo : « ajoute un bouton test, en bas, faut pas que ça mélange tout, un bouton test avec le score,
+  le temps estimé » (pour comparer Terminal-Bench 2.1 chez lui à Artificial Analysis).** Une carte à part, tout en
+  bas de « Tous les modèles » (`TerminalBenchTest.tsx`, service `terminalBench.ts`) : choix du modèle et des essais
+  (3 comme Artificial Analysis, ou 1 pour aller 3 fois plus vite), confirmation, puis tâches faites, score en direct
+  (« 16,7 % (15/90) »), temps écoulé et temps restant recalculé chaque minute (moyenne des tâches déjà faites ;
+  « calculé après la première tâche » avant, jamais un chiffre inventé). À la fin, le score de ce PC à côté de celui
+  d'Artificial Analysis. Ces résultats n'entrent JAMAIS dans le choix des modèles.
+  - **Même protocole qu'Artificial Analysis** (page « Intelligence Benchmarking », relue le 23/10/2026) : outil
+    officiel Harbor 0.24.0 (auteurs de Terminal-Bench), agent Terminus 2, 89 tâches, 3 essais, 250 étapes au plus,
+    2 h par tâche ou plus si la tâche le prévoit (seule la section [agent] du task.toml est changée, jamais le
+    correcteur), température 0,6, réussite seulement si tous les tests passent. Différences dites telles quelles :
+    Docker sur le PC au lieu de leur bac à sable, version Q4 d'Ollama, fenêtre de 32 768 tokens.
+  - **Harbor dans le Python de Jaris, par `pip --target`** (simples fichiers : ils restent valables après
+    « Déplacer », un environnement virtuel garde des chemins absolus), avec les versions figées de
+    `python/terminal-bench-constraints.txt` (résolues en une fois ; vérifié que l'ensemble se résout pour Windows en
+    roues binaires seulement). La marque d'installation retient aussi l'empreinte de ce fichier : une nouvelle version
+    de Jaris qui le change réinstalle Harbor. Docker Desktop est demandé, jamais installé par Jaris (étape 337).
+  - **Une panne de la machine n'est jamais comptée contre le modèle** : seul `AgentTimeoutError` (temps de l'agent
+    dépassé) compte comme un échec. Les autres délais de Harbor (installation de l'agent, démarrage du conteneur,
+    correcteur, lus dans `harbor/trial/errors.py`) font vérifier Docker et Ollama ; s'ils ne répondent plus, le test
+    s'arrête sans enregistrer la tâche, et reprend à elle au lancement suivant. Chaque tâche finie est enregistrée tout
+    de suite ; son image Docker est effacée (89 images ne tiendraient pas sur le disque). « Arrêter » interrompt aussi
+    l'installation de Harbor et le téléchargement des tâches, et retire les conteneurs de la tâche en cours.
+  - **Piège trouvé en faisant tourner Harbor pour de vrai ici (granite4.2:3b, Ollama, Docker)** : LiteLLM ignore
+    `model_info` tant qu'il ne contient pas `litellm_provider: 'ollama_chat'` (vérifié en Python) — il prenait alors
+    une limite d'un million de tokens : Terminus 2 ne résumait jamais la conversation, et Ollama la coupait en silence
+    à 32 768. **Leçon : un réglage passé à une bibliothèque tierce peut être accepté sans erreur et ignoré — vérifier
+    qu'il est LU (ici `get_model_info` qui renvoie la bonne limite), pas seulement qu'il est envoyé.**
+  - Le dossier `terminal-bench` (Harbor, tâches, journaux, résultats) suit « Déplacer » (OWNED_ENTRIES), et le test
+    est arrêté avant un déplacement et à la fermeture de Jaris.
+  **Non vérifié ici** : le test sous Windows (Harbor sur Docker Desktop), sa durée et le score réel sur la RTX 3070 de
+  Léo. Ce serveur n'a pas de carte graphique : granite4.2:3b y écrit 10 fois moins vite que chez Artificial Analysis,
+  son score ici ne serait pas comparable. Régression : `node --test scripts/test-terminal-bench.mjs` (calculs ;
+  déroulé complet avec un faux Harbor et un faux Docker sur un vrai dossier : installation avec les versions figées,
+  89 tâches, reprise, réinstallation quand les versions changent, Docker absent, panne de la machine, temps de
+  l'agent dépassé, arrêt) et les tests « Terminal-Bench » de `scripts/test-options-reorganization-ui.mjs` (carte après
+  le tableau et pas dedans, rien ne part sans confirmation, Docker absent, score et temps restant en direct, résultat
+  comparé). Chaque garde a été vérifiée en réintroduisant son défaut.
