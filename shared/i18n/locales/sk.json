@@ -940,6 +940,7 @@
   "image.notCapable": "Tvoj počítač nemá na kreslenie obrázkov dosť výkonu: {reason}.",
   "image.notInstalled": "Model obrázkov ešte nie je na tomto počítači nainštalovaný: otvor Možnosti → Modely a klikni na „Znova otestovať konfiguráciu“.",
   "image.gpuFreed": "Grafická karta uvoľnená na kreslenie (uvoľnené: {models}).",
+  "image.gpuDecodeRetry": "Grafická karta nedokázala obrázok dokončiť: nový pokus s procesorom (trochu pomalší)…",
   "image.preparing": "Príprava kreslenia…",
   "image.noOutput": "Engine obrázkov skončil bez vytvorenia obrázka.",
   "image.unknown": "Neznámy obrázok.",

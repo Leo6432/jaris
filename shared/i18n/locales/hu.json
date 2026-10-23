@@ -919,6 +919,7 @@
   "image.notCapable": "A géped nem elég erős képek rajzolásához: {reason}.",
   "image.notInstalled": "A képmodell még nincs telepítve ezen a gépen: nyisd meg az Opciók → Modellek menüt, és kattints a „Konfiguráció újratesztelése” gombra.",
   "image.gpuFreed": "Videokártya felszabadítva a rajzoláshoz (kiürítve: {models}).",
+  "image.gpuDecodeRetry": "A videókártya nem tudta befejezni a képet: új próbálkozás a processzorral (kicsit lassabb)…",
   "image.preparing": "A rajzolás előkészítése…",
   "image.noOutput": "A képmotor kép létrehozása nélkül fejezte be.",
   "image.unknown": "Ismeretlen kép.",

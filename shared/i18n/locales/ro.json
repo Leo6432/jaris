@@ -940,6 +940,7 @@
   "image.notCapable": "PC-ul tău nu are destulă putere pentru a desena imagini: {reason}.",
   "image.notInstalled": "Modelul de imagine nu este încă instalat pe acest PC: deschide Opțiuni → Modele și dă clic pe „Retestează configurația”.",
   "image.gpuFreed": "Placă video eliberată pentru desen ({models} descărcat din memorie).",
+  "image.gpuDecodeRetry": "Placa video nu a putut termina imaginea: o nouă încercare cu procesorul (puțin mai lent)…",
   "image.preparing": "Se pregătește desenul…",
   "image.noOutput": "Motorul de imagini a terminat fără să creeze o imagine.",
   "image.unknown": "Imagine necunoscută.",

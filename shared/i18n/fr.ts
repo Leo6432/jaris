@@ -929,6 +929,7 @@ export const fr = {
   "image.notCapable": "Ton PC n'a pas assez de puissance pour dessiner des images : {reason}.",
   "image.notInstalled": "Le modèle d'image n'est pas encore installé sur ce PC : ouvre Options → Modèles et clique « Retester la configuration ».",
   "image.gpuFreed": "Carte graphique libérée pour le dessin ({models} déchargé).",
+  "image.gpuDecodeRetry": "La carte graphique n'a pas pu finir l'image : nouvel essai avec le processeur (un peu plus lent)…",
   "image.preparing": "Préparation du dessin…",
   "image.noOutput": "Le moteur d'images a terminé sans créer d'image.",
   "image.unknown": "Image inconnue.",

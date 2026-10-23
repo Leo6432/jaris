@@ -940,6 +940,7 @@
   "image.notCapable": "Tvoje računalo nema dovoljno snage za crtanje slika: {reason}.",
   "image.notInstalled": "Model za slike još nije instaliran na ovom računalu: otvori Mogućnosti → Modeli i klikni „Ponovno testiraj konfiguraciju”.",
   "image.gpuFreed": "Grafička kartica oslobođena za crtanje (iz memorije uklonjeno: {models}).",
+  "image.gpuDecodeRetry": "Grafička kartica nije mogla dovršiti sliku: novi pokušaj s procesorom (malo sporije)…",
   "image.preparing": "Priprema crtanja…",
   "image.noOutput": "Pogon za slike završio je bez izrade slike.",
   "image.unknown": "Nepoznata slika.",

@@ -961,6 +961,7 @@
   "image.notCapable": "Tvoj računalnik nima dovolj moči za risanje slik: {reason}.",
   "image.notInstalled": "Model za slike na tem računalniku še ni nameščen: odpri Možnosti → Modeli in klikni „Ponovno preizkusi konfiguracijo“.",
   "image.gpuFreed": "Grafična kartica sproščena za risanje (sproščeno: {models}).",
+  "image.gpuDecodeRetry": "Grafična kartica ni mogla dokončati slike: nov poskus s procesorjem (nekoliko počasneje)…",
   "image.preparing": "Priprava risanja…",
   "image.noOutput": "Pogon za slike je končal, ne da bi ustvaril sliko.",
   "image.unknown": "Neznana slika.",

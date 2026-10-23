@@ -940,6 +940,7 @@
   "image.notCapable": "Tavo kompiuteriui trūksta galios piešti paveikslėlius: {reason}.",
   "image.notInstalled": "Paveikslėlių modelis šiame kompiuteryje dar neįdiegtas: atidaryk Parinktys → Modeliai ir spustelėk „Iš naujo patikrinti konfigūraciją“.",
   "image.gpuFreed": "Vaizdo plokštė atlaisvinta piešimui ({models} iškeltas iš atminties).",
+  "image.gpuDecodeRetry": "Vaizdo plokštė negalėjo užbaigti paveikslėlio: bandoma iš naujo su procesoriumi (šiek tiek lėčiau)…",
   "image.preparing": "Ruošiamas piešimas…",
   "image.noOutput": "Paveikslėlių variklis baigė darbą nesukūręs paveikslėlio.",
   "image.unknown": "Nežinomas paveikslėlis.",

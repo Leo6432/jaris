@@ -69,7 +69,7 @@ function sha(content) {
  * Charge imageGenerator.ts avec des faux : téléchargement (écrit un contenu connu), tar.exe (pose sd-cli.exe),
  * sd-cli (écrit la vraie sortie ci-dessus puis l'image), Ollama (note le déchargement).
  */
-function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = REAL_OUTPUT, holdEngine = false, vramGb = 8, ramGb = 32 } = {}) {
+function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = REAL_OUTPUT, holdEngine = false, vramGb = 8, ramGb = 32, gpuDecodeFails = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'jaris-images-'))
   const env = { LOCALAPPDATA: join(root, 'Local'), SystemRoot: 'C:\\Windows' }
   const dataRoot = join(root, 'data')
@@ -97,11 +97,14 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
       proc.kill = () => killed.push('kill')
       proc.spawnArgs = { exe, args, options }
       loaded.lastSpawn = proc
+      loaded.backends = [...(loaded.backends ?? []), args[args.indexOf('--backend') + 1]]
+      // Étape 345 : carte qui s'arrête net au décodage (0xC0000409) tant que le décodeur est sur elle.
+      const exitCode = gpuDecodeFails && !args.includes('te=cpu,vae=cpu') ? 3221226505 : engineExitCode
       if (!holdEngine) {
         setImmediate(() => {
           for (const line of engineOutput) proc.stdout.emit('data', Buffer.from(`${line}\r`))
-          if (engineExitCode === 0) writeFileSync(args[args.indexOf('-o') + 1], 'png')
-          proc.emit('close', engineExitCode)
+          if (exitCode === 0) writeFileSync(args[args.indexOf('-o') + 1], 'png')
+          proc.emit('close', exitCode)
         })
       }
       return proc
@@ -222,8 +225,50 @@ test('la description passe en UN argument (jamais un shell), avec la commande do
   assert.equal(args[args.indexOf('--cfg-scale') + 1], '1.0')
   assert.equal(args[args.indexOf('--steps') + 1], '4')
   // Étape 343 : sur la carte, la table de vocabulaire du lecteur faisait planter le moteur (0xC0000409).
-  // Étape 344 : le décodeur aussi (arrêt brutal pendant le décodage, juste après son chargement).
-  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu,vae=cpu', 'lecteur et décodeur sur le processeur')
+  // Étape 345 : le décodeur, lui, essaie d'abord la carte (bien plus rapide quand elle y arrive).
+  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu', 'lecteur sur le processeur, décodeur sur la carte')
+  t.cleanup()
+})
+
+test('étape 345 : la carte s’arrête net au décodage → même image refaite décodeur sur le processeur, et retenu', async () => {
+  const t = await installed({ gpuDecodeFails: true })
+  const logs = []
+  const image = await t.gen.generateImage('cat', (m) => logs.push(m))
+  assert.ok(existsSync(image.path), 'image finie malgré la carte')
+  assert.deepEqual(t.gen.backends, ['te=cpu', 'te=cpu,vae=cpu'], 'carte d’abord, puis processeur')
+  assert.ok(logs.some((l) => l.includes('nouvel essai avec le processeur')), 'Léo voit pourquoi ça recommence')
+  assert.equal(await t.gen.decodeOnCpuRemembered(), true)
+  // L'image suivante passe directement par le processeur : aucun essai raté de plus.
+  t.gen.backends = []
+  await t.gen.generateImage('dog', () => {})
+  assert.deepEqual(t.gen.backends, ['te=cpu,vae=cpu'])
+  t.cleanup()
+})
+
+test('étape 345 : une carte qui marche reste sur la carte, rien n’est retenu', async () => {
+  const t = await installed()
+  await t.gen.generateImage('cat', () => {})
+  await t.gen.generateImage('dog', () => {})
+  assert.deepEqual(t.gen.backends, ['te=cpu', 'te=cpu'])
+  assert.equal(await t.gen.decodeOnCpuRemembered(), false)
+  t.cleanup()
+})
+
+test('étape 345 : une panne qui n’est pas la carte (échec aussi au processeur) n’est jamais retenue', async () => {
+  const t = await installed({ engineExitCode: 1, engineOutput: ['ggml_vulkan: Device memory allocation failed', 'ErrorOutOfDeviceMemory'] })
+  await assert.rejects(t.gen.generateImage('cat'), /Pas assez de mémoire pour dessiner/)
+  assert.equal(await t.gen.decodeOnCpuRemembered(), false)
+  t.cleanup()
+})
+
+test('étape 345 : un nouveau moteur réessaie la carte (le défaut a peut-être été corrigé)', async () => {
+  const t = await installed({ gpuDecodeFails: true })
+  await t.gen.generateImage('cat', () => {})
+  assert.equal(await t.gen.decodeOnCpuRemembered(), true)
+  // Nouvelle version du moteur : le dossier bin est remplacé, le souvenir part avec lui.
+  t.gen.SD_ENGINE.tag = 'master-999-nouveau'
+  await t.gen.installImageModel()
+  assert.equal(await t.gen.decodeOnCpuRemembered(), false)
   t.cleanup()
 })
 
@@ -254,7 +299,8 @@ test('un manque de mémoire devient une phrase lisible par Léo', async () => {
 test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', async () => {
   const t = await installed({ holdEngine: true })
   const controller = new AbortController()
-  const first = t.gen.generateImage('cat', () => {}, controller.signal)
+  const logs = []
+  const first = t.gen.generateImage('cat', (m) => logs.push(m), controller.signal)
   // Attente en temps réel (5 s max), pas en tours de boucle : sous charge (suite complète), 1000 tours
   // s'écoulaient avant la fin des lectures disque et le test échouait sans aucun défaut du code.
   for (const end = Date.now() + 5000; !t.gen.lastSpawn && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
@@ -262,6 +308,8 @@ test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', as
   await assert.rejects(t.gen.generateImage('dog'), /déjà en train de dessiner/)
   controller.abort()
   await assert.rejects(first, /annulé/)
+  // Étape 345 : un arrêt demandé n'est jamais pris pour une panne de la carte (pas de second essai annoncé).
+  assert.ok(!logs.some((l) => l.includes('nouvel essai')), 'aucun nouvel essai après un arrêt')
   assert.deepEqual(t.killed[0], ['/PID', '4242', '/T', '/F'], 'tout l’arbre de processus est arrêté')
   t.cleanup()
 })

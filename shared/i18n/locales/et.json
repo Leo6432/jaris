@@ -919,6 +919,7 @@
   "image.notCapable": "Sinu arvutil pole piltide joonistamiseks piisavalt jõudu: {reason}.",
   "image.notInstalled": "Pildimudel pole selles arvutis veel installitud: ava Valikud → Mudelid ja klõpsa „Testi seadistust uuesti“.",
   "image.gpuFreed": "Graafikakaart vabastatud joonistamiseks ({models} mälust eemaldatud).",
+  "image.gpuDecodeRetry": "Graafikakaart ei suutnud pilti lõpetada: uus katse protsessoriga (veidi aeglasem)…",
   "image.preparing": "Joonistamise ettevalmistamine…",
   "image.noOutput": "Pildimootor lõpetas pilti loomata.",
   "image.unknown": "Tundmatu pilt.",

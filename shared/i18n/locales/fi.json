@@ -919,6 +919,7 @@
   "image.notCapable": "Tietokoneesi ei ole tarpeeksi tehokas kuvien piirtämiseen: {reason}.",
   "image.notInstalled": "Kuvamallia ei ole vielä asennettu tähän tietokoneeseen: avaa Asetukset → Mallit ja napsauta ”Testaa kokoonpano uudelleen”.",
   "image.gpuFreed": "Näytönohjain vapautettu piirtämistä varten ({models} poistettu muistista).",
+  "image.gpuDecodeRetry": "Näytönohjain ei saanut kuvaa valmiiksi: uusi yritys suorittimella (hieman hitaampi)…",
   "image.preparing": "Valmistellaan piirtämistä…",
   "image.noOutput": "Kuvamoottori päättyi luomatta kuvaa.",
   "image.unknown": "Tuntematon kuva.",

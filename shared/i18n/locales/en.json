@@ -919,6 +919,7 @@
   "image.notCapable": "Your PC isn't powerful enough to draw images: {reason}.",
   "image.notInstalled": "The image model isn't installed on this PC yet: open Options → Models and click “Retest the setup”.",
   "image.gpuFreed": "Graphics card freed for drawing ({models} unloaded).",
+  "image.gpuDecodeRetry": "The graphics card couldn't finish the image: trying again with the processor (a bit slower)…",
   "image.preparing": "Preparing the drawing…",
   "image.noOutput": "The image engine finished without creating an image.",
   "image.unknown": "Unknown image.",

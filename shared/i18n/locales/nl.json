@@ -919,6 +919,7 @@
   "image.notCapable": "Je pc is niet krachtig genoeg om afbeeldingen te tekenen: {reason}.",
   "image.notInstalled": "Het afbeeldingsmodel is nog niet op deze pc geïnstalleerd: open Opties → Modellen en klik op “Configuratie opnieuw testen”.",
   "image.gpuFreed": "Videokaart vrijgemaakt voor het tekenen ({models} uit het geheugen gehaald).",
+  "image.gpuDecodeRetry": "De videokaart kon de afbeelding niet afmaken: nieuwe poging met de processor (iets trager)…",
   "image.preparing": "Tekenen voorbereiden…",
   "image.noOutput": "De afbeeldingsengine is klaar zonder een afbeelding te maken.",
   "image.unknown": "Onbekende afbeelding.",

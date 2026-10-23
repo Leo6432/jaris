@@ -9315,3 +9315,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sur une autre machine peut trouver un AUTRE défaut réel, sans prouver que c'est celui de l'utilisateur.
   Régression : `test-image-generation.mjs` (lecteur et décodeur sur le processeur ; tuiles jamais affichées comme
   étapes de dessin, vérifié en retirant chaque correctif).
+
+- **Étape 345, Léo : « mon PC qui est assez puissant, il regarde et choisit le bon système ? » puis « oui ».** La
+  v0.36.7 décodait l'image sur le processeur pour TOUT LE MONDE, même là où la carte y arrive. Maintenant
+  (`generateImage`, imageGenerator.ts) : le lecteur de description reste sur le processeur (étape 343), le
+  décodeur essaie d'abord la carte ; si le moteur échoue (sauf arrêt demandé), la MÊME image est refaite une fois
+  décodeur sur le processeur, avec une ligne qui le dit. Retenu (`.decode-on-cpu` dans le dossier `bin` du
+  moteur) seulement si ce second essai réussit : une panne qui n'est pas la carte n'est jamais mise sur son
+  compte. Rangé avec le moteur exprès : une nouvelle version du moteur remplace `bin`, donc la carte est
+  réessayée (le défaut a peut-être été corrigé). Coût sur une carte qui plante : le dessin refait une fois, la
+  toute première image seulement. **Leçon : un contournement appliqué à tout le monde pour la panne d'une seule
+  machine pénalise toutes les autres — mieux vaut essayer le chemin rapide, retomber sur le sûr en cas d'échec
+  réel, et s'en souvenir.** Régression : `test-image-generation.mjs` (carte d'abord, repli puis souvenir, carte
+  qui marche jamais retenue, panne aussi au processeur jamais retenue, nouveau moteur qui réessaie, arrêt jamais
+  réessayé ; chaque garde vérifiée en la retirant). **Non vérifié sur Windows** : quelle partie choisit la carte
+  de Léo — à voir à sa première image (la ligne « nouvel essai » apparaît ou non).

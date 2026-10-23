@@ -919,6 +919,7 @@
   "image.notCapable": "Tu PC no tiene potencia suficiente para dibujar imágenes: {reason}.",
   "image.notInstalled": "El modelo de imagen aún no está instalado en este PC: abre Opciones → Modelos y haz clic en «Volver a probar la configuración».",
   "image.gpuFreed": "Tarjeta gráfica liberada para el dibujo ({models} descargado de la memoria).",
+  "image.gpuDecodeRetry": "La tarjeta gráfica no pudo terminar la imagen: nuevo intento con el procesador (un poco más lento)…",
   "image.preparing": "Preparando el dibujo…",
   "image.noOutput": "El motor de imágenes terminó sin crear ninguna imagen.",
   "image.unknown": "Imagen desconocida.",

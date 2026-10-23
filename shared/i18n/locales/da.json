@@ -919,6 +919,7 @@
   "image.notCapable": "Din pc er ikke kraftig nok til at tegne billeder: {reason}.",
   "image.notInstalled": "Billedmodellen er ikke installeret på denne pc endnu: åbn Indstillinger → Modeller, og klik på “Test konfigurationen igen”.",
   "image.gpuFreed": "Grafikkortet er frigjort til tegningen ({models} fjernet fra hukommelsen).",
+  "image.gpuDecodeRetry": "Grafikkortet kunne ikke gøre billedet færdigt: prøver igen med processoren (lidt langsommere)…",
   "image.preparing": "Forbereder tegningen…",
   "image.noOutput": "Billedmotoren sluttede uden at lave et billede.",
   "image.unknown": "Ukendt billede.",

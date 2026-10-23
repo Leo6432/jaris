@@ -116,10 +116,12 @@ export interface SdArgsInput {
   prompt: string
   output: string
   seed: number
+  /** Décodage de l'image sur le processeur (étape 345 : seulement si la carte graphique y a échoué). */
+  decodeOnCpu?: boolean
 }
 
 /** Ligne de commande de sd-cli pour FLUX.2 klein, telle que documentée par sd.cpp (docs/flux2.md). */
-export function buildSdArgs({ models, prompt, output, seed }: SdArgsInput): string[] {
+export function buildSdArgs({ models, prompt, output, seed, decodeOnCpu = false }: SdArgsInput): string[] {
   return [
     '--diffusion-model', models.diffusion,
     '--vae', models.vae,
@@ -144,7 +146,10 @@ export function buildSdArgs({ models, prompt, output, seed }: SdArgsInput): stri
     // le chargement du DÉCODEUR (seule pièce en bf16, d'où « convert: 0.06s » ; le dessin et le lecteur affichent
     // 0,00 s). Le plantage tombe donc au décodage de l'image, sur la carte. Décodeur sur le processeur aussi :
     // mesuré ici, 1024 px en 4 min 40 sur 4 cœurs lents — bien moins sur un PC de bureau, et ça marche partout.
-    '--backend', 'te=cpu,vae=cpu',
+    // Étape 345 (Léo : « mon PC assez puissant, il regarde et choisit le bon système ? ») : le décodeur reste sur
+    // la carte quand elle y arrive (bien plus rapide) ; il ne passe sur le processeur qu'après un échec réel sur
+    // CETTE machine (generateImage, decodeOnCpuRemembered).
+    '--backend', decodeOnCpu ? 'te=cpu,vae=cpu' : 'te=cpu',
     '-o', output
   ]
 }
@@ -247,6 +252,23 @@ export function engineExe(): string {
 function modelPaths(): Record<ImageModelFile['role'], string> {
   const dir = join(imageEngineRoot(), 'models')
   return Object.fromEntries(IMAGE_MODEL_FILES.map((f) => [f.role, join(dir, f.fileName)])) as Record<ImageModelFile['role'], string>
+}
+
+/**
+ * Étape 345 : la carte graphique de cette machine a déjà échoué au décodage d'une image. Rangé avec le moteur
+ * (dossier bin) : une nouvelle version du moteur remplace ce dossier, donc la carte est réessayée — le défaut
+ * a peut-être été corrigé.
+ */
+function decodeOnCpuMarker(): string {
+  return join(imageEngineRoot(), 'bin', '.decode-on-cpu')
+}
+
+export async function decodeOnCpuRemembered(): Promise<boolean> {
+  return (await sizeOf(decodeOnCpuMarker())) !== null
+}
+
+async function rememberDecodeOnCpu(): Promise<void> {
+  await writeFile(decodeOnCpuMarker(), SD_ENGINE.tag, 'utf-8').catch(() => {})
 }
 
 /** Le moteur installé est bien la version figée ci-dessus (une nouvelle version de Jaris peut en changer). */
@@ -492,9 +514,26 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     const fileName = imageFileName(text, new Date())
     const output = join(dir, fileName)
     onLog(t('image.preparing'))
-    await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed: Math.floor(Math.random() * 2 ** 31) }), onLog, signal)
-    if ((await sizeOf(output)) === null) {
-      throw new Error(t('image.noOutput'))
+    const seed = Math.floor(Math.random() * 2 ** 31)
+    const draw = async (decodeOnCpu: boolean): Promise<void> => {
+      await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed, decodeOnCpu }), onLog, signal)
+      if ((await sizeOf(output)) === null) throw new Error(t('image.noOutput'))
+    }
+    if (await decodeOnCpuRemembered()) {
+      await draw(true)
+      return { path: output, fileName }
+    }
+    try {
+      await draw(false)
+    } catch (err) {
+      // Étape 345 : sur certaines cartes, le moteur Vulkan s'arrête net pendant le décodage (0xC0000409, étape
+      // 344). Une annulation demandée n'est jamais réessayée ; tout autre échec l'est UNE fois, décodeur sur le
+      // processeur. Retenu seulement si ce second essai réussit : une autre panne n'est jamais mise sur la carte.
+      if (signal?.aborted) throw err
+      onLog(t('image.gpuDecodeRetry'))
+      await rm(output, { force: true })
+      await draw(true)
+      await rememberDecodeOnCpu()
     }
     return { path: output, fileName }
   } finally {

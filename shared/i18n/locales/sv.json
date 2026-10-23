@@ -919,6 +919,7 @@
   "image.notCapable": "Din dator är inte kraftfull nog för att rita bilder: {reason}.",
   "image.notInstalled": "Bildmodellen är inte installerad på den här datorn ännu: öppna Alternativ → Modeller och klicka på ”Testa konfigurationen igen”.",
   "image.gpuFreed": "Grafikkortet frigjort för ritningen ({models} urladdad).",
+  "image.gpuDecodeRetry": "Grafikkortet kunde inte göra klart bilden: nytt försök med processorn (lite långsammare)…",
   "image.preparing": "Förbereder ritningen…",
   "image.noOutput": "Bildmotorn avslutades utan att skapa någon bild.",
   "image.unknown": "Okänd bild.",

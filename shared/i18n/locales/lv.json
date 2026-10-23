@@ -940,6 +940,7 @@
   "image.notCapable": "Tavam datoram nepietiek jaudas attēlu zīmēšanai: {reason}.",
   "image.notInstalled": "Attēlu modelis šajā datorā vēl nav instalēts: atver Opcijas → Modeļi un noklikšķini „Pārbaudīt konfigurāciju vēlreiz”.",
   "image.gpuFreed": "Videokarte atbrīvota zīmēšanai (izlādēts: {models}).",
+  "image.gpuDecodeRetry": "Videokarte nevarēja pabeigt attēlu: jauns mēģinājums ar procesoru (nedaudz lēnāk)…",
   "image.preparing": "Sagatavo zīmēšanu…",
   "image.noOutput": "Attēlu dzinējs beidza darbu, neizveidojot attēlu.",
   "image.unknown": "Nezināms attēls.",

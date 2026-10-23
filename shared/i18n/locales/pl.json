@@ -961,6 +961,7 @@
   "image.notCapable": "Twój komputer ma za mało mocy, by rysować obrazy: {reason}.",
   "image.notInstalled": "Model obrazów nie jest jeszcze zainstalowany na tym komputerze: otwórz Opcje → Modele i kliknij „Przetestuj konfigurację ponownie”.",
   "image.gpuFreed": "Karta graficzna zwolniona do rysowania (wyładowano {models}).",
+  "image.gpuDecodeRetry": "Karta graficzna nie mogła dokończyć obrazu: nowa próba z procesorem (trochę wolniej)…",
   "image.preparing": "Przygotowywanie rysunku…",
   "image.noOutput": "Silnik obrazów zakończył pracę, nie tworząc obrazu.",
   "image.unknown": "Nieznany obraz.",

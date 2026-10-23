@@ -919,6 +919,7 @@
   "image.notCapable": "Dein PC ist nicht leistungsstark genug, um Bilder zu zeichnen: {reason}.",
   "image.notInstalled": "Das Bildmodell ist auf diesem PC noch nicht installiert: Öffne Optionen → Modelle und klick auf „Konfiguration neu testen“.",
   "image.gpuFreed": "Grafikkarte für das Zeichnen freigegeben ({models} entladen).",
+  "image.gpuDecodeRetry": "Die Grafikkarte konnte das Bild nicht fertigstellen: neuer Versuch mit dem Prozessor (etwas langsamer)…",
   "image.preparing": "Zeichnen wird vorbereitet…",
   "image.noOutput": "Die Bild-Engine hat beendet, ohne ein Bild zu erstellen.",
   "image.unknown": "Unbekanntes Bild.",
