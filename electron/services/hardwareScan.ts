@@ -1076,34 +1076,41 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
  * comme le site. Ces vitesses changent souvent, et parfois beaucoup, quand le fournisseur mesuré change :
  * granite4.2:3b est passé de 221 à 51,7 tokens/s. gemma4:26b (63,8) et mistral-small3.2:24b (32,9) ont de nouveau
  * une vitesse publiée ; qwen3-vl:8b n'en a plus (retirée).
+ *
+ * Étape 348 (Léo : « revérifie tout et fais-moi un tableau avant/après ») : les quatre tables d'Artificial Analysis
+ * relues le 23/10/2026 sur la page de chaque modèle (objet du modèle : `intelligenceIndex`, `omniscience`,
+ * `terminalBench21`, `timescaleData.medianOutputSpeed`, plus la phrase de vitesse). Intelligence, Omniscience et
+ * Terminal-Bench : identiques partout, K2 Horizon compris. Vitesses : 26 sur 27 ont bougé, parfois du simple au
+ * double (granite4.2:8b 47,1 → 97,3 ; gpt-oss:20b 235,4 → 156,1). Conséquence calculée sur 16 types de PC : sur une
+ * carte de 8 Go, Faible passe de qwen3.5:9b à granite4.2:8b ; sur 24 Go, Moyen passe de qwen3.6:27b à qwen3.8:27b.
  */
 const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
-  'qwen3.5:4b': 17.7,
-  'qwen3.5:9b': 64.4,
-  'qwen3.5:27b': 76.3,
-  'qwen3.5:35b': 142.4,
-  'qwen3.6:27b': 58.2,
-  'qwen3.6:35b': 134.4,
-  'qwen3.6:35b-a3b': 134.4,
-  'qwen3.8:27b': 39.2,
-  'muse-glimmer:30b': 112.1,
-  'gpt-oss:20b': 235.4,
-  'gemma4:12b': 114.9,
-  'gemma4:26b': 63.8,
-  'gemma4:31b': 35.7,
-  'gemma4:e4b': 28.3,
-  'ministral-3:14b': 80.7,
-  'ministral-3:3b': 197.9,
-  'granite4.2:3b': 51.7,
-  'ministral-3:8b': 111.4,
-  'granite4.2:8b': 47.1,
-  'granite4.2:30b': 41.2,
-  'mistral-small3.2:24b': 32.9,
-  'glm-4.7-flash:q4_K_M': 84.5,
-  'nemotron-3.5-lightning:30b': 307.2,
-  'qwen3-coder:30b': 178.9,
-  'north-mini-code-1.0': 75.4,
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 24.8,
+  'qwen3.5:4b': 16.4,
+  'qwen3.5:9b': 58.8,
+  'qwen3.5:27b': 78.0,
+  'qwen3.5:35b': 146.1,
+  'qwen3.6:27b': 57.0,
+  'qwen3.6:35b': 136.4,
+  'qwen3.6:35b-a3b': 136.4,
+  'qwen3.8:27b': 45.2,
+  'muse-glimmer:30b': 124.1,
+  'gpt-oss:20b': 156.1,
+  'gemma4:12b': 119.8,
+  'gemma4:26b': 79.0,
+  'gemma4:31b': 35.9,
+  'gemma4:e4b': 38.5,
+  'ministral-3:14b': 83.1,
+  'ministral-3:3b': 206.8,
+  'granite4.2:3b': 109.6,
+  'ministral-3:8b': 113.8,
+  'granite4.2:8b': 97.3,
+  'granite4.2:30b': 98.9,
+  'mistral-small3.2:24b': 41.9,
+  'glm-4.7-flash:q4_K_M': 88.2,
+  'nemotron-3.5-lightning:30b': 287.3,
+  'qwen3-coder:30b': 222.1,
+  'north-mini-code-1.0': 59.0,
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 56.7,
   'phi4-mini': 45.7
 }
 

@@ -140,11 +140,11 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
-  // Étape 340 : relevées le 21/10/2026, avec la décimale du site (qwen3.5:27b : 76,3, signalé par Léo).
-  assert.equal(byModel.get('ministral-3:3b'), 197.9)
-  assert.equal(byModel.get('granite4.2:3b'), 51.7)
-  assert.equal(byModel.get('qwen3.5:27b'), 76.3)
-  assert.equal(byModel.get('gemma4:26b'), 63.8, 'de nouveau publiée')
+  // Étape 348 : relues le 23/10/2026, avec la décimale du site (étape 340 : qwen3.5:27b à 76,3, signalé par Léo).
+  assert.equal(byModel.get('ministral-3:3b'), 206.8)
+  assert.equal(byModel.get('granite4.2:3b'), 109.6)
+  assert.equal(byModel.get('qwen3.5:27b'), 78)
+  assert.equal(byModel.get('gemma4:26b'), 79, 'de nouveau publiée')
   assert.equal(byModel.get('qwen3-vl:8b'), null, 'plus publiée : retirée')
   // Étape 220 : plus de vitesse publiée pour Devstral Small 2 (N/A) — retirée plutôt que gardée périmée.
   assert.equal(byModel.get('devstral-small-2:24b'), null)

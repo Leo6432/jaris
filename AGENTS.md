@@ -9398,3 +9398,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   téléchargement — lire le registre (manifeste, `requires`) et le lancer avant de l'ajouter.** Régression :
   `node --test scripts/test-hardwarescan-min-ollama.mjs` (versions minimales, proposés au test et jamais choisis
   sans score), `scripts/test-options-reorganization-ui.mjs` (futur modèle), `test-benchmark-candidates-sync.mjs`.
+
+- **Étape 348, Léo : « ajoute Gemma 4 26B A4B, et il y a quelques bugs, par exemple K2 Horizon les scores ne sont
+  pas totalement bons, revérifie tout et fais-moi un tableau avant/après ».** Les quatre tables d'Artificial Analysis
+  (intelligence, Omniscience, Terminal-Bench 2.1, vitesse) ont été relues sur la page de chaque modèle. La lecture se
+  fait sur l'objet du modèle lui-même : `currentModel`, ou l'objet portant le nom exact de la variante quand la page
+  en regroupe deux. La vitesse est lue à la fois dans `timescaleData.medianOutputSpeed` et dans la phrase « generates
+  output at », qui concordent. Résultats :
+  - **Intelligence, Omniscience et Terminal-Bench : identiques partout**, K2 Horizon compris (0.9B 3,0 / 3.7B 15,6 /
+    7B 20,6). Le 62,6 % de K2 Horizon 32B a été relu sur la fiche d'IFM : toujours le même.
+  - **Vitesses : 26 sur 27 ont bougé**, parfois du simple au double (granite4.2:8b 47,1 → 97,3 ; granite4.2:30b
+    41,2 → 98,9 ; gpt-oss:20b 235,4 → 156,1).
+
+  Conséquence, calculée avant et après sur 16 types de PC :
+  - carte de 8 Go (la machine de Léo) : Faible passe de qwen3.5:9b à granite4.2:8b ;
+  - carte de 24 Go : Moyen passe de qwen3.6:27b à qwen3.8:27b.
+
+  « Gemma 4 26B A4B » était déjà dans Jaris, sous le tag Ollama `gemma4:26b` (A4B = 4 milliards de paramètres
+  actifs). La recherche de « Tous les modèles » ne le trouve pas sous le nom d'Artificial Analysis. **Leçon : les
+  vitesses publiées changent avec le fournisseur mesuré, souvent et fortement, et elles décident de Faible et de
+  Moyen. Un test qui fige une vitesse réelle casse à chaque relevé : écrire les tests de règle avec des vitesses
+  fictives, et les vraies seulement dans les tests « machine de Léo ».** Les cinq tests touchés ont été mis aux
+  valeurs du jour ; leurs règles restent les mêmes. Régression : `node --test scripts/test-hardwarescan-*.mjs`.
