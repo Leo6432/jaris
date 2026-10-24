@@ -192,3 +192,22 @@ test('computeAvailableSteps garantit au moins 4 paliers dès que la VRAM laisse 
   // Un max plus grand encore garde l'échelle d'Ollama telle quelle (déjà bien plus que 4 valeurs).
   assert.deepEqual(computeAvailableSteps(262144), [8192, 16384, 32768, 65536, 131072, 262144])
 })
+
+// Étape 351 (test Terminal-Bench, Léo : « mémoire on peut pas changer ça ? ») : point de départ de la recherche de la
+// plus grande fenêtre qui tient sur la carte. Le chargement réel du modèle tranche ensuite (test-terminal-bench.mjs).
+test('étape 351 : fenêtre estimée pour un modèle seul sur la carte, et les cas où rien n’est sûr', async () => {
+  const GB = 1024 ** 3
+  const hs = loadHardwareScan({ freeVramMib: 6 * 1024, modelInfo: ARCH_8B, sizeBytes: 2 * GB, loaded: [{ model: 'autre:7b', vramGb: 2 }] })
+  const arch = hs.parseModelArchInfo(ARCH_8B)
+  // La place prise par un autre modèle de Jaris compte comme libre : il est déchargé avant le test.
+  assert.equal(await hs.estimateContextOnCard('granite4.2:3b', 131072), hs.computeMaxSafeContext(arch, 2, 8))
+  // Le modèle seul ne tient déjà pas sur la carte.
+  const big = loadHardwareScan({ freeVramMib: 6 * 1024, modelInfo: ARCH_8B, sizeBytes: 9 * GB })
+  assert.equal(await big.estimateContextOnCard('gros:30b', 131072), 0)
+  // Architecture illisible (têtes données couche par couche, modèle hybride) : le chargement réel tranchera.
+  const hybrid = loadHardwareScan({ freeVramMib: 6 * 1024, modelInfo: { ...ARCH_8B, 'llama.attention.head_count_kv': [8, 0, 8] }, sizeBytes: 2 * GB })
+  assert.equal(await hybrid.estimateContextOnCard('hybride:3b', 131072), 131072)
+  // Modèle pas installé : rien de sûr.
+  const absent = loadHardwareScan({ freeVramMib: 6 * 1024, modelInfo: ARCH_8B, sizeBytes: null })
+  assert.equal(await absent.estimateContextOnCard('absent:3b', 131072), null)
+})

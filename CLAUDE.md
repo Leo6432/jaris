@@ -9524,3 +9524,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   essai, entre deux essais ; la carte reçoit l'essai pendant la tâche et plus rien après) et le test « pendant une
   tâche » de `scripts/test-options-reorganization-ui.mjs` (texte affiché, temps qui avance seul, alerte après
   15 min, ancien message sans ces champs). Chaque garde vérifiée en réintroduisant son défaut.
+
+- **Étape 351, Léo : « mémoire on peut pas changer ça ? » puis « oui », et « pourquoi une fenêtre de 2 h, pourquoi
+  pas arrêter quand tout est fini comme eux ».** La fenêtre du test Terminal-Bench n'est plus fixe à 32 768 : avant
+  chaque NOUVEAU test, Jaris prend la plus grande qui tient ENTIÈREMENT sur la carte graphique (`chooseContext`,
+  terminalBench.ts), sans jamais descendre sous 32 768 (l'ancienne valeur). Au-delà de ce qui tient, une partie du
+  modèle passerait sur le processeur : plusieurs fois plus lent, donc plus de tâches coupées par la limite de temps.
+  - **Le calcul ne sert qu'à choisir par où commencer** (`estimateContextOnCard`, hardwareScan.ts : mémoire libre
+    de la carte + modèles de Jaris déjà chargés, ou mémoire totale moins 1 Go pour une carte AMD/Intel, moins le
+    poids du modèle, divisé par le coût de la mémoire de conversation par token ; 131 072 quand l'architecture est
+    illisible, modèle hybride par exemple). Chaque fenêtre est ensuite **vérifiée par un vrai chargement**, le
+    modèle seul sur la carte, puis lue dans `/api/ps` (`modelPlacement`, ollama.ts) : le calcul ignore la mémoire
+    de travail d'Ollama et peut se tromper dans les deux sens, le chargement réel non. **Vérifié dans le code
+    d'Ollama 0.40.10** (llm/llama_server.go, `MemorySize`) : toutes les couches sur la carte ⇒ `size` = `size_vram`
+    exactement ; et sur un vrai Ollama ici, `/api/ps` donne bien `size`, `size_vram` et `context_length`. Le
+    modèle reste chargé avec la fenêtre retenue : Harbor s'en sert sans rechargement.
+  - **Une reprise garde la fenêtre de son premier lancement** (`TerminalBenchRun.numCtx`), même si la carte est
+    plus chargée ce jour-là : jamais deux réglages dans un même score. Un test commencé avant (rien d'enregistré =
+    32 768) ne continue que si la nouvelle fenêtre est la même ; sinon il repart de zéro, comme convenu avec Léo.
+  - La fenêtre choisie s'affiche pendant le test et dans le tableau des résultats (« Mémoire du modèle »,
+    24 langues), avec chaque essai de chargement (« Essai d'une mémoire de 128k… »).
+  **Les 2 h ne sont pas une durée, c'est un plafond, le même qu'Artificial Analysis** (leur méthode, relue le
+  24/10/2026 : « Per-task agent timeout is set to two hours (7,200 seconds) », ou celui de la tâche s'il est plus
+  long, « well above typical task durations » ; ces limites coupent surtout « models stuck in an unsuccessful
+  loop »). Un essai s'arrête dès que le modèle dit avoir fini (Terminus 2 demande une confirmation, lu dans
+  terminus_2.py) ; les 2 h ne coupent qu'un modèle qui tourne en rond. Au passage : leur indice d'intelligence
+  utilise maintenant Terminal-Bench 4.0 avec un autre outil (mini-swe-agent, 500 étapes, sans résumé) ; le score
+  Terminal-Bench 2.1 qu'on compare reste mesuré avec Terminus 2.
+  **Leçon générale : quand un réglage de mémoire dépend du matériel, ne pas faire confiance au seul calcul —
+  charger pour de vrai et lire ce que le moteur a réellement fait.** Régression : `scripts/test-terminal-bench.mjs`
+  (fenêtres essayées, « tient sur la carte », 128k refusé puis 64k retenu avec chaque essai seul sur la carte,
+  reprise sans remesurer, carte inconnue ou modèle trop gros sans aucun chargement, ancien test repris ou
+  recommencé), `scripts/test-context-length.mjs` (estimation), `scripts/test-model-preload.mjs` (`/api/ps`, modèle
+  sans tag) et `scripts/test-options-reorganization-ui.mjs` (mémoire affichée, colonnes lues par leur titre — une
+  colonne ajoutée ne décale plus rien en silence). Les 7 garde-fous du service vérifiés en réintroduisant chaque
+  défaut. **Non vérifié ici** (pas de carte graphique) : la fenêtre réellement retenue sur la RTX 3070 de Léo.

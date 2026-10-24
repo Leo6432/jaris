@@ -15,6 +15,11 @@ import { loadTsModule } from './load-ts-module.mjs'
 const PYTHON_DIR = fileURLToPath(new URL('../python', import.meta.url))
 const ipc = loadTsModule('shared/ipc.ts')
 const TASKS = ipc.TERMINAL_BENCH_TASK_COUNT
+// Les mêmes paliers que le curseur de mémoire d'Options, relus dans hardwareScan.ts (trop lourd à charger ici).
+const STEPS = JSON.parse(
+  `[${/export const CONTEXT_LENGTH_STEPS = \[([^\]]+)\]/.exec(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'))[1]}]`
+)
+const GB = 1024 ** 3
 
 function load(env) {
   const powerStopped = []
@@ -37,8 +42,28 @@ function load(env) {
     './pythonRuntime': { resolvePythonBin: () => 'python', PIP_INSTALL: ['-m', 'pip', 'install', '--no-cache-dir'] },
     './ollama': {
       pullModelIfMissing: async (model) => env.pulled.push(model),
-      fitToModelContext: async (_model, n) => n
+      fitToModelContext: async (_model, n) => (env.native !== null && env.native < n ? env.native : n),
+      modelNativeContext: async () => env.native,
+      loadedOllamaModels: async () => (env.loaded ? [{ model: env.loaded.model, vramGb: 5 }] : []),
+      unloadOllamaModels: async () => {
+        env.unloads++
+        env.loaded = null
+        return []
+      },
+      preloadModel: async (model, numCtx) => {
+        // Rien d'autre ne doit être chargé pendant la mesure.
+        env.loadedDuringLoad.push(env.loaded)
+        env.loads.push(numCtx)
+        env.loaded = { model, numCtx }
+        return true
+      },
+      // Fausse carte : tout le modèle y tient jusqu'à `fitsUpTo` tokens, au-delà une partie reste sur le processeur.
+      modelPlacement: async (model) =>
+        env.loaded?.model === model
+          ? { sizeBytes: 5 * GB, vramBytes: env.loaded.numCtx <= env.fitsUpTo ? 5 * GB : 4 * GB, contextLength: env.loaded.numCtx }
+          : null
     },
+    './hardwareScan': { CONTEXT_LENGTH_STEPS: STEPS, estimateContextOnCard: async () => env.estimate },
     './atomicFile': { writeFileAtomic: (p, d) => fs.promises.writeFile(p, d) },
     '../../shared/ipc': ipc
   })
@@ -88,7 +113,15 @@ function makeEnv({ trial = () => ({ reward: 1 }), hangTask = null } = {}) {
     spawns: [],
     execs: [],
     runs: [],
-    ollamaUp: true
+    ollamaUp: true,
+    // Carte graphique : rien de connu par défaut (fenêtre de 32 768, sans aucun essai de chargement).
+    native: null,
+    estimate: null,
+    fitsUpTo: 0,
+    loaded: null,
+    loads: [],
+    loadedDuringLoad: [],
+    unloads: 0
   }
   env.childProcess = {
     execFile(cmd, args, _opts, cb) {
@@ -409,6 +442,147 @@ test('« Arrêter » : la tâche en cours n’est pas enregistrée et ses conten
     assert.ok(env.execs.some((e) => e[1] === 'rm' && e.includes('abc123')))
   } finally {
     rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+// Étape 351, Léo : « mémoire on peut pas changer ça ? » puis « oui ». La fenêtre n'est plus fixe : la plus grande qui
+// tient ENTIÈREMENT sur la carte, vérifiée par un vrai chargement du modèle, jamais moins qu'avant (32 768).
+function numCtxOfRun(r) {
+  const i = r.args.findIndex((a, k) => r.args[k - 1] === '--ak' && a.startsWith('llm_call_kwargs='))
+  return JSON.parse(r.args[i].slice('llm_call_kwargs='.length)).num_ctx
+}
+function maxInputOfRun(r) {
+  const i = r.args.findIndex((a, k) => r.args[k - 1] === '--ak' && a.startsWith('model_info='))
+  return JSON.parse(r.args[i].slice('model_info='.length)).max_input_tokens
+}
+
+test('fenêtres à essayer : de la plus grande qui devrait tenir au plancher, jamais au-delà du modèle', () => {
+  const mod = load(makeEnv())
+  const C = (native, upper) => mod.benchContextCandidates(native, upper, STEPS)
+  assert.deepEqual(C(262144, 140000), [131072, 65536, 32768])
+  assert.deepEqual(C(131072, 1e9), [131072, 65536, 32768], 'jamais plus que le modèle')
+  // Un maximum qui n'est pas un palier est essayé tel quel.
+  assert.deepEqual(C(40960, 1e9), [40960, 32768])
+  assert.deepEqual(C(40960, 35000), [32768])
+  // Le modèle seul déborde déjà de la carte, ou la carte est inconnue : la fenêtre d'avant, sans rien essayer.
+  assert.deepEqual(C(131072, 0), [32768])
+  assert.deepEqual(C(131072, null), [32768])
+  assert.deepEqual(C(null, 1e9), [32768])
+  // Un modèle qui ne lit pas 32 768 tokens garde son propre maximum, comme avant.
+  assert.deepEqual(C(8192, 1e9), [8192])
+  assert.equal(mod.shortContext(65536), '64k')
+  assert.equal(mod.shortContext(40960), '40k')
+})
+
+test('« tient sur la carte » : tout le modèle sur la carte, avec la fenêtre demandée', () => {
+  const mod = load(makeEnv())
+  assert.equal(mod.fullyOnCard({ sizeBytes: 5 * GB, vramBytes: 5 * GB, contextLength: 65536 }, 65536), true)
+  assert.equal(mod.fullyOnCard({ sizeBytes: 5 * GB, vramBytes: 5 * GB, contextLength: null }, 65536), true)
+  assert.equal(mod.fullyOnCard({ sizeBytes: 5 * GB, vramBytes: 4.8 * GB, contextLength: 65536 }, 65536), false)
+  assert.equal(mod.fullyOnCard({ sizeBytes: 5 * GB, vramBytes: 5 * GB, contextLength: 32768 }, 65536), false)
+  assert.equal(mod.fullyOnCard(null, 65536), false)
+})
+
+test('nouveau test : la plus grande fenêtre qui tient vraiment sur la carte, puis gardée pour la reprise', async () => {
+  const env = makeEnv()
+  Object.assign(env, { native: 131072, estimate: 140000, fitsUpTo: 65536, loaded: { model: 'autre:7b', numCtx: 8192 } })
+  try {
+    const mod = load(env)
+    const seen = []
+    mod.onTerminalBenchProgress((p) => seen.push(p))
+    const end = waitForEnd(mod)
+    mod.startTerminalBench('granite4.2:3b', 1)
+    assert.equal((await end).phase, 'done')
+    // 128k essayé puis refusé (une partie sur le processeur), 64k retenu ; chaque essai seul sur la carte.
+    assert.deepEqual(env.loads, [131072, 65536])
+    assert.deepEqual(env.loadedDuringLoad, [null, null])
+    assert.ok(seen.some((p) => /mémoire de 128k/.test(p.step)), 'l’essai en cours est affiché')
+    assert.equal(seen.at(-1).numCtx, 65536)
+    assert.ok(env.runs.every((r) => numCtxOfRun(r) === 65536 && maxInputOfRun(r) === 65536))
+    assert.equal(readResults(env.root).runs['granite4.2:3b|1'].numCtx, 65536)
+
+    // Reprise : la même fenêtre, sans rien remesurer, même si la carte est plus chargée ce jour-là.
+    const results = readResults(env.root)
+    const run = results.runs['granite4.2:3b|1']
+    for (const t of ['tache-10', 'tache-11']) delete run.tasks[t]
+    run.finishedAt = null
+    fs.writeFileSync(join(env.root, 'terminal-bench', 'results.json'), JSON.stringify(results))
+    Object.assign(env, { runs: [], loads: [], fitsUpTo: 0 })
+    const mod2 = load(env)
+    const end2 = waitForEnd(mod2)
+    mod2.startTerminalBench('granite4.2:3b', 1)
+    assert.equal((await end2).phase, 'done')
+    assert.deepEqual(env.loads, [])
+    assert.deepEqual(env.runs.map((r) => [r.task, numCtxOfRun(r)]), [['tache-10', 65536], ['tache-11', 65536]])
+  } finally {
+    rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+test('carte inconnue ou modèle trop gros : la fenêtre d’avant, sans aucun essai de chargement', async () => {
+  for (const estimate of [null, 0]) {
+    const env = makeEnv()
+    Object.assign(env, { native: 131072, estimate, fitsUpTo: 262144 })
+    try {
+      const mod = load(env)
+      const end = waitForEnd(mod)
+      mod.startTerminalBench('granite4.2:3b', 1)
+      assert.equal((await end).phase, 'done')
+      assert.deepEqual(env.loads, [], `estimate=${estimate}`)
+      assert.equal(env.unloads, 0, 'aucun modèle de Jaris déchargé pour rien')
+      assert.ok(env.runs.every((r) => numCtxOfRun(r) === 32768))
+    } finally {
+      rmSync(env.root, { recursive: true, force: true })
+    }
+  }
+})
+
+test('test commencé avant l’étape 351 : repart de zéro si la fenêtre change, continue sinon', async () => {
+  const oldRun = (root) => {
+    const tasks = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`tache-0${i}`, { passed: 1, trials: 1, seconds: 60 }]))
+    fs.mkdirSync(join(root, 'terminal-bench'), { recursive: true })
+    fs.writeFileSync(
+      join(root, 'terminal-bench', 'results.json'),
+      JSON.stringify({
+        version: 1,
+        runs: { 'granite4.2:3b|1': { model: 'granite4.2:3b', attempts: 1, startedAt: 'x', finishedAt: null, seconds: 300, tasks } }
+      })
+    )
+  }
+  // La carte permet 64k : les 5 tâches faites avec 32 768 ne sont pas mélangées avec les nouvelles.
+  const env = makeEnv()
+  Object.assign(env, { native: 131072, estimate: 70000, fitsUpTo: 65536 })
+  try {
+    oldRun(env.root)
+    const mod = load(env)
+    const end = waitForEnd(mod)
+    mod.startTerminalBench('granite4.2:3b', 1)
+    assert.equal((await end).phase, 'done')
+    assert.equal(env.runs.length, TASKS)
+    const run = readResults(env.root).runs['granite4.2:3b|1']
+    assert.equal(run.numCtx, 65536)
+    assert.ok(run.seconds < 300, 'les secondes de l’ancien test ne sont pas reprises')
+    assert.equal(Object.keys(run.tasks).length, TASKS)
+    assert.notEqual(run.startedAt, 'x')
+  } finally {
+    rmSync(env.root, { recursive: true, force: true })
+  }
+  // La carte ne permet pas plus : l'ancien test continue où il en était.
+  const env2 = makeEnv()
+  Object.assign(env2, { native: 131072, estimate: 70000, fitsUpTo: 32768 })
+  try {
+    oldRun(env2.root)
+    const mod = load(env2)
+    const end = waitForEnd(mod)
+    mod.startTerminalBench('granite4.2:3b', 1)
+    assert.equal((await end).phase, 'done')
+    assert.deepEqual(env2.loads, [65536])
+    assert.equal(env2.runs.length, TASKS - 5)
+    const run = readResults(env2.root).runs['granite4.2:3b|1']
+    assert.equal(run.startedAt, 'x')
+    assert.equal(run.numCtx, 32768)
+  } finally {
+    rmSync(env2.root, { recursive: true, force: true })
   }
 })
 

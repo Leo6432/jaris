@@ -1061,14 +1061,18 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
     // Avant la première tâche : jamais un temps inventé.
     assert.match(await page.textContent('.tbench__stats'), /calculé après la première tâche/)
     assert.equal(await page.$('.tbench__form'), null, 'le formulaire est caché pendant le test')
+    // Étape 351 : pas de mémoire affichée tant que le test ne l'a pas choisie.
+    assert.doesNotMatch(await page.textContent('.tbench__stats'), /Mémoire du modèle/)
     await page.evaluate((p) => window.__tbenchProgress(p), {
-      ...progress, tasksDone: 12, passed: 5, trials: 36, elapsedMs: 3 * 3_600_000, remainingMs: 22 * 3_600_000 + 15 * 60_000
+      ...progress, tasksDone: 12, passed: 5, trials: 36, elapsedMs: 3 * 3_600_000, remainingMs: 22 * 3_600_000 + 15 * 60_000,
+      numCtx: 65536
     })
     await page.waitForFunction(() => document.querySelector('.tbench__stats')?.textContent.includes('12 / 89'))
     const stats = await page.textContent('.tbench__stats')
     assert.match(stats, /13,9\s?%/)
     assert.match(stats, /\(5\/36\)/)
     assert.match(stats, /22 h 15/)
+    assert.match(stats, /Mémoire du modèle\s*64k/)
     const fill = await page.$eval('.tbench .options-menu__progress-bar-fill', (el) => el.style.width)
     assert.equal(fill, '13%')
     assert.ok(await page.$('.tbench__progress button:has-text("Arrêter")'))
@@ -1079,7 +1083,7 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
       window.__tbenchStatus = {
         docker: 'ready',
         runs: [
-          { model: 'gemma4:31b', attempts: 3, startedAt: 'x', finishedAt: 'y', seconds: 89 * 600, tasks: t },
+          { model: 'gemma4:31b', attempts: 3, numCtx: 65536, startedAt: 'x', finishedAt: 'y', seconds: 89 * 600, tasks: t },
           { model: 'qwen3:1.7b', attempts: 1, startedAt: 'x', finishedAt: null, seconds: 600, tasks: { a: { passed: 1, trials: 1, seconds: 600 } } }
         ],
         progress: null
@@ -1089,11 +1093,21 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
     await page.waitForSelector('.tbench__results tbody tr')
     const rows = await page.$$eval('.tbench__results tbody tr', (trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim())))
     assert.equal(rows.length, 2)
-    assert.match(rows[0][2], /44,9\s?%/, `score de ce PC : ${rows[0]}`)
-    assert.match(rows[0][3], /43,4\s?%/, `score d'Artificial Analysis : ${rows[0]}`)
-    assert.equal(rows[0][4], '89 / 89')
-    assert.equal(rows[1][3], '—')
-    assert.match(rows[1][4], /en pause/)
+    // Colonnes lues par leur titre, pas par leur numéro : une colonne ajoutée ne décale plus rien en silence.
+    const heads = await page.$$eval('.tbench__results thead th', (ths) => ths.map((th) => th.textContent.trim()))
+    const col = (name) => {
+      const i = heads.indexOf(name)
+      assert.notEqual(i, -1, `colonne « ${name} » : ${heads}`)
+      return i
+    }
+    assert.match(rows[0][col('Ce PC')], /44,9\s?%/, `score de ce PC : ${rows[0]}`)
+    assert.match(rows[0][col('Artificial Analysis')], /43,4\s?%/, `score d'Artificial Analysis : ${rows[0]}`)
+    assert.equal(rows[0][col('Tâches')], '89 / 89')
+    assert.equal(rows[0][col('Mémoire du modèle')], '64k')
+    // Un test commencé avant l'étape 351 n'enregistrait pas sa fenêtre : c'était 32 768.
+    assert.equal(rows[1][col('Mémoire du modèle')], '32k')
+    assert.equal(rows[1][col('Artificial Analysis')], '—')
+    assert.match(rows[1][col('Tâches')], /en pause/)
     assert.ok(await page.$('.tbench__form'), 'le formulaire revient à la fin du test')
   })
 })

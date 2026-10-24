@@ -6,6 +6,7 @@ import {
   type TerminalBenchRun,
   type TerminalBenchStatus
 } from '../../shared/ipc'
+import { formatContextLength } from '../lib/formatContextLength'
 import { formatModelName } from '../lib/formatModelName'
 import { formatDuration } from '../lib/formatCodeGenProgress'
 import { ipcErrorMessage } from '../lib/ipcError'
@@ -29,6 +30,8 @@ const MAX_STEPS = 250
  * Le texte « tbench.quiet » dit « 15 minutes » dans chaque langue : le changer avec ce nombre.
  */
 const QUIET_MS = 15 * 60_000
+/** Fenêtre d'un test commencé avant l'étape 351, qui ne l'enregistrait pas encore (MIN_BENCH_CTX côté main). */
+const LEGACY_NUM_CTX = 32768
 
 function stageText(live: TerminalBenchLive): string {
   if (live.stage === 'agent') return t('tbench.stage.agent', { steps: live.steps, max: MAX_STEPS })
@@ -232,6 +235,12 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
                 {progress.remainingMs === null ? t('tbench.remainingLater') : formatDuration(progress.remainingMs)}
               </dd>
             </div>
+            {typeof progress.numCtx === 'number' && (
+              <div>
+                <dt>{t('tbench.context')}</dt>
+                <dd>{formatContextLength(progress.numCtx)}</dd>
+              </div>
+            )}
             {live && (
               <div>
                 <dt>{t('tbench.trial')}</dt>
@@ -271,6 +280,7 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
               <tr>
                 <th>{t('tbench.model')}</th>
                 <th>{t('tbench.attemptsShort')}</th>
+                <th className="options-menu__col-num">{t('tbench.context')}</th>
                 <th className="options-menu__col-num">{t('tbench.yours')}</th>
                 <th className="options-menu__col-num">{t('tbench.theirs')}</th>
                 <th className="options-menu__col-num">{t('tbench.tasks')}</th>
@@ -285,6 +295,7 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
                   <tr key={`${run.model}|${run.attempts}`}>
                     <td title={run.model}>{formatModelName(run.model, { quant: false })}</td>
                     <td>{run.attempts}</td>
+                    <td className="options-menu__col-num">{formatContextLength(run.numCtx ?? LEGACY_NUM_CTX)}</td>
                     <td className="options-menu__col-num">{percentOf(s.passed, s.trials)}</td>
                     <td className="options-menu__col-num">{aa === null ? '—' : formatPercent(aa / 100)}</td>
                     <td className="options-menu__col-num">

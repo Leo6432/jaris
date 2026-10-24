@@ -8,7 +8,16 @@ import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { getDataRoot } from './dataLocation'
 import { resolvePythonBin, PIP_INSTALL } from './pythonRuntime'
-import { fitToModelContext, pullModelIfMissing } from './ollama'
+import {
+  fitToModelContext,
+  loadedOllamaModels,
+  modelNativeContext,
+  modelPlacement,
+  preloadModel,
+  pullModelIfMissing,
+  unloadOllamaModels
+} from './ollama'
+import { CONTEXT_LENGTH_STEPS, estimateContextOnCard } from './hardwareScan'
 import { writeFileAtomic } from './atomicFile'
 import {
   TERMINAL_BENCH_TASK_COUNT,
@@ -31,8 +40,8 @@ import { t } from '../../shared/i18n'
  * (ou le délai de la tâche s'il est plus long), réussite seulement si TOUS les tests passent, score = moyenne des
  * essais. Température 0,6 : leur règle pour un modèle qui réfléchit quand le créateur n'en donne pas.
  * Différences assumées : Docker sur le PC au lieu de leur bac à sable E2B, la version Q4 d'Ollama au lieu de la
- * version d'origine chez un fournisseur, et une fenêtre de 32 768 tokens (Terminus 2 résume au-delà) pour tenir
- * dans 8 Go de carte.
+ * version d'origine chez un fournisseur, et une fenêtre limitée à ce qui tient sur la carte graphique (Terminus 2
+ * résume la conversation au-delà) : voir chooseContext, étape 351.
  *
  * L'outil officiel du test, Harbor (Laude Institute, auteurs de Terminal-Bench), est installé dans le Python de
  * Jaris avec `pip --target` : de simples fichiers, qui restent valables quand « Déplacer » change le dossier de place
@@ -53,7 +62,20 @@ export const AA_SETTINGS = {
   minAgentTimeoutSec: 7200,
   temperature: 0.6
 } as const
-const NUM_CTX = 32768
+/**
+ * Étape 351 (Léo : « mémoire on peut pas changer ça ? ») : la fenêtre n'est plus fixe. Avant chaque NOUVEAU test,
+ * Jaris prend la plus grande qui tient entièrement sur la carte graphique (voir chooseContext), jamais moins que
+ * MIN_BENCH_CTX : la fenêtre fixe des versions 0.38.0 et 0.38.1, gardée quand la carte n'en permet pas plus — moins
+ * de mémoire ferait résumer la conversation sans arrêt. Plus que la carte ne tient ferait passer une partie du
+ * modèle sur le processeur : plusieurs fois plus lent, donc plus de tâches coupées par la limite de 2 h.
+ */
+export const MIN_BENCH_CTX = 32768
+/** Premier essai quand l'architecture du modèle n'est pas lisible : au-delà, aucune carte grand public ne suit. */
+export const UNKNOWN_ARCH_START = 131072
+/** Un modèle entièrement posé sur la carte : Ollama donne alors la même taille totale et sur la carte. */
+const ON_CARD_TOLERANCE_BYTES = 16 * 1024 ** 2
+/** Chargement d'un essai de fenêtre : un gros modèle, en partie sur le processeur, peut mettre plusieurs minutes. */
+const CALIBRATION_LOAD_MS = 5 * 60_000
 /**
  * Rythme de mise à jour de la carte pendant une tâche : le temps restant (Léo : « dis-moi toutes les minutes le temps
  * restant ») et ce qui se passe dans l'essai en cours (étape, dernière activité), relus dans les fichiers de Harbor.
@@ -128,7 +150,7 @@ export function harborRunArgs(opts: {
     '--ak',
     `max_turns=${AA_SETTINGS.maxTurns}`,
     // Sans num_ctx, Ollama coupe la conversation à sa fenêtre par défaut, sans rien dire (vérifié : avec, le modèle
-    // est bien chargé avec 32 768).
+    // est bien chargé avec la fenêtre demandée).
     '--ak',
     `llm_call_kwargs=${JSON.stringify({ num_ctx: opts.numCtx })}`,
     // Terminus 2 résume la conversation quand elle approche de cette limite, au lieu de la laisser déborder. Sans
@@ -152,6 +174,37 @@ export function harborRunArgs(opts: {
     '-y',
     '-q'
   ]
+}
+
+/**
+ * Les fenêtres à essayer, de la plus grande à la plus petite, toujours terminées par le plancher (essayé sans
+ * vérification : il était déjà utilisé avant l'étape 351, même quand le modèle débordait de la carte).
+ * `native` : le maximum du modèle lui-même (null = inconnu). `upper` : la plus grande fenêtre qui devrait tenir
+ * sur la carte (estimateContextOnCard ; null = carte inconnue, 0 = le modèle seul ne tient pas).
+ */
+export function benchContextCandidates(native: number | null, upper: number | null, ladder: readonly number[]): number[] {
+  if (native !== null && native <= MIN_BENCH_CTX) return [native]
+  if (native === null || upper === null) return [MIN_BENCH_CTX]
+  const top = Math.min(native, upper)
+  const tries = ladder.filter((size) => size > MIN_BENCH_CTX && size <= top)
+  // Un maximum qui n'est pas un palier (40 960 pour Qwen3, par exemple) est essayé tel quel.
+  if (native <= top && !tries.includes(native)) tries.push(native)
+  return [...tries.sort((a, b) => b - a), MIN_BENCH_CTX]
+}
+
+/** Vrai si Ollama a posé TOUT le modèle sur la carte graphique, avec au moins la fenêtre demandée. */
+export function fullyOnCard(
+  placement: { sizeBytes: number; vramBytes: number; contextLength: number | null } | null,
+  numCtx: number
+): boolean {
+  if (!placement || placement.sizeBytes <= 0) return false
+  if (placement.contextLength !== null && placement.contextLength < numCtx) return false
+  return placement.vramBytes + ON_CARD_TOLERANCE_BYTES >= placement.sizeBytes
+}
+
+/** Écriture courte d'une fenêtre, comme le curseur de mémoire d'Options (src/lib/formatContextLength.ts) : 65536 → « 64k ». */
+export function shortContext(tokens: number): string {
+  return tokens < 1024 ? String(tokens) : `${Math.round(tokens / 1024)}k`
 }
 
 /** Un nom de dossier sûr pour une tâche d'un modèle (« hf.co/a/b:Q4 » contient des caractères interdits). */
@@ -517,6 +570,42 @@ export async function getTerminalBenchStatus(): Promise<TerminalBenchStatus> {
   return { docker, runs: Object.values(results.runs), progress }
 }
 
+/** Attend qu'Ollama ait vraiment rendu la mémoire (`keep_alive: 0` répond avant la fin du déchargement). */
+async function waitUntilUnloaded(timeoutMs = 20_000): Promise<void> {
+  const until = Date.now() + timeoutMs
+  while (Date.now() < until) {
+    const loaded = await loadedOllamaModels()
+    if (!loaded || loaded.length === 0) return
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+}
+
+/**
+ * Étape 351 : la plus grande fenêtre qui tient ENTIÈREMENT sur la carte graphique avec ce modèle. Le calcul
+ * (estimateContextOnCard) ne sert qu'à choisir par où commencer : chaque fenêtre est vérifiée en chargeant
+ * vraiment le modèle, seul sur la carte, puis en lisant où Ollama l'a rangé (/api/ps) — le calcul ignore la
+ * mémoire de travail d'Ollama et peut se tromper dans les deux sens, le chargement réel non. Le modèle reste
+ * chargé avec la fenêtre retenue : Harbor s'en sert tel quel, sans rechargement.
+ */
+async function chooseContext(model: string): Promise<number> {
+  const [native, upper] = await Promise.all([
+    modelNativeContext(model),
+    estimateContextOnCard(model, UNKNOWN_ARCH_START).catch(() => null)
+  ])
+  const candidates = benchContextCandidates(native, upper, CONTEXT_LENGTH_STEPS)
+  const floor = candidates[candidates.length - 1]
+  for (const numCtx of candidates.slice(0, -1)) {
+    if (stopRequested) break
+    emit({ step: t('tbench.tryingContext', { size: shortContext(numCtx) }) })
+    // Seul sur la carte : un autre modèle de Jaris (ou l'essai précédent) fausserait la mesure.
+    await unloadOllamaModels()
+    await waitUntilUnloaded()
+    if (!(await preloadModel(model, numCtx, CALIBRATION_LOAD_MS))) continue
+    if (fullyOnCard(await modelPlacement(model), numCtx)) return numCtx
+  }
+  return floor
+}
+
 /** Arrête le test en cours (bouton « Arrêter », fermeture de Jaris) ; il reprendra à la tâche en cours. */
 export async function stopTerminalBench(): Promise<void> {
   stopRequested = true
@@ -606,19 +695,36 @@ async function runAll(model: string, attempts: number, started: number): Promise
       emit({ step: t('tbench.preparingModel'), tasksTotal: tasks.length })
       await pullModelIfMissing(model, (line) => emit({ step: line }))
     }
-    const numCtx = stopRequested ? NUM_CTX : await fitToModelContext(model, NUM_CTX)
 
     const results = await readResults()
     const key = runKey(model, attempts)
-    run = results.runs[key] ?? {
-      model,
-      attempts,
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-      seconds: 0,
-      tasks: {}
+    const previous = results.runs[key]
+    // Une reprise garde la fenêtre de son premier lancement, même si la carte est plus chargée ce jour-là : jamais
+    // deux réglages différents dans un même score.
+    let numCtx = previous?.numCtx ?? null
+    if (numCtx === null && !stopRequested) {
+      emit({ step: t('tbench.fittingContext') })
+      numCtx = await chooseContext(model)
     }
+    // Un test commencé avant l'étape 351 (fenêtre fixe, rien d'enregistré) ne continue que si la nouvelle fenêtre
+    // est la même ; sinon il repart de zéro (Léo : « oui », en sachant qu'il faut relancer depuis le début).
+    const legacyCtx = await fitToModelContext(model, MIN_BENCH_CTX)
+    numCtx ??= legacyCtx
+    const keep = previous !== undefined && (previous.numCtx ?? legacyCtx) === numCtx
+    run = keep
+      ? previous
+      : {
+          model,
+          attempts,
+          numCtx,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          seconds: 0,
+          tasks: {}
+        }
+    run.numCtx = numCtx
     results.runs[key] = run
+    emit({ numCtx })
     refresh()
 
     for (const task of tasks) {

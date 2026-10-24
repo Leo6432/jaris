@@ -157,3 +157,23 @@ test('étape 346 : la correction (voix) et la mémoire passent bien par le modè
   assert.match(voice, /const model = await preferLoadedModel\(\s*Object\.values\(profile\?\.models \?\? \{\}\),\s*profile\?\.models\?\.flash/)
   assert.match(memory, /const model = await preferLoadedModel\(Object\.values\(profile\?\.models \?\? \{\}\), profile\?\.models\?\.medium/)
 })
+
+// Étape 351 : où Ollama a vraiment rangé un modèle chargé (test Terminal-Bench : la fenêtre ne compte que si TOUT le
+// modèle est sur la carte). Un modèle sans tag est listé sous « :latest » par Ollama.
+test('placement d’un modèle chargé lu dans /api/ps, même sans tag', async () => {
+  respond = async () =>
+    new Response(
+      JSON.stringify({
+        models: [
+          { name: 'autre:7b', model: 'autre:7b', size: 9, size_vram: 9 },
+          { name: 'hf.co/org/depot:latest', model: 'hf.co/org/depot:latest', size: 5000, size_vram: 4000, context_length: 65536 }
+        ]
+      }),
+      { status: 200 }
+    )
+  assert.deepEqual(await ollama.modelPlacement('hf.co/org/depot'), { sizeBytes: 5000, vramBytes: 4000, contextLength: 65536 })
+  assert.deepEqual(await ollama.modelPlacement('autre:7b'), { sizeBytes: 9, vramBytes: 9, contextLength: null })
+  assert.equal(await ollama.modelPlacement('absent:1b'), null)
+  respond = async () => new Response('', { status: 500 })
+  assert.equal(await ollama.modelPlacement('autre:7b'), null)
+})

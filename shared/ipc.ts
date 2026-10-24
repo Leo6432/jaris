@@ -461,6 +461,11 @@ export interface TerminalBenchRun {
   finishedAt: string | null
   /** Temps passé sur les tâches finies, en secondes. */
   seconds: number
+  /**
+   * Fenêtre de mémoire du modèle (tokens), choisie au premier lancement et gardée pour la reprise (étape 351 : la
+   * plus grande qui tient sur la carte graphique). Absente pour un test commencé avant : 32 768.
+   */
+  numCtx?: number
   /** Par tâche finie : essais réussis, essais joués, durée. */
   tasks: Record<string, { passed: number; trials: number; seconds: number }>
 }
@@ -494,6 +499,8 @@ export interface TerminalBenchProgress {
   startedAt?: number
   /** Ce qui se passe dans la tâche en cours ; null hors d'une tâche. */
   live?: TerminalBenchLive | null
+  /** Fenêtre de mémoire du modèle pour ce test, une fois choisie (étape 351). */
+  numCtx?: number
   tasksDone: number
   tasksTotal: number
   /** Essais réussis et joués jusqu'ici (score en direct). */
