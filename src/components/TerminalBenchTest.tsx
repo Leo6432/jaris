@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   TERMINAL_BENCH_TASK_COUNT,
+  type TerminalBenchLive,
   type TerminalBenchProgress,
   type TerminalBenchRun,
   type TerminalBenchStatus
@@ -19,6 +20,20 @@ import { formatPercent, t } from '@/lib/i18n'
 
 const DOCKER_URL = 'https://www.docker.com/products/docker-desktop/'
 const DEFAULT_MODEL = 'granite4.2:3b'
+/** Étapes du modèle au plus dans un essai (réglage d'Artificial Analysis, AA_SETTINGS.maxTurns côté main). */
+const MAX_STEPS = 250
+/**
+ * Au-delà, la carte dit qu'il ne se passe plus rien et comment le vérifier (étape 350, Léo : « ça fait 58 min et
+ * toujours pareil »). Sur une carte graphique, un petit modèle répond en quelques secondes : un quart d'heure sans la
+ * moindre écriture de Harbor ou du modèle mérite d'être signalé, sans affirmer que c'est bloqué.
+ * Le texte « tbench.quiet » dit « 15 minutes » dans chaque langue : le changer avec ce nombre.
+ */
+const QUIET_MS = 15 * 60_000
+
+function stageText(live: TerminalBenchLive): string {
+  if (live.stage === 'agent') return t('tbench.stage.agent', { steps: live.steps, max: MAX_STEPS })
+  return t(`tbench.stage.${live.stage}`)
+}
 
 export interface TerminalBenchModel {
   model: string
@@ -53,6 +68,7 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
   const [attempts, setAttempts] = useState(3)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   const refresh = (): void => {
     void window.jaris
@@ -77,6 +93,22 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
 
   const aaScore = useMemo(() => models.find((m) => m.model === model)?.terminalBench ?? null, [models, model])
   const active = progress && (progress.phase === 'preparing' || progress.phase === 'running')
+
+  // Pendant le test, le temps écoulé et « dernière activité » avancent chaque seconde : un chiffre figé une minute
+  // entière se lit comme un blocage.
+  useEffect(() => {
+    if (!active) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
+
+  const live = active ? (progress?.live ?? null) : null
+  const elapsedMs =
+    active && typeof progress?.startedAt === 'number'
+      ? Math.max(progress.elapsedMs, now - progress.startedAt)
+      : (progress?.elapsedMs ?? 0)
+  const quietMs = live?.lastActivityAt ? Math.max(0, now - live.lastActivityAt) : null
 
   const start = async (): Promise<void> => {
     setConfirming(false)
@@ -162,6 +194,7 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
             })}
           </p>
           <p className="tbench__step">{progress.phase === 'error' ? t('tbench.failed') : progress.step}</p>
+          {live && <p className="tbench__stage">{stageText(live)}</p>}
           <div className="options-menu__progress-bar">
             <div
               className="options-menu__progress-bar-fill"
@@ -191,7 +224,7 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
             </div>
             <div>
               <dt>{t('tbench.elapsed')}</dt>
-              <dd>{formatDuration(progress.elapsedMs)}</dd>
+              <dd>{formatDuration(elapsedMs)}</dd>
             </div>
             <div>
               <dt>{t('tbench.remaining')}</dt>
@@ -199,7 +232,26 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
                 {progress.remainingMs === null ? t('tbench.remainingLater') : formatDuration(progress.remainingMs)}
               </dd>
             </div>
+            {live && (
+              <div>
+                <dt>{t('tbench.trial')}</dt>
+                <dd>{t('tbench.trialOf', { trial: live.trial, attempts: progress.attempts })}</dd>
+              </div>
+            )}
+            {live?.trialStartedAt && (
+              <div>
+                <dt>{t('tbench.trialTime')}</dt>
+                <dd>{formatDuration(Math.max(0, now - live.trialStartedAt))}</dd>
+              </div>
+            )}
+            {live && quietMs !== null && (
+              <div>
+                <dt>{t('tbench.lastActivity')}</dt>
+                <dd>{formatDuration(quietMs)}</dd>
+              </div>
+            )}
           </dl>
+          {live && quietMs !== null && quietMs >= QUIET_MS && <p className="tbench__warning">{t('tbench.quiet')}</p>}
           {progress.phase === 'error' && progress.error && <p className="options-menu__error">{progress.error}</p>}
           {active && (
             <button className="options-menu__action" onClick={() => void window.jaris.stopTerminalBench()}>

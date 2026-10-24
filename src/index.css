@@ -931,6 +931,14 @@ body.body--splash {
   overflow-wrap: anywhere;
 }
 
+/* Ce que fait l'essai en cours (étape 350) : juste sous la tâche, un peu plus visible qu'elle. */
+.tbench__stage {
+  margin: 0;
+  font-size: 13px;
+  color: var(--hud-text);
+  overflow-wrap: anywhere;
+}
+
 .tbench__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

@@ -9459,3 +9459,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'agent dépassé, arrêt) et les tests « Terminal-Bench » de `scripts/test-options-reorganization-ui.mjs` (carte après
   le tableau et pas dedans, rien ne part sans confirmation, Docker absent, score et temps restant en direct, résultat
   comparé). Chaque garde a été vérifiée en réintroduisant son défaut.
+
+- **Étape 350, Léo pendant son premier test Terminal-Bench (granite4.2:3b, 3 essais) : « ça fait 58 min et toujours
+  pareil » (0 / 89, « Tâche en cours : adaptive-rejection-sampler », temps restant « calculé après la première
+  tâche »).** Rien ne permettait de distinguer « ça travaille » de « c'est bloqué » : pendant une tâche, la carte
+  n'affichait que le temps écoulé, et seulement une fois par minute. Ce n'est pas forcément anormal (une tâche ne
+  compte qu'après ses 3 essais, joués l'un après l'autre — `-n 1`, pour que les essais ne se disputent pas la carte
+  graphique —, et chaque essai peut durer jusqu'à 2 h et 250 étapes), mais Léo ne pouvait pas le savoir. Même leçon
+  qu'aux étapes 34, 98 et 314 : une attente longue doit montrer qu'elle avance, avec des faits.
+  `readLiveTrial` (terminalBench.ts) lit, toutes les 10 s, ce que Harbor écrit déjà au fil de l'essai — structure
+  relevée sur un VRAI dossier de Harbor 0.24.0 : un sous-dossier par essai (config.json dès le début, result.json à la
+  fin), `agent/trajectory.json` réécrit après CHAQUE étape du modèle, journaux, enregistrement du terminal, et
+  `verifier/` quand les tests de la tâche tournent. La carte affiche : l'essai en cours (« 1 sur 3 »), ce qu'il fait
+  (« L'essai démarre… », « Préparation de l'environnement de la tâche… », « Le modèle travaille : étape 37 (250 au
+  plus) », « Vérification du résultat… »), la durée de l'essai et le temps depuis la dernière écriture de Harbor ou
+  du modèle. Temps écoulé et dernière activité avancent chaque seconde (l'heure de début est envoyée à l'écran).
+  Au-delà de 15 minutes sans aucune écriture, une phrase dit comment vérifier (conteneur de la tâche dans Docker
+  Desktop) et quoi faire, sans affirmer que c'est bloqué. Libellés choisis pour n'avoir aucune grammaire autour d'une
+  durée (« Depuis la dernière activité : 8 s » plutôt que « il y a 8 s ») : 24 langues, sans déclinaison à deviner.
+  L'état d'une tâche finie n'est jamais affiché sur la suivante (la lecture compare le dossier avant et après).
+  **Non vérifié ici** : les dates de modification des fichiers écrits DANS le conteneur sous Docker Desktop (Windows) ;
+  la dernière activité repose surtout sur des fichiers écrits par Harbor sur le PC lui-même (trajectory.json,
+  journaux). Régression : `scripts/test-terminal-bench.mjs` (états lus sur un vrai dossier : démarrage,
+  environnement, 37 étapes du modèle sans compter la consigne, fichier en pleine écriture, vérification, deuxième
+  essai, entre deux essais ; la carte reçoit l'essai pendant la tâche et plus rien après) et le test « pendant une
+  tâche » de `scripts/test-options-reorganization-ui.mjs` (texte affiché, temps qui avance seul, alerte après
+  15 min, ancien message sans ces champs). Chaque garde vérifiée en réintroduisant son défaut.

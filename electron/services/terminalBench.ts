@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync } from 'fs'
-import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { powerSaveBlocker } from 'electron'
 import { config } from '../config'
@@ -12,6 +12,7 @@ import { fitToModelContext, pullModelIfMissing } from './ollama'
 import { writeFileAtomic } from './atomicFile'
 import {
   TERMINAL_BENCH_TASK_COUNT,
+  type TerminalBenchLive,
   type TerminalBenchProgress,
   type TerminalBenchRun,
   type TerminalBenchStatus
@@ -53,8 +54,11 @@ export const AA_SETTINGS = {
   temperature: 0.6
 } as const
 const NUM_CTX = 32768
-/** Le temps restant est recalculé chaque minute (Léo : « dis-moi toutes les minutes le temps restant »). */
-const TICK_MS = 60_000
+/**
+ * Rythme de mise à jour de la carte pendant une tâche : le temps restant (Léo : « dis-moi toutes les minutes le temps
+ * restant ») et ce qui se passe dans l'essai en cours (étape, dernière activité), relus dans les fichiers de Harbor.
+ */
+const TICK_MS = 10_000
 const RESULTS_VERSION = 1
 
 function rootDir(): string {
@@ -198,6 +202,91 @@ export async function readTrialOutcomes(jobDir: string): Promise<TrialOutcome[]>
     }
   }
   return out
+}
+
+async function mtimeOf(file: string): Promise<number | null> {
+  try {
+    return (await stat(file)).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+/** Nombre d'étapes du modèle déjà gardées par Harbor, relu seulement quand le fichier a changé. */
+const stepsCache = new Map<string, { mtime: number; steps: number }>()
+
+async function agentSteps(trajectory: string, mtime: number | null): Promise<number> {
+  if (mtime === null) return 0
+  const cached = stepsCache.get(trajectory)
+  if (cached && cached.mtime === mtime) return cached.steps
+  try {
+    const data = JSON.parse(await readFile(trajectory, 'utf8')) as { steps?: Array<{ source?: string }> }
+    const steps = (data.steps ?? []).filter((step) => step?.source === 'agent').length
+    stepsCache.set(trajectory, { mtime, steps })
+    return steps
+  } catch {
+    // Fichier en pleine écriture : on garde le dernier nombre lu.
+    return cached?.steps ?? 0
+  }
+}
+
+/**
+ * Ce qui se passe dans la tâche en cours, lu dans le dossier que Harbor écrit au fil de l'essai : un sous-dossier par
+ * essai (config.json dès le début, result.json à la fin), le fichier agent/trajectory.json réécrit après CHAQUE étape
+ * du modèle, le journal de l'essai, l'enregistrement du terminal, et verifier/ quand les tests de la tâche tournent.
+ * Rien d'inventé : sans fichier, l'essai est « en démarrage ».
+ */
+export async function readLiveTrial(jobDir: string, attempts: number): Promise<TerminalBenchLive> {
+  let lastActivityAt = await mtimeOf(join(jobDir, 'job.log'))
+  const seen = (t: number | null): void => {
+    if (t !== null && (lastActivityAt === null || t > lastActivityAt)) lastActivityAt = t
+  }
+  let names: string[] = []
+  try {
+    names = (await readdir(jobDir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    // Harbor n'a pas encore créé le dossier.
+  }
+  let trialsDone = 0
+  let current: string | null = null
+  for (const name of names.sort()) {
+    if (existsSync(join(jobDir, name, 'result.json'))) trialsDone++
+    else current ??= join(jobDir, name)
+  }
+  const trial = Math.min(trialsDone + 1, attempts)
+  if (!current) {
+    return {
+      trial,
+      trialsDone,
+      stage: trialsDone >= attempts ? 'verifying' : 'starting',
+      steps: 0,
+      trialStartedAt: null,
+      lastActivityAt
+    }
+  }
+  const trajectory = join(current, 'agent', 'trajectory.json')
+  const trajectoryAt = await mtimeOf(trajectory)
+  seen(trajectoryAt)
+  for (const file of ['trial.log', join('agent', 'recording.cast'), join('agent', 'terminus_2.pane')]) {
+    seen(await mtimeOf(join(current, file)))
+  }
+  let verifying = false
+  try {
+    const files = await readdir(join(current, 'verifier'))
+    for (const file of files) seen(await mtimeOf(join(current, 'verifier', file)))
+    verifying = files.length > 0
+  } catch {
+    // Pas encore de vérification.
+  }
+  const steps = await agentSteps(trajectory, trajectoryAt)
+  return {
+    trial,
+    trialsDone,
+    stage: verifying ? 'verifying' : steps > 0 ? 'agent' : 'environment',
+    steps,
+    trialStartedAt: (await mtimeOf(join(current, 'config.json'))) ?? null,
+    lastActivityAt
+  }
 }
 
 /** Score affiché : part des essais réussis, comme Artificial Analysis (moyenne des 3 essais de chaque tâche). */
@@ -439,11 +528,14 @@ export function startTerminalBench(model: string, attempts: number): void {
   if (running) throw new Error(t('tbench.alreadyRunning'))
   if (attempts !== 1 && attempts !== AA_SETTINGS.attempts) throw new Error(t('tbench.badAttempts'))
   stopRequested = false
+  const startedAt = Date.now()
   progress = {
     model,
     attempts,
     phase: 'preparing',
     step: t('tbench.checkingDocker'),
+    startedAt,
+    live: null,
     tasksDone: 0,
     tasksTotal: TERMINAL_BENCH_TASK_COUNT,
     passed: 0,
@@ -454,16 +546,18 @@ export function startTerminalBench(model: string, attempts: number): void {
     error: null
   }
   emit({})
-  running = runAll(model, attempts).finally(() => {
+  running = runAll(model, attempts, startedAt).finally(() => {
     running = null
     current = null
   })
 }
 
-async function runAll(model: string, attempts: number): Promise<void> {
-  const started = Date.now()
+async function runAll(model: string, attempts: number, started: number): Promise<void> {
   const awake = powerSaveBlocker.start('prevent-app-suspension')
   let taskStarted = 0
+  /** Dossier de la tâche en cours, relu à chaque mise à jour de la carte. */
+  let liveJobDir: string | null = null
+  let liveBusy = false
   let run: TerminalBenchRun | null = null
   let tasks: string[] = []
   const refresh = (): void => {
@@ -481,7 +575,20 @@ async function runAll(model: string, attempts: number): Promise<void> {
       )
     })
   }
-  const tick = setInterval(refresh, TICK_MS)
+  const tickLive = async (): Promise<void> => {
+    const dir = liveJobDir
+    if (!dir || liveBusy) return refresh()
+    liveBusy = true
+    try {
+      const live = await readLiveTrial(dir, attempts)
+      // La tâche a pu se terminer pendant la lecture : jamais l'état d'une tâche affiché sur la suivante.
+      if (dir === liveJobDir) emit({ live })
+    } finally {
+      liveBusy = false
+    }
+    refresh()
+  }
+  const tick = setInterval(() => void tickLive(), TICK_MS)
   try {
     const docker = await dockerState()
     if (docker !== 'ready')
@@ -518,16 +625,25 @@ async function runAll(model: string, attempts: number): Promise<void> {
       if (stopRequested) break
       if (run.tasks[task]) continue
       taskStarted = Date.now()
-      emit({
-        phase: 'running',
-        currentTask: task,
-        step: t('tbench.runningTask', { task })
-      })
-      refresh()
       const jobName = jobNameFor(model, task, attempts)
       const jobDir = join(jobsDir(), jobName)
       // Un essai interrompu (Jaris fermé, PC éteint) est refait en entier : jamais un mélange de deux lancements.
       await rm(jobDir, { recursive: true, force: true })
+      liveJobDir = jobDir
+      emit({
+        phase: 'running',
+        currentTask: task,
+        step: t('tbench.runningTask', { task }),
+        live: {
+          trial: 1,
+          trialsDone: 0,
+          stage: 'starting',
+          steps: 0,
+          trialStartedAt: null,
+          lastActivityAt: taskStarted
+        }
+      })
+      refresh()
       const code = await runPython(
         [
           '-c',
@@ -547,6 +663,8 @@ async function runAll(model: string, attempts: number): Promise<void> {
         (proc) => (current = proc)
       )
       current = null
+      liveJobDir = null
+      emit({ live: null })
       const toml = await readFile(join(tasksDir(), task, 'task.toml'), 'utf8').catch(() => '')
       const image = dockerImageOf(toml)
       if (stopRequested) {
@@ -604,6 +722,8 @@ async function runAll(model: string, attempts: number): Promise<void> {
       error: err instanceof Error ? err.message : String(err)
     })
   } finally {
+    liveJobDir = null
+    stepsCache.clear()
     clearInterval(tick)
     if (powerSaveBlocker.isStarted(awake)) powerSaveBlocker.stop(awake)
   }

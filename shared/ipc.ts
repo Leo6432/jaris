@@ -465,12 +465,35 @@ export interface TerminalBenchRun {
   tasks: Record<string, { passed: number; trials: number; seconds: number }>
 }
 
+/**
+ * Ce qui se passe DANS la tâche en cours, lu dans les fichiers que Harbor écrit au fil de l'essai (étape 350, Léo :
+ * « ça fait 58 min et toujours pareil » — la carte n'affichait que le temps écoulé, impossible de distinguer « ça
+ * travaille » de « c'est bloqué »).
+ */
+export interface TerminalBenchLive {
+  /** Essai en cours, de 1 au nombre d'essais. */
+  trial: number
+  /** Essais de cette tâche déjà terminés. */
+  trialsDone: number
+  stage: 'starting' | 'environment' | 'agent' | 'verifying'
+  /** Étapes du modèle dans l'essai en cours (250 au plus). */
+  steps: number
+  /** Début de l'essai en cours (ms depuis 1970), null s'il n'a pas encore commencé. */
+  trialStartedAt: number | null
+  /** Dernière écriture de Harbor ou du modèle dans les fichiers de la tâche (ms depuis 1970). */
+  lastActivityAt: number | null
+}
+
 export interface TerminalBenchProgress {
   model: string
   attempts: number
   phase: 'preparing' | 'running' | 'done' | 'stopped' | 'error'
   /** Ce qui se passe en ce moment, déjà traduit. */
   step: string
+  /** Début de ce lancement (ms depuis 1970) : l'écran fait avancer le temps écoulé chaque seconde. */
+  startedAt?: number
+  /** Ce qui se passe dans la tâche en cours ; null hors d'une tâche. */
+  live?: TerminalBenchLive | null
   tasksDone: number
   tasksTotal: number
   /** Essais réussis et joués jusqu'ici (score en direct). */

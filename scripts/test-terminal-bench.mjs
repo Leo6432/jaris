@@ -422,3 +422,111 @@ test('les versions figées de Harbor sont bien livrées avec Jaris (electron-bui
   const python = yml.slice(yml.indexOf('  - from: python'), yml.indexOf('  - from:', yml.indexOf('  - from: python') + 5))
   assert.match(python, /^\s+- terminal-bench-constraints\.txt$/m)
 })
+
+// Étape 350, Léo : « ça fait 58 min et toujours pareil ». Pendant une tâche, la carte lit ce que Harbor écrit au fil
+// de l'essai (même structure que le vrai dossier d'un essai de Harbor 0.24.0, relevée sur un vrai lancement).
+function writeTrial(jobDir, name, { config = true, steps = null, trajectory = null, verifier = false, result = false } = {}) {
+  const dir = join(jobDir, name)
+  fs.mkdirSync(join(dir, 'agent'), { recursive: true })
+  fs.mkdirSync(join(dir, 'verifier'), { recursive: true })
+  if (config) fs.writeFileSync(join(dir, 'config.json'), '{}')
+  if (steps !== null) {
+    const list = [{ step_id: 1, source: 'user', message: 'tâche' }]
+    for (let i = 0; i < steps; i++) list.push({ step_id: i + 2, source: 'agent', message: 'commande' })
+    fs.writeFileSync(join(dir, 'agent', 'trajectory.json'), JSON.stringify({ schema_version: 'x', steps: list }))
+  }
+  if (trajectory !== null) fs.writeFileSync(join(dir, 'agent', 'trajectory.json'), trajectory)
+  if (verifier) fs.writeFileSync(join(dir, 'verifier', 'test-stdout.txt'), 'tests')
+  if (result) fs.writeFileSync(join(dir, 'result.json'), '{}')
+  return dir
+}
+
+function setTime(file, ms) {
+  fs.utimesSync(file, ms / 1000, ms / 1000)
+}
+
+test('pendant une tâche : essai en cours, étapes du modèle et dernière activité lus dans les fichiers de Harbor', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'jaris-tbench-live-'))
+  try {
+    const mod = load(makeEnv())
+    const jobDir = join(root, 'job')
+    // Harbor n'a encore rien écrit.
+    assert.deepEqual(await mod.readLiveTrial(jobDir, 3), {
+      trial: 1, trialsDone: 0, stage: 'starting', steps: 0, trialStartedAt: null, lastActivityAt: null
+    })
+    // Essai commencé, conteneur en préparation (aucune étape du modèle).
+    fs.mkdirSync(jobDir, { recursive: true })
+    const first = writeTrial(jobDir, 'tache__a1')
+    setTime(join(first, 'config.json'), 1_000_000)
+    let live = await mod.readLiveTrial(jobDir, 3)
+    assert.equal(live.stage, 'environment')
+    assert.equal(live.trialStartedAt, 1_000_000)
+    // Le modèle a fait 37 étapes : trajectory.json est réécrit après chacune.
+    writeTrial(jobDir, 'tache__a1', { steps: 37 })
+    setTime(join(first, 'agent', 'trajectory.json'), 5_000_000)
+    fs.writeFileSync(join(first, 'agent', 'recording.cast'), 'x')
+    setTime(join(first, 'agent', 'recording.cast'), 4_000_000)
+    live = await mod.readLiveTrial(jobDir, 3)
+    assert.equal(live.stage, 'agent')
+    assert.equal(live.steps, 37, 'seules les étapes du modèle comptent, pas la consigne')
+    assert.equal(live.lastActivityAt, 5_000_000, 'la dernière écriture, quel que soit le fichier')
+    // Fichier en pleine écriture : le dernier nombre lu est gardé, jamais 0.
+    fs.writeFileSync(join(first, 'agent', 'trajectory.json'), '{"steps": [{"source": "ag')
+    setTime(join(first, 'agent', 'trajectory.json'), 6_000_000)
+    assert.equal((await mod.readLiveTrial(jobDir, 3)).steps, 37)
+    // Les tests de la tâche tournent.
+    fs.writeFileSync(join(first, 'verifier', 'test-stdout.txt'), 'tests')
+    assert.equal((await mod.readLiveTrial(jobDir, 3)).stage, 'verifying')
+    // Premier essai fini, deuxième commencé.
+    fs.writeFileSync(join(first, 'result.json'), '{}')
+    writeTrial(jobDir, 'tache__b2', { steps: 4 })
+    live = await mod.readLiveTrial(jobDir, 3)
+    assert.deepEqual([live.trial, live.trialsDone, live.stage, live.steps], [2, 1, 'agent', 4])
+    // Entre deux essais : rien d'en cours, l'essai suivant démarre.
+    fs.writeFileSync(join(jobDir, 'tache__b2', 'result.json'), '{}')
+    live = await mod.readLiveTrial(jobDir, 3)
+    assert.deepEqual([live.trial, live.trialsDone, live.stage], [3, 2, 'starting'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('pendant une tâche : la carte reçoit l’essai en cours, puis plus rien une fois la tâche finie', async (t) => {
+  const env = makeEnv({ hangTask: 'tache-01' })
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  try {
+    const mod = load(env)
+    const seen = []
+    mod.onTerminalBenchProgress((p) => seen.push(p))
+    const end = waitForEnd(mod)
+    mod.startTerminalBench('granite4.2:3b', 3)
+    for (let i = 0; i < 400 && !env.runs.some((r) => r.task === 'tache-01'); i++) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
+    assert.ok(env.runs.some((r) => r.task === 'tache-01'), 'la tâche bloquée n’a jamais démarré')
+    const started = seen.find((p) => p.currentTask === 'tache-01')
+    assert.equal(started.live.stage, 'starting', 'dès le début de la tâche, la carte sait qu’un essai démarre')
+    assert.equal(typeof started.startedAt, 'number')
+    // Le faux Harbor ne joue rien : on écrit ce que le vrai écrirait, puis on avance l’horloge d’une mise à jour.
+    const jobDir = join(env.root, 'terminal-bench', 'jobs', mod.jobNameFor('granite4.2:3b', 'tache-01', 3))
+    for (let i = 0; i < 200 && !fs.existsSync(jobDir); i++) await new Promise((r) => setTimeout(r, 10))
+    writeTrial(jobDir, 'tache-01__x', { steps: 12 })
+    t.mock.timers.tick(10_000)
+    for (let i = 0; i < 200 && !seen.some((p) => p.live?.steps === 12); i++) await new Promise((r) => setTimeout(r, 10))
+    const live = seen.findLast((p) => p.live?.steps === 12)?.live
+    assert.ok(live, 'les étapes du modèle n’ont jamais été envoyées à la carte')
+    assert.deepEqual([live.trial, live.stage], [1, 'agent'])
+    await mod.stopTerminalBench()
+    await end
+    assert.equal(seen.at(-1).live ?? null, null, 'hors d’une tâche, plus rien n’est affiché sur l’essai')
+  } finally {
+    rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+test('le texte « rien depuis plus de 15 minutes » suit le seuil de la carte', () => {
+  const src = readFileSync(new URL('../src/components/TerminalBenchTest.tsx', import.meta.url), 'utf8')
+  assert.match(src, /const QUIET_MS = 15 \* 60_000/)
+  const fr = readFileSync(new URL('../shared/i18n/fr.ts', import.meta.url), 'utf8')
+  assert.match(fr, /"tbench\.quiet": "Aucune activité depuis plus de 15 minutes/)
+})

@@ -1097,3 +1097,50 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
     assert.ok(await page.$('.tbench__form'), 'le formulaire revient à la fin du test')
   })
 })
+
+// Étape 350, Léo : « ça fait 58 min et toujours pareil ». Pendant une tâche, la carte montre ce que fait l'essai en
+// cours (sinon « ça travaille » et « c'est bloqué » se ressemblent), et le temps écoulé avance chaque seconde.
+test('Terminal-Bench : pendant une tâche, essai en cours, étapes du modèle et dernière activité, sans attendre la fin', options, async () => {
+  await withOptions(async (page) => {
+    await openTerminalBench(page)
+    const now = await page.evaluate(() => Date.now())
+    const progress = {
+      model: 'gemma4:31b', attempts: 3, phase: 'running', step: 'Tâche en cours : adaptive-rejection-sampler',
+      tasksDone: 0, tasksTotal: 89, passed: 0, trials: 0, currentTask: 'adaptive-rejection-sampler',
+      elapsedMs: 40 * 60_000, remainingMs: null, error: null, startedAt: now - 58 * 60_000,
+      live: { trial: 1, trialsDone: 0, stage: 'agent', steps: 37, trialStartedAt: now - 52 * 60_000, lastActivityAt: now - 8_000 }
+    }
+    await page.evaluate((p) => window.__tbenchProgress(p), progress)
+    await page.waitForSelector('.tbench__stage')
+    assert.equal(await page.textContent('.tbench__stage'), 'Le modèle travaille : étape 37 (250 au plus)')
+    const stats = () => page.$$eval('.tbench__stats > div', (ds) => ds.map((d) => [d.querySelector('dt').textContent, d.querySelector('dd').textContent]))
+    const map = Object.fromEntries(await stats())
+    assert.equal(map['Essai en cours'], '1 sur 3')
+    assert.match(map['Durée de cet essai'], /^52 min 0\d$/)
+    assert.match(map['Depuis la dernière activité'], /^\d+ s$/)
+    // Le temps écoulé suit l'heure de début, pas le dernier chiffre reçu (40 min, envoyé il y a longtemps).
+    assert.match(map['Temps écoulé'], /^58 min 0\d$/)
+    assert.equal(await page.$('.tbench__warning'), null, 'aucune alerte quand le modèle vient d’agir')
+    // Le temps avance tout seul, sans nouveau message du test.
+    const before = map['Depuis la dernière activité']
+    await page.waitForFunction((b) => {
+      const dd = [...document.querySelectorAll('.tbench__stats > div')].find((d) => d.querySelector('dt').textContent === 'Depuis la dernière activité')
+      return dd && dd.querySelector('dd').textContent !== b
+    }, before, { timeout: 5000 })
+
+    // Préparation du conteneur : pas encore d'étape du modèle.
+    await page.evaluate((p) => window.__tbenchProgress(p), { ...progress, live: { ...progress.live, stage: 'environment', steps: 0 } })
+    await page.waitForFunction(() => document.querySelector('.tbench__stage')?.textContent === "Préparation de l'environnement de la tâche…")
+
+    // Plus de 15 minutes sans rien : la carte le dit, et comment vérifier.
+    await page.evaluate((p) => window.__tbenchProgress(p), { ...progress, live: { ...progress.live, lastActivityAt: now - 20 * 60_000 } })
+    await page.waitForSelector('.tbench__progress .tbench__warning')
+    assert.match(await page.textContent('.tbench__progress .tbench__warning'), /plus de 15 minutes.*Docker Desktop/)
+
+    // Ancien message sans ces champs (un lancement d'avant la mise à jour) : la carte s'affiche quand même.
+    const { startedAt, live, ...old } = progress
+    await page.evaluate((p) => window.__tbenchProgress(p), old)
+    await page.waitForFunction(() => !document.querySelector('.tbench__stage'))
+    assert.match(Object.fromEntries(await stats())['Temps écoulé'], /^40 min 00$/)
+  })
+})
