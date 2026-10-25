@@ -9520,3 +9520,56 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sans tag) et `scripts/test-options-reorganization-ui.mjs` (mémoire affichée, colonnes lues par leur titre — une
   colonne ajoutée ne décale plus rien en silence). Les 7 garde-fous du service vérifiés en réintroduisant chaque
   défaut. **Non vérifié ici** (pas de carte graphique) : la fenêtre réellement retenue sur la RTX 3070 de Léo.
+
+- **Étape 352, Léo : « mais on mesure pas la vitesse, ouais fais en sorte qu'on fait autant d'étapes que eux ».** Le
+  test Terminal-Bench n'a plus AUCUNE limite de temps sur le modèle : un essai s'arrête quand le modèle dit avoir
+  fini (Terminus 2 demande une confirmation) ou après ses 250 étapes, comme chez Artificial Analysis. Leurs 2 h par
+  tâche ne coupent presque jamais leurs serveurs rapides ; sur un PC plus lent, elles coupaient des tâches que le
+  modèle allait réussir. **Trois limites mesuraient en réalité la vitesse, trouvées en lisant le code de Harbor et de
+  LiteLLM, pas supposées :**
+  1. les 2 h de l'agent : la ligne `timeout_sec` de [agent] est retirée de chaque task.toml (`removeAgentTimeout`,
+     marque `.jaris-timeouts` = « none ») ; Harbor n'applique alors aucune limite (`_compute_agent_timeout_sec` rend
+     None, `asyncio.wait_for(timeout=None)`), vérifié en relisant le task.toml avec la classe TaskConfig de Harbor ;
+  2. **10 minutes par réponse du modèle, cachées dans LiteLLM** : sans réglage, `CompletionTimeout.resolve` rend
+     600 s (mesuré en Python), et une vraie réponse d'Ollama est bien coupée avec `REQUEST_TIMEOUT=3`. Jaris passe
+     `REQUEST_TIMEOUT` = 24 h au processus Harbor : ne sert plus qu'à ne pas attendre un Ollama figé. **Ce délai
+     existait aussi avant l'étape 352** : toute réponse de plus de 10 min (gros modèle qui réfléchit longtemps)
+     était abandonnée et refaite jusqu'à 9 fois, puis l'essai échouait ;
+  3. la préparation de la tâche (image Docker, installation de l'agent) : délais multipliés par 6, et un dépassement
+     (`EnvironmentStartTimeoutError`, `AgentSetupTimeoutError`) arrête le test sans rien compter contre le modèle,
+     même si Docker et Ollama répondent encore (`isSlowMachine`) — avant, il était compté comme un échec.
+  **Ce qui borne encore un modèle qui tourne en rond, et le piège trouvé par la relecture** : une réponse ne dépasse
+  jamais la mémoire du modèle (`num_predict` = fenêtre ; sans lui, Ollama peut écrire sans fin, étape 159). Mais une
+  réponse coupée remonte en OutputLengthExceededError, et Terminus 2 (`_query_llm`) se RAPPELLE alors lui-même dans
+  le même épisode : ces tours ne comptent dans aucune des 250 étapes. Sans limite de temps, un modèle qui écrit
+  toujours trop long tournait sans fin (vérifié avec Harbor, Docker et un faux Ollama : 314 requêtes en 90 s, jamais
+  fini) ; vers une centaine de tours, la récursion faisait même planter Python. Chez Artificial Analysis, ce sont
+  leurs 2 h qui coupent. Corrigé sans toucher aux messages de Terminus 2 : Harbor est lancé par
+  `python -P python/tbench_boot.py` (`harborBoot`, `-P` pour que les scripts de Jaris n'entrent pas dans les modules
+  de Harbor), qui joue ces tours à plat, compte CHAQUE réponse du modèle (`JARIS_TBENCH_MAX_TURNS` = 250, résumés
+  de la conversation non comptés, comme chez eux), et à la 250e arrête l'agent comme à la fin de ses étapes : Harbor
+  vérifie quand même la tâche, et trial.log dit pourquoi. Même faux Ollama : 6 réponses puis la vérification.
+  `max_output_tokens` du model_info reste 8192 (c'est seulement le chiffre que Terminus 2 cite au modèle).
+  **Un test commencé avant** (`noTimeLimit` absent) garde les tâches que les anciennes limites n'ont pas pu couper
+  et refait les autres, secondes recalculées. Gardée : une tâche de moins de 360 s (`OLD_SHORTEST_LIMIT_SEC`, la plus
+  courte des anciennes limites, celle de l'installation de l'agent), ou dont tous les essais ont fini sans aucune
+  erreur, sans réponse de plus de 600 s (`api_request_times_msec` des result.json) et sans la ligne « Unknown Error
+  in LLM interaction » dans trial.log — la relecture a trouvé que les abandons silencieux à 10 min de LiteLLM
+  n'apparaissaient nulle part ailleurs. Le tableau marque un tel test « avec la limite de 2 h ». Texte de la carte
+  corrigé dans les 24 langues : « sans limite de temps pour le modèle » (les délais du correcteur et de la
+  préparation existent encore, la première version promettait trop). « Aucune activité depuis 15 min » dit que le
+  modèle prépare peut-être une longue réponse.
+  **Leçons générales** : (1) une limite de temps peut se cacher dans une bibliothèque intermédiaire (ici LiteLLM,
+  10 min par défaut) — suivre l'appel jusqu'au bout et mesurer le délai réellement appliqué ; (2) retirer une limite
+  de temps, c'est aussi retirer le filet qui coupait les boucles qu'aucun compteur ne voit — chercher ces boucles
+  (ici un appel qui se rappelle lui-même hors du compteur d'étapes) avant de livrer.
+  **Vérifié ici** : une vraie tâche (fix-git) avec les arguments construits par Jaris, Harbor 0.24.0, Docker et
+  Ollama 0.40.10 (qwen3:0.6b) : multiplicateurs acceptés, fenêtre de 8192 reçue par Ollama, essai fini sans erreur ;
+  et avec `JARIS_TBENCH_MAX_TURNS=2`, l'agent s'arrête à 2 réponses, sans erreur, et Harbor vérifie (récompense 0).
+  **Non vérifié** : un test complet sur le PC de Léo (durée réelle sans limite).
+  Régression : `node --test scripts/test-terminal-bench.mjs` (limite retirée sur un vrai task.toml et sur un fichier
+  déjà porté à 2 h, num_predict et multiplicateurs, REQUEST_TIMEOUT et borne transmis, lancement par tbench_boot.py,
+  préparation lente jamais comptée, ancien test : seules les tâches coupées refaites), `python
+  scripts/test-tbench-boot.py` (aussi lancé par la CI Windows : borne, tours à plat sans récursion, épisodes normaux
+  inchangés, essais automatiques gardés) et les tests « Terminal-Bench » de `scripts/test-options-reorganization-ui.mjs`.
+  Chaque garde-fou vérifié en réintroduisant son défaut.

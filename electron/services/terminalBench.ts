@@ -36,12 +36,14 @@ import { t } from '../../shared/i18n'
  * plus lent : il aurait manqué de temps sur chaque tâche).
  *
  * Mêmes options qu'Artificial Analysis (page « Intelligence Benchmarking », relue le 23/10/2026) :
- * agent Terminus 2, les 89 tâches de Terminal-Bench 2.1, 3 essais par tâche, 250 étapes au plus, 2 h par tâche
- * (ou le délai de la tâche s'il est plus long), réussite seulement si TOUS les tests passent, score = moyenne des
- * essais. Température 0,6 : leur règle pour un modèle qui réfléchit quand le créateur n'en donne pas.
+ * agent Terminus 2, les 89 tâches de Terminal-Bench 2.1, 3 essais par tâche, 250 étapes au plus, réussite seulement
+ * si TOUS les tests passent, score = moyenne des essais. Température 0,6 : leur règle pour un modèle qui réfléchit
+ * quand le créateur n'en donne pas.
  * Différences assumées : Docker sur le PC au lieu de leur bac à sable E2B, la version Q4 d'Ollama au lieu de la
- * version d'origine chez un fournisseur, et une fenêtre limitée à ce qui tient sur la carte graphique (Terminus 2
- * résume la conversation au-delà) : voir chooseContext, étape 351.
+ * version d'origine chez un fournisseur, une fenêtre limitée à ce qui tient sur la carte graphique (Terminus 2
+ * résume la conversation au-delà, voir chooseContext, étape 351), et AUCUNE limite de temps (étape 352, voir
+ * RESPONSE_TIMEOUT_SEC) : chez eux, 2 h par tâche ; leurs serveurs vont assez vite pour ne presque jamais l'atteindre,
+ * un PC plus lent l'atteindrait sur des tâches que le modèle allait réussir.
  *
  * L'outil officiel du test, Harbor (Laude Institute, auteurs de Terminal-Bench), est installé dans le Python de
  * Jaris avec `pip --target` : de simples fichiers, qui restent valables quand « Déplacer » change le dossier de place
@@ -59,15 +61,54 @@ export const TERMINAL_BENCH_DATASET = 'terminal-bench/terminal-bench-2-1'
 export const AA_SETTINGS = {
   attempts: 3,
   maxTurns: 250,
-  minAgentTimeoutSec: 7200,
   temperature: 0.6
 } as const
+/**
+ * Étape 352, Léo : « mais on mesure pas la vitesse, ouais fais en sorte qu'on fait autant d'étapes que eux ». Plus
+ * aucune limite de temps sur le modèle : un essai s'arrête quand le modèle dit avoir fini (Terminus 2 demande une
+ * confirmation) ou après ses 250 étapes, comme chez Artificial Analysis, jamais parce que le PC est plus lent que
+ * leurs serveurs. Trois limites mesuraient en réalité la vitesse, toutes retirées :
+ * - les 2 h de l'agent : la ligne `timeout_sec` de [agent] est retirée de chaque task.toml (removeAgentTimeout ;
+ *   Harbor n'attend alors plus d'heure limite, lu dans harbor/trial/trial.py, `_compute_agent_timeout_sec`) ;
+ * - 10 minutes par réponse du modèle : LiteLLM, par qui Terminus 2 appelle Ollama, coupe une réponse au bout de
+ *   600 s quand rien n'est réglé (vérifié en Python : CompletionTimeout.resolve rend 600,0 sans REQUEST_TIMEOUT, et
+ *   une vraie réponse d'Ollama a bien été coupée avec REQUEST_TIMEOUT=3). Ce délai est porté à 24 h : il ne sert plus
+ *   qu'à ne pas attendre sans fin un Ollama figé (Harbor le relance jusqu'à 9 fois : 3 essais dans son appel au
+ *   modèle, 3 dans Terminus 2 ; la carte signale de toute façon 15 minutes sans activité) ;
+ * - la préparation de la tâche (image Docker à télécharger, installation de l'agent dans le conteneur) : délais de
+ *   Harbor multipliés par SETUP_TIMEOUT_MULTIPLIER, et un dépassement arrête le test sans rien compter contre le
+ *   modèle (isSlowMachine).
+ * Ce qui borne encore un modèle qui tourne en rond : 250 réponses du modèle par essai, et une réponse ne peut pas
+ * dépasser la mémoire du modèle (`num_predict` = fenêtre) — au-delà, elle n'aurait de toute façon plus tenu dans la
+ * conversation. Sans cette borne, un modèle peut écrire sans fin (Ollama fait glisser sa mémoire, étape 159).
+ * Terminus 2 rejoue une réponse trop longue DANS le même épisode, sans la compter dans ses 250 étapes : sans limite
+ * de temps, ça tournait sans fin (trouvé par la relecture, reproduit avec le vrai Harbor : plus de 300 requêtes en
+ * 90 s, jamais fini). python/tbench_boot.py, par qui Jaris lance Harbor, compte ces réponses comme des étapes
+ * (harborBoot).
+ */
+export const RESPONSE_TIMEOUT_SEC = 24 * 3600
+/** 10 min → 1 h pour l'image d'une tâche (plusieurs Go sur une connexion lente), 6 min → 36 min pour l'agent. */
+export const SETUP_TIMEOUT_MULTIPLIER = 6
+/**
+ * Un test commencé avant l'étape 352 (`noTimeLimit` absent) a pu être coupé par ces limites. Une tâche plus courte
+ * que la plus petite d'entre elles (6 min pour installer l'agent dans le conteneur, DEFAULT_SETUP_TIMEOUT_SEC de
+ * Harbor) ne l'a jamais été : elle est gardée sans relire ses fichiers. Voir dropTasksCutByOldLimits.
+ */
+export const OLD_SHORTEST_LIMIT_SEC = 360
+/** Ancienne limite d'une réponse du modèle (LiteLLM, sans REQUEST_TIMEOUT). */
+export const OLD_RESPONSE_LIMIT_MS = 600_000
+/**
+ * Ligne écrite par Terminus 2 quand un appel au modèle a échoué jusqu'au bout avant d'être relancé : seule trace
+ * d'une réponse coupée à 10 min puis réussie au nouvel essai (rien dans exception_info).
+ */
+export const LLM_ERROR_MARK = 'Unknown Error in LLM interaction'
 /**
  * Étape 351 (Léo : « mémoire on peut pas changer ça ? ») : la fenêtre n'est plus fixe. Avant chaque NOUVEAU test,
  * Jaris prend la plus grande qui tient entièrement sur la carte graphique (voir chooseContext), jamais moins que
  * MIN_BENCH_CTX : la fenêtre fixe des versions 0.38.0 et 0.38.1, gardée quand la carte n'en permet pas plus — moins
  * de mémoire ferait résumer la conversation sans arrêt. Plus que la carte ne tient ferait passer une partie du
- * modèle sur le processeur : plusieurs fois plus lent, donc plus de tâches coupées par la limite de 2 h.
+ * modèle sur le processeur : plusieurs fois plus lent (même sans limite de temps depuis l'étape 352, un test bien plus
+ * long pour rien).
  */
 export const MIN_BENCH_CTX = 32768
 /** Premier essai quand l'architecture du modèle n'est pas lisible : au-delà, aucune carte grand public ne suit. */
@@ -93,28 +134,27 @@ const jobsDir = (): string => join(rootDir(), 'jobs')
 const resultsPath = (): string => join(rootDir(), 'results.json')
 const harborStamp = (): string => join(libDir(), '.jaris-harbor-version')
 const tasksStamp = (): string => join(tasksDir(), '.jaris-timeouts')
+/** Contenu de la marque une fois la limite de l'agent retirée (« 7200 » avant l'étape 352 : tâches à reprendre). */
+const NO_AGENT_TIMEOUT_STAMP = 'none'
 
 // ---------------------------------------------------------------------------------------------------------------
 // Fonctions pures (testées à part)
 
 /**
- * Donne à l'agent au moins `minSec` secondes, comme Artificial Analysis (2 h, ou le délai de la tâche s'il est plus
- * long). Seule la ligne `timeout_sec` de la section [agent] change : celle du correcteur ([verifier]) reste celle de la
- * tâche.
+ * Retire la limite de temps de l'agent (étape 352) : Harbor n'en applique alors aucune. Seule la ligne `timeout_sec`
+ * de la section [agent] part : celle du correcteur ([verifier]) reste celle de la tâche — c'est le temps donné aux
+ * tests de la tâche, pas au modèle. Marche aussi sur un fichier déjà porté à 2 h par une version précédente.
  */
-export function patchAgentTimeout(toml: string, minSec: number): string {
-  const lines = toml.split(/\r?\n/)
+export function removeAgentTimeout(toml: string): string {
+  const out: string[] = []
   let section = ''
-  for (let i = 0; i < lines.length; i++) {
-    const header = /^\s*\[([^\]]+)\]\s*$/.exec(lines[i])
-    if (header) {
-      section = header[1].trim()
-      continue
-    }
-    const m = /^(\s*timeout_sec\s*=\s*)([0-9.]+)\s*$/.exec(lines[i])
-    if (m && section === 'agent') lines[i] = `${m[1]}${Math.max(minSec, Number(m[2])).toFixed(1)}`
+  for (const line of toml.split(/\r?\n/)) {
+    const header = /^\s*\[\[?([^\]]+)\]\]?\s*(#.*)?$/.exec(line)
+    if (header) section = header[1].trim()
+    else if (section === 'agent' && /^\s*timeout_sec\s*=/.test(line)) continue
+    out.push(line)
   }
-  return lines.join('\n')
+  return out.join('\n')
 }
 
 /** L'image Docker d'une tâche (effacée après la tâche : 89 images ne tiendraient pas sur le disque). */
@@ -151,13 +191,16 @@ export function harborRunArgs(opts: {
     `max_turns=${AA_SETTINGS.maxTurns}`,
     // Sans num_ctx, Ollama coupe la conversation à sa fenêtre par défaut, sans rien dire (vérifié : avec, le modèle
     // est bien chargé avec la fenêtre demandée).
+    // num_predict : une réponse ne dépasse jamais la mémoire du modèle (voir RESPONSE_TIMEOUT_SEC, étape 352).
     '--ak',
-    `llm_call_kwargs=${JSON.stringify({ num_ctx: opts.numCtx })}`,
+    `llm_call_kwargs=${JSON.stringify({ num_ctx: opts.numCtx, num_predict: opts.numCtx })}`,
     // Terminus 2 résume la conversation quand elle approche de cette limite, au lieu de la laisser déborder. Sans
     // litellm_provider, LiteLLM n'associe pas ces chiffres au modèle et prend une limite d'un million (vérifié).
     '--ak',
     `model_info=${JSON.stringify({
       max_input_tokens: opts.numCtx,
+      // Seulement le chiffre que Terminus 2 cite au modèle quand une réponse est trop longue (« reste sous… ») : il
+      // ne limite rien. Plus court que num_predict, pour l'inciter à découper au lieu de recommencer pareil.
       max_output_tokens: 8192,
       input_cost_per_token: 0,
       output_cost_per_token: 0,
@@ -167,6 +210,11 @@ export function harborRunArgs(opts: {
     String(opts.attempts),
     '-n',
     '1',
+    // Préparation de la tâche : une connexion ou un disque lent ne doit jamais compter contre le modèle.
+    '--environment-build-timeout-multiplier',
+    String(SETUP_TIMEOUT_MULTIPLIER),
+    '--agent-setup-timeout-multiplier',
+    String(SETUP_TIMEOUT_MULTIPLIER),
     '-o',
     opts.jobsDir,
     '--job-name',
@@ -216,20 +264,54 @@ export interface TrialOutcome {
   passed: boolean
   /** Type d'erreur de Harbor, ou null si l'essai s'est déroulé normalement. */
   exception: string | null
+  /** Plus long appel au modèle (ms, essais automatiques compris), lu seulement pour un test d'avant l'étape 352. */
+  longestCallMs?: number
+  /** Terminus 2 a écrit LLM_ERROR_MARK : un appel au modèle a échoué avant d'être relancé. */
+  llmError?: boolean
 }
 
 /**
- * Une erreur qui vient du MODÈLE (temps de l'agent dépassé, comme chez Artificial Analysis) compte comme un échec.
- * Toute autre erreur de Harbor (y compris ses autres délais : installation de l'agent, démarrage du conteneur,
- * correcteur — lu dans harbor/trial/errors.py) peut venir de la machine : le lanceur vérifie alors que Docker et
- * Ollama répondent avant d'enregistrer la tâche.
+ * Une erreur qui vient du MODÈLE compte comme un échec. AgentTimeoutError (temps de l'agent dépassé) n'arrive plus
+ * depuis l'étape 352, faute de limite ; elle reste comptée comme chez Artificial Analysis si une tâche en imposait
+ * une. Toute autre erreur de Harbor peut venir de la machine : le lanceur vérifie alors que Docker et Ollama
+ * répondent avant d'enregistrer la tâche.
  */
 export function isModelFailure(exception: string | null): boolean {
   return exception === null || exception === 'AgentTimeoutError'
 }
 
-/** Lit le résultat de chaque essai d'un « job » Harbor (un sous-dossier par essai, avec son result.json). */
-export async function readTrialOutcomes(jobDir: string): Promise<TrialOutcome[]> {
+/**
+ * Délais de Harbor qui ne mesurent que la machine (lu dans harbor/trial/errors.py) : démarrage du conteneur de la
+ * tâche (image à télécharger) et installation de l'agent dedans. Jamais comptés contre le modèle, même quand Docker
+ * et Ollama répondent encore : le test s'arrête et reprendra à cette tâche (étape 352 : on ne mesure pas la vitesse).
+ */
+export function isSlowMachine(exception: string | null): boolean {
+  return exception === 'EnvironmentStartTimeoutError' || exception === 'AgentSetupTimeoutError'
+}
+
+/**
+ * Une tâche d'un test commencé avant l'étape 352 reste valable sans limite de temps si aucune de ses limites d'alors
+ * n'a pu la couper : plus courte que la plus petite (6 min), ou chaque essai fini sans erreur, sans appel au modèle de
+ * 10 min ou plus, et sans appel échoué puis relancé (une réponse coupée à 10 min puis réussie au nouvel essai ne
+ * laisse aucune erreur dans le résultat : trouvé par la relecture, sur un vrai essai à 28 min pour une réponse).
+ * Sinon (essai coupé, erreur, fichiers de l'essai introuvables), elle est refaite.
+ */
+export function keptWithoutTimeLimit(
+  task: { trials: number; seconds: number },
+  outcomes: TrialOutcome[] | null
+): boolean {
+  if (task.seconds < OLD_SHORTEST_LIMIT_SEC) return true
+  if (!outcomes || outcomes.length < task.trials) return false
+  return outcomes.every(
+    (o) => o.exception === null && !o.llmError && (o.longestCallMs ?? 0) < OLD_RESPONSE_LIMIT_MS
+  )
+}
+
+/**
+ * Lit le résultat de chaque essai d'un « job » Harbor (un sous-dossier par essai, avec son result.json). Avec
+ * `withCalls`, lit aussi la durée des appels au modèle et le journal de l'essai (test d'avant l'étape 352).
+ */
+export async function readTrialOutcomes(jobDir: string, withCalls = false): Promise<TrialOutcome[]> {
   const out: TrialOutcome[] = []
   let entries: string[] = []
   try {
@@ -244,12 +326,22 @@ export async function readTrialOutcomes(jobDir: string): Promise<TrialOutcome[]>
       const data = JSON.parse(await readFile(file, 'utf8')) as {
         verifier_result?: { rewards?: Record<string, number> | null } | null
         exception_info?: { exception_type?: string } | null
+        agent_result?: { metadata?: { api_request_times_msec?: unknown } | null } | null
       }
       const reward = data.verifier_result?.rewards?.reward
-      out.push({
+      const outcome: TrialOutcome = {
         passed: typeof reward === 'number' && reward >= 1,
         exception: data.exception_info?.exception_type ?? null
-      })
+      }
+      if (withCalls) {
+        const times = data.agent_result?.metadata?.api_request_times_msec
+        outcome.longestCallMs = Array.isArray(times)
+          ? Math.max(0, ...times.filter((ms): ms is number => typeof ms === 'number'))
+          : 0
+        const log = await readFile(join(jobDir, entry, 'trial.log'), 'utf8').catch(() => '')
+        outcome.llmError = log.includes(LLM_ERROR_MARK)
+      }
+      out.push(outcome)
     } catch {
       // Un essai interrompu en pleine écriture : ignoré, la tâche sera refaite si elle n'a pas tous ses essais.
     }
@@ -432,12 +524,20 @@ function pythonEnv(): NodeJS.ProcessEnv {
     PYTHONUTF8: '1',
     TEMP: temp,
     TMP: temp,
-    TMPDIR: temp
+    TMPDIR: temp,
+    // Sinon LiteLLM coupe chaque réponse du modèle au bout de 10 minutes (étape 352, voir RESPONSE_TIMEOUT_SEC).
+    REQUEST_TIMEOUT: String(RESPONSE_TIMEOUT_SEC),
+    // Réponses du modèle par essai, réponses trop longues comprises (python/tbench_boot.py).
+    JARIS_TBENCH_MAX_TURNS: String(AA_SETTINGS.maxTurns)
   }
 }
 
-/** Lance Harbor depuis ses fichiers (`pip --target`), sans le petit exécutable qui garderait un chemin absolu. */
-const HARBOR_BOOT = "import sys; sys.argv[0] = 'harbor'; from harbor.cli.main import app; app()"
+/**
+ * Lance Harbor depuis ses fichiers (`pip --target`), sans le petit exécutable qui garderait un chemin absolu, avec la
+ * borne de 250 réponses du modèle par essai (étape 352). `-P` : le dossier des scripts de Jaris n'entre pas dans le
+ * chemin des modules de Harbor.
+ */
+const harborBoot = (): string[] => ['-P', join(pythonScriptsDir(), 'tbench_boot.py')]
 
 function runPython(
   args: string[],
@@ -507,7 +607,7 @@ async function ensureTasks(onStep: (step: string) => void, track: (proc: ChildPr
     onStep(t('tbench.downloadingTasks'))
     let last = ''
     const code = await runPython(
-      ['-c', HARBOR_BOOT, 'dataset', 'download', TERMINAL_BENCH_DATASET, '-o', tasksParent()],
+      [...harborBoot(), 'dataset', 'download', TERMINAL_BENCH_DATASET, '-o', tasksParent()],
       (line) => (last = line),
       track
     )
@@ -524,12 +624,13 @@ async function ensureTasks(onStep: (step: string) => void, track: (proc: ChildPr
     }
     await rm(tasksStamp(), { force: true })
   }
-  if (!existsSync(tasksStamp())) {
+  // Tâches neuves, ou portées à 2 h par une version d'avant l'étape 352 (marque « 7200 ») : limite de l'agent retirée.
+  if ((await readFile(tasksStamp(), 'utf8').catch(() => '')).trim() !== NO_AGENT_TIMEOUT_STAMP) {
     for (const task of tasks) {
       const file = join(tasksDir(), task, 'task.toml')
-      await writeFile(file, patchAgentTimeout(await readFile(file, 'utf8'), AA_SETTINGS.minAgentTimeoutSec))
+      await writeFile(file, removeAgentTimeout(await readFile(file, 'utf8')))
     }
-    await writeFile(tasksStamp(), String(AA_SETTINGS.minAgentTimeoutSec))
+    await writeFile(tasksStamp(), NO_AGENT_TIMEOUT_STAMP)
   }
   return tasks
 }
@@ -604,6 +705,27 @@ async function chooseContext(model: string): Promise<number> {
     if (fullyOnCard(await modelPlacement(model), numCtx)) return numCtx
   }
   return floor
+}
+
+/**
+ * Test commencé avant l'étape 352 (2 h par tâche, 10 min par réponse, 6 min pour l'agent) : les tâches qu'elles ont pu
+ * couper sont refaites, car leur résultat dépendait de la vitesse du PC ; les autres sont gardées, elles se seraient
+ * terminées de la même façon sans limite (keptWithoutTimeLimit). Rend vrai si le test a changé (à enregistrer).
+ */
+async function dropTasksCutByOldLimits(run: TerminalBenchRun): Promise<boolean> {
+  if (run.noTimeLimit) return false
+  for (const [task, done] of Object.entries(run.tasks)) {
+    const outcomes =
+      done.seconds < OLD_SHORTEST_LIMIT_SEC
+        ? null
+        : await readTrialOutcomes(join(jobsDir(), jobNameFor(run.model, task, run.attempts)), true)
+    if (keptWithoutTimeLimit(done, outcomes)) continue
+    delete run.tasks[task]
+    run.seconds = Math.max(0, run.seconds - done.seconds)
+    run.finishedAt = null
+  }
+  run.noTimeLimit = true
+  return true
 }
 
 /** Arrête le test en cours (bouton « Arrêter », fermeture de Jaris) ; il reprendra à la tâche en cours. */
@@ -717,6 +839,7 @@ async function runAll(model: string, attempts: number, started: number): Promise
           model,
           attempts,
           numCtx,
+          noTimeLimit: true,
           startedAt: new Date().toISOString(),
           finishedAt: null,
           seconds: 0,
@@ -724,6 +847,8 @@ async function runAll(model: string, attempts: number, started: number): Promise
         }
     run.numCtx = numCtx
     results.runs[key] = run
+    // Test commencé avec la limite de 2 h (avant l'étape 352) : ses tâches coupées par le temps sont refaites.
+    if (!stopRequested && (await dropTasksCutByOldLimits(run))) await writeResults(results)
     emit({ numCtx })
     refresh()
 
@@ -752,8 +877,7 @@ async function runAll(model: string, attempts: number, started: number): Promise
       refresh()
       const code = await runPython(
         [
-          '-c',
-          HARBOR_BOOT,
+          ...harborBoot(),
           ...harborRunArgs({
             tasksDir: tasksDir(),
             task,
@@ -778,6 +902,11 @@ async function runAll(model: string, attempts: number, started: number): Promise
         break
       }
       const outcomes = await readTrialOutcomes(jobDir)
+      const slow = outcomes.find((o) => isSlowMachine(o.exception))
+      if (slow) {
+        // Préparation de la tâche trop lente : la vitesse du PC ou de la connexion, jamais une erreur du modèle.
+        throw new Error(t('tbench.machineError', { task, reason: t('tbench.slowMachine') }))
+      }
       const machineError = outcomes.find((o) => !isModelFailure(o.exception))
       if (code !== 0 || outcomes.length < attempts || machineError) {
         // Docker ou Ollama tombé : jamais compté comme une erreur du modèle (même règle que le test des modèles).

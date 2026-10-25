@@ -466,6 +466,11 @@ export interface TerminalBenchRun {
    * plus grande qui tient sur la carte graphique). Absente pour un test commencé avant : 32 768.
    */
   numCtx?: number
+  /**
+   * Vrai pour un test joué sans limite de temps (étape 352). Absent : commencé avec la limite de 2 h par tâche ; à
+   * la reprise, ses tâches coupées par le temps sont refaites.
+   */
+  noTimeLimit?: boolean
   /** Par tâche finie : essais réussis, essais joués, durée. */
   tasks: Record<string, { passed: number; trials: number; seconds: number }>
 }

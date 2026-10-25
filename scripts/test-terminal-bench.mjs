@@ -206,12 +206,34 @@ function readResults(root) {
 
 // ---------------------------------------------------------------------------------------------------------------
 
-test('délai de l’agent porté à 2 h (ou plus long si la tâche le prévoit), jamais celui du correcteur', () => {
+// Étape 352, Léo : « mais on mesure pas la vitesse, ouais fais en sorte qu'on fait autant d'étapes que eux ».
+test('plus de limite de temps pour l’agent, celle du correcteur reste celle de la tâche', () => {
   const env = makeEnv()
   const mod = load(env)
-  const toml = '[agent]\ntimeout_sec = 900.0\n\n[verifier]\ntimeout_sec = 600.0\n'
-  assert.equal(mod.patchAgentTimeout(toml, 7200), '[agent]\ntimeout_sec = 7200.0\n\n[verifier]\ntimeout_sec = 600.0\n')
-  assert.match(mod.patchAgentTimeout('[agent]\r\ntimeout_sec = 12000\r\n', 7200), /timeout_sec = 12000\.0/)
+  // La vraie forme d'un task.toml de Terminal-Bench 2.1 (path-tracing), avec ses sous-tables.
+  const real = [
+    'schema_version = "1.1"',
+    '[task]',
+    'name = "terminal-bench/path-tracing"',
+    '[[task.authors]]',
+    'name = "Nicholas Carlini"',
+    '[verifier]',
+    'timeout_sec = 1800.0',
+    '[agent]',
+    'timeout_sec = 1800.0',
+    '[environment]',
+    'build_timeout_sec = 600.0',
+    'docker_image = "alexgshaw/path-tracing:20251031"',
+    '[verifier.env]',
+    ''
+  ].join('\n')
+  const out = mod.removeAgentTimeout(real)
+  assert.equal(out, real.replace('[agent]\ntimeout_sec = 1800.0\n', '[agent]\n'))
+  assert.match(out, /\[verifier\]\ntimeout_sec = 1800\.0/)
+  // Un fichier déjà porté à 2 h par une version précédente, aux fins de ligne Windows, en commentaire après l'en-tête.
+  assert.equal(mod.removeAgentTimeout('[agent]  # agent\r\ntimeout_sec = 7200.0\r\nuser = "root"\r\n'), '[agent]  # agent\nuser = "root"\n')
+  // Un timeout_sec d'une autre section n'est jamais touché.
+  assert.equal(mod.removeAgentTimeout('[agent.env]\ntimeout_sec = 5\n'), '[agent.env]\ntimeout_sec = 5\n')
   assert.equal(mod.dockerImageOf('[environment]\ndocker_image = "a/b:1"\n'), 'a/b:1')
   assert.equal(mod.dockerImageOf('[environment]\n'), null)
 })
@@ -239,9 +261,18 @@ test('options d’Artificial Analysis, et limite de mémoire bien rattachée au 
   assert.equal(kw.temperature, '0.6')
   assert.equal(kw.max_turns, '250')
   assert.equal(kw.api_base, 'http://127.0.0.1:11435')
-  assert.deepEqual(JSON.parse(kw.llm_call_kwargs), { num_ctx: 32768 })
+  // Une réponse ne dépasse jamais la mémoire du modèle : la seule borne d'un modèle qui écrirait sans fin.
+  assert.deepEqual(JSON.parse(kw.llm_call_kwargs), { num_ctx: 32768, num_predict: 32768 })
   const info = JSON.parse(kw.model_info)
   assert.equal(info.max_input_tokens, 32768)
+  // Seulement le chiffre que Terminus 2 cite au modèle quand sa réponse est trop longue : il ne limite rien.
+  assert.equal(info.max_output_tokens, 8192)
+  // Préparation de la tâche : une connexion lente ne compte jamais contre le modèle.
+  assert.equal(argAfter(args, '--environment-build-timeout-multiplier'), '6')
+  assert.equal(argAfter(args, '--agent-setup-timeout-multiplier'), '6')
+  // Aucune option de Harbor ne remet de limite de temps à l'agent.
+  for (const flag of ['--timeout-multiplier', '--agent-timeout-multiplier']) assert.ok(!args.includes(flag), flag)
+  assert.ok(!args.some((a) => a.includes('override_timeout')))
   // Sans lui, LiteLLM ignore ces chiffres et prend une limite d'un million de tokens (vérifié avec Harbor).
   assert.equal(info.litellm_provider, 'ollama_chat')
   assert.equal(mod.jobNameFor('hf.co/a/b:Q4_K_M', 'fix-git', 3), 'hf.co_a_b_Q4_K_M__3x__fix-git')
@@ -254,6 +285,34 @@ test('seul le temps de l’agent dépassé compte contre le modèle', () => {
   for (const e of ['EnvironmentStartTimeoutError', 'AgentSetupTimeoutError', 'VerifierTimeoutError', 'DockerError']) {
     assert.equal(mod.isModelFailure(e), false, e)
   }
+  // Ces deux délais ne mesurent que la machine (image à télécharger, agent à installer).
+  assert.equal(mod.isSlowMachine('EnvironmentStartTimeoutError'), true)
+  assert.equal(mod.isSlowMachine('AgentSetupTimeoutError'), true)
+  for (const e of [null, 'AgentTimeoutError', 'VerifierTimeoutError', 'Timeout', 'DockerError']) {
+    assert.equal(mod.isSlowMachine(e), false, String(e))
+  }
+})
+
+test('test d’avant l’étape 352 : une tâche est gardée seulement si aucune limite de temps n’a pu la couper', () => {
+  const mod = load(makeEnv())
+  const ok = { passed: true, exception: null }
+  // Plus courte que la plus petite limite d'alors (6 min pour installer l'agent) : gardée sans rien relire.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 3, seconds: 359 }, null), true)
+  // Agent trop lent à installer (6 min), compté contre le modèle à l'époque : refaite.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 1, seconds: 420 }, [{ passed: false, exception: 'AgentSetupTimeoutError' }]), false)
+  // Assez longue pour avoir été coupée : gardée seulement si chaque essai s'est fini sans erreur.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 3, seconds: 600 }, [ok, ok, ok]), true)
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 1, seconds: 3600 }, [{ ...ok, longestCallMs: 599_000, llmError: false }]), true)
+  // Une réponse de 10 min ou plus : coupée à 600 s puis refaite par un essai automatique, sans erreur visible.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 1, seconds: 3628 }, [{ ...ok, longestCallMs: 1_676_579 }]), false)
+  // Un appel échoué jusqu'au bout puis relancé par Terminus 2 : seule la ligne de son journal le dit.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 1, seconds: 3600 }, [{ ...ok, longestCallMs: 30_000, llmError: true }]), false)
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 3, seconds: 9000 }, [ok, { passed: false, exception: 'AgentTimeoutError' }, ok]), false)
+  // « Timeout » : une réponse coupée au bout de 10 min par LiteLLM, puis l'essai abandonné.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 1, seconds: 2000 }, [{ passed: false, exception: 'Timeout' }]), false)
+  // Fichiers de l'essai introuvables ou incomplets : impossible de savoir, la tâche est refaite.
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 3, seconds: 2000 }, null), false)
+  assert.equal(mod.keptWithoutTimeLimit({ trials: 3, seconds: 2000 }, [ok, ok]), false)
 })
 
 test('score et temps restant', () => {
@@ -291,16 +350,29 @@ test('déroulé complet : Harbor installé avec les versions figées, 89 tâches
     // Sortie en UTF-8 même sous un Windows en cp1252, Harbor lu depuis ses fichiers.
     assert.equal(pip.env.PYTHONIOENCODING, 'utf-8')
     assert.equal(env.runs[0].libDir, join(env.root, 'terminal-bench', 'harbor'))
+    // Sans REQUEST_TIMEOUT, LiteLLM coupe chaque réponse du modèle au bout de 10 minutes (étape 352).
+    const harborRun = env.spawns.find((s) => s.args.includes('-i'))
+    assert.equal(harborRun.env.REQUEST_TIMEOUT, String(24 * 3600))
+    // Harbor passe par python/tbench_boot.py (250 réponses du modèle au plus, réponses trop longues comprises),
+    // sans que le dossier des scripts de Jaris n'entre dans son chemin de modules (-P).
+    const boot = join(PYTHON_DIR, 'tbench_boot.py')
+    assert.ok(fs.existsSync(boot))
+    assert.deepEqual(harborRun.args.slice(0, 2), ['-P', boot])
+    assert.deepEqual(env.spawns.find((s) => s.args.includes('dataset')).args.slice(0, 2), ['-P', boot])
+    assert.equal(harborRun.env.JARIS_TBENCH_MAX_TURNS, '250')
 
     assert.equal(env.runs.length, TASKS)
     assert.deepEqual(env.pulled, ['granite4.2:3b'])
     const tasksDir = join(env.root, 'terminal-bench', 'tasks', 'terminal-bench-2-1')
-    assert.match(readFileSync(join(tasksDir, 'tache-01', 'task.toml'), 'utf8'), /\[agent\]\ntimeout_sec = 7200\.0/)
-    assert.match(readFileSync(join(tasksDir, 'tache-00', 'task.toml'), 'utf8'), /\[agent\]\ntimeout_sec = 9000\.0/)
-    assert.match(readFileSync(join(tasksDir, 'tache-01', 'task.toml'), 'utf8'), /\[verifier\]\ntimeout_sec = 600\.0/)
+    // Plus aucune limite de temps pour l'agent (étape 352), celle du correcteur ne bouge pas.
+    for (const task of ['tache-00', 'tache-01']) {
+      const toml = readFileSync(join(tasksDir, task, 'task.toml'), 'utf8')
+      assert.match(toml, /\[agent\]\n\n\[verifier\]\ntimeout_sec = 600\.0/, task)
+    }
 
     const run = readResults(env.root).runs['granite4.2:3b|3']
     assert.ok(run.finishedAt)
+    assert.equal(run.noTimeLimit, true)
     assert.equal(Object.keys(run.tasks).length, TASKS)
     // 45 tâches paires réussies 3 fois, 44 impaires réussies une fois sur trois.
     assert.deepEqual(mod.scoreOf(run), { passed: 45 * 3 + 44, trials: TASKS * 3, percent: ((45 * 3 + 44) / 267) * 100 })
@@ -404,6 +476,102 @@ test('panne de la machine : la tâche n’est jamais comptée contre le modèle'
     const run = readResults(env.root).runs['granite4.2:3b|1']
     assert.deepEqual(Object.keys(run.tasks), ['tache-00', 'tache-01', 'tache-02'])
     assert.equal(run.finishedAt, null)
+  } finally {
+    rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+test('préparation de la tâche trop lente : jamais comptée contre le modèle, même avec Docker et Ollama en marche', async () => {
+  for (const exception of ['EnvironmentStartTimeoutError', 'AgentSetupTimeoutError']) {
+    const env = makeEnv({ trial: (task) => (task === 'tache-03' ? { exception } : { reward: 1 }) })
+    try {
+      const mod = load(env)
+      const end = waitForEnd(mod)
+      mod.startTerminalBench('granite4.2:3b', 1)
+      const last = await end
+      assert.equal(last.phase, 'error', exception)
+      assert.match(last.error, /tache-03/)
+      assert.match(last.error, /préparation de la tâche/)
+      const run = readResults(env.root).runs['granite4.2:3b|1']
+      assert.deepEqual(Object.keys(run.tasks), ['tache-00', 'tache-01', 'tache-02'])
+
+      // Relancé une fois la connexion revenue : la tâche est reprise, sans rien refaire d'autre.
+      const env2Runs = env.runs.length
+      const mod2 = load(env)
+      const end2 = waitForEnd(mod2)
+      mod2.startTerminalBench('granite4.2:3b', 1)
+      await end2
+      assert.equal(env.runs[env2Runs].task, 'tache-03')
+    } finally {
+      rmSync(env.root, { recursive: true, force: true })
+    }
+  }
+})
+
+test('test commencé avec la limite de 2 h : seules ses tâches coupées par le temps sont refaites', async () => {
+  const env = makeEnv()
+  try {
+    const mod = load(env)
+    const end = waitForEnd(mod)
+    mod.startTerminalBench('granite4.2:3b', 3)
+    assert.equal((await end).phase, 'done')
+    // On en fait un test d'avant l'étape 352, comme s'il avait été joué avec la limite de 2 h.
+    const results = readResults(env.root)
+    const run = results.runs['granite4.2:3b|3']
+    delete run.noTimeLimit
+    const jobs = join(env.root, 'terminal-bench', 'jobs')
+    const trialFile = (task, k) => join(jobs, mod.jobNameFor('granite4.2:3b', task, 3), `${task}__t${k}`, 'result.json')
+    const cut = (task, k, exception) =>
+      fs.writeFileSync(trialFile(task, k), JSON.stringify({ verifier_result: { rewards: { reward: 0 } }, exception_info: { exception_type: exception } }))
+    // tache-05 : un essai coupé par les 2 h. tache-06 : une réponse coupée par LiteLLM au bout de 10 min.
+    cut('tache-05', 1, 'AgentTimeoutError')
+    cut('tache-06', 2, 'Timeout')
+    // tache-07 : longue mais sans erreur, gardée. tache-08 : longue, fichiers disparus, refaite.
+    // tache-09 : erreur, mais trop courte pour avoir été coupée par une limite de temps : gardée.
+    cut('tache-09', 0, 'AgentTimeoutError')
+    // tache-10 : une réponse de 28 min (coupée à 10 min puis refaite, sans erreur visible). tache-11 : un appel échoué
+    // puis relancé par Terminus 2, seulement écrit dans son journal. Toutes deux refaites.
+    const quiet = (task, k, times) =>
+      fs.writeFileSync(trialFile(task, k), JSON.stringify({ verifier_result: { rewards: { reward: 1 } }, exception_info: null, agent_result: { metadata: { api_request_times_msec: times } } }))
+    quiet('tache-07', 0, [40_000, 599_000])
+    quiet('tache-10', 1, [44_381, 1_676_579])
+    fs.writeFileSync(join(trialFile('tache-11', 2), '..', 'trial.log'), 'ERROR Unknown Error in LLM interaction: litellm.Timeout\n')
+    for (const t of ['tache-05', 'tache-06', 'tache-07', 'tache-08', 'tache-10', 'tache-11']) run.tasks[t].seconds = 7300
+    run.tasks['tache-09'].seconds = 100
+    rmSync(join(jobs, mod.jobNameFor('granite4.2:3b', 'tache-08', 3)), { recursive: true, force: true })
+    run.seconds = Object.values(run.tasks).reduce((sum, t) => sum + t.seconds, 0)
+    const secondsBefore = run.seconds
+    fs.writeFileSync(join(env.root, 'terminal-bench', 'results.json'), JSON.stringify(results))
+    // Tâches encore portées à 2 h par l'ancienne version : la limite doit être retirée à la reprise.
+    const tasksDir = join(env.root, 'terminal-bench', 'tasks', 'terminal-bench-2-1')
+    fs.writeFileSync(join(tasksDir, 'tache-01', 'task.toml'), '[agent]\ntimeout_sec = 7200.0\n\n[verifier]\ntimeout_sec = 600.0\n')
+    fs.writeFileSync(join(tasksDir, '.jaris-timeouts'), '7200')
+    env.runs = []
+
+    const mod2 = load(env)
+    const end2 = waitForEnd(mod2)
+    mod2.startTerminalBench('granite4.2:3b', 3)
+    assert.equal((await end2).phase, 'done')
+    assert.deepEqual(env.runs.map((r) => r.task), ['tache-05', 'tache-06', 'tache-08', 'tache-10', 'tache-11'])
+    const after = readResults(env.root).runs['granite4.2:3b|3']
+    assert.equal(after.noTimeLimit, true)
+    assert.ok(after.finishedAt)
+    assert.equal(after.tasks['tache-07'].seconds, 7300, 'la tâche longue sans erreur est gardée telle quelle')
+    assert.equal(after.tasks['tache-09'].seconds, 100)
+    // Les secondes des tâches refaites remplacent les anciennes.
+    const redoneTasks = ['tache-05', 'tache-06', 'tache-08', 'tache-10', 'tache-11']
+    const redone = redoneTasks.reduce((sum, t) => sum + after.tasks[t].seconds, 0)
+    assert.equal(after.seconds, secondsBefore - redoneTasks.length * 7300 + redone)
+    assert.equal(readFileSync(join(tasksDir, 'tache-01', 'task.toml'), 'utf8'), '[agent]\n\n[verifier]\ntimeout_sec = 600.0\n')
+    assert.equal(readFileSync(join(tasksDir, '.jaris-timeouts'), 'utf8'), 'none')
+
+    // Un test déjà joué sans limite n'est jamais relu ni refait.
+    env.runs = []
+    const mod3 = load(env)
+    const end3 = waitForEnd(mod3)
+    mod3.startTerminalBench('granite4.2:3b', 3)
+    assert.equal((await end3).phase, 'done')
+    assert.deepEqual(env.runs, [])
   } finally {
     rmSync(env.root, { recursive: true, force: true })
   }

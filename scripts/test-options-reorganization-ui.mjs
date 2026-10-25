@@ -1021,6 +1021,8 @@ test('Terminal-Bench : une carte à part, tout en bas, qui lance le test avec le
     assert.equal(place.border, 'solid', 'carte non habillée par le CSS de Jaris')
     assert.equal(place.radius, '10px')
     assert.match(place.title, /Terminal-Bench 2\.1/)
+    // Étape 352 : la carte dit que le test n'a pas de limite de temps, la seule différence voulue avec eux.
+    assert.match(await page.textContent('.options-page--models .tbench'), /sans limite de temps/)
 
     // Score d'Artificial Analysis du modèle choisi, pour comparer.
     await page.selectOption('.tbench__field select >> nth=0', 'gemma4:31b')
@@ -1083,7 +1085,7 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
       window.__tbenchStatus = {
         docker: 'ready',
         runs: [
-          { model: 'gemma4:31b', attempts: 3, numCtx: 65536, startedAt: 'x', finishedAt: 'y', seconds: 89 * 600, tasks: t },
+          { model: 'gemma4:31b', attempts: 3, numCtx: 65536, noTimeLimit: true, startedAt: 'x', finishedAt: 'y', seconds: 89 * 600, tasks: t },
           { model: 'qwen3:1.7b', attempts: 1, startedAt: 'x', finishedAt: null, seconds: 600, tasks: { a: { passed: 1, trials: 1, seconds: 600 } } }
         ],
         progress: null
@@ -1108,6 +1110,9 @@ test('Terminal-Bench : pendant le test, score en direct et temps restant, puis l
     assert.equal(rows[1][col('Mémoire du modèle')], '32k')
     assert.equal(rows[1][col('Artificial Analysis')], '—')
     assert.match(rows[1][col('Tâches')], /en pause/)
+    // Étape 352 : un test joué avec la limite de 2 h d'avant le dit, celui joué sans limite non.
+    assert.match(rows[1][col('Tâches')], /avec la limite de 2 h/)
+    assert.doesNotMatch(rows[0][col('Tâches')], /limite/)
     assert.ok(await page.$('.tbench__form'), 'le formulaire revient à la fin du test')
   })
 })
@@ -1150,6 +1155,8 @@ test('Terminal-Bench : pendant une tâche, essai en cours, étapes du modèle et
     await page.evaluate((p) => window.__tbenchProgress(p), { ...progress, live: { ...progress.live, lastActivityAt: now - 20 * 60_000 } })
     await page.waitForSelector('.tbench__progress .tbench__warning')
     assert.match(await page.textContent('.tbench__progress .tbench__warning'), /plus de 15 minutes.*Docker Desktop/)
+    // Étape 352 : sans limite de temps, une longue réponse du modèle n'écrit rien pendant qu'elle se prépare.
+    assert.match(await page.textContent('.tbench__progress .tbench__warning'), /longue réponse/)
 
     // Ancien message sans ces champs (un lancement d'avant la mise à jour) : la carte s'affiche quand même.
     const { startedAt, live, ...old } = progress

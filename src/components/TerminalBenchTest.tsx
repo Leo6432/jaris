@@ -27,7 +27,9 @@ const MAX_STEPS = 250
  * Au-delà, la carte dit qu'il ne se passe plus rien et comment le vérifier (étape 350, Léo : « ça fait 58 min et
  * toujours pareil »). Sur une carte graphique, un petit modèle répond en quelques secondes : un quart d'heure sans la
  * moindre écriture de Harbor ou du modèle mérite d'être signalé, sans affirmer que c'est bloqué.
- * Le texte « tbench.quiet » dit « 15 minutes » dans chaque langue : le changer avec ce nombre.
+ * Le texte « tbench.quiet » dit « 15 minutes » dans chaque langue : le changer avec ce nombre. Depuis l'étape 352
+ * (plus de limite de temps), une longue réponse du modèle n'écrit rien pendant qu'elle se prépare : le texte le dit
+ * avant de proposer de vérifier Docker.
  */
 const QUIET_MS = 15 * 60_000
 /** Fenêtre d'un test commencé avant l'étape 351, qui ne l'enregistrait pas encore (MIN_BENCH_CTX côté main). */
@@ -301,6 +303,8 @@ export default function TerminalBenchTest({ models }: { models: TerminalBenchMod
                     <td className="options-menu__col-num">
                       {s.tasks} / {TERMINAL_BENCH_TASK_COUNT}
                       {run.finishedAt ? '' : ` · ${t('tbench.paused')}`}
+                      {/* Joué avec la limite de 2 h d'avant l'étape 352 : ses tâches coupées seront refaites à la reprise. */}
+                      {run.noTimeLimit ? '' : ` · ${t('tbench.timeLimited')}`}
                     </td>
                     <td className="options-menu__col-num">{formatDuration(run.seconds * 1000)}</td>
                   </tr>
