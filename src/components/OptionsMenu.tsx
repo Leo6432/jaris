@@ -810,7 +810,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     >
       <header className="options-page__header">
         <div>
-          <span className="options-page__eyebrow">Jaris</span>
           <h2>{t('options.title')}</h2>
         </div>
         <button

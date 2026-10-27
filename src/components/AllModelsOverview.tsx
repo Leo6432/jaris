@@ -248,7 +248,6 @@ export default function AllModelsOverview(): JSX.Element {
           <div className="options-page options-page--models" role="dialog" aria-modal="true" aria-label={t('models.all.label')}>
             <header className="options-page__header">
               <div>
-                <span className="options-page__eyebrow">Jaris</span>
                 <h2>{t('models.all')}</h2>
               </div>
               <button className="options-page__close" onClick={() => setOpen(false)}>

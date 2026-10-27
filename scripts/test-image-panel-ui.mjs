@@ -256,3 +256,13 @@ test('PC pas assez puissant : la raison, et aucun bouton d’installation', opti
     assert.equal(await page.locator('.image-install__button').count(), 0)
   }, "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (4 Go de VRAM, il en faut 6 ou plus)', installed: false, downloadLabel: '5,1 Go' }")
 })
+
+// Étape 354 (design) : depuis l'étape 282 (.code-panel { padding: 0 } pour le mode Code), le champ de saisie des
+// écrans Image et Vidéo touchait le bas de la fenêtre, coins arrondis coupés.
+test('le champ de saisie garde sa marge en bas de l’écran (étape 354)', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.image-panel > .composer')
+    const gap = await page.evaluate(() => innerHeight - document.querySelector('.image-panel > .composer').getBoundingClientRect().bottom)
+    assert.ok(gap >= 12, `le champ est à ${gap}px du bas de la fenêtre`)
+  })
+})

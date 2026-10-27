@@ -75,6 +75,10 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
         .linkDirectionalParticles(2)
         .linkDirectionalParticleColor(() => '#37e2ff')
         .onNodeClick((node) => openNote(String(node.id)))
+        // Étape 354 (design) : quelques notes restaient minuscules au milieu d'un grand vide. Le graphe est posé
+        // avant le premier affichage, puis la caméra le cadre une seule fois (plus bas) : jamais elle ne reprend
+        // la main sur un zoom de l'utilisateur.
+        .warmupTicks(100)
         .width(container.clientWidth)
         .height(container.clientHeight)
     } catch (err) {
@@ -84,6 +88,7 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
       return
     }
     instanceRef.current = instance
+    const fitTimer = window.setTimeout(() => instance.zoomToFit(600, 120), 300)
 
     const handleResize = (): void => {
       if (!containerRef.current) return
@@ -96,6 +101,7 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
     window.addEventListener('resize', handleResize)
 
     return () => {
+      window.clearTimeout(fitTimer)
       observer.disconnect()
       window.removeEventListener('resize', handleResize)
       instance._destructor()

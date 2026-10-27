@@ -9634,3 +9634,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   les task.toml) tant qu'on n'a pas pu les retirer.** Régression : `node --test scripts/test-legacy-cleanup.mjs`
   (faux Docker : seuls les conteneurs et images des tâches, Docker arrêté puis relancé, Docker absent ; les 3 gardes
   vérifiées en les retirant) et `scripts/test-data-location.mjs` (deux usages indirects de getDataRoot() dans main.ts).
+
+- **Étape 354, passe de finition du design avec les skills impeccable, apple-design et ui-ux-pro-max (Léo : « utilise
+  tous ces skills… pour améliorer le plus possible le design », captures avant/après validées : « ok fait le »).**
+  Une FINITION, pas une refonte : mêmes gris, même orbe, même disposition. Méthode, à réutiliser : banc de captures de
+  tous les écrans (bundle esbuild de src/App.tsx + faux `window.jaris` + CSS compilé), sombre et clair, 1280 et
+  760 px, puis MESURE de ce qui se voit mal (contrastes, éléments coupés, hauteurs) avant de juger à l'œil.
+  - **Chat** : les listes du modèle (« - farine », « 1. Verse… ») deviennent de vraies listes (`toBlocks`/`renderText`,
+    formatReply.tsx) ; une ligne vide entre deux éléments ne coupe pas la liste ; un gras ouvert sur plusieurs lignes
+    garde l'ancien rendu plutôt que d'être coupé en deux ; rien ne change dans un bloc de code. Le fil s'efface en
+    fondu sous le titre et au-dessus du champ (masque piloté par le défilement, seulement si le navigateur le sait).
+  - **Configuration** : « Continuer » reste visible en bas, même dans une petite fenêtre (pied collant avec un fondu
+    vers le fond) ; « Voir le calcul » devient un petit bouton secondaire — `.app__onboarding button` lui imposait
+    44 px de haut, d'où `height: auto` sur la variante.
+  - **Options** : la carte des modèles n'est plus une carte dans une carte.
+  - **Image** : le champ de saisie ne touche plus le bas (l'étape 282 avait mis `.code-panel` sans marge pour le mode
+    Code, l'écran Image partage cette classe).
+  - **Cerveau** : le graphe est posé avant d'être affiché puis cadré une seule fois (`warmupTicks`, `zoomToFit`) ;
+    jamais la caméra ne reprend la main sur un zoom de l'utilisateur.
+  - **Étiquettes au-dessus des titres retirées** (Image, Vidéo, Options, Tous les modèles) : interdites par impeccable,
+    elles répétaient l'en-tête. Détails : sélection du texte aux couleurs de Jaris, chiffres des tableaux alignés,
+    titres équilibrés (`text-wrap: balance`).
+  **Laissé tel quel, ce sont des textes ou des promesses** : le titre de la ligne « Rechercher une mise à jour » répète
+  son bouton ; l'écran d'installation vidéo dit « Wan 2.2 » alors que le modèle est FastWan ; la suggestion « Résume mes
+  mails non lus » promet peut-être trop. **Leçon générale : une règle générale par élément (`.app__onboarding button {
+  height: 44px }`) s'applique aussi au petit bouton secondaire qu'on ajoute dedans — mesurer sa hauteur réelle, pas
+  la lire dans la nouvelle règle.** Régression : `test-format-reply.mjs` (vraies listes, ligne vide, numéro de départ,
+  imbrication, rien dans le code, « -5 °C » n'est pas une liste), `test-setup-screens-ui.mjs` (« Continuer » visible
+  sans défiler à 760×600, petit bouton secondaire), `test-image-panel-ui.mjs` (marge du champ),
+  `test-options-reorganization-ui.mjs` (pas de carte dans la carte) ; vérifiés en retirant chaque correctif. **Non
+  vérifié en usage réel** : le rendu dans la vraie fenêtre Windows.

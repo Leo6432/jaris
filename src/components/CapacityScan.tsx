@@ -73,9 +73,13 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
           <>
             <p>{t('setup.intro')}</p>
             {picks === null ? <p className="capacity-scan__status">{t('options.retest.detecting')}</p> : <MyModelPicks picks={picks} title={t('setup.picks.title')} beforeInstall />}
-            <button onClick={start} disabled={picks === null}>
-              {t('common.continue')}
-            </button>
+            {/* Étape 354 : la légende de la carte est longue ; « Continuer », la seule action qui fait avancer, reste
+                visible au bas de l'écran pendant qu'on fait défiler. */}
+            <div className="capacity-scan__footer">
+              <button onClick={start} disabled={picks === null}>
+                {t('common.continue')}
+              </button>
+            </div>
           </>
         )}
 

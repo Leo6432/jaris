@@ -286,7 +286,6 @@ export default function VideoPanel(): JSX.Element {
     return (
       <div className="image-panel image-install">
         <div className="image-install__card">
-          <span className="image-install__eyebrow">{t('app.mode.video')}</span>
           <h2>{t('video.install.title')}</h2>
           <p className="image-install__lead">{t('video.install.lead')}</p>
           {!status.supported ? (

@@ -984,3 +984,18 @@ test('Voix : un flux de silence total désigne Windows (micro coupé ou bloqué)
     assert.match(await page.textContent('.options-menu__mic-result--ok'), /Micro détecté/)
   })
 })
+
+// Étape 354 (design) : la carte des modèles avait son propre contour clair DANS la carte « Ce que ta machine fait
+// tourner » — une carte dans la carte. Dans Options, elle est à plat.
+test('Modèles : la carte des modèles n’est pas une carte dans la carte (étape 354)', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__group .capacity-scan__tier')
+    const tier = await page.$eval('.options-menu__group .capacity-scan__tier', (el) => {
+      const style = getComputedStyle(el)
+      return { border: style.borderTopWidth, background: style.backgroundColor }
+    })
+    assert.equal(tier.border, '0px')
+    assert.equal(tier.background, 'rgba(0, 0, 0, 0)')
+  })
+})

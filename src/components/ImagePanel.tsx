@@ -201,7 +201,6 @@ export default function ImagePanel(): JSX.Element {
     return (
       <div className="image-panel image-install">
         <div className="image-install__card">
-          <span className="image-install__eyebrow">{t('app.mode.image')}</span>
           <h2>{t('image.install.title')}</h2>
           <p className="image-install__lead">{t('image.install.lead')}</p>
           {!status.supported ? (

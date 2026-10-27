@@ -188,12 +188,15 @@ for (const [width, height] of [[1000, 760], [760, 760], [1920, 1080]]) {
   })
 }
 
-test('configuration : le bouton « Continuer » est atteignable en faisant défiler, même dans une fenêtre basse', options, async () => {
+test('configuration : le bouton « Continuer » est visible sans faire défiler, même dans une fenêtre basse', options, async () => {
+  // Étape 354 (design) : la légende de la carte poussait « Continuer », la seule action qui fait avancer, sous le bas
+  // de la fenêtre. Il reste au bas de l'écran ; « Voir le calcul des notes » redevient une action secondaire.
   await withScreen('capacity', { width: 760, height: 600 }, async (page) => {
-    const button = page.locator('.capacity-scan > button')
-    await button.scrollIntoViewIfNeeded()
-    const box = await button.boundingBox()
+    const box = await page.locator('.capacity-scan__footer > button').boundingBox()
     assert.ok(box && box.y >= 0 && box.y + box.height <= 600, `bouton à ${JSON.stringify(box)}`)
+    const calc = await page.$eval('.capacity-scan__calc-toggle', (el) => ({ height: el.getBoundingClientRect().height, background: getComputedStyle(el).backgroundColor }))
+    assert.ok(calc.height < 40, `« Voir le calcul des notes » fait ${calc.height}px de haut`)
+    assert.equal(calc.background, 'rgba(0, 0, 0, 0)', '« Voir le calcul des notes » ne doit pas être un bouton plein')
   })
 })
 
@@ -214,7 +217,7 @@ for (const colorScheme of ['light', 'dark']) {
   test(`configuration (${colorScheme === 'light' ? 'thème clair' : 'thème sombre'}) : aucun texte sous 4,5:1, des modèles au résumé`, options, async () => {
     await withScreen('capacity', { colorScheme }, async (page) => {
       assert.deepEqual(await lowContrastTexts(page), [], 'carte des modèles (badges compris)')
-      await page.click('.capacity-scan > button')
+      await page.click('.capacity-scan__footer > button')
       await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 1.2 * 1024 ** 3, total: 3.4 * 1024 ** 3, percent: 35, nextFile: false }))
       await page.waitForSelector('[role="progressbar"][aria-valuenow]')
       assert.deepEqual(await lowContrastTexts(page), [], 'téléchargement')
@@ -236,7 +239,7 @@ for (const colorScheme of ['light', 'dark']) {
 
 test('téléchargement : une vraie barre qui suit le pourcentage, avec la taille, puis un va-et-vient entre deux modèles', options, async () => {
   await withScreen('capacity', {}, async (page) => {
-    await page.click('.capacity-scan > button')
+    await page.click('.capacity-scan__footer > button')
     await page.waitForFunction(() => typeof window.__pull === 'function')
     const fillRatio = () =>
       page.evaluate(() => {
@@ -303,7 +306,7 @@ test('« Configuration terminée » : la ligne Vidéo, après Image, avec la mê
     [{ model: null, qualityLabel: null, quality: null, reason: 'carte graphique trop petite' }, 'Vidéo : aucun modèle (pas assez de puissance)']
   ]) {
     await withScreen('capacity', {}, async (page) => {
-      await page.click('.capacity-scan > button')
+      await page.click('.capacity-scan__footer > button')
       await finish(video)(page)
       const items = await lines(page)
       const at = items.indexOf(expected)

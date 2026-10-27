@@ -63,3 +63,29 @@ test('un « ** » sans partenaire est retiré, un titre « ### » devient une li
 test('les étoiles d’un bloc de code restent telles quelles', () => {
   assert.match(html('```\n**pas du gras** et 3 * 4\n```'), /<code>\*\*pas du gras\*\* et 3 \* 4<\/code>/)
 })
+
+/**
+ * Étape 354 (design) : les listes du modèle s'affichaient avec leurs tirets et numéros tapés à la main. Elles
+ * deviennent de vraies listes ; le texte autour reste du texte, et un gras étalé sur une ligne de liste garde
+ * l'ancien rendu (test juste au-dessus, étape 339).
+ */
+test('listes : vraies puces et vrais numéros, texte autour intact', () => {
+  const result = html('### Ingrédients\n- 250 g de farine\n- 4 **œufs**\n\n### Étapes\n1. Verse la farine.\n2. Ajoute le lait.\n\nBon appétit !')
+  assert.equal(
+    result,
+    '<strong>Ingrédients</strong><ul class="reply-list"><li>250 g de farine</li><li>4 <strong>œufs</strong></li></ul>' +
+      '<strong>Étapes</strong><ol class="reply-list"><li>Verse la farine.</li><li>Ajoute le lait.</li></ol>Bon appétit !'
+  )
+})
+
+test('listes : une ligne vide entre deux éléments ne coupe pas la liste, la numérotation reprise est gardée', () => {
+  assert.equal(html('1. Un\n\n2. Deux'), '<ol class="reply-list"><li>Un</li><li>Deux</li></ol>')
+  assert.equal(html('3. Trois\n4. Quatre'), '<ol class="reply-list" start="3"><li>Trois</li><li>Quatre</li></ol>')
+  assert.equal(html('- A\n  - sous-point'), '<ul class="reply-list"><li>A</li><li class="reply-list__nested">sous-point</li></ul>')
+})
+
+test('listes : jamais dans un bloc de code, et un calcul « - 5 » ou un tiret collé ne deviennent pas des listes', () => {
+  assert.match(html('```\n- pas une liste\n```'), /<code>- pas une liste<\/code>/)
+  assert.equal(html('-5 °C ce matin'), '-5 °C ce matin')
+  assert.equal(html('Total : 12\n*important*'), 'Total : 12\n<em>important</em>')
+})

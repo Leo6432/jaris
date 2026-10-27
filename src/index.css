@@ -2826,7 +2826,6 @@ p.capacity-scan__tier-missing {
   font-size: 1.45rem;
 }
 
-.options-page__eyebrow,
 .options-page__navigation-label {
   display: block;
   font-family: var(--hud-font-display);
@@ -3134,12 +3133,6 @@ p.capacity-scan__tier-missing {
   font-family: var(--hud-font-display);
   font-size: 1.5rem;
   color: var(--hud-text);
-}
-
-.image-install__eyebrow {
-  font-family: var(--hud-font-display);
-  font-size: 12px;
-  color: var(--hud-accent);
 }
 
 .image-install__lead {
@@ -4902,12 +4895,6 @@ textarea::placeholder {
   color: var(--hud-text);
 }
 
-.image-install__eyebrow {
-  font-family: var(--hud-font-body);
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
 /* --- Agent vocal ---------------------------------------------------------- */
 
 .voice-screen {
@@ -5121,7 +5108,6 @@ textarea::placeholder {
   color: var(--hud-text);
 }
 
-.options-page__eyebrow,
 .options-page__navigation-label {
   font-family: var(--hud-font-body);
   font-size: 12px;
@@ -8828,4 +8814,173 @@ button.changes-card__file:hover {
   .code-browser__side {
     flex-basis: 160px;
   }
+}
+
+/* ==========================================================================
+   Étape 354 — finitions (Léo : « utilise tous ces skills… pour améliorer le plus possible le design »)
+   --------------------------------------------------------------------------
+   Une passe de finition, pas une refonte : l'identité décidée avec Léo reste telle quelle (gris neutres façon
+   ChatGPT, orbe au bord irrégulier, barre d'icônes + liste façon Codex, cartes d'Options aérées). Chaque règle
+   corrige un défaut vu sur une capture du rendu compilé, écran par écran, en sombre, en clair et en fenêtre étroite.
+   Écrite en fin de fichier exprès : à spécificité égale, c'est la dernière règle qui gagne (étapes 95, 117, 130).
+   ========================================================================== */
+
+/* Ce que le navigateur dessine tout seul porte aussi le design : la sélection de texte était le bleu de Windows. */
+::selection {
+  background: rgba(var(--jv-ink-rgb), 0.22);
+}
+
+/* Titres équilibrés (plus de « créer ? » seul sur sa ligne), paragraphes sans mot orphelin. */
+h1,
+h2,
+h3,
+.empty-state__title,
+.app__status {
+  text-wrap: balance;
+}
+
+p,
+.empty-state__description {
+  text-wrap: pretty;
+}
+
+/* Chiffres alignés en colonne dans les tableaux de modèles (vitesses, notes, scores). */
+.capacity-scan__tier-table,
+.options-menu__model-overview {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Réponses : vraies listes (formatReply.tsx) ----------------------------------------------------------- */
+.reply-list {
+  margin: 6px 0 12px;
+  padding-left: 1.5em;
+  white-space: normal;
+}
+
+.reply-list > li {
+  margin: 4px 0;
+  padding-left: 0.2em;
+  white-space: pre-wrap;
+}
+
+.reply-list > li::marker {
+  color: var(--hud-text-faint);
+}
+
+ol.reply-list > li::marker {
+  font-variant-numeric: tabular-nums;
+}
+
+.reply-list > li.reply-list__nested {
+  margin-left: 1.25em;
+  list-style-type: circle;
+}
+
+/* --- Chat : la conversation s'efface doucement sous le titre et au-dessus du champ (au lieu d'être coupée net),
+   seulement quand elle défile vraiment de ce côté-là. --------------------------------------------------------- */
+@property --jv-edge-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --jv-edge-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes jv-edge-top {
+  from {
+    --jv-edge-top: 0px;
+  }
+  to {
+    --jv-edge-top: 28px;
+  }
+}
+
+@keyframes jv-edge-bottom {
+  from {
+    --jv-edge-bottom: 28px;
+  }
+  to {
+    --jv-edge-bottom: 0px;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  .chat-panel__thread {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--jv-edge-top),
+      #000 calc(100% - var(--jv-edge-bottom)),
+      transparent 100%
+    );
+    animation: jv-edge-top linear both, jv-edge-bottom linear both;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range: 0px 40px, calc(100% - 40px) 100%;
+  }
+}
+
+/* --- Image et Vidéo : le champ de saisie avait perdu sa marge depuis l'étape 282 (.code-panel { padding: 0 }
+   pour le mode Code, dont ces deux écrans réutilisent la classe) — il touchait le bas de la fenêtre, coins coupés. */
+.code-panel.image-panel {
+  padding: 0 24px 16px;
+}
+
+/* --- Modèles utilisés sur ta machine ----------------------------------------------------------------------
+   Il ne reste qu'une carte (étape 137) : le contour clair de l'ancien « palier courant » ne distinguait plus rien et
+   faisait, dans Options, une carte dans la carte. Contour discret à l'installation, carte à plat dans Options. */
+.capacity-scan__tier--current {
+  border-color: var(--hud-line);
+}
+
+.options-menu__group .capacity-scan__tier {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Écran de configuration : « Voir le calcul des notes » est une action secondaire. Il héritait du gros bouton plein
+   de l'accueil, plus visible que « Continuer », la seule action qui fait avancer. */
+.app__onboarding button.capacity-scan__calc-toggle {
+  align-self: flex-start;
+  height: auto;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  box-shadow: none;
+}
+
+.app__onboarding button.capacity-scan__calc-toggle:hover {
+  opacity: 1;
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+/* Écran de configuration : la légende de la carte des modèles est longue, et « Continuer » — la seule action qui fait
+   avancer — passait sous le bas de la fenêtre. Il reste au bas de l'écran pendant qu'on fait défiler, sur un fondu
+   du fond (le texte s'efface dessous au lieu de passer derrière le bouton). */
+.capacity-scan__footer {
+  position: sticky;
+  bottom: -24px;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  margin-top: -16px;
+  padding: 36px 0 24px;
+  background: linear-gradient(to bottom, transparent, var(--jv-rail) 50%);
+  pointer-events: none;
+}
+
+.capacity-scan__footer > button {
+  pointer-events: auto;
 }
