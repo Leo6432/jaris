@@ -939,39 +939,6 @@ export async function computeContextLengthOptions(models: string | string[], cur
 }
 
 /**
- * Étape 351 (test Terminal-Bench, Léo : « mémoire on peut pas changer ça ? ») : la plus grande fenêtre qui devrait
- * tenir sur la carte avec CE modèle seul chargé (les autres modèles de Jaris sont déchargés avant le test). Seulement
- * un point de départ : le test charge ensuite le modèle pour de vrai et vérifie qu'il tient entier sur la carte.
- * - null : rien ne dit ce que contient la carte (pas de carte graphique, ou sa mémoire est inconnue) ;
- * - 0 : le modèle seul ne tient déjà pas sur la carte ;
- * - sinon la fenêtre estimée, ou `unknownArchStart` quand l'architecture du modèle n'est pas lisible (modèle
- *   hybride dont Ollama donne les têtes couche par couche, par exemple) : le chargement réel tranchera.
- */
-export async function estimateContextOnCard(model: string, unknownArchStart: number): Promise<number | null> {
-  const [live, loaded, info, weightBytes] = await Promise.all([
-    getLiveGpuStatus(),
-    Promise.resolve()
-      .then(() => loadedOllamaModels())
-      .catch(() => null),
-    getModelInfo(model).catch(() => null),
-    getInstalledModelSizeBytes(model).catch(() => null)
-  ])
-  let usableGb: number | null = null
-  if (live.freeVramGb !== null) {
-    usableGb = live.freeVramGb + (loaded ?? []).reduce((sum, entry) => sum + entry.vramGb, 0)
-  } else {
-    // Carte AMD ou Intel (pas de nvidia-smi) : sa mémoire totale, moins ce que Windows y garde.
-    const { vramGb } = await detectGpu()
-    usableGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : null
-  }
-  if (usableGb === null || usableGb <= 0 || weightBytes === null) return null
-  const weightGb = weightBytes / 1024 ** 3
-  if (weightGb + LIVE_SAFETY_MARGIN_GB >= usableGb) return 0
-  const arch = parseModelArchInfo(info)
-  return arch ? computeMaxSafeContext(arch, weightGb, usableGb) : unknownArchStart
-}
-
-/**
  * Score MMLU-Pro publié (fiche modèle officielle / éditeur), pour donner une idée de l'"intelligence"
  * générale de chaque candidat dans l'onglet Modèles du menu Options — en complément de la vitesse et de la
  * fiabilité d'appel d'outils, qui vient des scores mesurés par Léo (verified-tool-scores.md, voir

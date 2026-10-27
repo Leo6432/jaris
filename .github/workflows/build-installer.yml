@@ -103,9 +103,6 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/test-phone-wav.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          # Étape 352 : borne de 250 réponses du modèle par essai du test Terminal-Bench (python/tbench_boot.py).
-          python scripts/test-tbench-boot.py
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/check-packaged-voice.py release/win-unpacked/resources/python
 
       # Étape 45 : lance vraiment l'appli packagée (pas l'unpacked, avant l'installeur NSIS) pour attraper un

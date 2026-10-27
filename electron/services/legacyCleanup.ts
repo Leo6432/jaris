@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { lstat, readlink, rm, unlink } from 'fs/promises'
+import { lstat, readFile, readdir, readlink, rm, unlink } from 'fs/promises'
 import { join } from 'path'
 
 /**
@@ -116,4 +116,79 @@ export async function removeLeftoverSearxng(dataRoot: string, docker: DockerRun 
   }
   await rm(dir, { recursive: true, force: true }).catch(() => {})
   return true
+}
+
+/**
+ * Étape 353 (Léo : « enlève le test en bas », après avoir mesuré qu'un test complet prendrait des jours, et des
+ * semaines pour un gros modèle) : le test Terminal-Bench 2.1 est retiré. Ce qu'il avait posé sur le disque est
+ * effacé une fois, au démarrage : l'outil Harbor installé dans `terminal-bench\harbor`, les 89 tâches, les journaux
+ * des essais. Le fichier des résultats (`results.json`, quelques Ko) est gardé : ce sont les données de Léo.
+ *
+ * Docker : un test arrêté en pleine tâche (fermeture de Jaris, mise à jour) laisse les conteneurs et l'image de
+ * cette tâche. Seuls les conteneurs et images dont le NOM figure dans un task.toml du test sont retirés — jamais
+ * une autre image, jamais Docker Desktop lui-même. Docker installé mais arrêté : les tâches (qui donnent ces noms)
+ * restent jusqu'au prochain démarrage où Docker répond. Docker absent : il n'y a plus rien à retirer.
+ */
+export const RETIRED_TERMINAL_BENCH_DIR = 'terminal-bench'
+export const KEPT_TERMINAL_BENCH_RESULTS = 'results.json'
+
+/** Les images Docker des tâches, lues dans les task.toml (`tasks\<jeu>\<tâche>\task.toml`). */
+export async function terminalBenchTaskImages(tasksDir: string): Promise<string[]> {
+  const images = new Set<string>()
+  const visit = async (dir: string, depth: number): Promise<void> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory() && depth < 3) await visit(path, depth + 1)
+      else if (entry.isFile() && entry.name === 'task.toml') {
+        const toml = await readFile(path, 'utf8').catch(() => '')
+        const image = /^\s*docker_image\s*=\s*"([^"]+)"/m.exec(toml)?.[1]
+        if (image) images.add(image)
+      }
+    }
+  }
+  await visit(tasksDir, 0)
+  return [...images]
+}
+
+export async function removeLeftoverTerminalBench(dataRoot: string, docker: DockerRun = runDocker): Promise<boolean> {
+  const dir = join(dataRoot, RETIRED_TERMINAL_BENCH_DIR)
+  let entries: string[]
+  try {
+    entries = await readdir(dir)
+  } catch {
+    return false // jamais lancé, ou déjà nettoyé
+  }
+  const tasksDir = join(dir, 'tasks')
+  const images = await terminalBenchTaskImages(tasksDir)
+  let keepTasks = false
+  if (images.length) {
+    let installed = true
+    try {
+      await docker(['--version'])
+    } catch {
+      installed = false // pas de Docker : plus aucune image à retirer
+    }
+    if (installed) {
+      try {
+        await docker(['info', '--format', '{{.ServerVersion}}'])
+        // Docker écrit « nom:latest » une image donnée sans version : les deux formes désignent la même image.
+        const wanted = new Set(images.flatMap((image) => (/:[^/]*$|@/.test(image) ? [image] : [image, `${image}:latest`])))
+        const containers = lines(await docker(['ps', '-a', '--format', '{{.ID}} {{.Image}}']))
+          .map((line) => line.split(/\s+/))
+          .filter(([, image]) => image !== undefined && wanted.has(image))
+          .map(([id]) => id)
+        if (containers.length) await docker(['rm', '-f', ...containers]).catch(() => '')
+        const present = lines(await docker(['images', '--format', '{{.Repository}}:{{.Tag}}'])).filter((ref) => wanted.has(ref))
+        for (const image of present) await docker(['image', 'rm', '-f', image]).catch(() => '')
+      } catch {
+        keepTasks = true // Docker arrêté : on réessaiera au prochain démarrage
+      }
+    }
+  }
+  for (const name of entries) {
+    if (name === KEPT_TERMINAL_BENCH_RESULTS || (name === 'tasks' && keepTasks)) continue
+    await rm(join(dir, name), { recursive: true, force: true }).catch(() => {})
+  }
+  return !keepTasks
 }

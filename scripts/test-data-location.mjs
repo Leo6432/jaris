@@ -1182,8 +1182,9 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
     'electron/services/relocation.ts': { uses: 3, writes: [] },
     // getJournalPath(root = getDataRoot()) puis join(root, 'journal-demandes.txt').
     'electron/services/requestJournal.ts': { uses: 1, writes: ['journal-demandes.txt'] },
-    // removeLeftoverSearxng(getDataRoot()) : efface l'ancien dossier `searxng-docker` (étape 337), n'y écrit rien.
-    'electron/main.ts': { uses: 1, writes: [] }
+    // removeLeftoverSearxng(getDataRoot()) et removeLeftoverTerminalBench(getDataRoot()) : effacent les anciens
+    // dossiers `searxng-docker` (étape 337) et `terminal-bench` (étape 353), n'y écrivent rien.
+    'electron/main.ts': { uses: 2, writes: [] }
   }
   for (const [file, uses] of indirect) {
     assert.ok(

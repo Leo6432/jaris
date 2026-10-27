@@ -114,8 +114,6 @@ export const OWNED_ENTRIES = [
   CODE_CONVERSATIONS_ASIDE_DIR,
   ...MODEL_TEST_ENTRIES,
   'duel-pilotes',
-  // Étape 349 : le test Terminal-Bench 2.1 (terminalBench.ts) — résultats, tâches, outil Harbor.
-  'terminal-bench',
   PHONE_TUNNEL_DIR,
   // Copies de secours d'un profil, d'une conversation, des rappels ou de la langue abîmés (atomicFile.ts, étape 325).
   UNREADABLE_DATA_DIR
@@ -154,8 +152,6 @@ export const KEPT_AT_DESTINATION_ENTRIES = [
   'github-connection.json',
   'phone-devices.json',
   ...MODEL_TEST_ENTRIES,
-  // Étape 349 : des jours de test Terminal-Bench, que quelques minutes lancées sur C ne doivent pas remplacer.
-  'terminal-bench',
   'conversation-history.json'
 ]
 

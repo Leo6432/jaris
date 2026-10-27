@@ -28,8 +28,6 @@ extraResources:
     filter:
       - '**/*.py'
       - requirements.txt
-      # Versions figées de Harbor pour le test Terminal-Bench 2.1 (étape 349, terminalBench.ts).
-      - terminal-bench-constraints.txt
   # Scores de fiabilité des modèles, lus à l'exécution pour choisir quel modèle installer sur cette
   # machine (voir parseVerifiedToolScores, hardwareScan.ts). Sans ce fichier, plus aucun candidat n'a de
   # score connu : le choix retombe sur "le plus gros modèle qui tient en VRAM", sans considération de sa

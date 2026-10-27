@@ -831,33 +831,6 @@ export async function loadedOllamaModels(): Promise<{ model: string; vramGb: num
 }
 
 /**
- * Étape 351 : où Ollama a VRAIMENT rangé un modèle chargé (`/api/ps`) — sa taille totale (poids, mémoire de la
- * conversation, calculs) et la part posée sur la carte graphique. Les deux sont égales quand tout tient sur la
- * carte ; sinon Ollama a laissé une partie sur le processeur. `contextLength` : la fenêtre réellement allouée, quand
- * cette version d'Ollama la donne. Null si le modèle n'est pas chargé ou si Ollama ne répond pas.
- */
-export async function modelPlacement(
-  model: string
-): Promise<{ sizeBytes: number; vramBytes: number; contextLength: number | null } | null> {
-  try {
-    const response = await fetch(`${config.ollama.host}/api/ps`, { signal: AbortSignal.timeout(5000) })
-    if (!response.ok) return null
-    const data = (await response.json()) as {
-      models?: { name?: string; model?: string; size?: number; size_vram?: number; context_length?: number }[]
-    }
-    const entry = (data.models ?? []).find((m) => withTag(m.model ?? m.name ?? '') === withTag(model))
-    if (!entry || typeof entry.size !== 'number') return null
-    return {
-      sizeBytes: entry.size,
-      vramBytes: Math.max(0, Number(entry.size_vram) || 0),
-      contextLength: typeof entry.context_length === 'number' && entry.context_length > 0 ? entry.context_length : null
-    }
-  } catch {
-    return null
-  }
-}
-
-/**
  * Étape 346 (« chaque phrase dite à voix haute recharge deux modèles ») : parmi les modèles de Jaris, celui qu'Ollama a
  * déjà en mémoire — sinon `preferred`. Sur une carte où le Rapide et le Moyen ne tiennent pas ensemble, utiliser le
  * Rapide pour corriger la phrase puis le Moyen pour répondre les rechargeait tous les deux à chaque phrase.

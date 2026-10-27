@@ -9573,3 +9573,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-tbench-boot.py` (aussi lancé par la CI Windows : borne, tours à plat sans récursion, épisodes normaux
   inchangés, essais automatiques gardés) et les tests « Terminal-Bench » de `scripts/test-options-reorganization-ui.mjs`.
   Chaque garde-fou vérifié en réintroduisant son défaut.
+
+- **Étape 353, le test Terminal-Bench est RETIRÉ (Léo, en plein premier test : « 2 à 7 jours ? », puis « un gros
+  modèle, ça va nous prendre une éternité », puis « enlève le test en bas »).** Cette entrée REMPLACE les étapes
+  349 à 352 pour le code : mêmes conventions que le duel vidéo (étape 258), le CODE part, l'HISTORIQUE reste (Harbor,
+  LiteLLM et ses 10 minutes cachées, la fenêtre vérifiée par un vrai chargement : leçons toujours valables). Pourquoi
+  c'était impossible : 89 tâches × 3 essais = 267 essais, chacun sans limite de temps jusqu'à 250 étapes ; sur une
+  carte de 8 Go, un gros modèle déborde sur la RAM et n'écrit que quelques mots par seconde, donc des semaines. Les
+  scores Terminal-Bench 2.1 d'Artificial Analysis servent toujours au choix du modèle Code, inchangés.
+  Code retiré par `git revert --no-commit` des 4 commits (v0.38.0 à v0.38.3, rien d'autre dedans, vérifié), notes et
+  version gardées : carte, service, `python/tbench_boot.py`, versions figées de Harbor, étape de la CI, canaux IPC,
+  phrases dans les 24 langues, et les deux aides qui ne servaient qu'à lui (`estimateContextOnCard`,
+  `modelPlacement`). `terminal-bench` quitte la liste des données emportées par « Déplacer ».
+  **Ce qu'il a posé sur le disque** (`removeLeftoverTerminalBench`, legacyCleanup.ts, au démarrage) : Harbor, les
+  tâches et les journaux sont effacés, `results.json` est gardé (données de Léo). Un test arrêté en pleine tâche
+  (fermeture de Jaris, mise à jour) laisse les conteneurs et l'image Docker de cette tâche : seuls ceux dont le NOM
+  figure dans un task.toml du test sont retirés (une image donnée sans version compte aussi sous « :latest »), jamais
+  une autre image ni Docker Desktop. Docker arrêté : les tâches, qui donnent ces noms, restent jusqu'au prochain
+  démarrage où Docker répond. **Leçon générale, après le Montage, le duel vidéo et SearXNG : retirer une fonction qui
+  lance Docker, c'est aussi retirer ses conteneurs et images — et garder de quoi les reconnaître (ici les noms dans
+  les task.toml) tant qu'on n'a pas pu les retirer.** Régression : `node --test scripts/test-legacy-cleanup.mjs`
+  (faux Docker : seuls les conteneurs et images des tâches, Docker arrêté puis relancé, Docker absent ; les 3 gardes
+  vérifiées en les retirant) et `scripts/test-data-location.mjs` (deux usages indirects de getDataRoot() dans main.ts).
