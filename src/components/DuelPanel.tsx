@@ -39,10 +39,39 @@ const CATEGORY_ICON: Record<DuelCategory, string> = {
   voice: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3'
 }
 
+/** Étape 372 (Léo : « plus de phrases d'idées ») : 10 idées par catégorie, 4 montrées au hasard à chaque duel. */
+const IDEAS_PER_CATEGORY = 10
+const IDEAS_SHOWN = 4
 const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
-  conversation: ['duel.suggest.conversation.1', 'duel.suggest.conversation.2', 'duel.suggest.conversation.3'],
-  code: ['duel.suggest.code.1', 'duel.suggest.code.2', 'duel.suggest.code.3'],
-  voice: ['duel.suggest.voice.1', 'duel.suggest.voice.2', 'duel.suggest.voice.3']
+  conversation: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.conversation.${i + 1}` as MessageKey),
+  code: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.code.${i + 1}` as MessageKey),
+  voice: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.voice.${i + 1}` as MessageKey)
+}
+
+/** 4 idées au hasard, en évitant celles déjà montrées (« Autres idées » montre vraiment d'autres phrases). */
+function pickIdeas(category: DuelCategory, shown: readonly MessageKey[] = []): MessageKey[] {
+  const shuffle = (keys: MessageKey[]): MessageKey[] => {
+    const out = [...keys]
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[out[i], out[j]] = [out[j], out[i]]
+    }
+    return out
+  }
+  const pool = SUGGESTIONS[category]
+  return [...shuffle(pool.filter((k) => !shown.includes(k))), ...shuffle(pool.filter((k) => shown.includes(k)))].slice(0, IDEAS_SHOWN)
+}
+
+/** Accueil d'un duel : la question, 4 idées et « Autres idées ». Remonté à chaque duel (key), donc tiré à nouveau. */
+function DuelAsk({ category, onPick }: { category: DuelCategory; onPick: (text: string) => void }): JSX.Element {
+  const [ideas, setIdeas] = useState(() => pickIdeas(category))
+  return (
+    <EmptyState title={t('duel.ask.title')} description={t('duel.ask.hint')} suggestions={ideas.map((key) => t(key))} onSuggestion={onPick}>
+      <button type="button" className="empty-state__more" onClick={() => setIdeas(pickIdeas(category, ideas))}>
+        {t('duel.suggest.more')}
+      </button>
+    </EmptyState>
+  )
 }
 
 /** Ce que l'outil appelé demande au PC, en mots de tous les jours (jamais le nom technique de l'outil). */
@@ -1069,12 +1098,7 @@ export default function DuelPanel(): JSX.Element {
 
         {round.prompt === null ? (
           <div className="duel__ask">
-            <EmptyState
-              title={t('duel.ask.title')}
-              description={t('duel.ask.hint')}
-              suggestions={SUGGESTIONS[view.category].map((key) => t(key))}
-              onSuggestion={setPrompt}
-            />
+            <DuelAsk key={`${view.category}-${view.votes}`} category={view.category} onPick={setPrompt} />
           </div>
         ) : (
           <div className="duel__scroll">

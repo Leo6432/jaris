@@ -223,11 +223,21 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
       await page.waitForSelector('.duel__ask .empty-state')
       assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/)
       // Une suggestion remplit le champ, Entrée envoie au modèle A.
+      // Étape 372 : 4 idées tirées au hasard parmi 10 ; « Autres idées » en montre 4 autres, jamais les mêmes.
+      const ideas = () => page.$$eval('.empty-state__suggestion', (els) => els.map((el) => el.textContent ?? ''))
+      const first = await ideas()
+      assert.equal(first.length, 4, `4 idées attendues : ${first}`)
+      assert.ok(first.every((text) => text && !text.startsWith('duel.suggest')), `idées traduites : ${first}`)
+      await page.click('.empty-state__more')
+      const second = await ideas()
+      assert.equal(second.length, 4)
+      assert.ok(second.every((text) => !first.includes(text)), `d'autres idées attendues : ${first} / ${second}`)
+      const picked = second[0]
       await page.click('.empty-state__suggestion >> nth=0')
-      assert.equal(await page.inputValue('.composer__input'), 'Ouvre le Bloc-notes et écris une liste de courses')
+      assert.equal(await page.inputValue('.composer__input'), picked)
       await page.click('.composer__send')
       await page.waitForSelector('.duel-side--running')
-      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', 'Ouvre le Bloc-notes et écris une liste de courses'])
+      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', picked])
       assert.equal(await page.locator('.composer').count(), 0, 'plus de champ : une seule demande par duel')
       assert.match(await page.textContent('.duel-side--running'), /Réfléchit/)
       assert.match(await page.textContent('.duel-side--idle'), /Le modèle B répondra quand le modèle A aura fini/)

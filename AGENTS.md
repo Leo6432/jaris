@@ -10027,3 +10027,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   colonne Duels, plus seulement en infobulle (`.options-menu__duel-count`). Il peut passer sur deux lignes : sans ça,
   le tableau défilait de côté à 1000 px (905 > 898, attrapé par le test de largeur). Régression :
   `scripts/test-options-reorganization-ui.mjs`.
+
+- **Étape 372 (v0.40.14), Léo : « ajoute plus de phrases d'idées, faire un jeu du serpent etc., fais en plus ».** Le
+  Duel passe de 3 à 10 idées de demandes par catégorie (Conversation, Code, Vocal ; 24 langues), et en montre 4 tirées
+  au hasard à chaque duel (`DuelAsk`, remonté par `key` à chaque duel). « Autres idées » en montre 4 autres, celles pas
+  encore vues d'abord. Les idées restent faisables par Jaris (pas d'extinction du PC). Régression :
+  `scripts/test-duel-panel-ui.mjs` (4 idées traduites, « Autres idées » sans aucune répétée, l'idée choisie est bien
+  envoyée) et `test-i18n-completeness.mjs`.

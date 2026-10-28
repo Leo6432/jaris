@@ -4571,6 +4571,24 @@ textarea::placeholder {
   background: var(--jv-hover);
 }
 
+/* Étape 372 : « Autres idées » sous les suggestions du Duel, un simple lien discret. */
+.empty-state__more {
+  margin-top: 10px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.empty-state__more:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
 /* --- Chat ----------------------------------------------------------------- */
 
 .chat-panel {
