@@ -63,7 +63,11 @@ export async function readWebPage(url: string): Promise<string> {
   }
 
   if (!response.ok) {
-    throw new Error(t('page.httpError', { url, status: response.status }))
+    // Étape 355 (Duel) : le site a répondu, mais pas avec la page (404 d'une adresse inventée…). C'est l'adresse choisie
+    // par le modèle qui est en cause, pas Jaris ni internet — le Duel le distingue par ce nom.
+    const error = new Error(t('page.httpError', { url, status: response.status }))
+    error.name = 'PageHttpError'
+    throw error
   }
 
   const contentType = response.headers.get('content-type') ?? ''

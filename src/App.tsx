@@ -6,6 +6,7 @@ import CodePanel from '@/components/CodePanel'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ImagePanel from '@/components/ImagePanel'
 import VideoPanel from '@/components/VideoPanel'
+import DuelPanel from '@/components/DuelPanel'
 import KeepAlive from '@/components/KeepAlive'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb, { setVoiceOutputDevice } from '@/components/JarisOrb'
@@ -31,8 +32,8 @@ const STATUS_LABEL: Record<JarisEmotion, MessageKey> = {
   surprised: 'app.status.surprised'
 }
 
-/** Les modes de la barre latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
-type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
+/** Les modes de la barre latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200 ; Duel, étape 355). */
+type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel'
 
 /**
  * Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : un rail d'icônes à gauche, libellé court sous
@@ -44,7 +45,9 @@ const MODES: Array<{ id: AppMode; label: MessageKey; title: MessageKey; panel?: 
   { id: 'chat', label: 'app.mode.chat', title: 'app.mode.chat', panel: 'app.mode.chat.panel', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
   { id: 'code', label: 'app.mode.code', title: 'app.mode.code', panel: 'app.mode.code.panel', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
   { id: 'image', label: 'app.mode.image', title: 'app.mode.image', panel: 'app.mode.image.panel', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
-  { id: 'video', label: 'app.mode.video', title: 'app.mode.video', panel: 'app.mode.video.panel', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
+  { id: 'video', label: 'app.mode.video', title: 'app.mode.video', panel: 'app.mode.video.panel', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' },
+  // Étape 355 (Léo : « pas dans option, directement à gauche, duel ») : deux épées croisées. Pas de liste à côté.
+  { id: 'duel', label: 'app.mode.duel', title: 'app.mode.duel.title', icon: 'M4 4l12 12M13.5 18.5l5-5M16 16l3.5 3.5M20 4L8 16M5.5 13.5l5 5M8 16l-3.5 3.5' }
 ]
 
 const ICON_BRAIN =
@@ -816,6 +819,12 @@ export default function App(): JSX.Element {
             <KeepAlive active={!screenShown && appMode === 'video'}>
               <ErrorBoundary label={t('app.boundary.video')}>
                 <VideoPanel />
+              </ErrorBoundary>
+            </KeepAlive>
+            {/* Gardé monté comme les autres : une réponse de modèle continue pendant qu'on regarde un autre écran. */}
+            <KeepAlive active={!screenShown && appMode === 'duel'}>
+              <ErrorBoundary label={t('app.boundary.duel')}>
+                <DuelPanel />
               </ErrorBoundary>
             </KeepAlive>
           </main>

@@ -154,6 +154,7 @@ test('étape 346 : le modèle de Jaris déjà chargé est préféré, sinon le m
 test('étape 346 : la correction (voix) et la mémoire passent bien par le modèle déjà chargé', () => {
   const voice = readFileSync(new URL('../electron/services/voicePipeline.ts', import.meta.url), 'utf8')
   const memory = readFileSync(new URL('../electron/services/memoryExtractor.ts', import.meta.url), 'utf8')
-  assert.match(voice, /const model = await preferLoadedModel\(\s*Object\.values\(profile\?\.models \?\? \{\}\),\s*profile\?\.models\?\.flash/)
+  // Étape 355 : les modèles de la VOIX (choisis par les duels « Vocal »), sinon ceux du Chat — toujours le Rapide en repli.
+  assert.match(voice, /const voiceModels = profile\?\.voiceModels \?\? profile\?\.models\s+const model = await preferLoadedModel\(Object\.values\(voiceModels \?\? \{\}\), voiceModels\?\.flash/)
   assert.match(memory, /const model = await preferLoadedModel\(Object\.values\(profile\?\.models \?\? \{\}\), profile\?\.models\?\.medium/)
 })

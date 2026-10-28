@@ -8,7 +8,7 @@ import { getDataRoot } from './dataLocation'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
 import { campaignCompletion, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
-import type { CapacityScanResult } from '../../shared/ipc'
+import type { CapacityScanResult, ModelTiers } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
 import { isVideoQualityInstalled } from './videoGenerator'
 import { detectRamGb } from './systemResources'
@@ -61,7 +61,15 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
     // Mode Code (étape 46) : le meilleur candidat qui tient dans la VRAM+RAM de cette machine
     // (picked.codeModel, même logique que flash/médium/puissant/vision) est installé d'avance ici aussi,
     // plutôt que de surprendre l'utilisateur en pleine génération de code.
-    const modelsToInstall = new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.visionModel, picked.codeModel])
+    const modelsToInstall = new Set([
+      picked.models.flash,
+      picked.models.medium,
+      picked.models.large,
+      picked.visionModel,
+      picked.codeModel,
+      // Étape 355 : les modèles de la voix choisis par les duels « Vocal », quand ce ne sont pas ceux du Chat.
+      ...(picked.voiceModels ? Object.values(picked.voiceModels) : [])
+    ])
     let newFailure = false
     for (const model of modelsToInstall) {
       try {
@@ -152,9 +160,14 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
     const inService = ([before, after]: [string | undefined, string]): string =>
       (skipped.has(after) || failedHuggingFace.has(after)) && before ? before : after
     for (const role of roles) keep.add(inService(role))
+    // Étape 355 : les rôles de la voix, quand les duels « Vocal » choisissent d'autres modèles que ceux du Chat.
+    const voiceRoles: [string | undefined, string][] | null = picked.voiceModels
+      ? (['flash', 'medium', 'large'] as const).map((r) => [profile.voiceModels?.[r] ?? profile.models?.[r], (picked.voiceModels as ModelTiers)[r]])
+      : null
+    if (voiceRoles) for (const role of voiceRoles) keep.add(inService(role))
     // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
     for (const chosen of Object.values(profile.modelChoices ?? {})) if (chosen) keep.add(chosen)
-    const oldModels = roles.map(([before]) => before).filter((m): m is string => Boolean(m))
+    const oldModels = [...roles.map(([before]) => before), ...Object.values(profile.voiceModels ?? {})].filter((m): m is string => Boolean(m))
     // Étape 231 : le modèle de pilotage installé ce coup-ci, sinon celui d'avant s'il existe encore un rôle
     // (téléchargement raté) ; plus de rôle du tout (carte trop petite) = l'ancien est supprimé comme les autres.
     const pilotModel = pilot.installed ? pilot.model ?? undefined : pilotPick.model ? profile.pilotModel : undefined
@@ -176,9 +189,13 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
       }
     }
 
+    const models = { flash: inService(roles[0]), medium: inService(roles[1]), large: inService(roles[2]) }
+    const voiceModels = voiceRoles ? { flash: inService(voiceRoles[0]), medium: inService(voiceRoles[1]), large: inService(voiceRoles[2]) } : undefined
+    const sameAsChat = !voiceModels || (voiceModels.flash === models.flash && voiceModels.medium === models.medium && voiceModels.large === models.large)
     await saveProfile({
       ...profile,
-      models: { flash: inService(roles[0]), medium: inService(roles[1]), large: inService(roles[2]) },
+      models,
+      voiceModels: sameAsChat ? undefined : voiceModels,
       visionModel: inService(roles[3]),
       codeModel: inService(roles[4]),
       pilotModel,

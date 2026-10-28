@@ -1,5 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import { contextBridge, ipcRenderer } from 'electron'
 import { ipcErrorMessage } from '../shared/ipcError'
 import {
@@ -14,6 +15,11 @@ import {
   type RepoPreview,
   type RepoView,
   type AppMode,
+  type DuelHistoryEntry,
+  type DuelPlan,
+  type DuelRankingView,
+  type DuelSessionView,
+  type DuelSummary,
   type AppVersionStatus,
   type LaunchAtStartupStatus,
   type PhoneAccessStatus,
@@ -263,6 +269,25 @@ const api = {
   stopTestWakeWord: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestWakeWord),
   onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => subscribe(IPC_CHANNELS.wakeTestHeard, cb),
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
+  // Étape 355 — le Duel.
+  duelPlan: (category: DuelCategory): Promise<DuelPlan> => invoke(IPC_CHANNELS.duelPlan, category),
+  duelStart: (category: DuelCategory, count: number): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelStart, category, count),
+  duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
+  duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
+  duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),
+  duelVote: (outcome: DuelOutcome): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelVote, outcome),
+  duelEnd: (): Promise<DuelSummary> => invoke(IPC_CHANNELS.duelEnd),
+  duelClose: (): Promise<void> => invoke(IPC_CHANNELS.duelClose),
+  duelState: (): Promise<DuelSessionView | null> => invoke(IPC_CHANNELS.duelState),
+  duelAudio: (side: DuelSide): Promise<Uint8Array | null> => invoke(IPC_CHANNELS.duelAudio, side),
+  duelDeleteModels: (models: string[]): Promise<{ deleted: string[]; failed: { model: string; error: string }[] }> =>
+    invoke(IPC_CHANNELS.duelDeleteModels, models),
+  duelRankings: (): Promise<DuelRankingView[]> => invoke(IPC_CHANNELS.duelRankings),
+  duelHistory: (): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistory),
+  duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),
+  duelRetry: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRetry),
+  duelSkip: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSkip),
+  onDuelChanged: (cb: (view: DuelSessionView | null) => void) => subscribe(IPC_CHANNELS.duelChanged, cb),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
   getWindowChrome: (): Promise<WindowChrome> => invoke(IPC_CHANNELS.getWindowChrome),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => invoke(IPC_CHANNELS.getLaunchAtStartup),

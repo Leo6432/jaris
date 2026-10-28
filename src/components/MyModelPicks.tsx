@@ -56,6 +56,12 @@ function formatTerminalBench(value: number): string {
  * montrait un chiffre sans effet et cachait le bon —, l'intelligence pour les autres rôles.
  */
 function formatMeasure(entry: ModelOverviewEntry, role: string): { text: string; empty: boolean; title: string } {
+  // Étape 355 : un modèle passé en duel est noté par les votes de Léo, plus par Artificial Analysis — c'est ce
+  // chiffre-là qui décide, c'est donc lui qui s'affiche (leçon de l'étape 329).
+  const base = entry.note?.base
+  if (base?.kind === 'duel') {
+    return { text: t('picks.duel', { value: formatDecimal(base.value, 1) }), empty: false, title: t('picks.duel.title', { count: base.duels ?? 0 }) }
+  }
   if (role === 'code') {
     const value = entry.terminalBench ?? null
     return { text: value === null ? '—' : formatTerminalBench(value), empty: value === null, title: t('picks.terminalBench.title') }
@@ -66,7 +72,8 @@ function formatMeasure(entry: ModelOverviewEntry, role: string): { text: string;
 /** « Omniscience -10 » : ne compte que pour Faible, Moyen et Élevé, affiché seulement là (étape 329). */
 function formatOmniscience(entry: ModelOverviewEntry, role: string): string | null {
   const value = entry.omniscience ?? null
-  if (!CONVERSATION_ROLES.has(role) || value === null) return null
+  // Noté par les duels, Omniscience ne compte plus pour ce modèle (étape 355) : rien à afficher.
+  if (!CONVERSATION_ROLES.has(role) || value === null || entry.note?.base?.kind === 'duel') return null
   return t('picks.omniscience', { value: formatDecimal(value) })
 }
 
@@ -82,11 +89,13 @@ export function formatNoteCalc(entry: ModelOverviewEntry): string | null {
   if (note.total === null || note.base === null) return t('picks.calc.unpublished')
   const base = note.base
   const parts = [
-    base.kind === 'terminalBench'
-      ? base.value > (entry.terminalBench ?? 0)
-        ? t('picks.calc.floor', { value: formatTerminalBench(base.value) })
-        : formatTerminalBench(base.value)
-      : t('picks.intelligence', { value: formatIntelligenceIndex(base.value) })
+    base.kind === 'duel'
+      ? t('picks.calc.duel', { value: formatDecimal(base.value, 1), count: base.duels ?? 0 })
+      : base.kind === 'terminalBench'
+        ? base.value > (entry.terminalBench ?? 0)
+          ? t('picks.calc.floor', { value: formatTerminalBench(base.value) })
+          : formatTerminalBench(base.value)
+        : t('picks.intelligence', { value: formatIntelligenceIndex(base.value) })
   ]
   if (note.omniscienceShare !== null && entry.omniscience != null) {
     parts.push(t('picks.calc.omniscience', { percent: formatPercent(note.omniscienceShare), value: formatDecimal(entry.omniscience) }))
@@ -132,6 +141,17 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [showCalc, setShowCalc] = useState(false)
   const check = beforeInstall ? undefined : picks.installCheck
+  // Étape 355 : quand les duels Vocal mènent à d'autres modèles que ceux du Chat, la voix a ses propres lignes,
+  // juste après Faible, Moyen et Élevé.
+  const rows: { id: string; key: (typeof ROLES)[number]['key']; label: string; entry: ModelOverviewEntry; voice: boolean }[] = []
+  for (const { key, label } of ROLES) {
+    rows.push({ id: key, key, label: t(label), entry: picks[key], voice: false })
+    if (key === 'large' && picks.voice) {
+      for (const role of ['flash', 'medium', 'large'] as const) {
+        rows.push({ id: `voice-${role}`, key: role, label: t('role.voice', { role: t(`role.${role}`) }), entry: picks.voice[role], voice: true })
+      }
+    }
+  }
   const remove = async (model: string): Promise<void> => {
     if (!onDeleteUnused) return
     setDeleting(model)
@@ -154,17 +174,16 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
         </div>
         <table className="capacity-scan__tier-table">
           <tbody>
-            {ROLES.map(({ key, label }) => {
-              const entry = picks[key]
-              const upgrade = picks.upgrades[key]
-              const missing = check?.notInstalled.includes(key) ?? false
+            {rows.map(({ id, key, label, entry, voice }) => {
+              const upgrade = voice ? undefined : picks.upgrades[key]
+              const missing = voice ? false : check?.notInstalled.includes(key) ?? false
               const measure = formatMeasure(entry, key)
               const omniscience = formatOmniscience(entry, key)
               const calc = showCalc ? formatNoteCalc(entry) : null
               return (
-                <Fragment key={key}>
+                <Fragment key={id}>
                   <tr>
-                    <td className="capacity-scan__tier-slot">{t(label)}</td>
+                    <td className="capacity-scan__tier-slot">{label}</td>
                     <td className="capacity-scan__tier-model" title={entry.model}>
                       {formatModelName(entry.model)}
                     </td>

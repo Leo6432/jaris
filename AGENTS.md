@@ -9625,3 +9625,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sans défiler à 760×600, petit bouton secondaire), `test-image-panel-ui.mjs` (marge du champ),
   `test-options-reorganization-ui.mjs` (pas de carte dans la carte) ; vérifiés en retirant chaque correctif. **Non
   vérifié en usage réel** : le rendu dans la vraie fenêtre Windows.
+
+- **Étape 355, le Duel (Léo : « un bouton duel à gauche, une session télécharge 4-6 modèles qui tiennent, anonymes, on
+  choisit conversation, code ou vocal, et on vote, à la place d'Artificial Analysis »).** Mode « Duel » dans la barre
+  d'icônes (`DuelPanel.tsx`, `duelSession.ts`, `duelStore.ts`, `shared/duel.ts`). Une session choisit 4 à 6 modèles qui
+  tiennent sur CE PC et réussissent le test d'outils (`getDuelCandidates`, ≥ 75 % aux 78 questions, version d'Ollama
+  respectée), télécharge ceux qui manquent, puis enchaîne des duels : A répond et agit VRAIMENT sur le PC (Léo : « si on
+  lui dit ouvre bloc-notes, il va voir si un modèle a vraiment ouvert ou pas »), B seulement après que Léo a vérifié,
+  puis vote (A, B, égalité, les deux nuls). Les noms ne sont révélés qu'à la fin ; on propose alors de supprimer les
+  modèles téléchargés pour la session et dont Jaris ne se sert pas.
+  - **Anonymat** : l'écran ne reçoit que « A » et « B » ; l'ordre des modèles est mélangé ; une erreur d'Ollama qui nomme
+    un modèle est masquée (`withoutModelNames` : tag complet, `famille:latest`, famille seule, « … » si deux modèles la
+    partagent, les plus longs remplacés d'abord). Les téléchargements n'envoient aucun message (ils portent le nom).
+  - **Les deux côtés sont traités pareil** (`ConverseRestrictions`) : modèle imposé, aucun raccourci de Jaris
+    (`modelOnly`, sinon c'est Jaris qui répond à la place du modèle), aucun réglage de réflexion choisi pour un autre
+    modèle, aucune consigne en plus, et `shutdown_pc` retiré puis refusé. La mémoire automatique est annulée avant
+    chaque tour (elle occupait Ollama).
+  - **Les votes remplacent Artificial Analysis, par catégorie** : classement Bradley–Terry (MAP, ordre des votes sans
+    effet), note de départ = la note habituelle du rôle (`duelPrior` : Terminal-Bench pour Code, Artificial Analysis
+    pour la conversation, votes Conversation puis AA pour la Voix — sinon des votes Conversation séparaient la voix du
+    Chat). `PRIOR_SIGMA_KNOWN = 0,5` mesuré : un modèle 1,5× moins bien noté passe devant après 2 victoires, 2× après 3,
+    3× après 5 — jamais sur un seul vote. Un modèle jamais en duel garde sa note AA. Le test d'outils reste le filtre.
+  - **Sélection d'une session** : modèles en service d'abord, puis tour à tour un challenger qui tient sur la carte
+    (Faible/Moyen) et un qui déborde sur la RAM (Élevé) — sans ces groupes, une session de 5 sur 8 Go ne prenait que
+    des modèles de 27 milliards de paramètres, aucun challenger pour Faible et Moyen.
+  - **Historique** (Léo : « un petit bouton pour voir tous les combats ») : chaque vote garde les deux réponses (8 000
+    caractères), ce qu'elles ont fait sur le PC, leur durée ; l'application d'un duel Code est rangée dans `duel-apps/`
+    (dans OWNED_ENTRIES, nom = identifiant du vote revérifié, jamais un chemin venu de l'écran) et se rouvre dans
+    l'aperçu isolé. Les noms de la session en cours restent cachés dans l'historique.
+  - **Un outil de Jaris en panne n'est pas la faute du modèle** (Léo : « si le modèle a un problème avec l'outil de
+    navigation, c'est pas sa faute ? »). `ConverseRestrictions.onToolFailure` transmet l'erreur d'origine ; recherche,
+    lecture de page, regarder l'écran, pilotage, image et état du PC qui ÉCHOUENT (`isJarisToolFailure`) rendent le duel
+    non votable : « Rejouer ce duel » (même paire, même demande) ou « Passer sans voter ». Restent la faute du modèle :
+    une page qui répond 404 (`PageHttpError`, adresse inventée) et une application qui n'existe pas.
+  **Leçon générale : pour départager deux modèles, il faut que RIEN d'autre ne change entre eux — mêmes outils, mêmes
+  consignes, aucun raccourci, et une panne de l'environnement ne doit jamais devenir une défaite.** Régression :
+  `test-duel.mjs`, `test-duel-session.mjs` (anonymat de tout ce que voit l'écran, ordre, panne d'outil, rejouer/passer,
+  historique), `test-duel-panel-ui.mjs` (vrai navigateur), `test-hardwarescan-duel.mjs` (vrais scores, machine de Léo),
+  `test-duel-store.mjs`, `test-assistant-history.mjs` ; chaque garde vérifiée en la retirant. **Non vérifié en usage
+  réel** : une vraie session sur la machine de Léo (téléchargements, actions sur le PC). Votes et historique restent
+  LOCAUX à ce PC ; un classement commun à tous les utilisateurs demanderait un serveur (à décider avec Léo).

@@ -987,6 +987,21 @@ test('rebranché : rappels et journal valides des deux côtés, un démarrage re
   rmSync(root, { recursive: true, force: true })
 })
 
+test('rebranché : les votes des duels de C rejoignent ceux de D, sans en compter un deux fois (étape 355)', () => {
+  const { root, from, to, storageRoot } = setupMerge()
+  const vote = (id, outcome) => ({ id, category: 'conversation', at: 1, sessionId: 's', modelA: 'a:1b', modelB: 'b:2b', outcome, prompt: '' })
+  writeFileSync(join(to, 'duel-votes.json'), JSON.stringify([vote('vote-d', 'a'), vote('commun', 'tie')], null, 2))
+  const putBack = () => writeFileSync(join(from, 'duel-votes.json'), JSON.stringify([vote('commun', 'tie'), vote('vote-c', 'b')], null, 2))
+  putBack()
+  storageRoot.moveOwnedEntriesSync(from, to)
+  const ids = () => JSON.parse(readFileSync(join(to, 'duel-votes.json'), 'utf8')).map((v) => v.id)
+  assert.deepEqual(ids(), ['vote-d', 'commun', 'vote-c'])
+  putBack()
+  storageRoot.moveOwnedEntriesSync(from, to)
+  assert.deepEqual(ids(), ['vote-d', 'commun', 'vote-c'], 'un démarrage rejoué a compté un vote deux fois')
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('rebranché, fusion du journal puis démarrage abandonné et session continuée sur C : le début du journal de C n’est pas recopié', () => {
   const { root, from, to, storageRoot } = setupMerge()
   const d = '\n===== 01/10 — voix =====\nDemande : quelle heure\n'
@@ -1015,6 +1030,8 @@ test('chaque donnée emportée par « Déplacer » a sa règle au rebranchement 
   assert.equal(rules['language.json'], 'destination-wins')
   assert.equal(rules.conversations, 'merge-conversations')
   assert.equal(rules['reminders.json'], 'merge-reminders')
+  // Étape 355 : les votes des duels, réunis par identifiant comme les rappels (un vote n'est jamais compté deux fois).
+  assert.equal(rules['duel-votes.json'], 'merge-reminders')
   assert.equal(rules.memory, 'merge-memory')
   assert.equal(rules['journal-demandes.txt'], 'append-journal')
   for (const entry of storageRoot.KEPT_AT_DESTINATION_ENTRIES) assert.equal(rules[entry], 'keep-destination')

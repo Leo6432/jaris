@@ -4,12 +4,13 @@ import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
+import type { DuelAction, DuelCategory, DuelOutcome, DuelToolTrouble, DuelVoteSide } from './duel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
 /** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
  * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
-export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
+export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel'
 
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
@@ -120,6 +121,11 @@ export interface Profile {
   capacityScanDone?: boolean
   /** Modèles rapide/médium/puissant choisis par le scan de capacité, vide = OLLAMA_MODEL de .env pour les trois. */
   models?: ModelTiers
+  /**
+   * Étape 355 : modèles de la VOIX choisis d'après les votes des duels « Vocal », quand ils diffèrent de ceux du Chat
+   * (`models`). Absent = la voix utilise `models`, comme avant.
+   */
+  voiceModels?: ModelTiers
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
   /**
@@ -345,6 +351,8 @@ export interface CapacityScanResult {
   gpuName: string | null
   vramGb: number | null
   models: ModelTiers
+  /** Étape 355 : modèles de la voix quand les votes « Vocal » en choisissent d'autres que `models` ; absent sinon. */
+  voiceModels?: ModelTiers
   visionModel: string
   /**
    * Meilleur modèle de code (CODE_CANDIDATES, hardwareScan.ts) qui tient réellement dans la VRAM+RAM de
@@ -412,6 +420,8 @@ export interface MyModelPicks {
   large: ModelOverviewEntry
   vision: ModelOverviewEntry
   code: ModelOverviewEntry
+  /** Étape 355 : les modèles de la voix, seulement quand les votes « Vocal » en ont choisi d'autres que ceux du Chat. */
+  voice?: { flash: ModelOverviewEntry; medium: ModelOverviewEntry; large: ModelOverviewEntry }
   /**
    * Rôles pour lesquels un meilleur modèle existe mais n'est pas celui utilisé : soit pas encore installé
    * (il suffit de « Retester la configuration »), soit bloqué au téléchargement (`blockedReason`).
@@ -502,8 +512,11 @@ export interface ModelOverviewEntry {
  * modèles (noteOf, hardwareScan.ts). Une part est ce qu'une mesure GARDE de la note : 1 = rien perdu.
  */
 export interface ModelNoteBreakdown {
-  /** Mesure de départ : Intelligence Index (Faible, Moyen, Élevé, Vision) ou Terminal-Bench 2.1 (Code). */
-  base: { kind: 'intelligence' | 'terminalBench'; value: number } | null
+  /**
+   * Mesure de départ : Intelligence Index (Faible, Moyen, Élevé, Vision) ou Terminal-Bench 2.1 (Code) — ou, étape 355,
+   * la force donnée par les votes des duels (`duel`, avec leur nombre), qui remplace Artificial Analysis pour ce modèle.
+   */
+  base: { kind: 'intelligence' | 'terminalBench' | 'duel'; value: number; duels?: number } | null
   /** Part gardée selon AA-Omniscience : (100 + Omniscience) / 200. Faible, Moyen et Élevé seulement. */
   omniscienceShare: number | null
   /** Part gardée selon le test d'appel d'outils : taux de réussite puissance `chain` (actions d'affilée). */
@@ -961,6 +974,107 @@ export interface RepoCommitResult {
 }
 
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
+/**
+ * Étape 355 — le Duel (Léo : « un bouton duel, une session télécharge 4-6 modèles qui tiennent, anonymes, on choisit
+ * conversation, code ou vocal, et on vote, à la place d'Artificial Analysis »). L'écran ne reçoit JAMAIS le nom d'un
+ * modèle pendant une session : seulement « A » et « B ». Les noms ne sortent qu'à la fin (DuelSummary).
+ */
+export interface DuelPlan {
+  category: DuelCategory
+  /** Modèles qui tiennent sur ce PC et réussissent le test d'appel d'outils. */
+  available: number
+  /** Chaque taille de session possible : combien de modèles à télécharger, leur poids, et si le disque a la place. */
+  sizes: { count: number; toDownload: number; downloadGb: number; fitsDisk: boolean }[]
+  freeDiskGb: number | null
+}
+
+/** Ce que fait un modèle pendant son tour, en données (l'écran l'écrit dans sa langue). */
+export type DuelActivity =
+  | { kind: 'loading' | 'reading' | 'thinking' | 'writing' }
+  | { kind: 'action'; action: DuelAction }
+
+export interface DuelSideView {
+  status: 'idle' | 'running' | 'done' | 'error' | 'stopped'
+  /** La réponse, partielle pendant qu'elle s'écrit. */
+  text: string
+  activity: DuelActivity | null
+  startedAt: number | null
+  durationMs: number | null
+  /** Ce que le modèle a fait sur le PC (application ouverte, texte tapé…), à vérifier par Léo. */
+  actions: DuelAction[]
+  /** Mode Code : l'application écrite, dans l'aperçu isolé. */
+  previewUrl: string | null
+  /** Duel Vocal : la réponse lue existe (getDuelAudio). */
+  audio: boolean
+  audioError: string | null
+  error: string | null
+  /** Un outil de Jaris a échoué (recherche, vision…) : pas la faute du modèle, le duel ne peut pas être voté. */
+  trouble: DuelToolTrouble | null
+}
+
+export interface DuelRoundView {
+  /** Numéro du duel dans la session, à partir de 1. */
+  number: number
+  prompt: string | null
+  a: DuelSideView
+  b: DuelSideView
+}
+
+export interface DuelSessionView {
+  id: string
+  category: DuelCategory
+  phase: 'preparing' | 'ready' | 'ended'
+  modelCount: number
+  /** Téléchargement des modèles de la session, sans leur nom. */
+  preparing: { done: number; total: number; percent: number | null } | null
+  /** Modèles retirés de la session faute d'avoir pu être téléchargés. */
+  dropped: number
+  votes: number
+  round: DuelRoundView | null
+  error: string | null
+}
+
+export interface DuelStandingView {
+  model: string
+  /** Force après les votes, sur l'échelle de la note de départ. */
+  strength: number
+  wins: number
+  losses: number
+  ties: number
+  duels: number
+}
+
+export interface DuelSummary {
+  category: DuelCategory
+  /** Les duels de la session, noms révélés. */
+  rounds: { prompt: string; modelA: string; modelB: string; outcome: DuelOutcome }[]
+  /** Le classement de la catégorie, TOUS les votes compris (pas seulement cette session). */
+  ranking: DuelStandingView[]
+  /** Ce que les votes changent au choix de Jaris : `applied` = déjà en service (le modèle est installé). */
+  changes: { role: 'flash' | 'medium' | 'large' | 'code'; from: string | null; to: string; applied: boolean }[]
+  /** Modèles téléchargés pour la session ; `inUse` = Jaris s'en sert, jamais proposé à la suppression. */
+  downloaded: { model: string; sizeGb: number; inUse: boolean }[]
+}
+
+export interface DuelRankingView {
+  category: DuelCategory
+  votes: number
+  ranking: DuelStandingView[]
+}
+
+/** Un duel voté, pour l'historique. Les noms de la session EN COURS restent cachés (`null`) jusqu'à sa fin. */
+export interface DuelHistoryEntry {
+  id: string
+  category: DuelCategory
+  at: number
+  prompt: string
+  outcome: DuelOutcome
+  modelA: string | null
+  modelB: string | null
+  /** Les deux réponses, ou `null` pour un duel voté avec une version qui ne les gardait pas. */
+  sides: { a: DuelVoteSide; b: DuelVoteSide } | null
+}
+
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
   transcript: 'jaris:transcript',
@@ -1197,6 +1311,26 @@ export const IPC_CHANNELS = {
    * d'activation, transcription) quand il est en train d'écrire dans un autre mode.
    */
   setActiveMode: 'jaris:set-active-mode',
+  /** Étape 355 — Duel : plan d'une session, lancement, demande, tour de B, arrêt, vote, fin, réponse lue, suppression. */
+  duelPlan: 'jaris:duel-plan',
+  duelStart: 'jaris:duel-start',
+  duelAsk: 'jaris:duel-ask',
+  duelRunB: 'jaris:duel-run-b',
+  duelStop: 'jaris:duel-stop',
+  duelVote: 'jaris:duel-vote',
+  duelEnd: 'jaris:duel-end',
+  duelState: 'jaris:duel-state',
+  duelAudio: 'jaris:duel-audio',
+  duelDeleteModels: 'jaris:duel-delete-models',
+  duelRankings: 'jaris:duel-rankings',
+  duelClose: 'jaris:duel-close',
+  /** Historique des duels, application d'un duel Code de l'historique, rejouer ou passer un duel gâché par Jaris. */
+  duelHistory: 'jaris:duel-history',
+  duelHistoryApp: 'jaris:duel-history-app',
+  duelRetry: 'jaris:duel-retry',
+  duelSkip: 'jaris:duel-skip',
+  /** main -> écran : nouvel état de la session (ou `null` quand il n'y en a plus). */
+  duelChanged: 'jaris:duel-changed',
   /**
    * main -> widget : quelle forme le widget flottant doit prendre, dérivée du dernier mode actif de la
    * fenêtre de réglages (voir `setActiveMode` juste au-dessus). Léo : "quand on se met dans chat, et on part

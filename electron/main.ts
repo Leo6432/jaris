@@ -63,8 +63,31 @@ import {
   getMyModelPicks,
   isUnusedInstalledModel,
   setOllamaVersionSource,
+  setDuelStrengthSource,
   detectGpu
 } from './services/hardwareScan'
+import { getDuelVotes, loadDuelVotes } from './services/duelStore'
+import {
+  abortDuel,
+  askDuel,
+  closeDuel,
+  deleteDuelModels,
+  duelAudio,
+  duelHistory,
+  duelHistoryApp,
+  duelRankings,
+  endDuel,
+  getDuelView,
+  planDuel,
+  retryDuel,
+  runDuelB,
+  setDuelEnvironment,
+  skipDuel,
+  startDuel,
+  stopDuelRun,
+  voteDuel
+} from './services/duelSession'
+import { isDuelCategory, isDuelOutcome, rankDuels, type DuelCategory } from '../shared/duel'
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -198,6 +221,19 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 // Étape 312 : les choix de modèles écartent ce que la version d'Ollama installée ne sait pas charger (K2 Horizon).
 setOllamaVersionSource(() => getLocalOllamaVersion())
+// Étape 355 : la force que les votes des duels donnent aux modèles remplace leur note d'Artificial Analysis. Recalculée
+// seulement quand les votes changent (le choix des modèles la demande à chaque calcul).
+let duelStrengthCache: { votes: unknown; byCategory: Map<string, ReturnType<typeof rankDuels>> } | null = null
+setDuelStrengthSource((category: DuelCategory, prior) => {
+  const votes = getDuelVotes()
+  if (duelStrengthCache?.votes !== votes) duelStrengthCache = { votes, byCategory: new Map() }
+  let standings = duelStrengthCache.byCategory.get(category)
+  if (!standings) {
+    standings = rankDuels(votes.filter((v) => v.category === category), prior)
+    duelStrengthCache.byCategory.set(category, standings)
+  }
+  return standings
+})
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
 // Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).
@@ -808,7 +844,8 @@ function hasWidgetToShow(): boolean {
 
 /** Code, Image et Vidéo (étapes 200 et 203) n'ont pas de widget : ce sont des écrans de travail. */
 function modeWithoutWidget(): boolean {
-  return activeMode === 'code' || activeMode === 'image' || activeMode === 'video'
+  // Étape 355 : le Duel non plus — on y compare des modèles, Jaris n'y répond pas lui-même.
+  return activeMode === 'code' || activeMode === 'image' || activeMode === 'video' || activeMode === 'duel'
 }
 
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
@@ -1275,7 +1312,8 @@ const STARTUP_ENGINE_CONFIRM_MS = 10_000
  */
 async function warmUpConversationModel(): Promise<boolean> {
   const profile = await getProfile()
-  const model = profile?.modelChoices?.voice || profile?.models?.flash
+  // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
+  const model = profile?.modelChoices?.voice || (profile?.voiceModels ?? profile?.models)?.flash
   if (!model) return false
   return preloadModel(model, profile?.contextLength ?? config.ollama.numCtx)
 }
@@ -1650,6 +1688,57 @@ app.whenReady().then(async () => {
     activeMode = mode
     applyListeningForActiveMode()
   })
+
+  // Étape 355 — le Duel. Ce qui vient de l'écran est revérifié ici (catégorie, issue du vote, taille de session).
+  setDuelEnvironment({
+    onReminderFire: fireReminder,
+    emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view)
+  })
+  void loadDuelVotes()
+  const duelCategory = (value: unknown): DuelCategory => {
+    if (!isDuelCategory(value)) throw new Error(t('duel.error.badRequest'))
+    return value
+  }
+  ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, count: unknown) => {
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 2 || count > 6) throw new Error(t('duel.error.badRequest'))
+    return startDuel(duelCategory(category), count)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelAsk, (_event, prompt: unknown) => {
+    if (typeof prompt !== 'string' || prompt.length > 20_000) throw new Error(t('duel.error.badRequest'))
+    // Comme toute nouvelle demande (étape 324) : la mémoire automatique ne doit pas occuper Ollama pendant le tour d'un
+    // modèle — elle le ralentirait, et seulement lui, au détriment de la comparaison.
+    cancelMemoryExtraction()
+    return askDuel(prompt)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelRunB, () => {
+    cancelMemoryExtraction()
+    return runDuelB()
+  })
+  ipcMain.handle(IPC_CHANNELS.duelStop, () => stopDuelRun())
+  ipcMain.handle(IPC_CHANNELS.duelVote, (_event, outcome: unknown) => {
+    if (!isDuelOutcome(outcome)) throw new Error(t('duel.error.badRequest'))
+    return voteDuel(outcome)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelEnd, () => endDuel())
+  ipcMain.handle(IPC_CHANNELS.duelClose, () => closeDuel())
+  ipcMain.handle(IPC_CHANNELS.duelState, () => getDuelView())
+  ipcMain.handle(IPC_CHANNELS.duelAudio, (_event, side: unknown) => (side === 'a' || side === 'b' ? duelAudio(side) : null))
+  ipcMain.handle(IPC_CHANNELS.duelDeleteModels, (_event, models: unknown) => {
+    if (!Array.isArray(models) || !models.every((m) => typeof m === 'string')) throw new Error(t('duel.error.badRequest'))
+    return deleteDuelModels(models)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelRankings, () => duelRankings())
+  ipcMain.handle(IPC_CHANNELS.duelHistory, () => duelHistory())
+  ipcMain.handle(IPC_CHANNELS.duelHistoryApp, (_event, voteId: unknown, side: unknown) => {
+    if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
+    return duelHistoryApp(voteId, side)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelRetry, () => {
+    cancelMemoryExtraction()
+    return retryDuel()
+  })
+  ipcMain.handle(IPC_CHANNELS.duelSkip, () => skipDuel())
   ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => displayedWidgetMode)
   ipcMain.on(IPC_CHANNELS.setChatWidgetHeight, (_event, height: number | null) => {
     chatWidgetHeight = height
@@ -1691,7 +1780,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async () => {
     const profile = await getProfile()
     // Étape 346 : les trois modèles de conversation — la référence est le plus gros qui tourne sur la carte.
-    const models = profile?.models ? [profile.models.flash, profile.models.medium, profile.models.large] : [config.ollama.model]
+    const models = profile?.models
+      ? [profile.models.flash, profile.models.medium, profile.models.large, ...Object.values(profile.voiceModels ?? {})]
+      : [config.ollama.model]
     const currentContext = profile?.contextLength ?? config.ollama.numCtx
     return computeContextLengthOptions(models, currentContext)
   })
@@ -1757,6 +1848,8 @@ app.whenReady().then(async () => {
     // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic). Attendus
     // jusqu'à leur sortie : sous Windows, un fichier encore ouvert ne s'efface pas de l'ancien dossier.
     await stopModelTest()
+    // Étape 355 : un duel en cours s'arrête aussi (les modèles écrivent sur le PC, et un téléchargement remplit le disque).
+    abortDuel()
     await phoneAccess?.disable().catch(() => {})
 
     // Pendant la copie (souvent des dizaines de minutes), le mode Code reste utilisable. Tout ce qu'il écrirait dans
@@ -2392,6 +2485,8 @@ async function readProfileAtStartup(): Promise<Profile | null | undefined> {
 app.on('before-quit', () => {
   // Étape 230 : un test de modèles (des heures) ne doit jamais continuer après Jaris : il reprendra au relancement.
   stopModelTest()
+  // Étape 355 : un duel en cours s'arrête avec Jaris ; aucun vote n'est donné à la place de Léo.
+  abortDuel()
   stopOllamaIfStartedByJaris()
   // Étape 153 : app.quit() (mise à jour, croix, « Quitter ») ne déclenche PAS 'window-all-closed' — seul
   // endroit où les deux programmes Python (écoute, voix) étaient arrêtés. Ils survivaient donc à Jaris, micro

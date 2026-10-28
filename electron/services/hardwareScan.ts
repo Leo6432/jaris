@@ -17,6 +17,7 @@ import type {
   Profile
 } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
+import type { DuelCategory } from '../../shared/duel'
 
 const execAsync = promisify(exec)
 
@@ -1502,6 +1503,60 @@ export function codeStrength(model: string): number | null {
   const score = ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model]
   return score === undefined ? null : Math.max(score, TERMINAL_BENCH_ONE_TASK)
 }
+
+/**
+ * Étape 355 (Duel, Léo : « on vote, à la place d'Artificial Analysis ») : la force que les votes donnent à chaque
+ * modèle d'une catégorie, branchée par main.ts (votes lus par duelStore.ts, classement de shared/duel.ts) — par une
+ * fonction plutôt qu'un import, pour que ce module reste sans dépendance de plus (il est chargé par de nombreux tests).
+ * `prior` est la note de départ (Artificial Analysis) que les votes corrigent.
+ */
+export type DuelStrengthSource = (
+  category: DuelCategory,
+  prior: (model: string) => number | null
+) => ReadonlyMap<string, { strength: number; duels: number }>
+let duelStrengthSource: DuelStrengthSource | null = null
+export function setDuelStrengthSource(source: DuelStrengthSource | null): void {
+  duelStrengthSource = source
+}
+
+/**
+ * La note de départ d'une catégorie, que ses votes corrigent : Artificial Analysis (Terminal-Bench pour le Code). Pour
+ * la VOIX, les votes « Conversation » d'abord : ce sont les mêmes modèles qui répondent, et Léo les a déjà jugés — sans
+ * ça, des duels Conversation seuls auraient séparé la voix du Chat (la voix restant sur Artificial Analysis).
+ * Une seule définition, utilisée partout (choix, calcul affiché, classement) : la source des votes garde en mémoire un
+ * classement par catégorie, qui doit toujours partir de la même note.
+ */
+export function duelPrior(category: DuelCategory): (model: string) => number | null {
+  if (category === 'code') return codeStrength
+  if (category === 'conversation') return conversationStrength
+  return duelStrength('conversation')
+}
+
+/** Les modèles votés dans cette catégorie (vide sans vote, ou sans source branchée). */
+function duelStandings(category: DuelCategory): ReadonlyMap<string, { strength: number; duels: number }> {
+  return duelStrengthSource?.(category, duelPrior(category)) ?? new Map()
+}
+
+/**
+ * La force d'un modèle pour une catégorie : celle de ses votes s'il a déjà été en duel, sinon sa note de départ
+ * (duelPrior) — un modèle jamais passé en duel la garde en attendant le sien.
+ */
+export function duelStrength(category: DuelCategory): (model: string) => number | null {
+  const prior = duelPrior(category)
+  const voted = duelStandings(category)
+  if (!voted.size) return prior
+  return (model) => voted.get(model)?.strength ?? prior(model)
+}
+
+/**
+ * Les votes qui donnent sa force à un modèle pour cette catégorie, ou `undefined` : ceux de la catégorie, et pour la
+ * voix, à défaut, ceux de la Conversation (même règle que duelPrior).
+ */
+function votedStanding(category: DuelCategory, model: string): { strength: number; duels: number } | undefined {
+  const own = duelStandings(category).get(model)
+  if (own || category !== 'voice') return own
+  return duelStandings('conversation').get(model)
+}
 const VISION_CHAIN_LENGTH = 1
 
 /**
@@ -1606,14 +1661,25 @@ export type NoteRole = 'conversation' | 'vision' | 'code'
  * d'un modèle pour un rôle, facteur par facteur. `total` vient de modelNote, la formule du choix : jamais recalculé
  * à part. `toolCalling` est le score qui compte pour ce rôle (test de code, sinon de conversation, pour Code).
  */
-export function noteBreakdown(model: string, role: NoteRole, toolCalling: string | null, demandScore: string | null): ModelNoteBreakdown {
+export function noteBreakdown(
+  model: string,
+  role: NoteRole,
+  toolCalling: string | null,
+  demandScore: string | null,
+  // Étape 355 : les rôles de conversation de la VOIX ont leur propre classement de duels (« Vocal »).
+  conversationCategory: 'conversation' | 'voice' = 'conversation'
+): ModelNoteBreakdown {
   const chain = role === 'vision' ? VISION_CHAIN_LENGTH : TOOL_CHAIN_LENGTH
-  const strength = role === 'conversation' ? conversationStrength(model) : role === 'code' ? codeStrength(model) : intelligenceStrength(model)
+  const published = role === 'conversation' ? conversationStrength : role === 'code' ? codeStrength : intelligenceStrength
+  // Vision n'a pas de duel : ses votes ne remplacent rien.
+  const voted = role === 'vision' ? undefined : votedStanding(role === 'code' ? 'code' : conversationCategory, model)
+  const strength = voted ? voted.strength : published(model)
   const intelligence = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
   const omniscience = ARTIFICIAL_ANALYSIS_OMNISCIENCE[model]
   const code = codeStrength(model)
-  const base: ModelNoteBreakdown['base'] =
-    role === 'code'
+  const base: ModelNoteBreakdown['base'] = voted
+    ? { kind: 'duel', value: voted.strength, duels: voted.duels }
+    : role === 'code'
       ? code === null
         ? null
         : { kind: 'terminalBench', value: code }
@@ -1624,7 +1690,8 @@ export function noteBreakdown(model: string, role: NoteRole, toolCalling: string
   const demands = role === 'conversation' ? demandsFactor(demandScore, toolCalling) : null
   return {
     base,
-    omniscienceShare: role === 'conversation' && omniscience !== undefined ? (100 + omniscience) / 200 : null,
+    // Les votes remplacent TOUTE la note de départ, « n'invente pas » compris : pas de seconde part à afficher.
+    omniscienceShare: role === 'conversation' && !voted && omniscience !== undefined ? (100 + omniscience) / 200 : null,
     toolsShare: rate >= 0 ? Math.pow(rate, chain) : null,
     chain,
     demandsShare: demands?.value ?? null,
@@ -1703,6 +1770,12 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
   addUsage(activeModels.large, t('role.large'))
   addUsage(activeModels.vision, t('role.vision'))
   addUsage(activeModels.code, t('app.mode.code'))
+  // Étape 355 : la voix a ses propres modèles quand les votes « Vocal » en ont choisi d'autres.
+  if (profile?.voiceModels) {
+    addUsage(profile.voiceModels.flash, t('role.voice', { role: t('role.flash') }))
+    addUsage(profile.voiceModels.medium, t('role.voice', { role: t('role.medium') }))
+    addUsage(profile.voiceModels.large, t('role.voice', { role: t('role.large') }))
+  }
 
   // Fiabilité affichée : le test de conversation quand le modèle l'a passé (le cas général), sinon celui de
   // code, sinon celui de vision.
@@ -1787,7 +1860,9 @@ function computeModelPicks(
   vramGb: number | null,
   ramGb: number,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
-  exclude: ReadonlySet<string> = new Set()
+  exclude: ReadonlySet<string> = new Set(),
+  // Étape 355 : la voix a son propre classement de duels (« Vocal ») pour Faible, Moyen et Élevé.
+  conversationCategory: 'conversation' | 'voice' = 'conversation'
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -2029,13 +2104,17 @@ function computeModelPicks(
   // choisi — Léo : « le meilleur pour le code, ça peut être des modèles puissants »).
   const code = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'code') ?? resultFor(c, 'conversation')
 
+  // Étape 355 : la force d'un modèle déjà passé en duel vient de ses votes, plus d'Artificial Analysis.
+  const conversationNote = duelStrength(conversationCategory)
+  const codeNote = duelStrength('code')
+
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
-    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
+    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote),
     // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
-    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
+    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationStrength),
+    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
@@ -2045,20 +2124,97 @@ function computeModelPicks(
       VISION_CHAIN_LENGTH
     ),
     // Code : le plus fort de tous en code, même lent (choix de Léo, étape 160) — Terminal-Bench 2.1 depuis l'étape 328.
-    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeStrength)
+    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote)
   }
 }
 
 export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set()): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), parseVerifiedToolScores(), exclude)
+  const ramGb = detectRamGb()
+  const scores = parseVerifiedToolScores()
+  const picks = computeModelPicks(vramGb, ramGb, scores, exclude)
+  const models = { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model }
+  // Étape 355 : la voix suit les votes « Vocal » — seulement quand ils mènent à d'autres modèles que ceux du Chat.
+  const voice = computeModelPicks(vramGb, ramGb, scores, exclude, 'voice')
+  const voiceModels = { flash: voice.flash.model, medium: voice.medium.model, large: voice.large.model }
+  const voiceDiffers = voiceModels.flash !== models.flash || voiceModels.medium !== models.medium || voiceModels.large !== models.large
   return {
     gpuName: name,
     vramGb,
-    models: { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model },
+    models,
+    ...(voiceDiffers ? { voiceModels } : {}),
     visionModel: picks.vision.model,
     codeModel: picks.code.model
   }
+}
+
+/** Étape 355 : sous ce taux au test d'appel d'outils, un modèle n'est jamais proposé en duel (Jaris ne le choisirait pas). */
+export const DUEL_MIN_TOOL_RATE = 0.75
+
+/** Un modèle qui peut entrer dans une session de duel sur CETTE machine (voir selectDuelModels, shared/duel.ts). */
+export interface DuelCandidate {
+  model: string
+  vramGb: number
+  /** Note actuelle pour la catégorie (votes compris) ; `null` sans note de départ ni vote. */
+  note: number | null
+  /** Duels déjà joués par ce modèle dans la catégorie. */
+  duels: number
+  /** Jaris s'en sert déjà pour cette catégorie : toujours dans la session, pour qu'un autre puisse le détrôner. */
+  inUse: boolean
+  /** `card` (tient sur la carte), `ram` (déborde sur la RAM) ou `code` : voir selectDuelModels (shared/duel.ts). */
+  group: string
+}
+
+/**
+ * Étape 355, Léo : « une session télécharge 4-6 modèles, c'est modèle qui tient ». Les modèles qui TIENNENT sur ce PC
+ * comme Jaris les ferait tourner (sur la carte, ou en débordant sur la RAM pour ceux qui le peuvent, comme Élevé et
+ * Code), qu'Ollama sait charger, et qui réussissent le test d'appel d'outils : les votes ne mesurent pas les actions,
+ * ce test reste le filtre de base.
+ */
+export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null): Promise<DuelCandidate[]> {
+  const { vramGb } = await detectGpu()
+  const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
+  const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
+  const scores = parseVerifiedToolScores()
+  const tooNew = modelsNeedingNewerOllama()
+  const blocked = new Set(Object.keys(profile?.blockedModels ?? {}))
+  const standings = duelStandings(category)
+  const strengthOf = duelStrength(category)
+  const toolScore = (model: string): string | null =>
+    (category === 'code' ? scores.code.get(model) ?? scores.conversation.get(model) : scores.conversation.get(model)) ?? null
+  const used =
+    category === 'code'
+      ? [profile?.codeModel]
+      : Object.values((category === 'voice' ? profile?.voiceModels ?? profile?.models : profile?.models) ?? {})
+  const inUse = new Set(used.filter((m): m is string => Boolean(m)))
+  return ALL_MODELS.filter((c) => {
+    if (tooNew.has(c.model) || blocked.has(c.model)) return false
+    if (parseToolScore(toolScore(c.model)) < DUEL_MIN_TOOL_RATE) return false
+    return c.vramGb <= (LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
+  }).map((c) => {
+    const tools = toolScore(c.model)
+    const demands = category === 'code' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value
+    return {
+      model: c.model,
+      vramGb: c.vramGb,
+      note: modelNote(strengthOf(c.model), tools, TOOL_CHAIN_LENGTH, demands),
+      duels: standings.get(c.model)?.duels ?? 0,
+      inUse: inUse.has(c.model),
+      // Conversation et Vocal : Faible et Moyen doivent tenir sur la carte, Élevé peut déborder sur la RAM — une session
+      // propose des challengers des deux côtés (selectDuelModels). Le Code n'a qu'un rôle, même lent.
+      group: category === 'code' ? 'code' : c.vramGb <= budgetGb ? 'card' : 'ram'
+    }
+  })
+}
+
+/**
+ * Étape 355 : ce que les votes des duels choisissent pour CETTE machine — les rôles de conversation (ceux du Chat, ou
+ * ceux de la voix pour les duels « Vocal ») et le modèle Code. Même calcul que « Retester la configuration ».
+ */
+export async function pickModelsForDuelCategory(category: DuelCategory): Promise<{ flash: string; medium: string; large: string; code: string }> {
+  const { vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseVerifiedToolScores(), new Set(), category === 'voice' ? 'voice' : 'conversation')
+  return { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model, code: picks.code.model }
 }
 
 /**
@@ -2129,9 +2285,24 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
   }
+  // Étape 355 : les modèles de la voix, quand les votes « Vocal » en ont choisi d'autres que ceux du Chat.
+  const voiceModels = profile?.voiceModels
+  const voice = voiceModels
+    ? Object.fromEntries(
+        (['flash', 'medium', 'large'] as const).map((role) => {
+          const model = voiceModels[role]
+          const entry = entryForModel(model, ['conversation'], verifiedToolScores)
+          return [role, { ...entry, note: noteBreakdown(model, 'conversation', entry.toolCalling, currentDemandScore(verifiedToolScores, model), 'voice') }]
+        })
+      ) as MyModelPicks['voice']
+    : undefined
   // Étape 231 : le modèle de pilotage d'écran est utilisé lui aussi — jamais proposé à la suppression.
-  const alsoUsed = [...Object.values(profile?.modelChoices ?? {}), ...(profile?.pilotModel ? [profile.pilotModel] : [])]
-  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse, alsoUsed) }
+  const alsoUsed = [
+    ...Object.values(profile?.modelChoices ?? {}),
+    ...(profile?.pilotModel ? [profile.pilotModel] : []),
+    ...(voiceModels ? Object.values(voiceModels) : [])
+  ]
+  return { gpuName: name, vramGb, ramGb, ...entries, ...(voice ? { voice } : {}), upgrades, installCheck: await checkInstalled(inUse, alsoUsed) }
 }
 
 /** Ollama liste un modèle sans tag sous `:latest` : les deux écritures désignent le même modèle. */

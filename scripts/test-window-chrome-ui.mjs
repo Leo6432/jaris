@@ -256,14 +256,15 @@ test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas d
     const rail0 = await page.locator('.app-rail').boundingBox()
     assert.ok(rail0.width <= 64, `barre d’icônes trop large : ${rail0.width}px`)
     // Étape 273 (Léo : « enlève le bouton widget en bas à gauche ») : Cerveau et Options seulement, en bas.
-    assert.equal(await page.locator('.app-rail .rail__item').count(), 7, 'les 5 modes et les 2 outils sont dans la barre d’icônes')
+    // Étape 355 : le Duel rejoint les modes (Léo : « pas dans Options, directement à gauche »).
+    assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 6 modes et les 2 outils sont dans la barre d’icônes')
     assert.equal(await page.locator('.app-rail .rail__item[title*="widget" i]').count(), 0, 'bouton Widget revenu')
     assert.equal(await page.locator('.app-rail .rail__item').first().getAttribute('title'), 'Agent vocal', 'Vocal n’est pas en premier')
     assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
     await page.click('.rail__item:has-text("Chat")')
     const list0 = await page.locator('.app-sidebar').boundingBox()
     assert.ok(list0, 'pas de liste dans le Chat')
-    for (const [label, listed] of [['Vocal', false], ['Chat', true], ['Code', true], ['Image', true], ['Options', true], ['Cerveau', false], ['Vocal', false], ['Chat', true]]) {
+    for (const [label, listed] of [['Vocal', false], ['Chat', true], ['Code', true], ['Image', true], ['Duel', false], ['Options', true], ['Cerveau', false], ['Vocal', false], ['Chat', true]]) {
       await page.click(`.rail__item:has-text("${label}")`)
       await page.waitForTimeout(250)
       assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0, `barre d’icônes changée sur l’écran ${label}`)

@@ -36,10 +36,12 @@ const ROLES_BY_MODE: Record<ModelChoiceMode, ReadonlyArray<{ key: string; label:
 
 function modelForRole(profile: Profile | null, value: string, mode: ModelChoiceMode): string | null {
   if (!ROLES_BY_MODE[mode].some(({ key }) => value === `role:${key}`)) return null
+  // Étape 355 : en Vocal, les rôles désignent les modèles de la voix quand les duels « Vocal » en ont choisi d'autres.
+  const models = (mode === 'voice' ? profile?.voiceModels : undefined) ?? profile?.models
   switch (value) {
-    case 'role:flash': return profile?.models?.flash ?? null
-    case 'role:medium': return profile?.models?.medium ?? null
-    case 'role:large': return profile?.models?.large ?? null
+    case 'role:flash': return models?.flash ?? null
+    case 'role:medium': return models?.medium ?? null
+    case 'role:large': return models?.large ?? null
     default: return null
   }
 }

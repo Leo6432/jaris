@@ -105,6 +105,9 @@ export const OWNED_ENTRIES = [
   'generated-images',
   'generated-videos',
   'reminders.json',
+  // Étape 355 : les votes des duels, et les applications des duels Code gardées pour l'historique (duelStore.ts).
+  'duel-votes.json',
+  'duel-apps',
   'journal-demandes.txt',
   'github-connection.json',
   'github-token.bin',
@@ -166,7 +169,7 @@ export const KEPT_AT_DESTINATION_ENTRIES = [
  * - `destination-wins` : profil et langue — un seul réglage possible : celui de D gagne, celui de C ne sert que si D
  *   n'en a pas, ou si celui de D est abîmé (rangé de côté avant) ;
  * - `merge-conversations` : union des conversations, index réuni (la conversation active reste celle de D) ;
- * - `merge-reminders` : union des rappels par identifiant ;
+ * - `merge-reminders` : union par identifiant — les rappels, et les votes des duels (étape 355) ;
  * - `merge-memory` : union des notes ; une note du même titre des deux côtés est réunie, entrée par entrée ;
  * - `append-journal` : le journal de C est ajouté à la suite de celui de D (rien n'est perdu, rien n'est doublé) ;
  * - `merge-code-conversations` : conversations du mode Code réunies (combineCodeConversations) ;
@@ -194,6 +197,8 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   'generated-images': 'keep-both',
   'generated-videos': 'keep-both',
   'reminders.json': 'merge-reminders',
+  'duel-votes.json': 'merge-reminders',
+  'duel-apps': 'keep-both',
   'journal-demandes.txt': 'append-journal',
   [CODE_CONVERSATIONS_FILE]: 'merge-code-conversations',
   [CODE_CONVERSATIONS_ASIDE_DIR]: 'keep-both',
@@ -447,13 +452,13 @@ function keepDestinationSettingSync(source: string, dest: string, dataDir: strin
   mergeJsonFileSync(source, dest, dataDir, label, parseJsonObject, () => null)
 }
 
-/** Rappels : union par identifiant, ceux de D d'abord (deux fois de suite : rien n'est doublé). */
-function mergeRemindersFileSync(source: string, dest: string, dataDir: string): void {
+/** Rappels et votes des duels : union par identifiant, ceux de D d'abord (deux fois de suite : rien n'est doublé). */
+function mergeRemindersFileSync(source: string, dest: string, dataDir: string, label: string): void {
   const keyOf = (reminder: unknown): string => {
     const id = (reminder as { id?: unknown } | null)?.id
     return typeof id === 'string' && id ? `id:${id}` : `json:${JSON.stringify(reminder)}`
   }
-  mergeJsonFileSync(source, dest, dataDir, 'reminders', parseJsonArray, (older, newer) => {
+  mergeJsonFileSync(source, dest, dataDir, label, parseJsonArray, (older, newer) => {
     const seen = new Set(older.map(keyOf))
     const extra = newer.filter((reminder) => {
       const key = keyOf(reminder)
@@ -674,7 +679,7 @@ function mergeIntoExistingSync(entry: string, source: string, dest: string, data
     case 'merge-conversations':
       return mergeConversationsDirSync(source, dest, dataDir)
     case 'merge-reminders':
-      return mergeRemindersFileSync(source, dest, dataDir)
+      return mergeRemindersFileSync(source, dest, dataDir, entry.replace(/\.json$/, ''))
     case 'merge-memory':
       return mergeMemoryDirSync(source, dest)
     case 'append-journal':

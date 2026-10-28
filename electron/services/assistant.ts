@@ -301,8 +301,26 @@ export type { ConverseChannel } from './systemPrompt'
  */
 export interface ConverseRestrictions {
   allowedTools: ReadonlySet<string>
+  /** Ajoutée aux consignes ; vide = consignes inchangées (Duel : le modèle doit répondre comme d'habitude). */
   note: string
   refusal: string
+  /**
+   * Étape 355 (Duel) : CE modèle répond, sans repli ni réglage de réflexion choisi pour un autre modèle — les deux
+   * modèles d'un duel sont traités exactement pareil.
+   */
+  model?: string
+  /**
+   * Étape 355 (Duel) : aucun raccourci de Jaris (salutation, « ouvre X », Bloc-notes, recherche dans le navigateur,
+   * clic direct) — sinon c'est Jaris qui répond à la place du modèle, et les deux réponses d'un duel sont identiques.
+   */
+  modelOnly?: boolean
+  /** Nom du canal dans le journal des demandes (« téléphone » par défaut). */
+  journalLabel?: string
+  /**
+   * Étape 355 (Duel) : prévenu quand un outil échoue (exception), avec l'erreur d'origine. Le Duel s'en sert pour ne
+   * pas compter contre un modèle une panne de Jaris ou d'internet (recherche bloquée, vision injoignable…).
+   */
+  onToolFailure?: (tool: string, error: unknown) => void
 }
 
 /**
@@ -541,7 +559,7 @@ export async function converse(...args: ConverseArgs): Promise<string> {
   const [prompt, , , onLog, , signal, , channel = 'voice', , , , restrictions] = args
   // Étape 245 : chaque étape annoncée à l'écran (onLog, outils compris) est aussi écrite dans le journal des
   // demandes, avec le temps écoulé — pour savoir où passent les minutes sur la machine de Léo.
-  const journal = startJournalEntry(restrictions ? 'téléphone' : channel, prompt)
+  const journal = startJournalEntry(restrictions ? restrictions.journalLabel ?? 'téléphone' : channel, prompt)
   forwarded[3] = (message: string) => {
     journal.line(message)
     onLog?.(message)
@@ -604,7 +622,9 @@ async function conversation(
   // Étape 273, chat uniquement : chaque recherche web et page lue, pour le bloc dépliable au-dessus de la réponse.
   onWebActivity?: WebActivityHandler
 ): Promise<string> {
-  const socialReply = directSocialReply(prompt)
+  // Étape 355 (Duel) : sans raccourci, le modèle fait tout lui-même — c'est lui qu'on juge.
+  const shortcuts = !restrictions?.modelOnly
+  const socialReply = shortcuts ? directSocialReply(prompt) : undefined
   if (socialReply) {
     onLog?.('Réponse sociale courte, sans appel au modèle.')
     return socialReply
@@ -622,7 +642,7 @@ async function conversation(
   }
   const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
 
-  const note = notepadRequest(prompt)
+  const note = shortcuts ? notepadRequest(prompt) : null
   // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).
   if (note && restrictions) return restrictions.refusal
   if (note) {
@@ -640,7 +660,7 @@ async function conversation(
 
   // Étape 248 : « ouvre Firefox et cherche X » — la page de résultats ouverte directement, sans réflexion du modèle ni
   // pilotage d'écran (journal de Léo : 2 min de réflexion, puis des clics dans la barre des tâches).
-  const browserSearch = directBrowserSearch(prompt)
+  const browserSearch = shortcuts ? directBrowserSearch(prompt) : null
   if (browserSearch) {
     if (!isToolAllowed('open_app')) return restrictions?.refusal ?? t('reply.unavailable')
     if (signal?.aborted) return t('reply.searchCancelled')
@@ -652,7 +672,7 @@ async function conversation(
     return openBrowserSearch(browserSearch)
   }
 
-  const screenTask = directScreenTask(prompt)
+  const screenTask = shortcuts ? directScreenTask(prompt) : null
   if (screenTask && isToolAllowed('computer_use_task')) {
     if (signal?.aborted) return t('reply.taskCancelled')
     onLog?.(`Action à l'écran demandée : pilotage direct, sans réflexion préalable du modèle.`)
@@ -664,7 +684,7 @@ async function conversation(
     }
   }
 
-  const requestedApp = directAppRequest(prompt)
+  const requestedApp = shortcuts ? directAppRequest(prompt) : null
   if (requestedApp) {
     if (signal?.aborted) return t('reply.openCancelled')
     onLog?.(t('log.opening', { app: requestedApp }))
@@ -679,7 +699,9 @@ async function conversation(
     }
   }
 
-  const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
+  // Étape 355 : la voix a ses propres modèles quand les votes des duels « Vocal » en ont choisi d'autres.
+  const models = (channel === 'voice' ? profile?.voiceModels : undefined) ??
+    profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   // Curseur de longueur de contexte (Options -> Modèles) : `undefined` tant que Léo n'y a jamais touché,
   // Jaris garde alors exactement le comportement d'avant ce réglage (OLLAMA_NUM_CTX, config.ts).
   const numCtx = profile?.contextLength ?? config.ollama.numCtx
@@ -705,7 +727,7 @@ async function conversation(
   // Étape 141 : un modèle choisi à la main pour ce mode (sélecteur du Chat / de l'écran vocal) remplace le
   // choix par palier. Le palier garde son rôle pour l'effort de réflexion, mais pas de repli VRAM automatique :
   // c'est un choix explicite de Léo, pas à défaire en silence. `null` = Auto, strictement comme avant.
-  const chosenModel = resolveChosenModel(profile, channel, installedModels)
+  const chosenModel = restrictions?.model ?? resolveChosenModel(profile, channel, installedModels)
   if (!chosenModel && profile?.modelChoices?.[channel]) {
     onLog?.(t('log.chosenModelGone', { model: profile.modelChoices[channel] ?? '' }))
   }
@@ -744,7 +766,8 @@ async function conversation(
 
   // Étape 192 : la réflexion choisie à côté du modèle remplace celle du palier, seulement pour le modèle pour
   // lequel Léo l'a choisie et s'il l'accepte vraiment (shared/effort.ts). Pas de choix = comportement d'avant.
-  const thinkChoice = profile?.thinkChoices?.[channel]
+  // Étape 355 : jamais en duel — le réglage choisi pour un modèle avantagerait un seul des deux.
+  const thinkChoice = restrictions?.model ? undefined : profile?.thinkChoices?.[channel]
   const withEffort = async (r: { model: string; think: ThinkLevel | ThinkValue }): Promise<{ model: string; think: ThinkLevel | ThinkValue }> => {
     if (!thinkChoice) return r
     const think = chosenThink(thinkChoice, r.model, await getModelThinking(r.model))
@@ -778,7 +801,7 @@ async function conversation(
   const messages: OllamaMessage[] = [
     {
       role: 'system',
-      content: restrictions ? `${systemPrompt}\n\n${restrictions.note}` : systemPrompt
+      content: restrictions?.note ? `${systemPrompt}\n\n${restrictions.note}` : systemPrompt
     },
     // Les erreurs d'outils sont conservées dans l'historique visible, mais pas réinjectées au modèle :
     // qwen3.5:4b a reproduit un ancien 403 SANS appeler search_web, alors que le service répondait 200.
@@ -954,6 +977,7 @@ async function conversation(
         result = await raceAbort(executeTool(call.function.name, call.function.arguments), signal)
       } catch (err) {
         if (signal?.aborted) throw err
+        restrictions?.onToolFailure?.(call.function.name, err)
         result = toolFailure(err)
         toolFailed = true
       }

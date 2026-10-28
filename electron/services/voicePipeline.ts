@@ -459,10 +459,9 @@ export class VoicePipeline extends EventEmitter {
         if (profile?.voiceCorrectionEnabled !== false) {
           // Étape 346 : le modèle déjà chargé par Ollama s'il fait partie de ceux de Jaris — sinon, sur une carte où le
           // Rapide et le Moyen ne tiennent pas ensemble, chaque phrase rechargeait les deux (correction, puis réponse).
-          const model = await preferLoadedModel(
-            Object.values(profile?.models ?? {}),
-            profile?.models?.flash ?? config.ollama.model
-          )
+          // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
+          const voiceModels = profile?.voiceModels ?? profile?.models
+          const model = await preferLoadedModel(Object.values(voiceModels ?? {}), voiceModels?.flash ?? config.ollama.model)
           // Étape 294 : la fenêtre de la conversation, pour que le modèle rapide reste chargé entre la correction et
           // la réponse — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
           const numCtx = profile?.contextLength ?? config.ollama.numCtx

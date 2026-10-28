@@ -6,6 +6,7 @@ import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 import { withI18n } from './i18n-test-module.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 
 // Exécute la vraie boucle de conversation sans Electron ni services externes.
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/assistant.ts', import.meta.url), 'utf8'), {
@@ -24,11 +25,13 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../electron/services
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, { exports: noteExports, require: name => name === 'util' ? {promisify: () => {}} : {} })
 
-function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu'), { profile = null, installed = ['test'], overloadWarning = null } = {}) {
+const effortModule = loadTsModule('shared/effort.ts')
+
+function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu'), { profile = null, installed = ['test'], overloadWarning = null, tools = [], thinking = null } = {}) {
   const config = { ollama: { model: 'test', visionModel: 'vision', numCtx: 8192 } }
   const modules = {
     '../config': { config },
-    './ollama': { chatWithOllama: chat, listInstalledModels: async () => installed },
+    './ollama': { chatWithOllama: chat, listInstalledModels: async () => installed, getModelThinking: async () => thinking },
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => profile },
@@ -36,17 +39,90 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
     './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.'), launchedAppName: result => (result.endsWith(' a été lancé.') ? result.slice(0, -' a été lancé.'.length) : undefined) },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
+    // Le vrai module (étape 355) : un réglage de réflexion choisi pour un modèle doit pouvoir s'appliquer — ou pas.
+    '../../shared/effort': effortModule,
     // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.
     // Recherche ouverte dans le navigateur (étape 248) : jamais déclenchée par les phrases de ces tests.
     './browserSearch': { directBrowserSearch: () => undefined, openBrowserSearch: async () => assert.fail('navigateur ouvert à tort') },
     './requestJournal': { startJournalEntry: () => ({ line() {}, timed() {}, end: async () => {} }), describeModelCall: () => '' },
     './resourceMonitor': { checkOverloadWarning: async () => overloadWarning },
-    './tools': { TOOLS: [], createToolExecutor: () => execute }
+    './tools': { TOOLS: tools, createToolExecutor: () => execute }
   }
   const exports = {}
   vm.runInNewContext(source, { exports, Error, require: withI18n(name => modules[name]) })
   return exports.converse
 }
+
+/** Étape 355 — les restrictions d'un tour de Duel, comme duelSession.ts les construit. */
+const DUEL_TOOLS = ['open_app', 'type_text', 'shutdown_pc'].map((name) => ({ type: 'function', function: { name, description: '', parameters: {} } }))
+const duelRestrictions = (model) => ({
+  allowedTools: new Set(['open_app', 'type_text']),
+  note: '',
+  refusal: 'Éteindre le PC est bloqué pendant un duel.',
+  model,
+  modelOnly: true,
+  journalLabel: 'duel'
+})
+
+test('Duel : « Salut » et « Ouvre le Bloc-notes » vont au modèle du duel, sans raccourci de Jaris, sans consigne en plus', async () => {
+  for (const prompt of ['Salut', 'Ouvre le Bloc-notes', 'ouvre le bloc-notes et écris bonjour']) {
+    const seen = []
+    const converse = setup(
+      async (messages, tools, model, think) => {
+        seen.push({ system: messages[0].content, tools: tools.map((t) => t.function.name), model, think })
+        return { role: 'assistant', content: 'Réponse du modèle' }
+      },
+      async () => assert.fail('aucun outil attendu'),
+      async () => assert.fail('le raccourci Bloc-notes de Jaris ne doit pas répondre à la place du modèle'),
+      {
+        tools: DUEL_TOOLS,
+        installed: ['test', 'duel-a:7b'],
+        // Un réglage de réflexion choisi pour un autre modèle : jamais appliqué en duel.
+        profile: { thinkChoices: { chat: { model: 'duel-a:7b', think: 'xhigh' } }, modelChoices: { chat: 'role:large' } },
+        thinking: { canThink: true, values: ['low', 'medium', 'xhigh'], default: 'xhigh' }
+      }
+    )
+    assert.equal(await converse(prompt, null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, duelRestrictions('duel-a:7b')), 'Réponse du modèle', prompt)
+    assert.equal(seen.length, 1, `${prompt} : le modèle doit répondre lui-même`)
+    assert.equal(seen[0].model, 'duel-a:7b', 'le modèle du duel, jamais celui choisi pour le Chat')
+    assert.notEqual(seen[0].think, 'xhigh')
+    assert.deepEqual(seen[0].tools, ['open_app', 'type_text'], 'jamais l’extinction du PC')
+    assert.doesNotMatch(seen[0].system, /\n\n$/, 'aucune consigne ajoutée aux consignes de Jaris')
+  }
+})
+
+test('Duel : un modèle qui appelle quand même l’extinction du PC reçoit le refus, et rien n’est exécuté', async () => {
+  const converse = setup(
+    async () => ({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'shutdown_pc', arguments: {} } }] }),
+    async () => assert.fail('l’outil ne doit jamais s’exécuter'),
+    undefined,
+    { tools: DUEL_TOOLS, installed: ['test', 'duel-b:4b'] }
+  )
+  assert.equal(
+    await converse('Éteins le PC', null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, duelRestrictions('duel-b:4b')),
+    'Éteindre le PC est bloqué pendant un duel.'
+  )
+})
+
+test('Duel : un outil qui échoue est signalé avec son erreur d’origine (le Duel sait que ce n’est pas la faute du modèle)', async () => {
+  const failures = []
+  const blocked = new Error('Recherche impossible : vérification anti-robot.')
+  const tools = ['search_web'].map((name) => ({ type: 'function', function: { name, description: '', parameters: {} } }))
+  const converse = setup(
+    async () => ({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'search_web', arguments: { query: 'météo' } } }] }),
+    async () => {
+      throw blocked
+    },
+    undefined,
+    { tools, installed: ['test', 'duel-a:7b'] }
+  )
+  const restrictions = { ...duelRestrictions('duel-a:7b'), allowedTools: new Set(['search_web']), onToolFailure: (tool, error) => failures.push([tool, error]) }
+  const reply = await converse('Quel temps fera-t-il ?', null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, restrictions)
+  assert.match(reply, /anti-robot/)
+  assert.equal(failures.length, 1)
+  assert.equal(failures[0][0], 'search_web')
+  assert.equal(failures[0][1], blocked, 'l’erreur elle-même, pour lire son nom (PageHttpError…)')
+})
 
 for (const channel of ['chat', 'voice']) {
   test(`${channel} : un ancien échec ne remplace pas une nouvelle recherche`, async () => {

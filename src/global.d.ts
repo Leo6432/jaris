@@ -1,10 +1,16 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import type { LanguageSetting } from '../shared/i18n/languages'
 import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
 import type {
   LanguageState,
   AppMode,
+  DuelHistoryEntry,
+  DuelPlan,
+  DuelRankingView,
+  DuelSessionView,
+  DuelSummary,
   GithubDeviceCode,
   GithubRepoSummary,
   GithubStatus,
@@ -214,6 +220,23 @@ declare global {
       stopTestWakeWord: () => void
       onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => () => void
       setActiveMode: (mode: AppMode) => void
+      duelPlan: (category: DuelCategory) => Promise<DuelPlan>
+      duelStart: (category: DuelCategory, count: number) => Promise<DuelSessionView>
+      duelAsk: (prompt: string) => Promise<DuelSessionView>
+      duelRunB: () => Promise<DuelSessionView>
+      duelStop: () => Promise<void>
+      duelVote: (outcome: DuelOutcome) => Promise<DuelSessionView>
+      duelEnd: () => Promise<DuelSummary>
+      duelClose: () => Promise<void>
+      duelState: () => Promise<DuelSessionView | null>
+      duelAudio: (side: DuelSide) => Promise<Uint8Array | null>
+      duelDeleteModels: (models: string[]) => Promise<{ deleted: string[]; failed: { model: string; error: string }[] }>
+      duelRankings: () => Promise<DuelRankingView[]>
+      duelHistory: () => Promise<DuelHistoryEntry[]>
+      duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
+      duelRetry: () => Promise<DuelSessionView>
+      duelSkip: () => Promise<DuelSessionView>
+      onDuelChanged: (cb: (view: DuelSessionView | null) => void) => () => void
       setOptionsOpen: (open: boolean) => void
       getWindowChrome: () => Promise<WindowChrome>
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>

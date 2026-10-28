@@ -118,6 +118,12 @@ export interface GenerateAppOptions {
   onLive?: (live: CodeLiveWrite | null) => void
   /** Arrêt demandé par l'utilisateur (bouton "Arrêter"). */
   signal?: AbortSignal
+  /**
+   * Étape 355 (Duel) : CE modèle écrit l'application, avec la réflexion habituelle du mode Code (jamais un réglage
+   * choisi pour un autre modèle), et rien n'est enregistré dans « Tes applications » (`persist: false`).
+   */
+  model?: string
+  persist?: boolean
 }
 
 /** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
@@ -818,7 +824,7 @@ export async function generateApp(
   imageBase64?: string,
   options: GenerateAppOptions = {}
 ): Promise<GeneratedApp> {
-  const { onProgress, onActivity, onLive, signal } = options
+  const { onProgress, onActivity, onLive, signal, persist = true } = options
 
   /**
    * Étape 288 (Léo : « mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : chaque ligne du
@@ -874,10 +880,10 @@ export async function generateApp(
     imageDescription = await describeImageForCode(imageBase64, profile?.visionModel ?? config.ollama.visionModel, onStatus)
   }
 
-  const model = await resolveCodeModel(onStatus, profile)
+  const model = options.model ?? (await resolveCodeModel(onStatus, profile))
   const modelMaxContext = await readModelMaxContext(model)
 
-  const think = await resolveCodeThink(profile, model)
+  const think = options.model ? 'high' : await resolveCodeThink(profile, model)
   const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string => withImageDescription(base, imageDescription)
@@ -1025,9 +1031,12 @@ export async function generateApp(
     }
   }
 
-  const dir = join(getGeneratedAppsDir(), `${Date.now()}-${slugify(description)}`)
-  await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'index.html'), final, 'utf-8')
+  // Étape 355 (Duel) : l'application d'un duel n'est que montrée, jamais rangée parmi celles de Léo.
+  const dir = persist ? join(getGeneratedAppsDir(), `${Date.now()}-${slugify(description)}`) : ''
+  if (persist) {
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'index.html'), final, 'utf-8')
+  }
   const written = diffLines(currentHtml ?? null, final)
   onActivity?.({ kind: currentHtml ? 'edit' : 'create', path: 'index.html', added: written.added, removed: written.removed })
 

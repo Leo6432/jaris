@@ -643,7 +643,9 @@ export async function repairModelsViewIfNeeded(): Promise<boolean> {
 export async function pullModelIfMissing(
   model: string,
   onStatus?: (message: string) => void,
-  onProgress?: PullProgressListener
+  onProgress?: PullProgressListener,
+  // Étape 355 (Duel) : arrêter la session arrête aussi le téléchargement en cours.
+  signal?: AbortSignal
 ): Promise<void> {
   let installed = await listInstalledModels()
   // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un
@@ -652,8 +654,9 @@ export async function pullModelIfMissing(
   if (installed.includes(model) || installed.includes(withTag(model))) return
 
   try {
-    await pullWithOllama(model, onStatus, onProgress)
+    await pullWithOllama(model, onStatus, onProgress, signal)
   } catch (err) {
+    if (signal?.aborted) throw err
     // Étape 139 : Ollama 0.34.2 bloque tout `pull hf.co/...` (redirection entre hôtes, voir
     // huggingFaceImport.ts). Plutôt que d'abandonner ce modèle, Jaris le récupère lui-même depuis Hugging
     // Face, à l'identique. Jamais pour un manque de place (VRAM/disque) : réessayer n'y changerait rien.
@@ -681,7 +684,12 @@ export async function pullModelIfMissing(
   }
 }
 
-async function pullWithOllama(model: string, onStatus?: (message: string) => void, onProgress?: PullProgressListener): Promise<void> {
+async function pullWithOllama(
+  model: string,
+  onStatus?: (message: string) => void,
+  onProgress?: PullProgressListener,
+  signal?: AbortSignal
+): Promise<void> {
 
   const budgetGb = await getDownloadBudgetGb()
   const freeDiskGb = await detectFreeDiskGb()
@@ -692,7 +700,7 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: model, stream: true }),
-    signal: controller.signal
+    signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal
   }).catch((err: unknown) => {
     throw explainOllamaUnreachable(err)
   })
