@@ -2154,6 +2154,13 @@ export const DUEL_MIN_TOOL_RATE = 0.75
 /** Sans carte graphique : taille jusqu'à laquelle un modèle compte parmi les « petits » d'une session de duel. */
 const CARDLESS_SMALL_MODEL_GB = 6
 
+/**
+ * Étape 357 : sans carte graphique, RAM laissée à Windows et à Jaris pendant un duel. La marge habituelle
+ * (RESOURCE_SAFETY_MARGIN_GB, 16 Go) protège des GROS modèles qui débordent sur la RAM ; appliquée à un PC sans carte
+ * de 16 Go, elle ne laissait plus rien — « Modèles qui conviennent : 0 ».
+ */
+const CARDLESS_RAM_RESERVE_GB = 6
+
 /** Un modèle qui peut entrer dans une session de duel sur CETTE machine (voir selectDuelModels, shared/duel.ts). */
 export interface DuelCandidate {
   model: string
@@ -2187,6 +2194,7 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
   // Sans carte graphique détectée, TOUS les modèles tournent sur le processeur, dans la RAM : la règle « Faible et
   // Moyen sur la carte » ne laissait alors que deux ou trois gros modèles, et le Duel disait « pas assez de modèles ».
   const cardless = vramGb === null
+  const cardlessBudgetGb = Math.max(ramOffloadBudgetGb, detectRamGb() - CARDLESS_RAM_RESERVE_GB)
   const scores = parseVerifiedToolScores()
   const tooNew = modelsNeedingNewerOllama()
   const blocked = new Set(Object.keys(profile?.blockedModels ?? {}))
@@ -2202,7 +2210,8 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
   return ALL_MODELS.filter((c) => {
     if (tooNew.has(c.model) || blocked.has(c.model)) return false
     if (parseToolScore(toolScore(c.model)) < DUEL_MIN_TOOL_RATE) return false
-    return c.vramGb <= (cardless || LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
+    if (cardless) return c.vramGb <= cardlessBudgetGb
+    return c.vramGb <= (LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
   }).map((c) => {
     const tools = toolScore(c.model)
     const demands = category === 'code' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value

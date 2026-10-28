@@ -168,3 +168,12 @@ test('sans carte graphique détectée : les modèles tournent dans la RAM, le Du
   assert.ok(chosen.some((model) => sizes.get(model) <= 6), `que des gros modèles : ${chosen}`)
   assert.deepEqual(JSON.parse(JSON.stringify(await m.duelMachine())), { vramGb: null, ramGb: 32 })
 })
+
+test('sans carte graphique et 16 Go de RAM (étape 357) : assez de petits modèles pour un duel', async () => {
+  const m = setup([], { vramMib: 'x', ramGb: 16 })
+  const candidates = await m.getDuelCandidates('conversation', null)
+  assert.ok(candidates.length >= 4, `seulement ${candidates.length} modèles : ${candidates.map((c) => c.model)}`)
+  assert.ok(candidates.every((c) => c.vramGb <= 16 - 6), 'jamais un modèle qui prendrait la RAM de Windows')
+  assert.ok(duel.selectDuelModels(candidates, 4).length >= 2)
+  for (const category of ['code', 'voice']) assert.ok((await m.getDuelCandidates(category, null)).length >= 2, category)
+})

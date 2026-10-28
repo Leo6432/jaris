@@ -9715,3 +9715,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   cause se lit à l'écran. **Leçon : un message « pas assez de X » doit dire ce qui a été compté et sur quoi.**
   Régression : `test-hardwarescan-duel.mjs` (sans carte : au moins 10 modèles, dont des petits ; vérifié en retirant
   le correctif) et `test-duel-panel-ui.mjs` (détection affichée).
+
+- **Étape 331, Léo : « revoit tous les modèles et doit mettre s'il est Q4 ou pas ».** Seul MiniCPM5-2B affichait
+  « (Q4_K_M) », parce que son nom hf.co/ le contient ; tous les autres étaient aussi compressés, sans le dire. Relevé
+  pour de vrai dans le registre de chaque modèle (`file_type` de la configuration d'Ollama ; pour un import hf.co/, le
+  tag, et pour G9v3-3B sans tag, le fichier par défaut reconnu à sa taille exacte) : Q4_K_M partout, sauf
+  qwen3.5:0.8b et qwen3.5:2b (Q8_0) et gpt-oss:20b (MXFP4, son format de publication). Table `MODEL_QUANTIZATION`
+  (hardwareScan.ts), affichée en petit badge SOUS le nom dans « Tous les modèles » — à côté du nom, elle disparaissait
+  derrière les points de suspension d'un nom long. Infobulle (24 langues) : les scores d'Artificial Analysis sont
+  mesurés sur la version d'origine, pas sur celle-ci. Affichage seulement, aucun choix ne change. Rappel donné à
+  Léo : pour un petit modèle Q4, ces scores sont un peu optimistes, mais le classement reste comparable (tous sont
+  mesurés en original et tournent compressés) ; les tests d'appel d'outils, eux, sont faits sur la vraie version Q4.
+  **Coût** : Léo a interrompu un essai de vérification par plusieurs agents (« arrête de me dépenser des tokens en
+  mettant plein d'agents ») — pour une question ou une recherche simple, répondre directement, sans agents.
+  Régression : `scripts/test-model-note.mjs` (chaque modèle candidat a sa version — un modèle ajouté sans elle fait
+  échouer le test) et `scripts/test-options-reorganization-ui.mjs` (badge entier sous les 26 noms, y compris le plus
+  long, habillé par le CSS ; vérifié en remettant le badge à côté du nom : le test échoue).
+
+- **Étape 342, Léo : « je fais retester la configuration sur mon autre PC et ça met fetch failed ».** Cause exacte
+  sur ce PC inconnue (pas d'accès). Ce qui est sûr : « fetch failed » est le message brut du fetch de Node quand RIEN
+  n'écoute à l'adresse d'Ollama, et « Retester » téléchargeait sans vérifier qu'Ollama tournait. Corrigé : (1) le
+  bouton relance Ollama s'il est arrêté (`ensureOllamaRunning`, main.ts) avant de télécharger ; (2)
+  `ensureOllamaRunning` ne lance plus qu'un démarrage à la fois (deux appels rapprochés lançaient deux serveurs sur
+  le même port, le second échouait) ; (3) « fetch failed » devient une phrase qui dit qu'Ollama ne tourne pas, avec
+  son adresse (`explainOllamaUnreachable`, ollama.ts) ; (4) un Ollama de Jaris qui s'arrête juste après son lancement
+  donne son code de sortie dans le journal, seule trace possible de la vraie cause (antivirus, fichier manquant).
+  Régression : `scripts/test-ollama-pull-repair.mjs` (vérifié en retirant la traduction : le test échoue).
+
+- **Étape 357, Léo : « ah tout les pc ne peuvent pas ? » (« aucune carte graphique détectée, 16 Go de RAM. Modèles qui
+  conviennent : 0 »).** Le correctif de l'étape 356 gardait, sans carte, la marge de RAM des gros modèles
+  (`RESOURCE_SAFETY_MARGIN_GB`, 16 Go, étape 119) : sur un PC de 16 Go, il ne restait rien. Sans carte, un duel laisse
+  maintenant 6 Go à Windows et à Jaris (`CARDLESS_RAM_RESERVE_GB`) : 10 Go de modèles sur 16 Go, 2 Go sur 8 Go (encore
+  assez de petits modèles). **Leçon : une marge pensée pour un cas (gros modèle qui déborde) ne se recopie pas telle
+  quelle dans un autre (PC sans carte) — calculer ce qu'elle laisse sur les petites machines.** Régression :
+  `test-hardwarescan-duel.mjs` (sans carte et 16 Go : au moins 4 modèles, en Conversation, Code et Vocal ; vérifié en
+  remettant l'ancienne marge).
