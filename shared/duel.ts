@@ -19,6 +19,8 @@ export type DuelSide = 'a' | 'b'
 /** Nombre de modèles d'une session : 4 à 6 (Léo), jamais moins de 2 (sinon pas de duel possible). */
 export const DUEL_MIN_MODELS = 2
 export const DUEL_SESSION_SIZES = [4, 5, 6] as const
+/** Étape 363, Léo : « choisir les modèles qu'on veut, il y a un minimum de 4 ». */
+export const DUEL_MIN_CHOSEN = 4
 export const DUEL_DEFAULT_SIZE = 5
 
 /**

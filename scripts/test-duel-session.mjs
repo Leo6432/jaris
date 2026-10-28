@@ -55,6 +55,10 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       duelPrior: (category) => () => (category === 'code' ? 20 : 10),
       getDuelCandidates: async () =>
         MODELS.map((model, index) => ({ model, vramGb: index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),
+      getDuelModelList: async () => [
+        ...MODELS.map((model, index) => ({ model, vramGb: index + 2, reason: null })),
+        { model: 'echo-model:70b', vramGb: 42, reason: { kind: 'tooBig', needGb: 42, budgetGb: 23 } }
+      ],
       pickModelsForDuelCategory: async () => ({ flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b', code: 'delta-model:7b' })
     },
     './ollama': {
@@ -401,7 +405,8 @@ test('une seule session à la fois, et une catégorie ou une taille venues de l�
   const { readFileSync } = await import('node:fs')
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   assert.match(main, /if \(!isDuelCategory\(value\)\) throw new Error/)
-  assert.match(main, /count < 2 \|\| count > 6\) throw new Error/)
+  assert.match(main, /pick < 2 \|\| pick > 6\) throw new Error/)
+  assert.match(main, /pick\.length > 200 \|\| !pick\.every/)
   assert.match(main, /if \(!isDuelOutcome\(outcome\)\) throw new Error/)
   // Un duel s'arrête avec Jaris et avant un « Déplacer » (les modèles écrivent sur le PC, un téléchargement remplit le disque).
   assert.equal((main.match(/abortDuel\(\)/g) ?? []).length, 2)
@@ -520,4 +525,37 @@ test('historique Code : l’application de chaque côté est gardée et se rouvr
   assert.ok(env.apps.get(`${id}-a`).startsWith('<html>'))
   assert.match(await env.session.duelHistoryApp(id, 'a'), /^jaris-preview:/)
   assert.equal(await env.session.duelHistoryApp('inconnu', 'a'), null, 'un identifiant qui n’est pas un vote : rien')
+})
+
+test('étape 363 : le plan montre TOUS les modèles, ceux que le PC ne peut pas faire tourner avec leur raison', async () => {
+  const env = setup({ installed: ['alpha-model:3b'] })
+  const plan = await env.session.planDuel('conversation')
+  assert.equal(plan.models.length, MODELS.length + 1)
+  const big = plan.models.find((m) => m.model === 'echo-model:70b')
+  assert.equal(big.reason.kind, 'tooBig')
+  assert.equal(plan.models.find((m) => m.model === 'alpha-model:3b').installed, true)
+  assert.equal(plan.models.find((m) => m.model === 'bravo-model:8b').installed, false)
+  assert.equal(plan.downloadBudgetGb, 95)
+})
+
+test('étape 363 : modèles choisis à la main — exactement ceux-là, au moins 4, jamais un modèle indisponible ou inventé', async () => {
+  const env = setup({ installed: [] })
+  await assert.rejects(env.session.startDuel('conversation', MODELS.slice(0, 3)), /au moins 4/)
+  await assert.rejects(env.session.startDuel('conversation', [...MODELS.slice(0, 3), 'echo-model:70b']), /ne peut pas faire de duel/)
+  await assert.rejects(env.session.startDuel('conversation', [...MODELS.slice(0, 3), 'inventé:1b']), /ne peut pas faire de duel/)
+  // Un doublon ne compte qu'une fois.
+  await assert.rejects(env.session.startDuel('conversation', [...MODELS.slice(0, 3), MODELS[0]]), /au moins 4/)
+  const started = await env.session.startDuel('conversation', [...MODELS].reverse())
+  assertAnonymous([started], 'session choisie')
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
+  // Exactement les modèles choisis : ce sont eux qui sont téléchargés, aucun autre.
+  assert.deepEqual([...env.calls.pulls].sort(), [...MODELS].sort())
+})
+
+test('étape 363 : un modèle choisi et absent est téléchargé, sans jamais envoyer son nom à l’écran', async () => {
+  const env = setup({ installed: MODELS.slice(0, 3) })
+  await env.session.startDuel('conversation', MODELS)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
+  assert.deepEqual(env.calls.pulls, [MODELS[3]])
+  assertAnonymous(env.emitted, 'téléchargement')
 })

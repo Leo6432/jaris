@@ -9844,3 +9844,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-duel-store.mjs` (vrai dossier : deux sessions, ordre, réponses et application gardées, nom du
   fichier) et `test-duel-panel-ui.mjs` (vrai navigateur : bouton à côté de « Retour », résultat affiché, annulation
   muette, échec relayé, désactivé sans vote).
+
+- **Étape 363 (v0.40.5), Léo : « ajoute soit aléatoire, soit choisir les modèles qu'on veut, minimum 4 ; on doit voir
+  tous les modèles de Jaris, et si le PC ne peut pas, il est en gris mais quand même présent ».** Sur l'écran de départ
+  du Duel : « Au hasard » (4, 5 ou 6 modèles, comme avant) ou « Je choisis ». En « Je choisis », TOUS les modèles de
+  Jaris sont listés, disponibles d'abord : ceux que le PC ne peut pas faire tourner sont grisés, non cochables, avec la
+  raison (trop gros avec la taille et la place, test d'appel d'outils sous 75 % avec le score, pas encore testé, Ollama
+  trop ancien, téléchargement bloqué). Compteur « Modèles choisis : N (minimum 4) », taille à télécharger et place sur
+  le disque ; Démarrer reste grisé sous 4. Pas de maximum. Les réponses restent anonymes A/B, noms révélés au vote.
+  **Une seule règle pour le hasard et pour la liste** : `assessDuelModels` (hardwareScan.ts) donne à chaque modèle sa
+  raison ou `null` ; `getDuelCandidates` garde les `null`, `getDuelModelList` les montre tous — un modèle coché est
+  donc toujours un modèle que le hasard aurait pu prendre. **Une liste venue de l'écran n'est jamais crue** : main.ts
+  borne sa forme, `startDuel` refuse un modèle non disponible ou inventé (`duel.error.notAvailable`), compte les
+  doublons une fois et exige `DUEL_MIN_CHOSEN` (shared/duel.ts). Cases en `role="checkbox"` plutôt qu'en `<input>` (la
+  règle générale des champs leur imposerait un cadre). Régression : `test-hardwarescan-duel.mjs` (tous les modèles,
+  disponibles = candidats du hasard, raisons), `test-duel-session.mjs` (3 refusé, indisponible ou inventé refusé,
+  doublon, exactement les modèles choisis téléchargés, anonymat) et `test-duel-panel-ui.mjs` (vrai navigateur :
+  grisés non cochables avec raison, Démarrer sous 4, liste envoyée au main, hasard inchangé). Vérifié en retirant le
+  contrôle de disponibilité et en abaissant le minimum de l'écran : les deux font échouer leur test.

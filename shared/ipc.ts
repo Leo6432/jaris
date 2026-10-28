@@ -987,6 +987,24 @@ export interface RepoCommitResult {
  * conversation, code ou vocal, et on vote, à la place d'Artificial Analysis »). L'écran ne reçoit JAMAIS le nom d'un
  * modèle pendant une session : seulement « A » et « B ». Les noms ne sortent qu'à la fin (DuelSummary).
  */
+/** Pourquoi un modèle de Jaris ne peut pas entrer dans un duel sur ce PC (étape 363 : affiché en gris, jamais caché). */
+export type DuelUnavailableReason =
+  | { kind: 'tooBig'; needGb: number; budgetGb: number }
+  | { kind: 'untested' }
+  | { kind: 'tools'; score: string }
+  | { kind: 'ollama'; version: string }
+  | { kind: 'blocked' }
+
+/** Un modèle de Jaris tel que le Duel le voit sur ce PC : disponible ou non, et pourquoi. */
+export interface DuelModelOption {
+  model: string
+  vramGb: number
+  /** `null` = le modèle peut entrer dans un duel. */
+  reason: DuelUnavailableReason | null
+  /** Déjà téléchargé (rempli par planDuel). */
+  installed?: boolean
+}
+
 export interface DuelPlan {
   category: DuelCategory
   /** Modèles qui tiennent sur ce PC et réussissent le test d'appel d'outils. */
@@ -996,6 +1014,10 @@ export interface DuelPlan {
   freeDiskGb: number | null
   /** Ce que Jaris a détecté sur ce PC : carte graphique (`null` = aucune détectée) et RAM, en Go. */
   machine: { vramGb: number | null; ramGb: number }
+  /** Étape 363 : tous les modèles de Jaris, pour les choisir à la main (ceux qui ne conviennent pas, grisés). */
+  models: DuelModelOption[]
+  /** Place utilisable pour des téléchargements (place libre moins la marge de sécurité), `null` si inconnue. */
+  downloadBudgetGb: number | null
 }
 
 /** Ce que fait un modèle pendant son tour, en données (l'écran l'écrit dans sa langue). */

@@ -13,6 +13,8 @@ import type {
   ModelOverviewEntry,
   ModelOverviewResult,
   ModelRole,
+  DuelModelOption,
+  DuelUnavailableReason,
   MyModelPicks,
   Profile
 } from '../../shared/ipc'
@@ -2209,7 +2211,11 @@ export async function duelMachine(): Promise<{ vramGb: number | null; ramGb: num
   return { vramGb, ramGb: Math.round(detectRamGb()) }
 }
 
-export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null): Promise<DuelCandidate[]> {
+/**
+ * Étapes 355 et 363 : la même règle pour composer une session au hasard (getDuelCandidates) et pour la liste à cocher
+ * (getDuelModelList) — un seul calcul, pour qu'un modèle coché soit toujours un modèle que le hasard aurait pu prendre.
+ */
+async function assessDuelModels(category: DuelCategory, profile?: Profile | null) {
   const { vramGb } = await detectGpu()
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
   const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
@@ -2220,21 +2226,31 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
   const scores = parseVerifiedToolScores()
   const tooNew = modelsNeedingNewerOllama()
   const blocked = new Set(Object.keys(profile?.blockedModels ?? {}))
-  const standings = duelStandings(category)
-  const strengthOf = duelStrength(category)
   const toolScore = (model: string): string | null =>
     (category === 'code' ? scores.code.get(model) ?? scores.conversation.get(model) : scores.conversation.get(model)) ?? null
+  const reasonFor = (c: ModelCandidate): DuelUnavailableReason | null => {
+    if (tooNew.has(c.model)) return { kind: 'ollama', version: MIN_OLLAMA_VERSION[c.model] ?? '' }
+    if (blocked.has(c.model)) return { kind: 'blocked' }
+    const tools = toolScore(c.model)
+    if (tools === null) return { kind: 'untested' }
+    if (parseToolScore(tools) < DUEL_MIN_TOOL_RATE) return { kind: 'tools', score: tools }
+    const limit = cardless ? cardlessBudgetGb : LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb
+    if (c.vramGb > limit) return { kind: 'tooBig', needGb: c.vramGb, budgetGb: Math.max(0, Math.round(limit * 10) / 10) }
+    return null
+  }
+  return { scores, toolScore, budgetGb, cardless, assessed: ALL_MODELS.map((c) => ({ c, reason: reasonFor(c) })) }
+}
+
+export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null): Promise<DuelCandidate[]> {
+  const { scores, toolScore, budgetGb, cardless, assessed } = await assessDuelModels(category, profile)
+  const standings = duelStandings(category)
+  const strengthOf = duelStrength(category)
   const used =
     category === 'code'
       ? [profile?.codeModel]
       : Object.values((category === 'voice' ? profile?.voiceModels ?? profile?.models : profile?.models) ?? {})
   const inUse = new Set(used.filter((m): m is string => Boolean(m)))
-  return ALL_MODELS.filter((c) => {
-    if (tooNew.has(c.model) || blocked.has(c.model)) return false
-    if (parseToolScore(toolScore(c.model)) < DUEL_MIN_TOOL_RATE) return false
-    if (cardless) return c.vramGb <= cardlessBudgetGb
-    return c.vramGb <= (LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
-  }).map((c) => {
+  return assessed.filter(({ reason }) => reason === null).map(({ c }) => {
     const tools = toolScore(c.model)
     const demands = category === 'code' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value
     return {
@@ -2250,6 +2266,18 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
       group: category === 'code' ? 'code' : c.vramGb <= (cardless ? CARDLESS_SMALL_MODEL_GB : budgetGb) ? 'card' : 'ram'
     }
   })
+}
+
+/**
+ * Étape 363, Léo : « on doit voir tous les modèles de Jaris, et si le PC ne peut pas, il est en gris mais présent ».
+ * Tous les modèles candidats, disponibles d'abord puis du plus léger au plus lourd, avec la raison de ceux qui ne
+ * peuvent pas entrer dans un duel ici.
+ */
+export async function getDuelModelList(category: DuelCategory, profile?: Profile | null): Promise<DuelModelOption[]> {
+  const { assessed } = await assessDuelModels(category, profile)
+  return assessed
+    .map(({ c, reason }) => ({ model: c.model, vramGb: c.vramGb, reason }))
+    .sort((a, b) => Number(a.reason !== null) - Number(b.reason !== null) || a.vramGb - b.vramGb || a.model.localeCompare(b.model))
 }
 
 /**

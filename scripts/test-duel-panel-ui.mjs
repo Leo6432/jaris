@@ -30,7 +30,17 @@ window.__side = side
 window.__calls = []
 window.__plan = window.__plan || {
   category: 'conversation', available: 6, freeDiskGb: 120,
-  sizes: [{ count: 4, toDownload: 1, downloadGb: 5.2, fitsDisk: true }, { count: 5, toDownload: 2, downloadGb: 9.8, fitsDisk: true }, { count: 6, toDownload: 3, downloadGb: 15.1, fitsDisk: true }]
+  sizes: [{ count: 4, toDownload: 1, downloadGb: 5.2, fitsDisk: true }, { count: 5, toDownload: 2, downloadGb: 9.8, fitsDisk: true }, { count: 6, toDownload: 3, downloadGb: 15.1, fitsDisk: true }],
+  downloadBudgetGb: 115,
+  models: [
+    { model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true },
+    { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true },
+    { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false },
+    { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false },
+    { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true },
+    { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 } },
+    { model: 'phi4-mini', vramGb: 2.5, reason: { kind: 'tools', score: '7/78' } }
+  ]
 }
 window.__rankings = window.__rankings || [
   { category: 'conversation', votes: 3, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
@@ -151,8 +161,8 @@ test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images)
     assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal'])
     assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Conversation')
     await page.waitForSelector('.duel-size')
-    assert.deepEqual(await page.locator('.duel-size').allTextContents(), ['4', '5', '6'])
-    assert.equal(await page.locator('.duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
+    assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode) .duel-size').allTextContents(), ['4', '5', '6'])
+    assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 2 \(9,8 Go\)/)
     await page.click('.duel-size:has-text("4")')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 1 \(5,2 Go\)/)
@@ -467,4 +477,53 @@ test('historique : accessible aussi pendant un duel, sans rien perdre du duel en
     await page.waitForSelector('.duel__bar')
     assert.match(await page.textContent('.duel__bar'), /Duel 2/)
   }, init, { width: 760, height: 700 })
+})
+
+test('étape 363 : « Je choisis » montre tous les modèles, grise ceux que le PC ne peut pas, et exige au moins 4', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    await page.getByRole('radio', { name: 'Je choisis' }).click()
+    await page.waitForSelector('.duel-pick')
+    const rows = await page.$$eval('.duel-pick', (els) => els.map((el) => ({ text: el.textContent, disabled: el.disabled })))
+    assert.equal(rows.length, 7, 'tous les modèles, même ceux que le PC ne peut pas faire tourner')
+    const big = rows.find((r) => r.text.includes('Devstral') || r.text.includes('devstral'))
+    assert.equal(big.disabled, true)
+    assert.match(big.text, /Trop gros pour ce PC/)
+    const weak = rows.find((r) => /phi/i.test(r.text))
+    assert.equal(weak.disabled, true)
+    assert.match(weak.text, /7\/78/)
+    // Grisé pour de vrai (style calculé), et un clic dessus ne coche rien.
+    const greyed = await page.$eval('.duel-pick--unavailable', (el) => getComputedStyle(el).color)
+    const normal = await page.$eval('.duel-pick:not(.duel-pick--unavailable)', (el) => getComputedStyle(el).color)
+    assert.notEqual(greyed, normal)
+    await page.locator('.duel-pick--unavailable').first().click({ force: true })
+    assert.equal(await page.$$eval('.duel-pick[aria-checked="true"]', (els) => els.length), 0)
+
+    const start = page.locator('.duel-home__start')
+    const enabled = [0, 1, 2]
+    for (const i of enabled) await page.locator('.duel-pick:not(:disabled)').nth(i).click()
+    assert.equal(await start.isDisabled(), true, 'moins de 4 : on ne peut pas lancer')
+    assert.match(await page.textContent('.duel-home'), /Modèles choisis : 3 \(minimum 4\)/)
+    await page.locator('.duel-pick:not(:disabled)').nth(3).click()
+    assert.match(await page.textContent('.duel-home'), /Modèles choisis : 4/)
+    assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 2/)
+    assert.equal(await start.isDisabled(), false)
+    // La case cochée est habillée par le CSS de Jaris (fond d'accent), pas une case du navigateur.
+    const box = await page.$eval('.duel-pick--checked .duel-pick__box', (el) => getComputedStyle(el).backgroundColor)
+    assert.notEqual(box, 'rgba(0, 0, 0, 0)')
+    await start.click()
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+    assert.deepEqual(call, ['start', 'conversation', ['granite4.2:8b', 'qwen3.5:9b', 'ministral-3:8b', 'gemma4:12b']])
+  })
+})
+
+test('étape 363 : « Au hasard » garde le nombre de modèles comme avant', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    assert.equal(await page.getByRole('radio', { name: 'Au hasard' }).getAttribute('aria-checked'), 'true')
+    assert.equal(await page.$$eval('.duel-pick', (els) => els.length), 0)
+    await page.locator('.duel-home__start').click()
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+    assert.deepEqual(call, ['start', 'conversation', 5])
+  })
 })

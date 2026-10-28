@@ -9171,6 +9171,92 @@ ol.reply-list > li::marker {
   border-color: transparent;
 }
 
+/* Étape 363 : « Au hasard / Je choisis », puis la liste de TOUS les modèles de Jaris (grisés quand le PC ne peut pas). */
+.duel-pickmode {
+  margin-bottom: 4px;
+}
+
+.duel-picks {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+}
+
+.duel-pick {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.duel-pick:hover:not(:disabled) {
+  background: var(--jv-hover);
+}
+
+.duel-pick:disabled {
+  cursor: default;
+  color: var(--hud-text-faint);
+}
+
+.duel-pick__box {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--hud-line-strong);
+  border-radius: 5px;
+  color: var(--jv-accent-ink);
+}
+
+.duel-pick--checked .duel-pick__box {
+  background: var(--hud-accent);
+  border-color: transparent;
+}
+
+.duel-pick--unavailable .duel-pick__box {
+  opacity: 0.4;
+}
+
+.duel-pick__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duel-pick__meta {
+  flex: 0 1 auto;
+  max-width: 55%;
+  font-size: 12px;
+  text-align: right;
+  color: var(--hud-text-dim);
+}
+
+.duel-pick:disabled .duel-pick__meta {
+  color: var(--hud-text-faint);
+}
+
 .duel-home__note {
   margin: 0;
   font-size: 13px;

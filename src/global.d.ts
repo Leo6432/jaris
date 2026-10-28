@@ -222,7 +222,7 @@ declare global {
       onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => () => void
       setActiveMode: (mode: AppMode) => void
       duelPlan: (category: DuelCategory) => Promise<DuelPlan>
-      duelStart: (category: DuelCategory, count: number) => Promise<DuelSessionView>
+      duelStart: (category: DuelCategory, pick: number | string[]) => Promise<DuelSessionView>
       duelAsk: (prompt: string) => Promise<DuelSessionView>
       duelRunB: () => Promise<DuelSessionView>
       duelStop: () => Promise<void>

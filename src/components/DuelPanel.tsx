@@ -9,8 +9,8 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
-import { DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
-import type { DuelActivity, DuelHistoryEntry, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
+import { DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, DUEL_MIN_CHOSEN, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
+import type { DuelActivity, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -128,6 +128,72 @@ function keepSize(plan: DuelPlan, current: number): number {
 }
 
 const gb = (value: number): string => t('unit.gb', { value: formatDecimal(value) })
+
+/** Étape 363 : pourquoi un modèle est grisé dans la liste à cocher. */
+function unavailableText(option: DuelModelOption): string {
+  const reason = option.reason
+  if (!reason) return ''
+  switch (reason.kind) {
+    case 'tooBig':
+      return t('duel.pick.reason.tooBig', { need: gb(reason.needGb), budget: gb(reason.budgetGb) })
+    case 'untested':
+      return t('duel.pick.reason.untested')
+    case 'tools':
+      return t('duel.pick.reason.tools', { score: reason.score })
+    case 'ollama':
+      return t('duel.pick.reason.ollama', { version: reason.version })
+    case 'blocked':
+      return t('duel.pick.reason.blocked')
+  }
+}
+
+interface ModelPickerProps {
+  plan: DuelPlan
+  picked: string[]
+  onToggle: (model: string) => void
+}
+
+/**
+ * Étape 363, Léo : « choisir les modèles qu'on veut, minimum 4, et on doit voir tous les modèles de Jaris ; si le PC
+ * ne peut pas, il est en gris mais il est quand même présent ». Boutons à cocher (role="checkbox") plutôt que des
+ * <input> : la règle générale des champs de saisie leur imposerait un cadre carré.
+ */
+function ModelPicker({ plan, picked, onToggle }: ModelPickerProps): JSX.Element {
+  const models = plan.models ?? []
+  return (
+    <ul className="duel-picks" aria-labelledby="duel-size-title">
+      {models.map((option) => {
+        const available = option.reason === null
+        const checked = available && picked.includes(option.model)
+        return (
+          <li key={option.model}>
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              disabled={!available}
+              className={`duel-pick${checked ? ' duel-pick--checked' : ''}${available ? '' : ' duel-pick--unavailable'}`}
+              title={option.model}
+              onClick={() => onToggle(option.model)}
+            >
+              <span className="duel-pick__box" aria-hidden="true">
+                {checked && (
+                  <svg viewBox="0 0 16 16" width="12" height="12">
+                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="duel-pick__name">{formatModelName(option.model)}</span>
+              <span className="duel-pick__meta">
+                {available ? (option.installed ? t('duel.pick.installed') : gb(option.vramGb)) : unavailableText(option)}
+              </span>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
 
 interface SideCardProps {
   name: DuelSide
@@ -481,6 +547,9 @@ export default function DuelPanel(): JSX.Element {
   const [category, setCategory] = useState<DuelCategory>('conversation')
   const [plan, setPlan] = useState<DuelPlan | null>(null)
   const [size, setSize] = useState<number>(DUEL_DEFAULT_SIZE)
+  /** Étape 363 : modèles au hasard, ou choisis à la main. */
+  const [pickMode, setPickMode] = useState<'random' | 'manual'>('random')
+  const [picked, setPicked] = useState<string[]>([])
   const [rankings, setRankings] = useState<DuelRankingView[] | null>(null)
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -631,11 +700,18 @@ export default function DuelPanel(): JSX.Element {
     }
   }
 
+  // Seuls les modèles disponibles pour la catégorie affichée comptent (un modèle coché en Conversation peut ne pas
+  // l'être en Code).
+  const availableModels = new Set((plan?.models ?? []).filter((m) => m.reason === null).map((m) => m.model))
+  const pickedNow = picked.filter((m) => availableModels.has(m))
+  const toggle = (model: string): void =>
+    setPicked((current) => (current.includes(model) ? current.filter((m) => m !== model) : [...current, model]))
+
   const start = (): void => {
     void run('start', async () => {
       setEnded(null)
       setDeleted(null)
-      setView(await window.jaris.duelStart(category, size))
+      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size))
     })
   }
 
@@ -709,6 +785,11 @@ export default function DuelPanel(): JSX.Element {
     const ranking = rankings?.find((r) => r.category === category) ?? null
     const chosen = plan?.sizes.find((s) => s.count === size) ?? null
     const tooFew = plan !== null && plan.sizes.length === 0
+    const manual = pickMode === 'manual'
+    const pickedMissing = (plan?.models ?? []).filter((m) => pickedNow.includes(m.model) && !m.installed)
+    const pickedDownloadGb = pickedMissing.reduce((sum, m) => sum + m.vramGb, 0)
+    const pickedFitsDisk = plan?.downloadBudgetGb == null || pickedDownloadGb <= plan.downloadBudgetGb
+    const canStart = manual ? pickedNow.length >= DUEL_MIN_CHOSEN && pickedFitsDisk : Boolean(chosen && chosen.fitsDisk)
     content = (
       <div className="duel__scroll">
         <div className="duel-home">
@@ -742,8 +823,37 @@ export default function DuelPanel(): JSX.Element {
             <h2 id="duel-size-title" className="duel-home__label">
               {t('duel.size.title')}
             </h2>
+            <div className="duel-sizes duel-pickmode" role="radiogroup" aria-label={t('duel.pick.title')}>
+              {(['random', 'manual'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={pickMode === mode}
+                  className={`duel-size${pickMode === mode ? ' duel-size--selected' : ''}`}
+                  onClick={() => setPickMode(mode)}
+                >
+                  {t(mode === 'random' ? 'duel.pick.random' : 'duel.pick.manual')}
+                </button>
+              ))}
+            </div>
             {plan === null ? (
               <p className="duel-home__note">{t('duel.size.searching')}</p>
+            ) : manual ? (
+              <>
+                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} />
+                <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
+                  {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
+                </p>
+                {pickedNow.length > 0 && (
+                  <p className={`duel-home__note${pickedFitsDisk ? '' : ' duel-home__note--warn'}`}>
+                    {pickedMissing.length === 0
+                      ? t('duel.size.installed')
+                      : t('duel.size.download', { count: pickedMissing.length, size: gb(pickedDownloadGb) })}
+                    {!pickedFitsDisk && ` ${t('duel.size.noDisk', { free: gb(plan.freeDiskGb ?? 0) })}`}
+                  </p>
+                )}
+              </>
             ) : tooFew ? (
               <p className="duel-home__note duel-home__note--warn">
                 {t('duel.notEnough')}{' '}
@@ -793,7 +903,7 @@ export default function DuelPanel(): JSX.Element {
             type="button"
             className="duel-btn duel-btn--primary duel-home__start"
             onClick={start}
-            disabled={pending !== null || !chosen || !chosen.fitsDisk}
+            disabled={pending !== null || !canStart}
           >
             {pending === 'start' ? t('duel.starting') : t('duel.start')}
           </button>

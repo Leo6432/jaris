@@ -1716,9 +1716,16 @@ app.whenReady().then(async () => {
     return value
   }
   ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
-  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, count: unknown) => {
-    if (typeof count !== 'number' || !Number.isInteger(count) || count < 2 || count > 6) throw new Error(t('duel.error.badRequest'))
-    return startDuel(duelCategory(category), count)
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown) => {
+    // Un nombre (modèles au hasard) ou, étape 363, la liste des modèles choisis à la main — revérifiée par startDuel.
+    if (Array.isArray(pick)) {
+      if (pick.length > 200 || !pick.every((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)) {
+        throw new Error(t('duel.error.badRequest'))
+      }
+      return startDuel(duelCategory(category), pick as string[])
+    }
+    if (typeof pick !== 'number' || !Number.isInteger(pick) || pick < 2 || pick > 6) throw new Error(t('duel.error.badRequest'))
+    return startDuel(duelCategory(category), pick)
   })
   ipcMain.handle(IPC_CHANNELS.duelAsk, (_event, prompt: unknown) => {
     if (typeof prompt !== 'string' || prompt.length > 20_000) throw new Error(t('duel.error.badRequest'))

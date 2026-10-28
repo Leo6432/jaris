@@ -255,3 +255,31 @@ test('sans carte graphique et 16 Go de RAM (étape 357) : assez de petits modèl
   assert.ok(duel.selectDuelModels(candidates, 4).length >= 2)
   for (const category of ['code', 'voice']) assert.ok((await m.getDuelCandidates(category, null)).length >= 2, category)
 })
+
+test('étape 363 : la liste à cocher montre TOUS les modèles de Jaris ; disponibles = exactement les candidats du hasard', async () => {
+  const m = setup([])
+  const profile = { models: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE }, codeModel: LARGE, blockedModels: { 'gemma4:e4b': 'bloqué' } }
+  m.setOllamaVersionSource(() => '0.40.3')
+  const list = await m.getDuelModelList('conversation', profile)
+  const all = (await m.getModelOverview()).entries.map((e) => e.model)
+  // Tous les modèles de Jaris, chacun une fois (une chaîne : piège des tableaux d'un autre contexte vm).
+  assert.equal([...new Set(list.map((o) => o.model))].sort().join(), [...new Set(all)].sort().join())
+  const candidates = await m.getDuelCandidates('conversation', profile)
+  assert.equal(list.filter((o) => o.reason === null).map((o) => o.model).sort().join(), candidates.map((c) => c.model).sort().join())
+  // Disponibles d'abord : aucun modèle grisé avant un modèle disponible.
+  const firstGrey = list.findIndex((o) => o.reason !== null)
+  assert.ok(firstGrey > 0 && list.slice(firstGrey).every((o) => o.reason !== null))
+  const reason = (model) => list.find((o) => o.model === model)?.reason
+  assert.equal(reason('gemma4:e4b').kind, 'blocked')
+  const k2 = list.find((o) => o.model.includes('K2-Horizon'))
+  assert.equal(k2.reason.kind, 'ollama')
+  assert.match(k2.reason.version, /^0\.40\.\d+$/)
+  const big = list.find((o) => o.reason?.kind === 'tooBig')
+  assert.ok(big && big.reason.needGb > big.reason.budgetGb, 'un modèle trop gros dit combien il lui faut')
+  // Un score d'outils sous 75 % est grisé avec ce score ; un modèle jamais testé l'est aussi.
+  const weak = list.find((o) => o.reason?.kind === 'tools')
+  assert.ok(weak && /\/78$/.test(weak.reason.score))
+  const [correct] = weak.reason.score.split('/').map(Number)
+  assert.ok(correct / 78 < 0.75)
+  m.setOllamaVersionSource(() => '0.40.10')
+})

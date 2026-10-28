@@ -5,6 +5,7 @@ import { createGeneratedAppPreview } from './generatedAppPreview'
 import {
   duelMachine,
   getDuelCandidates,
+  getDuelModelList,
   pickModelsForDuelCategory,
   type DuelCandidate
 } from './hardwareScan'
@@ -17,6 +18,7 @@ import { addDuelVote, getDuelVotes, readDuelApp, saveDuelApp } from './duelStore
 import {
   DUEL_CATEGORIES,
   DUEL_HISTORY_TEXT_MAX,
+  DUEL_MIN_CHOSEN,
   DUEL_MIN_MODELS,
   DUEL_SESSION_SIZES,
   duelActionFromLog,
@@ -206,11 +208,12 @@ async function candidatesFor(category: DuelCategory, profile: Profile | null): P
 /** Ce qu'une session proposerait, taille par taille, avant de la lancer : rien n'est téléchargé ici. */
 export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
   const profile = await getProfile()
-  const [candidates, installed, freeDiskGb, machine] = await Promise.all([
+  const [candidates, installed, freeDiskGb, machine, list] = await Promise.all([
     candidatesFor(category, profile),
     listInstalledModels().catch(() => [] as string[]),
     detectFreeDiskGb().catch(() => null),
-    duelMachine()
+    duelMachine(),
+    getDuelModelList(category, profile)
   ])
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
   const counts = [...new Set(DUEL_SESSION_SIZES.map((size) => Math.min(size, candidates.length)))].filter((n) => n >= DUEL_MIN_MODELS)
@@ -219,6 +222,8 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
     available: candidates.length,
     freeDiskGb,
     machine,
+    models: list.map((option) => ({ ...option, installed: isInstalled(option.model, installed) })),
+    downloadBudgetGb: freeDiskGb === null ? null : Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB),
     sizes: counts.map((count) => {
       const missing = selectDuelModels(candidates, count).filter((m) => !isInstalled(m, installed))
       const downloadGb = missing.reduce((sum, m) => sum + (sizeOf.get(m) ?? 0), 0)
@@ -240,13 +245,25 @@ function busy(): boolean {
  * Lance une session : choisit les modèles (exactement ceux annoncés par planDuel), télécharge ceux qui manquent sans
  * jamais en dire le nom, puis prépare le premier duel. Un modèle qui ne peut pas être téléchargé (place, réseau) est
  * retiré de la session, sans son nom non plus.
+ *
+ * Étape 363 : `pick` est soit un nombre (modèles au hasard), soit la liste des modèles choisis à la main. Une liste
+ * venue de l'écran n'est jamais crue telle quelle : chaque nom doit être un modèle DISPONIBLE pour un duel sur ce PC,
+ * et il en faut au moins DUEL_MIN_CHOSEN.
  */
-export async function startDuel(category: DuelCategory, count: number): Promise<DuelSessionView> {
+export async function startDuel(category: DuelCategory, pick: number | readonly string[]): Promise<DuelSessionView> {
   if (busy()) throw new Error(t('duel.error.alreadyRunning'))
   const profile = await getProfile()
   const candidates = await candidatesFor(category, profile)
-  const chosen = selectDuelModels(candidates, count)
-  if (chosen.length < DUEL_MIN_MODELS) throw new Error(t('duel.notEnough'))
+  let chosen: string[]
+  if (typeof pick === 'number') {
+    chosen = selectDuelModels(candidates, pick)
+    if (chosen.length < DUEL_MIN_MODELS) throw new Error(t('duel.notEnough'))
+  } else {
+    const available = new Set(candidates.map((c) => c.model))
+    chosen = [...new Set(pick)]
+    if (chosen.some((m) => !available.has(m))) throw new Error(t('duel.error.notAvailable'))
+    if (chosen.length < DUEL_MIN_CHOSEN) throw new Error(t('duel.error.chooseMin', { min: DUEL_MIN_CHOSEN }))
+  }
   const installed = await listInstalledModels().catch(() => [] as string[])
   const missing = chosen.filter((m) => !isInstalled(m, installed))
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
