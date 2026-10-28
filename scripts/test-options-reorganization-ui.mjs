@@ -416,11 +416,12 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!headers.some((h) => /Intelligence|Omniscience|Terminal|Artificial/.test(h)), `colonnes d'Artificial Analysis encore là : ${headers}`)
     assert.ok(headers[6].startsWith('Duels Conversation') && headers[7].startsWith('Duels Code') && headers[8].startsWith('Duels Vocal'), `colonnes de duels : ${headers}`)
-    assert.equal(rows[0][6], '0', `points de duel Conversation : ${rows[0][6]}`)
-    assert.equal(rows[0][7], '+120', `points de duel Code : ${rows[0][7]}`)
+    // Étape 371 : le nombre de duels s'affiche sous les points (plus seulement en infobulle).
+    assert.equal(rows[0][6], '0Duels : 2', `points de duel Conversation : ${rows[0][6]}`)
+    assert.equal(rows[0][7], '+120Duels : 3', `points de duel Code : ${rows[0][7]}`)
     assert.equal(rows[0][8], '—', `jamais en duel Vocal : ${rows[0][8]}`)
     assert.equal(rows[1][7], '—', `jamais en duel : ${rows[1][7]}`)
-    assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(8)', (el) => el.getAttribute('title')), 'Duels : 3')
+    assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(8) .options-menu__duel-count', (el) => getComputedStyle(el).display), 'block', 'nombre de duels sur sa propre ligne')
     // Vitesse : « — » sans mesure.
     assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)

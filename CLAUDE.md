@@ -10060,3 +10060,9 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   évaluée la première) — fr.ts entier perdu, restauré par git ; toujours lire, puis écrire en deux instructions.
   Régression : `scripts/test-options-reorganization-ui.mjs` (plus aucune colonne d'Artificial Analysis, points et
   « — », infobulle, tri, largeur à 1000 px avec des points de duel).
+
+- **Étape 371 (v0.40.13), Léo : « tu peux pas mettre le score avec le nombre de votes ».** Dans « Tous les modèles », le
+  nombre de duels (« Duels : 3 », clé existante `models.duel.count`, déjà traduite) s'affiche sous les points de chaque
+  colonne Duels, plus seulement en infobulle (`.options-menu__duel-count`). Il peut passer sur deux lignes : sans ça,
+  le tableau défilait de côté à 1000 px (905 > 898, attrapé par le test de largeur). Régression :
+  `scripts/test-options-reorganization-ui.mjs`.

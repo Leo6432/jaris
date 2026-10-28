@@ -150,8 +150,10 @@ function DuelCell({ cell }: { cell: { points: number; duels: number } | undefine
   if (!cell) return <td className="options-menu__col-num">—</td>
   const rounded = Math.round(cell.points)
   return (
-    <td className="options-menu__col-num" title={t('models.duel.count', { count: cell.duels })}>
+    <td className="options-menu__col-num">
       {`${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`}
+      {/* Étape 371 (Léo : « mettre le score avec le nombre de votes ») : visible, plus seulement en infobulle. */}
+      <span className="options-menu__duel-count">{t('models.duel.count', { count: cell.duels })}</span>
     </td>
   )
 }

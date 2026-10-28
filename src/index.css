@@ -1011,6 +1011,17 @@ body.body--splash {
   color: var(--hud-text-faint);
 }
 
+/* Étape 371 : nombre de duels sous les points, discret, aligné à droite comme le chiffre. */
+.options-menu__duel-count {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+  font-variant-numeric: tabular-nums;
+  /* Peut passer sur deux lignes dans une fenêtre étroite plutôt que faire défiler le tableau de côté. */
+  white-space: normal;
+}
+
 /* Étape 341 : futurs modèles, en bas de « Tous les modèles », sur fond rayé — repérés, jamais choisis. */
 .options-menu__model-overview tr.options-menu__model-row--future td {
   background: repeating-linear-gradient(
