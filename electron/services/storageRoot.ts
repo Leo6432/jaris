@@ -108,6 +108,8 @@ export const OWNED_ENTRIES = [
   // Étape 355 : les votes des duels, et les applications des duels Code gardées pour l'historique (duelStore.ts).
   'duel-votes.json',
   'duel-apps',
+  // Étape 367 : vitesses des modèles mesurées sur ce PC (speedStore.ts).
+  'model-speeds.json',
   'journal-demandes.txt',
   'github-connection.json',
   'github-token.bin',
@@ -199,6 +201,8 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   'reminders.json': 'merge-reminders',
   'duel-votes.json': 'merge-reminders',
   'duel-apps': 'keep-both',
+  // Les vitesses de CE PC : celles de la racine gagnent, une session sur C n'en mesure que quelques-unes.
+  'model-speeds.json': 'destination-wins',
   'journal-demandes.txt': 'append-journal',
   [CODE_CONVERSATIONS_FILE]: 'merge-code-conversations',
   [CODE_CONVERSATIONS_ASIDE_DIR]: 'keep-both',

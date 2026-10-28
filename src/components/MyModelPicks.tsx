@@ -6,6 +6,7 @@ import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
+import { shownSpeed } from '../lib/shownSpeed'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
@@ -35,9 +36,20 @@ const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: Mes
   { key: 'code', label: 'app.mode.code' }
 ]
 
-/** Vitesse publiée par Artificial Analysis (étape 131) — mesurée sur leur matériel, pas sur cette machine. */
+/**
+ * Étape 367 : vitesse sur CE PC (mesurée à chaque réponse ; « ≈ » si elle est estimée pour un modèle jamais lancé ici),
+ * sinon la vitesse publiée par Artificial Analysis tant que rien n'a été mesuré.
+ */
 function formatSpeed(entry: ModelOverviewEntry): string {
-  return typeof entry.artificialAnalysisSpeed === 'number' ? `${formatDecimal(entry.artificialAnalysisSpeed)} tok/s` : '—'
+  const speed = shownSpeed(entry)
+  if (speed.value === null) return '—'
+  return `${speed.kind === 'estimated' ? '≈ ' : ''}${formatDecimal(speed.value)} tok/s`
+}
+
+const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
+  measured: 'speed.kind.measured',
+  estimated: 'speed.kind.estimated',
+  published: 'speed.kind.published'
 }
 
 /** Points de duel façon Arena (étape 358) : « 0 », « +120 », « -45 ». */
@@ -196,8 +208,11 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                     {/* « — » si rien n'est publié : aligné en colonne dans le tableau large, masqué quand la carte passe sur
                         deux lignes par rôle (il n'y a plus de colonne pour lui donner un sens, voir index.css). */}
                     <td
-                      className={`capacity-scan__tier-speed${typeof entry.artificialAnalysisSpeed === 'number' ? '' : EMPTY}`}
-                      title={t('picks.speed.title')}
+                      className={`capacity-scan__tier-speed${shownSpeed(entry).value === null ? EMPTY : ''}`}
+                      title={(() => {
+                        const kind = shownSpeed(entry).kind
+                        return kind ? `${t('picks.speed.title')} — ${t(SPEED_KIND_LABELS[kind])}` : t('picks.speed.title')
+                      })()}
                     >
                       {formatSpeed(entry)}
                     </td>

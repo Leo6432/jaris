@@ -490,6 +490,14 @@ export interface ModelOverviewEntry {
    */
   artificialAnalysisSpeed: number | null
   /**
+   * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen.
+   * `localSpeedKind` dit d'où elle vient : `measured` (mesurée ici à la fin de chaque réponse), `estimated` (jamais
+   * lancé ici : vitesse publiée × rapport mesuré/publié des modèles déjà lancés), `published` (aucune mesure sur ce
+   * PC encore). `null` si elle est inconnue. Voir shared/localSpeed.ts.
+   */
+  localSpeed: number | null
+  localSpeedKind: 'measured' | 'estimated' | 'published' | null
+  /**
    * Étape 329, Léo (« il y a pas écrit le score Terminal-Bench ») : AA-Omniscience publié par Artificial Analysis,
    * de -100 (invente souvent) à 100 (sait tout), 0 = dit « je ne sais pas » plutôt que d'inventer. Compte dans la
    * note de Faible, Moyen et Élevé depuis l'étape 328. `null` si rien n'est publié pour ce modèle exact.

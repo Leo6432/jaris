@@ -20,6 +20,7 @@ import type {
 } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 import type { DuelCategory } from '../../shared/duel'
+import type { ResolvedSpeed } from '../../shared/localSpeed'
 
 const execAsync = promisify(exec)
 
@@ -1519,6 +1520,28 @@ export function setDuelProbability(fn: DuelProbability | null): void {
 }
 
 /**
+ * Étape 367 : la vitesse d'un modèle sur CE PC (mesurée à chaque réponse, speedStore.ts ; règles dans
+ * shared/localSpeed.ts), branchée par main.ts — un import ici obligerait chaque test de ce module à la fournir. Sans
+ * elle, la vitesse publiée par Artificial Analysis, comme avant.
+ */
+export type LocalSpeedResolver = (model: string, published: Readonly<Record<string, number>>) => ResolvedSpeed
+let localSpeedResolver: LocalSpeedResolver | null = null
+export function setLocalSpeedResolver(resolver: LocalSpeedResolver | null): void {
+  localSpeedResolver = resolver
+}
+
+export function localSpeedOf(model: string): ResolvedSpeed {
+  if (localSpeedResolver) return localSpeedResolver(model, ARTIFICIAL_ANALYSIS_SPEED)
+  const published = ARTIFICIAL_ANALYSIS_SPEED[model]
+  return published === undefined ? { speed: null, kind: null } : { speed: published, kind: 'published' }
+}
+
+/** La vitesse utilisée pour choisir les modèles, `undefined` si elle est inconnue (même convention qu'avant). */
+function speedFor(model: string): number | undefined {
+  return localSpeedOf(model).speed ?? undefined
+}
+
+/**
  * Étape 360 (relecture de ChatGPT, acceptée par Léo) : quand un modèle est déjà en service pour un rôle, un autre ne
  * le remplace que s'il est PROUVÉ meilleur — comparaison directe des deux, pas chacun contre la moyenne :
  * - au moins DUEL_MIN_FOR_SWITCH duels (nécessaire, jamais suffisant seul) ;
@@ -1636,11 +1659,15 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
 }
 
 /** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
-function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'omniscience' | 'terminalBench' | 'quantization'> {
+function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'localSpeed' | 'localSpeedKind' | 'omniscience' | 'terminalBench' | 'quantization'> {
   return {
     quantization: MODEL_QUANTIZATION[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null,
+    ...(() => {
+      const local = localSpeedOf(model)
+      return { localSpeed: local.speed, localSpeedKind: local.kind }
+    })(),
     omniscience: ARTIFICIAL_ANALYSIS_OMNISCIENCE[model] ?? null,
     terminalBench: ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model] ?? null
   }
@@ -1928,8 +1955,8 @@ function computeModelPicks(
    * vitesse publiée, le plus léger (moins de mémoire à lire par mot écrit).
    */
   const fastestFirst = (a: Scored, b: Scored): number => {
-    const aSpeed = ARTIFICIAL_ANALYSIS_SPEED[a.model]
-    const bSpeed = ARTIFICIAL_ANALYSIS_SPEED[b.model]
+    const aSpeed = speedFor(a.model)
+    const bSpeed = speedFor(b.model)
     if (aSpeed !== undefined && bSpeed !== undefined && aSpeed !== bSpeed) return bSpeed - aSpeed
     if (aSpeed !== undefined && bSpeed === undefined) return -1
     if (aSpeed === undefined && bSpeed !== undefined) return 1
@@ -1951,11 +1978,11 @@ function computeModelPicks(
     // le passent, par note (intelligence × fiabilité).
     const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
     const reference = scored.filter((c) => parseToolScore(c.result.toolCalling) === top)
-    const speeds = reference.map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model]).filter((v): v is number => v !== undefined)
+    const speeds = reference.map((c) => speedFor(c.model)).filter((v): v is number => v !== undefined)
     if (!speeds.length) return bestNote(scored, chain)
     const floor = Math.max(...speeds) * RAPIDE_MIN_SPEED_RATIO
     return scored
-      .filter((c) => (ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? -1) >= floor)
+      .filter((c) => (speedFor(c.model) ?? -1) >= floor)
       .sort((a, b) => bestNoteFirstOrNull(a, b, chain) ?? fastestFirst(a, b))
   }
 
@@ -1968,12 +1995,12 @@ function computeModelPicks(
     const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
     const speeds = scored
       .filter((c) => parseToolScore(c.result.toolCalling) === top)
-      .map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model])
+      .map((c) => speedFor(c.model))
       .filter((v): v is number => v !== undefined)
     if (!speeds.length) return bestNote(scored, chain)
     const floor = Math.max(...speeds) * MEDIUM_MIN_SPEED_RATIO
     const kept = scored.filter((c) => {
-      const speed = ARTIFICIAL_ANALYSIS_SPEED[c.model]
+      const speed = speedFor(c.model)
       return speed === undefined || speed >= floor
     })
     return bestNote(kept.length ? kept : scored, chain)

@@ -9,6 +9,13 @@ import { filterModels } from '../lib/filterModels'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 import { FUTURE_MODELS } from '../../shared/futureModels'
+import { shownSpeed } from '../lib/shownSpeed'
+
+const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
+  measured: 'speed.kind.measured',
+  estimated: 'speed.kind.estimated',
+  published: 'speed.kind.published'
+}
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
@@ -113,10 +120,26 @@ function toolScoreValue(toolCalling: string | null): number | null {
   return Number.isFinite(total) && total > 0 ? correct / total : correct
 }
 
+/**
+ * Étape 367 : vitesse sur CE PC. « ≈ » devant une vitesse estimée (modèle jamais lancé ici) ; l'infobulle dit d'où
+ * vient le chiffre (mesurée sur ton PC, estimée, ou publiée tant que rien n'a été mesuré).
+ */
+function SpeedCell({ entry }: { entry: ModelOverviewEntry }) {
+  const speed = shownSpeed(entry)
+  if (speed.value === null) return <td className="options-menu__col-num">—</td>
+  return (
+    <td className="options-menu__col-num" title={speed.kind ? t(SPEED_KIND_LABELS[speed.kind]) : undefined}>
+      {speed.kind === 'estimated' ? '≈ ' : ''}
+      {formatDecimal(speed.value)}
+    </td>
+  )
+}
+
 function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'toolCalling') return toolScoreValue(entry.toolCalling)
   if (key === 'demands') return toolScoreValue(entry.demands ?? null)
   // `?? null` : une mesure absente (y compris d'une réponse plus ancienne sans ce champ) reste toujours en fin de liste.
+  if (key === 'artificialAnalysisSpeed') return shownSpeed(entry).value
   return entry[key] ?? null
 }
 
@@ -334,7 +357,7 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? t('models.notPublished') : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
                                 <td className="options-menu__col-num">{entry.omniscience == null ? '—' : formatDecimal(entry.omniscience)}</td>
                                 <td className="options-menu__col-num">{entry.terminalBench == null ? '—' : formatPercent(entry.terminalBench / 100)}</td>
-                                <td className="options-menu__col-num">{typeof entry.artificialAnalysisSpeed === 'number' ? formatDecimal(entry.artificialAnalysisSpeed) : '—'}</td>
+                                <SpeedCell entry={entry} />
                               </tr>
                             ))}
                             {futureEntries.map((entry) => (

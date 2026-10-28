@@ -9995,3 +9995,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - `test-duel-panel-ui.mjs` (pre-wrap mesuré, titre sur sa ligne, 3 éléments, trait espacé).
 
   Chaque garde a été vérifiée en la retirant (13 mutations, toutes attrapées).
+
+- **Étape 367 (v0.40.9), Léo : « un score vitesse avec les tokens par seconde, ça compte beaucoup pour Rapide, comme
+  avant avec Artificial Analysis mais avec nos mesures ».** Faible (plancher 50 % du plus rapide) et Moyen (20 %)
+  utilisaient la vitesse PUBLIÉE par Artificial Analysis, mesurée chez un fournisseur en ligne (étapes 340, 348).
+  Ollama donne déjà, à la fin de chaque réponse, `eval_count`/`eval_duration` : la vraie vitesse sur ce PC.
+  - **Mesure à un seul endroit** : `requestChat` (ollama.ts), par où passent conversation, voix, Chat, mode Code et
+    duels, appelle un enregistreur branché par main.ts (`setSpeedRecorder`). Ignorée sous 20 tokens écrits ; une
+    erreur d'enregistrement ne fait jamais échouer une réponse.
+  - **`speedStore.ts`** (`model-speeds.json`, dans OWNED_ENTRIES, règle `destination-wins`) : les 10 dernières
+    mesures par modèle (« :latest » = sans tag), vitesse retenue = la médiane, pour qu'une mesure prise pendant qu'un
+    autre modèle occupait la carte ne compte pas.
+  - **Règles (`shared/localSpeed.ts`, pur)** : mesurée ici, sinon (jamais lancé ici) vitesse publiée × la médiane du
+    rapport mesuré/publié des modèles déjà mesurés, sinon (aucune mesure encore) la vitesse publiée comme avant ; des
+    mesures sans aucun modèle commun pour le rapport donnent « inconnue ». **Sans ce rapport, deux échelles se
+    mélangent** : un modèle jamais essayé (200 tok/s publiés chez un fournisseur) passerait toujours devant un modèle
+    mesuré ici (40 tok/s réels).
+  - Branché dans hardwareScan.ts par un SETTER (`setLocalSpeedResolver`, comme `setDuelProbability`), pas par un
+    import : une dizaine de tests chargent ce module avec leur propre liste de modules, un import de valeur les
+    aurait tous cassés (piège déjà noté). Mêmes planchers qu'avant ; Élevé, Code et Vision ne regardent pas la vitesse.
+  - Affichage : « Modèles utilisés sur ta machine » et la colonne Vitesse de « Tous les modèles » montrent la vitesse
+    de ce PC, « ≈ » devant une estimation, et l'infobulle dit d'où vient le chiffre (24 langues).
+  Le changement ne s'applique qu'au prochain « Retester la configuration » (ou fin de session de duel) : les choix
+  sont figés dans le profil. Régression : `node --test scripts/test-local-speed.mjs` (réponse trop courte ignorée,
+  médiane, relu après redémarrage, enregistreur appelé en flux et sans, sans mesure = choix identique sur la machine
+  de Léo, un modèle mesuré lent perd Faible ; trois gardes vérifiées en les retirant). **Non vérifié en usage réel** :
+  les vitesses mesurées sur la carte de Léo.

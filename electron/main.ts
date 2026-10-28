@@ -50,7 +50,9 @@ import {
   usesEmbeddedOllama
 } from './services/dependencyServices'
 import { engineModelsDir } from './services/ollamaEngine'
-import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
+import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
+import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services/speedStore'
+import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
@@ -65,6 +67,7 @@ import {
   setOllamaVersionSource,
   setDuelStrengthSource,
   setDuelProbability,
+  setLocalSpeedResolver,
   detectGpu
 } from './services/hardwareScan'
 import { buildDuelVotesExport, defaultDuelExportName, getDuelVotes, loadDuelVotes } from './services/duelStore'
@@ -251,6 +254,16 @@ setDuelProbability((category, challenger, incumbent) => {
     switchCache.results.set(key, switchProbability(votes.filter((v) => v.category === category), challenger, incumbent))
   }
   return switchCache.results.get(key) ?? null
+})
+// Étape 367 : chaque réponse d'Ollama mesure la vitesse du modèle sur ce PC ; Faible et Moyen la préfèrent à la vitesse
+// publiée par Artificial Analysis.
+setSpeedRecorder((model, tokens, ms) => void recordModelSpeed(model, tokens, ms))
+let speedRatio: { measured: Record<string, number>; ratio: number | null } | null = null
+setLocalSpeedResolver((model, published) => {
+  const measured = getMeasuredSpeeds()
+  // Même objet tant qu'aucune mesure n'a changé : le rapport mesuré/publié n'est recalculé qu'après une mesure.
+  if (speedRatio?.measured !== measured) speedRatio = { measured, ratio: localToPublishedRatio(measured, published) }
+  return resolveSpeed(model, measured, published, speedRatio.ratio)
 })
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
@@ -1713,6 +1726,7 @@ app.whenReady().then(async () => {
     emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view)
   })
   void loadDuelVotes()
+  void loadModelSpeeds()
   const duelCategory = (value: unknown): DuelCategory => {
     if (!isDuelCategory(value)) throw new Error(t('duel.error.badRequest'))
     return value

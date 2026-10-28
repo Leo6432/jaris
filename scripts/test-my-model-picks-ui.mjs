@@ -176,11 +176,12 @@ test('les nombres suivent la langue : « 13.1 » et « 7.8 GB » en anglais, « 
   )
 })
 
-test('la légende dit que ces chiffres ne prédisent pas la vitesse sur la machine', options, async () => {
+// Étape 367 : la vitesse est désormais celle mesurée sur CE PC ; la légende le dit, et dit ce que veut dire « ≈ ».
+test('la légende dit que la vitesse est mesurée sur ce PC', options, async () => {
   await withPreview(async (page) => {
     const legend = await page.$eval('.capacity-scan__tier-legend', (el) => el.textContent ?? '')
-    assert.match(legend, /Artificial Analysis/)
-    assert.match(legend, /pas la vitesse sur ta\s+machine/)
+    assert.match(legend, /Vitesse : mesurée sur ton PC/)
+    assert.match(legend, /≈ : estimée/)
   })
 })
 

@@ -58,6 +58,25 @@ export interface ChatMetrics {
   thinkingChars: number
 }
 
+/**
+ * Étape 367 : chaque réponse donne la vitesse du modèle sur ce PC (tokens par seconde). Branché par main.ts
+ * (speedStore.ts) plutôt qu'importé, comme les autres sources de ce genre : ce module est chargé par beaucoup de tests.
+ */
+export type SpeedRecorder = (model: string, outputTokens: number | undefined, outputMs: number | undefined) => void
+let speedRecorder: SpeedRecorder | null = null
+export function setSpeedRecorder(recorder: SpeedRecorder | null): void {
+  speedRecorder = recorder
+}
+
+function reportMetrics(model: string, metrics: ChatMetrics, onMetrics?: (metrics: ChatMetrics) => void): void {
+  try {
+    speedRecorder?.(model, metrics.outputTokens, metrics.outputMs)
+  } catch {
+    // une mesure perdue ne fait jamais échouer une réponse
+  }
+  onMetrics?.(metrics)
+}
+
 function metricsOf(data: OllamaChatResponse, thinkingChars: number): ChatMetrics {
   const ms = (ns?: number): number | undefined => (typeof ns === 'number' ? Math.round(ns / 1e6) : undefined)
   return {
@@ -163,7 +182,7 @@ async function requestChat(
       throw new ContextFullError(model, numCtx)
     }
     if (!data.message) throw new Error(t('ollama.empty', { model }))
-    onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
+    reportMetrics(model, metricsOf(data, data.message.thinking?.length ?? 0), onMetrics)
     return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
   }
 
@@ -235,7 +254,7 @@ async function requestChat(
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(t('ollama.empty', { model }))
   }
-  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinking.length))
+  if (finalChunk) reportMetrics(model, metricsOf(finalChunk, thinking.length), onMetrics)
   // Sans relais (voix, mémoire), la forme d'avant le flux : la réflexion reste jointe au message, comme une réponse
   // d'un bloc — le canal voix la garde entre deux appels d'outils (étape 233).
   return { role, content, tool_calls: toolCalls, ...(!relays && thinking ? { thinking } : {}) }
