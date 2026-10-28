@@ -9667,6 +9667,56 @@ ol.reply-list > li::marker {
   background: #ffffff;
 }
 
+/* Étape 364 : aperçu ou code de chaque application, comme dans le mode Code. */
+.duel-app {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.duel-app__views {
+  align-self: flex-end;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--jv-hover);
+}
+
+.duel-app__view {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+}
+
+.duel-app__view:hover {
+  color: var(--hud-text);
+}
+
+.duel-app__view--active {
+  background: var(--hud-panel);
+  color: var(--hud-text);
+}
+
+.duel-app__code {
+  height: 380px;
+  overflow: auto;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: var(--jv-code);
+}
+
+.duel-app__note {
+  padding: 12px 14px;
+}
+
 .duel-side__issues p {
   margin: 0 0 4px;
   font-size: 13px;

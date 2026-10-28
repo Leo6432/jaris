@@ -9901,3 +9901,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   doublon, exactement les modèles choisis téléchargés, anonymat) et `test-duel-panel-ui.mjs` (vrai navigateur :
   grisés non cochables avec raison, Démarrer sous 4, liste envoyée au main, hasard inchangé). Vérifié en retirant le
   contrôle de disponibilité et en abaissant le minimum de l'écran : les deux font échouer leur test.
+
+- **Étape 364 (v0.40.6), Léo : « il m'a fait mais je peux pas voir le code ».** En duel Code, chaque côté n'affichait
+  que l'aperçu de l'application. Chaque carte (duel en cours et historique) a maintenant l'œil (aperçu, par défaut) et
+  les chevrons (code), comme le mode Code (étape 327). Le code numéroté passe par `CodeSource`, extrait de
+  CodeBrowser.tsx et partagé par les deux écrans. Le HTML n'est demandé qu'au clic (`duelSideCode`, `duelHistoryCode`),
+  jamais dans la vue envoyée à chaque mise à jour. Il est lu seulement une fois ce côté fini, sans nom de modèle
+  (`withoutModelNames`), et un identifiant de vote inconnu ne renvoie rien. Régression : `test-duel-session.mjs` et
+  `test-duel-panel-ui.mjs` (aperçu puis code numéroté, retour à l'aperçu, historique ; vérifié en coupant le bouton).

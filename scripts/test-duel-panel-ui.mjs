@@ -95,6 +95,8 @@ window.jaris = {
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
   duelExportVotes: async () => { window.__calls.push('export'); return window.__exportResult || { saved: true, count: 3 } },
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
+  duelHistoryCode: async (id, side) => { window.__calls.push(['historyCode', id, side]); return '<html>\\n<body>serpent</body>\\n</html>' },
+  duelSideCode: async (side) => { window.__calls.push(['sideCode', side]); return '<html>\\n<body>\\n<h1>Compteur</h1>\\n</body>\\n</html>' },
   duelRetry: async () => {
     window.__calls.push('retry')
     return ready({ ...window.__view.round, a: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' } }), b: side() })
@@ -526,4 +528,43 @@ test('étape 363 : « Au hasard » garde le nombre de modèles comme avant', opt
     const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
     assert.deepEqual(call, ['start', 'conversation', 5])
   })
+})
+
+test('étape 364 : en duel Code, on voit l’aperçu puis le code de chaque application, numéroté', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-app__view--code')
+    // Aperçu par défaut.
+    assert.equal(await page.$$eval('.duel-side iframe.duel-side__preview', (els) => els.length), 2)
+    await page.click('.duel-side:nth-of-type(1) .duel-app__view--code')
+    await page.waitForSelector('.duel-app__code .code-browser__code')
+    assert.match(await page.textContent('.duel-app__code .code-browser__code'), /Compteur/)
+    assert.equal((await page.textContent('.duel-app__code .code-browser__gutter')).trim(), '1\n2\n3\n4\n5')
+    assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'sideCode' && c[1] === 'a'))
+    // L'autre côté garde son aperçu, et le bouton actif est réellement habillé par le CSS.
+    assert.equal(await page.$$eval('.duel-side iframe.duel-side__preview', (els) => els.length), 1)
+    const style = await page.$eval('.duel-app__view--code', (el) => { const s = getComputedStyle(el); return { radius: s.borderRadius, w: el.getBoundingClientRect().width, pressed: el.getAttribute('aria-pressed') } })
+    assert.equal(style.radius, '8px')
+    assert.equal(style.w, 34)
+    assert.equal(style.pressed, 'true')
+    // Retour à l'aperçu.
+    await page.click('.duel-side:nth-of-type(1) .duel-app__view--preview')
+    assert.equal(await page.$$eval('.duel-side iframe.duel-side__preview', (els) => els.length), 2)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
+  }, `window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null,
+    round: { number: 1, prompt: 'Un compteur', revealed: null,
+      a: { status: 'done', text: '', activity: null, startedAt: 1, durationMs: 30000, actions: [], previewUrl: 'data:text/html,<p>A</p>', audio: false, audioError: null, error: null, trouble: null },
+      b: { status: 'done', text: '', activity: null, startedAt: 1, durationMs: 40000, actions: [], previewUrl: 'data:text/html,<p>B</p>', audio: false, audioError: null, error: null, trouble: null } } }`)
+})
+
+test('étape 364 : le code d’un duel Code de l’historique se lit aussi', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-history-button')
+    await page.click('.duel-history-button')
+    await page.click('.duel-history__item:nth-child(2) .duel-history__toggle')
+    await page.click('.duel-history__item:nth-child(2) .duel-history__open-app')
+    await page.click('.duel-history__item:nth-child(2) .duel-app__view--code >> nth=0')
+    await page.waitForSelector('.duel-history__item:nth-child(2) .duel-app__code .code-browser__code')
+    assert.match(await page.textContent('.duel-history__item:nth-child(2) .duel-app__code'), /serpent/)
+    assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'historyCode' && c[1] === 'v2' && c[2] === 'a'))
+  }, HISTORY)
 })

@@ -1368,6 +1368,8 @@ export const IPC_CHANNELS = {
   /** Historique des duels, application d'un duel Code de l'historique, rejouer ou passer un duel gâché par Jaris. */
   duelHistory: 'jaris:duel-history',
   duelHistoryApp: 'jaris:duel-history-app',
+  duelHistoryCode: 'jaris:duel-history-code',
+  duelSideCode: 'jaris:duel-side-code',
   duelRetry: 'jaris:duel-retry',
   duelSkip: 'jaris:duel-skip',
   /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */

@@ -86,6 +86,24 @@ export function lineCount(text: string): number {
   return text.endsWith('\n') ? lines - 1 : lines
 }
 
+/**
+ * Un fichier en lecture seule, numéros de ligne à gauche. Partagé par cette vue et par le Duel (étape 364) pour que
+ * le code s'affiche partout de la même façon.
+ */
+export function CodeSource({ text, label }: { text: string; label: string }): JSX.Element {
+  const gutter = useMemo(() => Array.from({ length: lineCount(text) }, (_, index) => index + 1).join('\n'), [text])
+  return (
+    <div className="code-browser__source">
+      <pre className="code-browser__gutter" aria-hidden="true">
+        {gutter}
+      </pre>
+      <pre className="code-browser__code" tabIndex={0} aria-label={label}>
+        <code>{text}</code>
+      </pre>
+    </div>
+  )
+}
+
 function FolderIcon({ open }: { open: boolean }): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -293,10 +311,6 @@ export default function CodeBrowser({ files, changes, initialPath, load, version
 
   const current = active ? contents.get(active) : undefined
   const text = current?.status === 'done' ? current.file.text : null
-  const gutter = useMemo(() => {
-    if (text === null) return ''
-    return Array.from({ length: lineCount(text) }, (_, index) => index + 1).join('\n')
-  }, [text])
 
   return (
     <div className="code-browser">
@@ -386,14 +400,7 @@ export default function CodeBrowser({ files, changes, initialPath, load, version
           ) : text === null ? (
             <p className="code-browser__message">{t('code.browser.binary')}</p>
           ) : (
-            <div className="code-browser__source">
-              <pre className="code-browser__gutter" aria-hidden="true">
-                {gutter}
-              </pre>
-              <pre className="code-browser__code" tabIndex={0} aria-label={active}>
-                <code>{text}</code>
-              </pre>
-            </div>
+            <CodeSource text={text} label={active ?? ''} />
           )}
         </div>
       </div>

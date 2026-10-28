@@ -390,6 +390,10 @@ test('duel Code : l’application est écrite par CE modèle, montrée dans l’
   assert.ok(MODELS.includes(call.options.model))
   assert.equal(call.options.persist, false)
   assert.match(env.session.getDuelView().round.a.previewUrl, /^jaris-preview:/)
+  // Étape 364 : le code de A se lit une fois A fini ; B n'a encore rien écrit.
+  assert.ok(env.session.duelSideCode('a').startsWith('<html>'))
+  assert.equal(env.session.duelSideCode('b'), null)
+  assert.equal(JSON.stringify(env.session.getDuelView()).includes('<html>'), false, 'le code ne voyage pas avec chaque mise à jour')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
   await env.session.voteDuel('a')
@@ -525,6 +529,8 @@ test('historique Code : l’application de chaque côté est gardée et se rouvr
   assert.ok(env.apps.get(`${id}-a`).startsWith('<html>'))
   assert.match(await env.session.duelHistoryApp(id, 'a'), /^jaris-preview:/)
   assert.equal(await env.session.duelHistoryApp('inconnu', 'a'), null, 'un identifiant qui n’est pas un vote : rien')
+  assert.ok((await env.session.duelHistoryCode(id, 'a')).startsWith('<html>'))
+  assert.equal(await env.session.duelHistoryCode('inconnu', 'a'), null)
 })
 
 test('étape 363 : le plan montre TOUS les modèles, ceux que le PC ne peut pas faire tourner avec leur raison', async () => {

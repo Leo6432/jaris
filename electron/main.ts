@@ -76,6 +76,8 @@ import {
   duelAudio,
   duelHistory,
   duelHistoryApp,
+  duelHistoryCode,
+  duelSideCode,
   duelRankings,
   endDuel,
   getDuelView,
@@ -1781,6 +1783,14 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.duelHistoryApp, (_event, voteId: unknown, side: unknown) => {
     if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
     return duelHistoryApp(voteId, side)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelHistoryCode, (_event, voteId: unknown, side: unknown) => {
+    if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
+    return duelHistoryCode(voteId, side)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelSideCode, (_event, side: unknown) => {
+    if (side !== 'a' && side !== 'b') throw new Error(t('duel.error.badRequest'))
+    return duelSideCode(side)
   })
   ipcMain.handle(IPC_CHANNELS.duelRetry, () => {
     cancelMemoryExtraction()

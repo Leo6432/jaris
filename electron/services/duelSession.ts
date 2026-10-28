@@ -619,6 +619,25 @@ export async function duelHistoryApp(voteId: string, side: DuelSide): Promise<st
   return html === null ? null : createGeneratedAppPreview(html)
 }
 
+/**
+ * Étape 364 : le code d'une application du duel en cours, demandé au clic (jamais dans la vue envoyée à chaque mise à
+ * jour, trop lourde). Seulement une fois ce côté fini, et sans le nom d'un modèle avant la révélation.
+ */
+export function duelSideCode(name: DuelSide): string | null {
+  const current = session
+  const round = current?.round
+  if (!current || !round || current.category !== 'code') return null
+  const side = round.sides[name]
+  if (!side.html || !sideFinished(side)) return null
+  return withoutModelNames(side.html, current.models, round.pair)
+}
+
+/** Le code d'une application d'un duel Code de l'historique (`null` si elle n'a pas été gardée). */
+export async function duelHistoryCode(voteId: string, side: DuelSide): Promise<string | null> {
+  if (!getDuelVotes().some((v) => v.id === voteId)) return null
+  return readDuelApp(voteId, side)
+}
+
 const ROLES = ['flash', 'medium', 'large'] as const
 
 /**

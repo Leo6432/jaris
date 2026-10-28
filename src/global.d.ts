@@ -236,6 +236,8 @@ declare global {
       duelHistory: () => Promise<DuelHistoryEntry[]>
       duelExportVotes: () => Promise<DuelExportResult>
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
+      duelHistoryCode: (voteId: string, side: DuelSide) => Promise<string | null>
+      duelSideCode: (side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>
       duelNext: () => Promise<DuelSessionView>

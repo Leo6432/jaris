@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import { setVoiceOutputDevice } from '@/components/JarisOrb'
@@ -195,6 +196,57 @@ function ModelPicker({ plan, picked, onToggle }: ModelPickerProps): JSX.Element 
   )
 }
 
+/**
+ * Étape 364 (Léo : « il m'a fait mais je peux pas voir le code ») : l'application d'un côté, avec l'œil (aperçu) et les
+ * chevrons (code) comme dans le mode Code. Le code n'est demandé qu'au premier clic.
+ */
+function DuelAppView({ name, url, loadCode }: { name: DuelSide; url: string; loadCode: () => Promise<string | null> }): JSX.Element {
+  const [view, setView] = useState<'preview' | 'code'>('preview')
+  const [code, setCode] = useState<string | null | 'loading' | 'missing'>(null)
+  const showCode = (): void => {
+    setView('code')
+    if (code !== null && code !== 'missing') return
+    setCode('loading')
+    loadCode()
+      .then((html) => setCode(html ?? 'missing'))
+      .catch(() => setCode('missing'))
+  }
+  const label = t('duel.preview.title', { side: name.toUpperCase() })
+  return (
+    <div className="duel-app">
+      <div className="duel-app__views" role="group">
+        {(['preview', 'code'] as const).map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            className={`duel-app__view duel-app__view--${choice}${view === choice ? ' duel-app__view--active' : ''}`}
+            onClick={choice === 'preview' ? () => setView('preview') : showCode}
+            title={t(choice === 'preview' ? 'code.preview' : 'app.mode.code')}
+            aria-label={t(choice === 'preview' ? 'code.preview' : 'app.mode.code')}
+            aria-pressed={view === choice}
+          >
+            <LineIcon
+              d={choice === 'preview' ? 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6' : 'm8 7-5 5 5 5M16 7l5 5-5 5M13.5 4.5l-3 15'}
+              size={16}
+            />
+          </button>
+        ))}
+      </div>
+      {view === 'preview' ? (
+        <iframe className="duel-side__preview" title={label} sandbox="allow-scripts allow-forms" src={url} />
+      ) : (
+        <div className="duel-app__code">
+          {typeof code === 'string' && code !== 'loading' && code !== 'missing' ? (
+            <CodeSource text={code} label={label} />
+          ) : (
+            <p className="duel-side__muted duel-app__note">{code === 'missing' ? t('duel.history.appMissing') : t('common.loading')}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface SideCardProps {
   name: DuelSide
   side: DuelSideView
@@ -253,12 +305,7 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model 
       )}
 
       {category === 'code' && side.previewUrl && (
-        <iframe
-          className="duel-side__preview"
-          title={t('duel.preview.title', { side: name.toUpperCase() })}
-          sandbox="allow-scripts allow-forms"
-          src={side.previewUrl}
-        />
+        <DuelAppView key={side.previewUrl} name={name} url={side.previewUrl} loadCode={() => window.jaris.duelSideCode(name)} />
       )}
 
       {category === 'code' ? (
@@ -387,12 +434,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
         <>
           {side.app &&
             (typeof app === 'string' && app !== 'loading' && app !== 'missing' ? (
-              <iframe
-                className="duel-side__preview"
-                title={t('duel.preview.title', { side: name.toUpperCase() })}
-                sandbox="allow-scripts allow-forms"
-                src={app}
-              />
+              <DuelAppView name={name} url={app} loadCode={() => window.jaris.duelHistoryCode(entry.id, name)} />
             ) : (
               <button type="button" className="duel-btn duel-history__open-app" onClick={openApp} disabled={app === 'loading'}>
                 {app === 'loading' ? t('common.loading') : t('duel.history.openApp')}
