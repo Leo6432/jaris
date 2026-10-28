@@ -1515,6 +1515,7 @@
   "duel.summary.deleteFailed": "Neodstránené: {model} ({error})",
   "duel.summary.again": "Nová relácia",
   "duel.refusal": "Vypnutie počítača je počas súboja zablokované.",
+  "duel.toolUnavailable": "Tento nástroj nie je na tomto počítači k dispozícii.",
   "duel.error.badRequest": "Neplatná požiadavka na súboj.",
   "duel.error.alreadyVoted": "V tomto dueli už je odhlasované.",
   "duel.error.alreadyRunning": "Relácia súboja už prebieha.",

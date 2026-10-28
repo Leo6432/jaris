@@ -70,33 +70,62 @@ function renderInline(text: string, keyPrefix: string): JSX.Element[] {
  * propre), comme dans ChatGPT. Une ligne vide entre deux éléments ne coupe pas la liste. Si un gras s'étale sur
  * plusieurs lignes dont une ressemble à un élément de liste (vu en vrai, étape 339), on garde l'ancien rendu plutôt
  * que de casser le gras en deux.
+ *
+ * Étape 366 (capture de Léo : « 1. Objectif, 2. Contrôles » avec deux sous-puces, puis « 5. Croissance ») : les
+ * éléments en retrait étaient des `<li>` du MÊME `<ol>`, donc comptés dans la numérotation — « 3. » devenait « 5. ».
+ * Ils forment maintenant une vraie sous-liste DANS l'élément du dessus. Et une ligne seule « --- » (séparateur que les
+ * modèles écrivent souvent) devient un trait fin au lieu de rester du texte.
  */
 const LIST_ITEM = /^([ \t]*)([-*•+]|\d{1,3}[.)])[ \t]+(.*)$/
+const RULE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/
 
 interface ListItem {
   text: string
+  /** Retrait de la ligne (tabulation = 2 espaces). */
+  indent: number
   nested: boolean
+  ordered: boolean
+  number: number
 }
-type Block = { kind: 'text'; lines: string[] } | { kind: 'ul' | 'ol'; start: number; items: ListItem[] }
+type Block = { kind: 'text'; lines: string[] } | { kind: 'rule' } | { kind: 'ul' | 'ol'; start: number; items: ListItem[] }
+
+function listItemOf(match: RegExpExecArray): ListItem {
+  const ordered = /\d/.test(match[2])
+  const indent = match[1].replace(/\t/g, '  ').length
+  return {
+    text: match[3],
+    indent,
+    nested: indent >= 2,
+    ordered,
+    number: ordered ? Number.parseInt(match[2], 10) || 1 : 1
+  }
+}
 
 function toBlocks(text: string): Block[] {
   const lines = text.split('\n')
   const blocks: Block[] = []
   lines.forEach((line, index) => {
+    if (RULE.test(line)) {
+      blocks.push({ kind: 'rule' })
+      return
+    }
     const match = LIST_ITEM.exec(line)
     const last = blocks[blocks.length - 1]
     if (match) {
-      const kind = /\d/.test(match[2]) ? 'ol' : 'ul'
-      const item = { text: match[3], nested: match[1].replace(/\t/g, '  ').length >= 2 }
-      if (last && last.kind !== 'text' && (last.kind === kind || item.nested)) last.items.push(item)
-      else blocks.push({ kind, start: kind === 'ol' ? Number.parseInt(match[2], 10) || 1 : 1, items: [item] })
+      const item = listItemOf(match)
+      const kind = item.ordered ? 'ol' : 'ul'
+      if (last && (last.kind === 'ul' || last.kind === 'ol') && (last.kind === kind || item.nested)) last.items.push(item)
+      else blocks.push({ kind, start: item.number, items: [item] })
       return
     }
-    // Une ligne vide entre deux éléments de la même liste : la liste continue.
-    if (line.trim() === '' && last && last.kind !== 'text') {
+    // Une ligne vide entre deux éléments de la même liste (ou avant une sous-puce) : la liste continue.
+    if (line.trim() === '' && last && (last.kind === 'ul' || last.kind === 'ol')) {
       const next = lines.slice(index + 1).find((candidate) => candidate.trim() !== '')
       const nextMatch = next === undefined ? null : LIST_ITEM.exec(next)
-      if (nextMatch && (/\d/.test(nextMatch[2]) ? 'ol' : 'ul') === last.kind) return
+      if (nextMatch) {
+        const nextItem = listItemOf(nextMatch)
+        if ((nextItem.ordered ? 'ol' : 'ul') === last.kind || nextItem.nested) return
+      }
     }
     if (last && last.kind === 'text') last.lines.push(line)
     else blocks.push({ kind: 'text', lines: [line] })
@@ -104,28 +133,81 @@ function toBlocks(text: string): Block[] {
   return blocks
 }
 
-/** Hors bloc de code : titres, gras, italique, `code` — et les listes. */
+interface ListNode {
+  item: ListItem
+  children: ListNode[]
+}
+
+/**
+ * L'arbre de la liste, d'après le retrait RELATIF des lignes (relecture de l'étape 366) : une liste entièrement en
+ * retrait sous un libellé (« **Contrôles** :\n   - Flèches\n   - Espace ») reste une liste à un seul niveau, et un
+ * troisième niveau (6 espaces sous 3) devient une sous-liste de la sous-liste, au lieu de compter dans sa numérotation.
+ */
+function toTree(items: ListItem[]): ListNode[] {
+  const roots: ListNode[] = []
+  const stack: ListNode[] = []
+  for (const item of items) {
+    const node: ListNode = { item, children: [] }
+    while (stack.length && stack[stack.length - 1].item.indent >= item.indent) stack.pop()
+    if (stack.length) stack[stack.length - 1].children.push(node)
+    else roots.push(node)
+    stack.push(node)
+  }
+  return roots
+}
+
+function renderNodes(nodes: ListNode[], keyPrefix: string): JSX.Element[] {
+  return nodes.map((node, index) => (
+    <li key={`${keyPrefix}-${index}`}>
+      {renderInline(node.item.text, `${keyPrefix}-${index}`)}
+      {renderChildren(node.children, `${keyPrefix}-${index}`)}
+    </li>
+  ))
+}
+
+/** Sous-listes d'un élément : une par suite de sous-éléments du même genre (puces ou numéros). */
+function renderChildren(children: ListNode[], keyPrefix: string): JSX.Element[] {
+  const groups: ListNode[][] = []
+  for (const child of children) {
+    const group = groups[groups.length - 1]
+    if (group && group[0].item.ordered === child.item.ordered) group.push(child)
+    else groups.push([child])
+  }
+  return groups.map((group, groupIndex) => {
+    const key = `${keyPrefix}-s${groupIndex}`
+    const first = group[0].item
+    return first.ordered ? (
+      <ol key={key} className="reply-list reply-list--nested" start={first.number === 1 ? undefined : first.number}>
+        {renderNodes(group, key)}
+      </ol>
+    ) : (
+      <ul key={key} className="reply-list reply-list--nested">
+        {renderNodes(group, key)}
+      </ul>
+    )
+  })
+}
+
+/** Hors bloc de code : titres, gras, italique, `code` — les listes et les séparateurs. */
 function renderText(text: string, keyPrefix: string): JSX.Element[] {
   const blocks = toBlocks(text)
   const balanced = blocks.every((block) => {
+    if (block.kind === 'rule') return true
     const body = block.kind === 'text' ? block.lines.join('\n') : block.items.map((item) => item.text).join('\n')
     return (body.match(/\*\*/g)?.length ?? 0) % 2 === 0
   })
   if (!balanced || blocks.every((block) => block.kind === 'text')) return renderInline(text, keyPrefix)
   return blocks.flatMap((block, index) => {
     const key = `${keyPrefix}-l${index}`
+    if (block.kind === 'rule') return [<hr key={key} className="reply-rule" />]
     if (block.kind === 'text') {
-      // La liste est un bloc : les lignes vides qui la touchent feraient un trou en plus de sa propre marge.
+      // Une liste ou un trait est un bloc : les lignes vides qui le touchent feraient un trou en plus de sa propre marge.
       const lines = [...block.lines]
       if (index > 0) while (lines.length && lines[0].trim() === '') lines.shift()
       if (index < blocks.length - 1) while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
       return lines.length ? renderInline(lines.join('\n'), key) : []
     }
-    const items = block.items.map((item, itemIndex) => (
-      <li key={`${key}-${itemIndex}`} className={item.nested ? 'reply-list__nested' : undefined}>
-        {renderInline(item.text, `${key}-${itemIndex}`)}
-      </li>
-    ))
+    const items = renderNodes(toTree(block.items), key)
     return block.kind === 'ol'
       ? [<ol key={key} className="reply-list" start={block.start === 1 ? undefined : block.start}>{items}</ol>]
       : [<ul key={key} className="reply-list">{items}</ul>]

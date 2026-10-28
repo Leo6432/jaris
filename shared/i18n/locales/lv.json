@@ -1515,6 +1515,7 @@
   "duel.summary.deleteFailed": "Nav dzēsts: {model} ({error})",
   "duel.summary.again": "Jauna sesija",
   "duel.refusal": "Datora izslēgšana dueļa laikā ir bloķēta.",
+  "duel.toolUnavailable": "Šis rīks šajā datorā nav pieejams.",
   "duel.error.badRequest": "Nederīgs dueļa pieprasījums.",
   "duel.error.alreadyVoted": "Par šo dueli jau ir nobalsots.",
   "duel.error.alreadyRunning": "Dueļa sesija jau notiek.",

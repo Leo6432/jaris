@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Não excluído: {model} ({error})",
   "duel.summary.again": "Nova sessão",
   "duel.refusal": "Desligar o PC fica bloqueado durante um duelo.",
+  "duel.toolUnavailable": "Esta ferramenta não está disponível neste PC.",
   "duel.error.badRequest": "Pedido de duelo inválido.",
   "duel.error.alreadyVoted": "Este duelo já foi votado.",
   "duel.error.alreadyRunning": "Já há uma sessão de duelo em andamento.",

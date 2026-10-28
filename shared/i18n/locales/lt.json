@@ -1515,6 +1515,7 @@
   "duel.summary.deleteFailed": "Neištrinta: {model} ({error})",
   "duel.summary.again": "Nauja sesija",
   "duel.refusal": "Kompiuterio išjungimas dvikovos metu užblokuotas.",
+  "duel.toolUnavailable": "Šis įrankis šiame kompiuteryje nepasiekiamas.",
   "duel.error.badRequest": "Netinkama dvikovos užklausa.",
   "duel.error.alreadyVoted": "Už šią dvikovą jau balsuota.",
   "duel.error.alreadyRunning": "Dvikovos sesija jau vyksta.",

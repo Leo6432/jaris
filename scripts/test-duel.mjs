@@ -295,3 +295,37 @@ test('la ligne du journal lue par le Duel est bien celle qu’écrit assistant.t
   const source = readFileSync(new URL('../electron/services/assistant.ts', import.meta.url), 'utf8')
   assert.match(source, /onLog\?\.\(`Outil appelé : \$\{call\.function\.name\}\(\$\{JSON\.stringify\(call\.function\.arguments\)\}\)`\)/)
 })
+
+/**
+ * Étape 366 (capture de Léo, PC sans carte graphique) : seulement les outils que CE PC peut faire tourner — le dessin si
+ * le PC dessine, regarder l'écran et le pilotage si le modèle de vision est installé, jamais l'extinction. On ne retire
+ * que ce qui est sûr : Ollama muet, les outils de vision restent.
+ */
+test('étape 366 : outils proposés en duel selon ce que ce PC peut faire tourner', () => {
+  const names = ['open_app', 'search_web', 'generate_image', 'look_at_screen', 'computer_use_task', 'shutdown_pc']
+  const offered = (machine) => [...duel.duelOfferedTools(names, machine)].sort()
+  assert.deepEqual(offered({ canDraw: false, installed: ['qwen3-vl:8b', 'granite4.2:8b'], visionModels: ['qwen3-vl:8b'] }), [
+    'computer_use_task',
+    'look_at_screen',
+    'open_app',
+    'search_web'
+  ])
+  assert.deepEqual(offered({ canDraw: true, installed: ['granite4.2:8b'], visionModels: ['qwen3-vl:8b'] }), ['generate_image', 'open_app', 'search_web'])
+  // Ollama muet : on ne sait pas, rien n'est retiré (sauf l'extinction, toujours).
+  assert.deepEqual(offered({ canDraw: true, installed: null, visionModels: ['qwen3-vl:8b'] }), [
+    'computer_use_task',
+    'generate_image',
+    'look_at_screen',
+    'open_app',
+    'search_web'
+  ])
+  // Un modèle sans tag est listé « :latest » par Ollama : c'est le même.
+  assert.ok(duel.duelOfferedTools(names, { canDraw: false, installed: ['hf.co/org/Vision-GGUF:latest'], visionModels: ['hf.co/org/Vision-GGUF'] }).has('look_at_screen'))
+  assert.ok(!duel.duelOfferedTools(names, { canDraw: false, installed: ['qwen3-vl:4b'], visionModels: ['qwen3-vl:8b'] }).has('look_at_screen'))
+})
+
+test('étape 366 (relecture) : un AUTRE modèle qui lit les images, installé, garde regarder l’écran', () => {
+  const names = ['look_at_screen', 'computer_use_task', 'open_app']
+  const tools = duel.duelOfferedTools(names, { canDraw: false, installed: ['qwen3.5:4b'], visionModels: ['qwen3.8:27b', 'qwen3.5:4b'] })
+  assert.ok(tools.has('look_at_screen') && tools.has('computer_use_task'))
+})

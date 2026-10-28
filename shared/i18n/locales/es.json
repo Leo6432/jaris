@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "No eliminado: {model} ({error})",
   "duel.summary.again": "Nueva sesión",
   "duel.refusal": "Apagar el PC está bloqueado durante un duelo.",
+  "duel.toolUnavailable": "Esta herramienta no está disponible en este PC.",
   "duel.error.badRequest": "Petición de duelo no válida.",
   "duel.error.alreadyVoted": "Este duelo ya está votado.",
   "duel.error.alreadyRunning": "Ya hay una sesión de duelo en curso.",

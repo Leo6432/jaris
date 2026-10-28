@@ -1515,6 +1515,7 @@
   "duel.summary.deleteFailed": "Nesmazáno: {model} ({error})",
   "duel.summary.again": "Nová relace",
   "duel.refusal": "Vypnutí počítače je během souboje zablokované.",
+  "duel.toolUnavailable": "Tento nástroj není na tomto počítači k dispozici.",
   "duel.error.badRequest": "Neplatný požadavek na souboj.",
   "duel.error.alreadyVoted": "V tomto duelu už je odhlasováno.",
   "duel.error.alreadyRunning": "Relace souboje už probíhá.",

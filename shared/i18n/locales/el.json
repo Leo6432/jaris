@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Δεν διαγράφηκε: {model} ({error})",
   "duel.summary.again": "Νέα συνεδρία",
   "duel.refusal": "Ο τερματισμός του υπολογιστή είναι αποκλεισμένος κατά τη μονομαχία.",
+  "duel.toolUnavailable": "Αυτό το εργαλείο δεν είναι διαθέσιμο σε αυτόν τον υπολογιστή.",
   "duel.error.badRequest": "Μη έγκυρο αίτημα μονομαχίας.",
   "duel.error.alreadyVoted": "Σε αυτή τη μονομαχία έχεις ήδη ψηφίσει.",
   "duel.error.alreadyRunning": "Μια συνεδρία μονομαχίας είναι ήδη σε εξέλιξη.",

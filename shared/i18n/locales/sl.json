@@ -1536,6 +1536,7 @@
   "duel.summary.deleteFailed": "Ni izbrisano: {model} ({error})",
   "duel.summary.again": "Nova seja",
   "duel.refusal": "Izklop računalnika je med dvobojem onemogočen.",
+  "duel.toolUnavailable": "To orodje na tem računalniku ni na voljo.",
   "duel.error.badRequest": "Neveljavna zahteva za dvoboj.",
   "duel.error.alreadyVoted": "Za ta dvoboj je že glasovano.",
   "duel.error.alreadyRunning": "Seja dvoboja že poteka.",

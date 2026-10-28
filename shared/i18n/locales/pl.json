@@ -1536,6 +1536,7 @@
   "duel.summary.deleteFailed": "Nie usunięto: {model} ({error})",
   "duel.summary.again": "Nowa sesja",
   "duel.refusal": "Wyłączanie komputera jest zablokowane podczas pojedynku.",
+  "duel.toolUnavailable": "To narzędzie nie jest dostępne na tym komputerze.",
   "duel.error.badRequest": "Nieprawidłowa prośba o pojedynek.",
   "duel.error.alreadyVoted": "Ten pojedynek ma już głos.",
   "duel.error.alreadyRunning": "Sesja pojedynku już trwa.",

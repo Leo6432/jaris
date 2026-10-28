@@ -42,8 +42,8 @@ async function waitFor(predicate, what) {
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true } = {}) {
-  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [] }
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true } = {}) {
+  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0 }
   const votes = []
   const apps = new Map()
   const emitted = []
@@ -85,11 +85,20 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       }
     },
     './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` },
+    // Étape 366 : ce que le PC peut faire tourner (dessin, modèle de vision par défaut).
+    '../config': { config: { ollama: { visionModel: 'vision-model:8b' } } },
+    './imageGenerator': {
+      imageDrawingAvailable: async () => {
+        calls.drawChecks++
+        return canDraw
+      }
+    },
     './hardwareScan': {
       duelMachine: async () => ({ vramGb: 8, ramGb: 32 }),
       duelPrior: (category) => () => (category === 'code' ? 20 : 10),
       getDuelCandidates: async () =>
         MODELS.map((model, index) => ({ model, vramGb: index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),
+      imageReadingModels: () => ['vision-model:8b'],
       getDuelModelList: async () => [
         ...MODELS.map((model, index) => ({ model, vramGb: index + 2, reason: null })),
         { model: 'echo-model:70b', vramGb: 42, reason: { kind: 'tooBig', needGb: 42, budgetGb: 23 } }
@@ -133,7 +142,11 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       }
     },
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 100 },
-    './tools': { TOOLS: ['open_app', 'type_text', 'set_reminder', 'shutdown_pc', 'search_web'].map((name) => ({ function: { name } })) },
+    './tools': {
+      TOOLS: ['open_app', 'type_text', 'set_reminder', 'shutdown_pc', 'search_web', 'generate_image', 'look_at_screen', 'computer_use_task'].map((name) => ({
+        function: { name }
+      }))
+    },
     './tts': {
       synthesizeSpeech: async (text) => {
         calls.speech.push(text)
@@ -270,7 +283,8 @@ test('l’ordre est tenu : B attend A, le vote attend les deux, une seule demand
   assert.throws(() => env.session.askDuel('   '), /demande/)
   env.session.askDuel('Écris un poème')
   assert.throws(() => env.session.askDuel('Autre chose'), /déjà sa demande/)
-  await waitFor(() => env.session.getDuelView().round.a.status === 'running', 'A tourne')
+  // Le modèle A est vraiment parti (après la lecture de sa réflexion et des outils de ce PC).
+  await waitFor(() => env.session.getDuelView().round.a.status === 'running' && typeof releaseA === 'function', 'A tourne')
   assert.throws(() => env.session.runDuelB(), /A doit d.abord finir/)
   await assert.rejects(env.session.voteDuel('a'), /doivent d.abord finir/)
   releaseA()
@@ -673,4 +687,56 @@ test('étape 365 : Ollama ne voit pas les modèles (étapes 289/313) — rien n�
   const result = await blindToTheEnd.session.deleteDuelModels(MODELS)
   assert.deepEqual(result.deleted, [])
   assert.deepEqual(blindToTheEnd.calls.deleted, [])
+})
+
+/**
+ * Étape 366 (capture de Léo, PC sans carte graphique) : un modèle a voulu dessiner, Jaris a répondu « ton PC n'a pas
+ * assez de puissance », et le duel est devenu impossible à voter — « Rejouer » refaisait la même chose. Un outil que CE
+ * PC ne peut jamais faire tourner n'est plus proposé, et le demander quand même est le choix du modèle.
+ */
+test('étape 366 : sur un PC qui ne peut pas dessiner, le dessin n’est pas proposé, et le demander quand même se vote', async () => {
+  const env = setup({
+    installed: [...MODELS, 'vision-model:8b'],
+    canDraw: false,
+    converseImpl: async (_prompt, _name, _onReminder, onLog, _history, _signal, _live, _channel, onToken, _onImage, _onWeb, restrictions) => {
+      // Comme le vrai converse() : l'outil non proposé est annoncé, puis refusé sans être exécuté (jamais onToolFailure).
+      onLog?.('Outil appelé : generate_image({"prompt":"A colorful slither.io game board"})')
+      const refusal = restrictions.refusalFor('generate_image')
+      onToken?.(refusal)
+      return refusal
+    }
+  })
+  await readySession(env)
+  env.session.askDuel('Fais un jeu style slither.io')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A a fini')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B a fini')
+  const [a, b] = env.calls.converse.map((args) => args[11])
+  for (const restrictions of [a, b]) {
+    assert.equal(restrictions.allowedTools.has('generate_image'), false, 'ce PC ne dessine pas : outil pas proposé')
+    assert.equal(restrictions.allowedTools.has('look_at_screen'), true, 'le modèle de vision est installé')
+    assert.equal(restrictions.allowedTools.has('shutdown_pc'), false)
+    assert.equal(restrictions.refusalFor('generate_image'), 'Cet outil n’est pas disponible sur ce PC.'.replace('’', "'"))
+    assert.match(restrictions.refusalFor('shutdown_pc'), /bloqué pendant un duel/)
+  }
+  assert.deepEqual([...a.allowedTools].sort(), [...b.allowedTools].sort(), 'A et B ont exactement les mêmes outils')
+  assert.equal(env.calls.drawChecks, 1, 'lu une fois par duel, gardé pour B')
+  const round = env.session.getDuelView().round
+  assert.equal(round.a.trouble, null, 'pas une panne de Jaris : le modèle a choisi un outil absent')
+  assert.equal(round.b.trouble, null)
+  assert.equal(round.a.actions[0].tool, 'generate_image', 'Léo voit ce que le modèle a voulu faire')
+  await env.session.voteDuel('a')
+  assert.equal(env.votes.length, 1, 'le duel se vote')
+})
+
+test('étape 366 : PC qui dessine mais sans modèle de vision — dessin proposé, regarder l’écran non', async () => {
+  const env = setup({ installed: MODELS, canDraw: true })
+  await readySession(env)
+  env.session.askDuel('Dessine un chat')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A a fini')
+  const restrictions = env.calls.converse[0][11]
+  assert.equal(restrictions.allowedTools.has('generate_image'), true)
+  assert.equal(restrictions.allowedTools.has('look_at_screen'), false)
+  assert.equal(restrictions.allowedTools.has('computer_use_task'), false)
+  assert.equal(restrictions.allowedTools.has('open_app'), true)
 })

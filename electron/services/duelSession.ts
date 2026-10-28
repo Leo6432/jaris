@@ -1,11 +1,14 @@
 import { randomUUID } from 'crypto'
+import { config } from '../config'
 import { converse, type ConverseRestrictions } from './assistant'
 import { generateApp } from './codeGenerator'
 import { createGeneratedAppPreview } from './generatedAppPreview'
+import { imageDrawingAvailable } from './imageGenerator'
 import {
   duelMachine,
   getDuelCandidates,
   getDuelModelList,
+  imageReadingModels,
   pickModelsForDuelCategory,
   type DuelCandidate
 } from './hardwareScan'
@@ -17,11 +20,13 @@ import { synthesizeSpeech } from './tts'
 import { addDuelVote, getDuelVotes, readDuelApp, saveDuelApp } from './duelStore'
 import {
   DUEL_CATEGORIES,
+  DUEL_FORBIDDEN_TOOLS,
   DUEL_HISTORY_TEXT_MAX,
   DUEL_MIN_CHOSEN,
   DUEL_MIN_MODELS,
   DUEL_SESSION_SIZES,
   duelActionFromLog,
+  duelOfferedTools,
   isJarisToolFailure,
   nextDuelPair,
   pairKey,
@@ -61,18 +66,22 @@ import { equivalentThink, type ThinkValue } from '../../shared/effort'
  */
 export const DUEL_THINK_LEVEL = 'medium'
 
-/** Ce que Jaris ne fait jamais pendant un duel : un modèle qui se trompe ne doit pas éteindre le PC de Léo. */
-export const DUEL_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set(['shutdown_pc'])
-
-function duelRestrictions(model: string, think: ThinkValue, onToolFailure?: ConverseRestrictions['onToolFailure']): ConverseRestrictions {
+function duelRestrictions(
+  model: string,
+  think: ThinkValue,
+  tools: ReadonlySet<string>,
+  onToolFailure?: ConverseRestrictions['onToolFailure']
+): ConverseRestrictions {
   return {
     think,
-    allowedTools: new Set(TOOLS.map((tool) => tool.function.name).filter((name) => !DUEL_FORBIDDEN_TOOLS.has(name))),
+    allowedTools: tools,
     // Aucune consigne de plus : le modèle doit répondre exactement comme en usage normal.
     note: '',
     get refusal() {
       return t('duel.refusal')
     },
+    // Étape 366 : un outil absent de ce PC n'est pas « éteindre le PC » — chacun son refus.
+    refusalFor: (tool) => (DUEL_FORBIDDEN_TOOLS.has(tool) ? t('duel.refusal') : t('duel.toolUnavailable')),
     model,
     modelOnly: true,
     journalLabel: 'duel',
@@ -94,6 +103,11 @@ interface RoundState {
   sides: Record<DuelSide, SideState>
   /** Étape 358 : noms révélés après le vote, comme sur Arena. */
   revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  /**
+   * Étape 366 : les outils proposés pendant CE duel — ceux que ce PC peut faire tourner —, lus avant le tour de A et
+   * gardés pour B : les deux modèles ont exactement les mêmes. `null` tant que A n'a pas commencé.
+   */
+  tools: ReadonlySet<string> | null
 }
 
 interface Session {
@@ -358,7 +372,7 @@ function nextRound(current: Session): void {
     current.round = null
     return
   }
-  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null }
+  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null }
 }
 
 function sideFinished(side: SideState): boolean {
@@ -432,10 +446,11 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   try {
     // Ollama arrêté : `null`, et le niveau part tel quel (Ollama le ramène à un niveau du modèle).
     const think = equivalentThink(DUEL_THINK_LEVEL, await getModelThinking(model))
-    // « Arrêter » pendant cette lecture : le modèle ne doit pas partir quand même (le signal est déjà donné).
+    if (current.category !== 'code' && !round.tools) round.tools = await duelToolsHere()
+    // « Arrêter » pendant ces lectures : le modèle ne doit pas partir quand même (le signal est déjà donné).
     if (!controller.signal.aborted) {
       if (current.category === 'code') await runCode(current, side, model, prompt, think, controller.signal)
-      else await runConversation(current, side, model, prompt, think, controller.signal)
+      else await runConversation(current, side, model, prompt, think, round.tools ?? new Set(), controller.signal)
     }
     if (controller.signal.aborted) side.status = 'stopped'
     else side.status = 'done'
@@ -453,7 +468,31 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   }
 }
 
-async function runConversation(current: Session, side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
+/**
+ * Étape 366 : les outils proposés aux modèles, selon ce que CE PC peut faire tourner (duelOfferedTools). Une lecture qui
+ * échoue ne retire rien : on ne retire que ce qui est sûr.
+ */
+async function duelToolsHere(): Promise<ReadonlySet<string>> {
+  const [canDraw, installed, profile] = await Promise.all([
+    imageDrawingAvailable().catch(() => true),
+    installedModelsSeen(),
+    getProfile().catch(() => null)
+  ])
+  return duelOfferedTools(
+    TOOLS.map((tool) => tool.function.name),
+    { canDraw, installed: installed.length ? installed : null, visionModels: [profile?.visionModel ?? config.ollama.visionModel, ...imageReadingModels()] }
+  )
+}
+
+async function runConversation(
+  current: Session,
+  side: SideState,
+  model: string,
+  prompt: string,
+  think: ThinkValue,
+  tools: ReadonlySet<string>,
+  signal: AbortSignal
+): Promise<void> {
   const profile = await getProfile()
   // « Arrêter » pendant cette lecture : rien ne part au modèle.
   if (signal.aborted) return
@@ -485,7 +524,7 @@ async function runConversation(current: Session, side: SideState, model: string,
     },
     undefined,
     undefined,
-    duelRestrictions(model, think, (tool, error) => {
+    duelRestrictions(model, think, tools, (tool, error) => {
       if (side.trouble) return
       const name = error instanceof Error ? error.name : null
       if (!isJarisToolFailure(tool, name)) return
@@ -620,6 +659,8 @@ export function retryDuel(): DuelSessionView {
   if (round.sides.a.status === 'running' || round.sides.b.status === 'running') throw new Error(t('duel.error.notFinished'))
   if (!round.sides.a.trouble && !round.sides.b.trouble) throw new Error(t('duel.error.badRequest'))
   round.sides = { a: emptySide(), b: emptySide() }
+  // Relus au nouveau tour de A : le modèle d'images a peut-être été installé entre-temps.
+  round.tools = null
   void runSide(current, round, 'a')
   return getDuelView() as DuelSessionView
 }

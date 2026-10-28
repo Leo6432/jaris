@@ -128,6 +128,44 @@ export function isJarisToolFailure(tool: string, errorName: string | null | unde
   return !(tool === 'read_web_page' && errorName === 'PageHttpError')
 }
 
+/** Ce que Jaris ne fait jamais pendant un duel : un modèle qui se trompe ne doit pas éteindre le PC de Léo. */
+export const DUEL_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set(['shutdown_pc'])
+
+/** Ce que ce PC peut faire tourner, lu au début d'un duel. `installed` : `null` si Ollama n'a pas répondu. */
+export interface DuelMachineTools {
+  canDraw: boolean
+  installed: readonly string[] | null
+  /** Les modèles qui lisent les images (celui du profil d'abord) : Jaris prend l'un d'eux s'il est installé. */
+  visionModels: readonly string[]
+}
+
+/** Ollama liste un modèle sans tag sous `:latest` : les deux écritures désignent le même modèle. */
+function withLatest(model: string): string {
+  return model.slice(model.lastIndexOf('/') + 1).includes(':') ? model : `${model}:latest`
+}
+
+/**
+ * Étape 366 (capture de Léo, duel sur un PC sans carte graphique) : un modèle a voulu dessiner, Jaris a répondu « ton
+ * PC n'a pas assez de puissance », et le duel est devenu impossible à voter (« ce n'est pas la faute du modèle ») —
+ * « Rejouer » refaisait la même chose. Un outil que CE PC ne peut JAMAIS faire tourner n'est donc pas proposé : sans
+ * dessin possible, pas de `generate_image` ; sans AUCUN modèle qui lit les images, ni `look_at_screen` ni `computer_use_task`. Un
+ * modèle qui l'appelle quand même (il le connaît par les consignes) reçoit un refus, et le duel reste votable : c'est
+ * son choix. On ne retire que ce qui est sûr : Ollama muet, les outils de vision restent.
+ */
+export function duelOfferedTools(names: readonly string[], machine: DuelMachineTools): Set<string> {
+  const hasVision = machine.installed && machine.installed.length
+    ? machine.installed.some((model) => machine.visionModels.some((vision) => withLatest(vision) === withLatest(model)))
+    : null
+  return new Set(
+    names.filter((name) => {
+      if (DUEL_FORBIDDEN_TOOLS.has(name)) return false
+      if (name === 'generate_image') return machine.canDraw
+      if (name === 'look_at_screen' || name === 'computer_use_task') return hasVision !== false
+      return true
+    })
+  )
+}
+
 /** L'outil de Jaris qui a échoué pendant un tour, et son message (déjà sans le nom des modèles). */
 export interface DuelToolTrouble {
   tool: string

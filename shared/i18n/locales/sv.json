@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Inte borttagen: {model} ({error})",
   "duel.summary.again": "Ny session",
   "duel.refusal": "Att stänga av datorn är spärrat under en duell.",
+  "duel.toolUnavailable": "Det här verktyget är inte tillgängligt på den här datorn.",
   "duel.error.badRequest": "Ogiltig duellförfrågan.",
   "duel.error.alreadyVoted": "Den här duellen har redan röstats.",
   "duel.error.alreadyRunning": "En duellsession pågår redan.",

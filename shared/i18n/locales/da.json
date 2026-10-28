@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Ikke slettet: {model} ({error})",
   "duel.summary.again": "Ny session",
   "duel.refusal": "Det er spærret at lukke pc'en ned under en duel.",
+  "duel.toolUnavailable": "Dette værktøj er ikke tilgængeligt på denne pc.",
   "duel.error.badRequest": "Ugyldig duelforespørgsel.",
   "duel.error.alreadyVoted": "Der er allerede stemt i denne duel.",
   "duel.error.alreadyRunning": "Der kører allerede en duelsession.",

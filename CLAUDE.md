@@ -9954,3 +9954,44 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - `test-codegen-progress.mjs`, `test-ollama-pull-repair.mjs` et `test-duel-panel-ui.mjs`.
 
   Chaque garde a été vérifiée en la retirant.
+
+- **Étape 366 (v0.40.8), capture de Léo : duel Conversation sur le PC sans carte graphique, demande d'un jeu façon
+  slither.io — « il y a un modèle qui veut faire une image et un autre qui n'a même pas fait ».** Le jeu relevait de la
+  catégorie Code (Léo s'était trompé de catégorie). Mais la capture montrait trois vrais défauts :
+  1. **Duel bloqué pour rien.** Tous les outils étaient proposés, même le dessin sur un PC qui ne peut JAMAIS dessiner.
+     B l'a appelé, l'échec a été classé « panne de Jaris, pas la faute du modèle », et le vote était impossible :
+     « Rejouer » refaisait exactement pareil. Désormais, `duelOfferedTools` (shared/duel.ts) ne propose que ce que CE
+     PC peut faire tourner :
+     - pas de `generate_image` sans dessin possible (`imageDrawingAvailable`, imageGenerator.ts, même règle que
+       `generateImage`) ;
+     - pas de `look_at_screen` ni de `computer_use_task` sans AUCUN modèle qui lit les images installé
+       (`imageReadingModels`, les mêmes que `pickSafeVisionModel`) ;
+     - jamais `shutdown_pc`.
+
+     La liste est lue une fois par duel (`round.tools`) : A et B ont exactement les mêmes outils. Un modèle qui appelle
+     quand même un outil non proposé (il le connaît par les consignes) est refusé sans exécution, avec SON refus
+     (`refusalFor`, ConverseRestrictions ; « Cet outil n'est pas disponible sur ce PC », 24 langues) — avant, tout
+     refus disait « Éteindre le PC est bloqué ». Le duel reste votable, car c'est le choix du modèle. On ne retire que
+     ce qui est sûr : Ollama muet, les outils restent. **Leçon générale : un échec PRÉVISIBLE (matériel absent) ne
+     doit pas se traiter comme une panne passagère ; on ne propose pas ce qui ne peut pas marcher.**
+  2. **Titres collés au texte dans le Duel** (« …contexte). Règles du jeu ») : `.duel-side__text` n'avait pas
+     `white-space: pre-wrap`, contrairement au Chat. Ajouté (le modificateur `--voice` devient inutile, retiré).
+  3. **Numérotation 1, 2, 5, 6, 7** : les sous-puces étaient des `<li>` du même `<ol>`, donc comptées (Chat compris).
+     formatReply.tsx construit maintenant un arbre selon le retrait RELATIF : vraie sous-liste dans l'élément du dessus,
+     liste entièrement en retrait sous un libellé laissée à un niveau, 3e niveau imbriqué. Une ligne seule `---`,
+     `***` ou `___` devient un trait (`.reply-rule`).
+
+  La relecture adverse (workflow, 11 agents) a trouvé 4 défauts dans le premier jet, tous corrigés :
+  - le retrait absolu rendait une liste en retrait sous « **Contrôles** : » comme 1 élément + 2 sous-éléments ;
+  - le 3e niveau comptait encore dans le 2e ;
+  - le trait perdait ses marges dans le Duel (`> :first-child` / `> :last-child` ignorent les nœuds texte) ;
+  - les outils de vision étaient retirés alors qu'un autre modèle lisant les images, installé, aurait servi.
+
+  **Leçon : un rendu de liste se teste aussi avec une liste ENTIÈREMENT en retrait et sur trois niveaux, pas seulement
+  avec le cas de la capture.** Piège de test : `waitFor(status === 'running')` ne garantit pas que le modèle est parti
+  (`running` est posé avant les lectures asynchrones) ; attendre l'appel réel. Régression :
+  - `test-format-reply.mjs`, `test-duel.mjs`, `test-duel-session.mjs` ;
+  - `test-assistant-history.mjs` (outil non proposé : refus de CET outil, jamais exécuté, jamais compté comme panne) ;
+  - `test-duel-panel-ui.mjs` (pre-wrap mesuré, titre sur sa ligne, 3 éléments, trait espacé).
+
+  Chaque garde a été vérifiée en la retirant (13 mutations, toutes attrapées).

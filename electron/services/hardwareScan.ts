@@ -754,6 +754,11 @@ function pickSafeAmong(pool: ModelCandidate[], freeVramGb: number, installedMode
  * dans la VRAM *libre* à l'instant présent (conversation déjà chargée, jeu ou navigateur en parallèle...),
  * ce qui forcerait sinon Ollama à décharger/recharger un gros modèle et ferait traîner look_at_screen.
  */
+/** Étape 366 : les modèles de Jaris qui lisent les images — ceux parmi lesquels pickSafeVisionModel peut choisir. */
+export function imageReadingModels(): string[] {
+  return ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)).map((c) => c.model)
+}
+
 export function pickSafeVisionModel(freeVramGb: number, installedModels: string[], fallbackModel: string): string {
   return pickSafeAmong(ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)), freeVramGb, installedModels, fallbackModel)
 }

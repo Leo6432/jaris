@@ -348,7 +348,7 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model 
           </div>
         ) : null
       ) : side.text.trim() ? (
-        <div className={`duel-side__text${category === 'voice' ? ' duel-side__text--voice' : ''}`}>
+        <div className="duel-side__text">
           {category === 'voice' ? side.text : renderFormattedText(side.text)}
         </div>
       ) : null}
@@ -481,7 +481,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
           )}
         </>
       ) : side.text.trim() ? (
-        <div className={`duel-side__text${entry.category === 'voice' ? ' duel-side__text--voice' : ''}`}>
+        <div className="duel-side__text">
           {entry.category === 'voice' ? side.text : renderFormattedText(side.text)}
         </div>
       ) : (

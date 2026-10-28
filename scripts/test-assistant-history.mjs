@@ -143,6 +143,36 @@ test('Duel : un outil qui échoue est signalé avec son erreur d’origine (le D
   assert.equal(failures[0][1], blocked, 'l’erreur elle-même, pour lire son nom (PageHttpError…)')
 })
 
+/**
+ * Étape 366 (capture de Léo, duel sur un PC sans carte graphique) : un outil que ce PC ne peut pas faire tourner n'est
+ * plus proposé. Le modèle peut quand même l'appeler (il le connaît par les consignes) : il est refusé sans être exécuté,
+ * avec SON refus (pas « Éteindre le PC est bloqué »), et le Duel n'est jamais prévenu d'une « panne de Jaris ».
+ */
+test('Duel : un outil non proposé appelé quand même — refus de CET outil, jamais exécuté, jamais compté comme panne', async () => {
+  const failures = []
+  const tools = ['open_app', 'generate_image'].map((name) => ({ type: 'function', function: { name, description: '', parameters: {} } }))
+  let offered = null
+  const converse = setup(
+    async (_messages, sent) => {
+      offered = sent.map((t) => t.function.name)
+      return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'generate_image', arguments: { prompt: 'a slither.io board' } } }] }
+    },
+    async () => assert.fail('un outil non proposé ne doit jamais être exécuté'),
+    undefined,
+    { tools, installed: ['test', 'duel-a:7b'] }
+  )
+  const restrictions = {
+    ...duelRestrictions('duel-a:7b'),
+    allowedTools: new Set(['open_app']),
+    refusalFor: (tool) => (tool === 'shutdown_pc' ? 'Éteindre le PC est bloqué pendant un duel.' : 'Cet outil n’est pas disponible sur ce PC.'),
+    onToolFailure: (tool, error) => failures.push([tool, error])
+  }
+  const reply = await converse('Fais un jeu style slither.io', null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, restrictions)
+  assert.deepEqual(offered, ['open_app'], 'le dessin n’est même pas présenté au modèle')
+  assert.equal(reply, 'Cet outil n’est pas disponible sur ce PC.')
+  assert.equal(failures.length, 0, 'pas une panne de Jaris : le choix du modèle')
+})
+
 for (const channel of ['chat', 'voice']) {
   test(`${channel} : un ancien échec ne remplace pas une nouvelle recherche`, async () => {
     let toolCalls = 0

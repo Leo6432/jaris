@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Ei kustutatud: {model} ({error})",
   "duel.summary.again": "Uus seanss",
   "duel.refusal": "Arvuti väljalülitamine on duelli ajal blokeeritud.",
+  "duel.toolUnavailable": "See tööriist pole selles arvutis saadaval.",
   "duel.error.badRequest": "Vigane duellipalve.",
   "duel.error.alreadyVoted": "Selles duellis on juba hääletatud.",
   "duel.error.alreadyRunning": "Duelliseanss juba käib.",

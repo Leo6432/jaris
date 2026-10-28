@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Niet verwijderd: {model} ({error})",
   "duel.summary.again": "Nieuwe sessie",
   "duel.refusal": "Afsluiten van de pc is geblokkeerd tijdens een duel.",
+  "duel.toolUnavailable": "Dit hulpmiddel is niet beschikbaar op deze pc.",
   "duel.error.badRequest": "Ongeldig duelverzoek.",
   "duel.error.alreadyVoted": "Op dit duel is al gestemd.",
   "duel.error.alreadyRunning": "Er loopt al een duelsessie.",

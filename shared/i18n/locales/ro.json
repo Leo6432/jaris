@@ -1515,6 +1515,7 @@
   "duel.summary.deleteFailed": "Neșters: {model} ({error})",
   "duel.summary.again": "Sesiune nouă",
   "duel.refusal": "Oprirea PC-ului este blocată în timpul unui duel.",
+  "duel.toolUnavailable": "Acest instrument nu este disponibil pe acest PC.",
   "duel.error.badRequest": "Cerere de duel nevalidă.",
   "duel.error.alreadyVoted": "Acest duel a fost deja votat.",
   "duel.error.alreadyRunning": "O sesiune de duel este deja în desfășurare.",

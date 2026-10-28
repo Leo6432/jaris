@@ -8871,9 +8871,22 @@ ol.reply-list > li::marker {
   font-variant-numeric: tabular-nums;
 }
 
-.reply-list > li.reply-list__nested {
-  margin-left: 1.25em;
+/* Étape 366 : une vraie sous-liste dans l'élément du dessus (elle ne compte plus dans la numérotation). */
+.reply-list--nested {
+  margin: 4px 0 2px;
+  padding-left: 1.25em;
+}
+
+ul.reply-list--nested {
   list-style-type: circle;
+}
+
+/* Étape 366 : la ligne « --- » des modèles, un trait fin plutôt que du texte. */
+.reply-rule {
+  height: 0;
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--hud-line);
 }
 
 /* --- Chat : la conversation s'efface doucement sous le titre et au-dessus du champ (au lieu d'être coupée net),
@@ -9655,6 +9668,9 @@ ol.reply-list > li::marker {
   font-size: 14.5px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+  /* Étape 366 : comme le Chat (.chat-panel__body) — sans ça, les retours à la ligne d'une réponse disparaissaient et
+     ses titres se collaient au texte d'avant (« …contexte). Règles du jeu »). */
+  white-space: pre-wrap;
 }
 
 .duel-side__text > :first-child {
@@ -9669,8 +9685,10 @@ ol.reply-list > li::marker {
   overflow-x: auto;
 }
 
-.duel-side__text--voice {
-  white-space: pre-wrap;
+/* Relecture de l'étape 366 : un trait reste espacé même en premier ou dernier élément (les nœuds texte autour ne
+   comptent pas pour :first-child / :last-child). */
+.duel-side__text > .reply-rule {
+  margin: 14px 0;
 }
 
 /* L'aperçu garde un fond blanc : il montre l'application telle qu'elle s'affichera (comme le mode Code). */

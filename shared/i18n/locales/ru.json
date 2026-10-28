@@ -1536,6 +1536,7 @@
   "duel.summary.deleteFailed": "Не удалено: {model} ({error})",
   "duel.summary.again": "Новая сессия",
   "duel.refusal": "Выключение компьютера во время дуэли заблокировано.",
+  "duel.toolUnavailable": "Этот инструмент недоступен на этом компьютере.",
   "duel.error.badRequest": "Неверный запрос дуэли.",
   "duel.error.alreadyVoted": "За этот дуэль уже проголосовали.",
   "duel.error.alreadyRunning": "Сессия дуэли уже идёт.",

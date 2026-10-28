@@ -346,6 +346,65 @@ test('mise en page : réellement habillé par le CSS, aucun débordement de côt
   }
 })
 
+/**
+ * Étape 366 (capture de Léo) : dans le Duel, les retours à la ligne d'une réponse disparaissaient (« …contexte). Règles
+ * du jeu » collé au texte), et deux sous-puces sous « 2. » faisaient afficher « 5. » au lieu de « 3. ».
+ */
+test('étape 366 : une réponse garde ses retours à la ligne, ses sous-puces et sa numérotation', options, async () => {
+  const reply = [
+    'Je vous propose un mini-jeu dans ce contexte.',
+    '**Règles du jeu**',
+    '1. **Objectif** : le plus long serpent.',
+    '2. **Contrôles** :',
+    '   - Les flèches du clavier.',
+    '   - Rien à taper ici.',
+    '3. **Croissance** : il grandit.',
+    '---',
+    'Veuillez indiquer votre première direction.'
+  ].join('\n')
+  const init = `window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0,
+    round: { number: 1, prompt: 'Fais un jeu style slither.io',
+      a: { status: 'done', text: ${JSON.stringify(reply)}, activity: null, startedAt: 1, durationMs: 392000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null },
+      b: { status: 'done', text: 'Voilà.', activity: null, startedAt: 1, durationMs: 105000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }`
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-side__text ol')
+      const shown = await page.evaluate(() => {
+        const box = document.querySelector('.duel-side__text')
+        const intro = document.createRange()
+        intro.selectNodeContents(box.firstChild)
+        const title = box.querySelector(':scope > strong')
+        const ol = box.querySelector(':scope > ol')
+        const rule = box.querySelector(':scope > hr')
+        return {
+          whiteSpace: getComputedStyle(box).whiteSpace,
+          titleBelowIntro: title.getBoundingClientRect().top >= intro.getBoundingClientRect().bottom - 1,
+          topItems: [...ol.children].filter((el) => el.tagName === 'LI').length,
+          nestedInSecond: ol.children[1].querySelectorAll(':scope > ul > li').length,
+          start: ol.getAttribute('start'),
+          ruleHeight: rule ? rule.getBoundingClientRect().height : null,
+          ruleBorder: rule ? getComputedStyle(rule).borderTopStyle : null,
+          dashes: box.textContent.includes('---')
+        }
+      })
+      assert.equal(shown.whiteSpace, 'pre-wrap', 'les retours à la ligne sont gardés, comme dans le Chat')
+      assert.equal(shown.titleBelowIntro, true, '« Règles du jeu » sur sa propre ligne')
+      assert.equal(shown.topItems, 3, 'trois éléments numérotés : 1, 2, 3')
+      assert.equal(shown.nestedInSecond, 2, 'les sous-puces sont DANS le 2e élément')
+      assert.equal(shown.start, null)
+      assert.equal(shown.ruleBorder, 'solid', 'le séparateur est un vrai trait')
+      assert.ok(shown.ruleHeight !== null && shown.ruleHeight <= 2)
+      assert.equal(shown.dashes, false)
+      const margins = await page.evaluate(() => {
+        const style = getComputedStyle(document.querySelector('.duel-side__text > hr'))
+        return [parseFloat(style.marginTop), parseFloat(style.marginBottom)]
+      })
+      assert.ok(margins[0] >= 10 && margins[1] >= 10, `le trait reste espacé (${margins})`)
+    },
+    init
+  )
+})
+
 test('outil de Jaris en panne : le côté le dit, le vote disparaît, « Rejouer » et « Passer » le remplacent', options, async () => {
   const init = `
     window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 1, error: null,

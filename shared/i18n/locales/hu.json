@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Nem törölve: {model} ({error})",
   "duel.summary.again": "Új munkamenet",
   "duel.refusal": "A gép leállítása párbaj közben le van tiltva.",
+  "duel.toolUnavailable": "Ez az eszköz nem érhető el ezen a gépen.",
   "duel.error.badRequest": "Érvénytelen párbajkérés.",
   "duel.error.alreadyVoted": "Erre a párbajra már szavaztál.",
   "duel.error.alreadyRunning": "Már fut egy párbaj-munkamenet.",

@@ -305,6 +305,11 @@ export interface ConverseRestrictions {
   note: string
   refusal: string
   /**
+   * Étape 366 (Duel) : le refus propre à CET outil, quand il y en a un — sans lui, un outil absent de ce PC (dessin sans
+   * carte graphique) répondait « Éteindre le PC est bloqué ». Absent : `refusal` pour tous (téléphone).
+   */
+  refusalFor?: (tool: string) => string
+  /**
    * Étape 355 (Duel) : CE modèle répond, sans repli ni réglage de réflexion choisi pour un autre modèle — les deux
    * modèles d'un duel sont traités exactement pareil.
    */
@@ -642,7 +647,7 @@ async function conversation(
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
-    if (!isToolAllowed(name)) throw new Error(restrictions?.refusal ?? t('reply.unavailable'))
+    if (!isToolAllowed(name)) throw new Error(restrictions?.refusalFor?.(name) ?? restrictions?.refusal ?? t('reply.unavailable'))
     return runTool(name, args)
   }
   const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
@@ -970,8 +975,8 @@ async function conversation(
       // Téléphone (étape 214) : un outil interdit que le modèle appelle quand même (il n'en avait pas la liste)
       // n'est jamais exécuté, et la réponse est le refus lui-même, sans « Échec de l'outil » technique devant.
       if (restrictions && !isToolAllowed(call.function.name)) {
-        onLog?.(`Outil refusé depuis le téléphone : ${call.function.name}`)
-        return finalize(restrictions.refusal)
+        onLog?.(`Outil refusé : ${call.function.name}`)
+        return finalize(restrictions.refusalFor?.(call.function.name) ?? restrictions.refusal)
       }
 
       let result: string

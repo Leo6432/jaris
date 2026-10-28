@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Не е изтрит: {model} ({error})",
   "duel.summary.again": "Нова сесия",
   "duel.refusal": "Изключването на компютъра е блокирано по време на дуел.",
+  "duel.toolUnavailable": "Този инструмент не е достъпен на този компютър.",
   "duel.error.badRequest": "Невалидна заявка за дуел.",
   "duel.error.alreadyVoted": "За този дуел вече е гласувано.",
   "duel.error.alreadyRunning": "Вече тече сесия на дуел.",

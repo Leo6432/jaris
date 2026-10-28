@@ -1536,6 +1536,7 @@
   "duel.summary.deleteFailed": "Не видалено: {model} ({error})",
   "duel.summary.again": "Нова сесія",
   "duel.refusal": "Вимкнення комп'ютера під час дуелі заблоковано.",
+  "duel.toolUnavailable": "Цей інструмент недоступний на цьому комп'ютері.",
   "duel.error.badRequest": "Неправильний запит дуелі.",
   "duel.error.alreadyVoted": "За цей дуель уже проголосовано.",
   "duel.error.alreadyRunning": "Сесія дуелі вже триває.",

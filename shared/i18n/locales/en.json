@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Not deleted: {model} ({error})",
   "duel.summary.again": "New session",
   "duel.refusal": "Shutting down the PC is blocked during a duel.",
+  "duel.toolUnavailable": "This tool isn't available on this PC.",
   "duel.error.badRequest": "Invalid duel request.",
   "duel.error.alreadyVoted": "This duel has already been voted.",
   "duel.error.alreadyRunning": "A duel session is already running.",

@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Ei poistettu: {model} ({error})",
   "duel.summary.again": "Uusi istunto",
   "duel.refusal": "Tietokoneen sammuttaminen on estetty kaksintaistelun aikana.",
+  "duel.toolUnavailable": "Tämä työkalu ei ole käytettävissä tässä tietokoneessa.",
   "duel.error.badRequest": "Virheellinen kaksintaistelupyyntö.",
   "duel.error.alreadyVoted": "Tähän kaksintaisteluun on jo äänestetty.",
   "duel.error.alreadyRunning": "Kaksintaisteluistunto on jo käynnissä.",

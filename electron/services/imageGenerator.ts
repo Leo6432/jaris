@@ -481,6 +481,18 @@ export async function drawingPrompt(text: string, onLog: Log, translate?: Prompt
   return english
 }
 
+/**
+ * Étape 366 (Duel, capture de Léo sur un PC sans carte graphique) : ce PC peut-il dessiner TOUT DE SUITE ? La même règle
+ * que generateImage ci-dessous (Windows, machine assez puissante, modèle installé), sans rien lancer. Le Duel ne propose
+ * le dessin aux modèles que si oui : sinon l'échec, prévisible, bloquait le vote à chaque fois.
+ */
+export async function imageDrawingAvailable(): Promise<boolean> {
+  if (process.platform !== 'win32') return false
+  const { vramGb } = await detectGpu()
+  if (!pickImageModel(vramGb, detectRamGb()).model) return false
+  return isImageModelInstalled()
+}
+
 export async function generateImage(prompt: string, onLog: Log = () => {}, signal?: AbortSignal, translate?: PromptTranslate): Promise<GeneratedImage> {
   if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
   const text = cleanPrompt(prompt)

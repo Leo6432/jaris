@@ -1507,6 +1507,7 @@ export const fr = {
   "duel.summary.deleteFailed": "Non supprimé : {model} ({error})",
   "duel.summary.again": "Nouvelle session",
   "duel.refusal": "Éteindre le PC est bloqué pendant un duel.",
+  "duel.toolUnavailable": "Cet outil n'est pas disponible sur ce PC.",
   "duel.error.badRequest": "Demande de duel invalide.",
   "duel.error.alreadyVoted": "Ce duel est déjà voté.",
   "duel.error.alreadyRunning": "Une session de duel est déjà en cours.",

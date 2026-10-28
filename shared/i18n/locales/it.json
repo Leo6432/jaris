@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Non eliminato: {model} ({error})",
   "duel.summary.again": "Nuova sessione",
   "duel.refusal": "Spegnere il PC è bloccato durante un duello.",
+  "duel.toolUnavailable": "Questo strumento non è disponibile su questo PC.",
   "duel.error.badRequest": "Richiesta di duello non valida.",
   "duel.error.alreadyVoted": "Questo duello è già stato votato.",
   "duel.error.alreadyRunning": "Una sessione di duello è già in corso.",

@@ -1494,6 +1494,7 @@
   "duel.summary.deleteFailed": "Nicht gelöscht: {model} ({error})",
   "duel.summary.again": "Neue Sitzung",
   "duel.refusal": "Das Herunterfahren des PCs ist während eines Duells gesperrt.",
+  "duel.toolUnavailable": "Dieses Werkzeug ist auf diesem PC nicht verfügbar.",
   "duel.error.badRequest": "Ungültige Duell-Anfrage.",
   "duel.error.alreadyVoted": "Für dieses Duell wurde bereits abgestimmt.",
   "duel.error.alreadyRunning": "Es läuft bereits eine Duell-Sitzung.",
