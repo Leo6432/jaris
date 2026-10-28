@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Este duelo não pode ser votado: uma ferramenta do Jaris falhou.",
   "role.voice": "Voz · {role}",
   "picks.duel": "Duelos {value}",
-  "picks.duel.title": "Pontos seguros dos teus duelos (votos: {count}): a margem de 95 % é descontada. Enquanto um modelo não estiver claramente à frente ou atrás, fica em 0.",
+  "picks.duel.title": "Pontos dos teus duelos (votos: {count}). Um modelo já em uso só é substituído por outro com pelo menos 5 duelos, mais de 95 % de probabilidade de ser melhor e que continue claramente à frente contando a sua fiabilidade. Caso contrário, nada muda.",
   "picks.calc.duel": "Duelos {points} pts = ×{value} (votos: {count})"
 }

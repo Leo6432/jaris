@@ -64,6 +64,7 @@ import {
   isUnusedInstalledModel,
   setOllamaVersionSource,
   setDuelStrengthSource,
+  setDuelProbability,
   detectGpu
 } from './services/hardwareScan'
 import { getDuelVotes, loadDuelVotes } from './services/duelStore'
@@ -88,7 +89,7 @@ import {
   stopDuelRun,
   voteDuel
 } from './services/duelSession'
-import { isDuelCategory, isDuelOutcome, rankDuels, type DuelCategory } from '../shared/duel'
+import { isDuelCategory, isDuelOutcome, probabilityBetter, rankDuels, type DuelCategory } from '../shared/duel'
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -235,6 +236,8 @@ setDuelStrengthSource((category: DuelCategory) => {
   }
   return standings
 })
+// Étape 360 : un challenger ne remplace le modèle en service que s'il a plus de 95 % de chances d'être meilleur.
+setDuelProbability((challenger, incumbent) => probabilityBetter(challenger as never, incumbent as never))
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
 // Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).

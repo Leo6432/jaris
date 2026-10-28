@@ -1519,6 +1519,6 @@ export const fr = {
   "duel.error.trouble": "Ce duel ne peut pas être voté : un outil de Jaris a échoué.",
   "role.voice": "Voix · {role}",
   "picks.duel": "Duels {value}",
-  "picks.duel.title": "Points sûrs de tes duels (votes : {count}) : la marge à 95 % est déduite. Tant qu'un modèle n'est pas sûrement devant ou derrière, il reste à 0.",
+  "picks.duel.title": "Points de tes duels (votes : {count}). Un modèle déjà en service n'est remplacé que par un modèle qui a au moins 5 duels, plus de 95 % de chances d'être meilleur, et qui reste nettement devant une fois sa fiabilité comptée. Sinon, rien ne change.",
   "picks.calc.duel": "Duels {points} pts = ×{value} (votes : {count})",
 } as const

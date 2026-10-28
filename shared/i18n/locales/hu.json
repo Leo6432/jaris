@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Erre a párbajra nem lehet szavazni: a Jaris egyik eszköze hibázott.",
   "role.voice": "Hang · {role}",
   "picks.duel": "Párbajok {value}",
-  "picks.duel.title": "Biztos pontok a párbajaidból (szavazatok: {count}): a 95%-os hibahatár le van vonva. Amíg egy modell nincs biztosan elöl vagy hátul, 0 marad.",
+  "picks.duel.title": "Pontok a párbajaidból (szavazatok: {count}). A már használt modellt csak olyan modell váltja fel, amelynek legalább 5 párbaja van, több mint 95% eséllyel jobb, és a megbízhatóságát beszámítva is egyértelműen elöl áll. Különben semmi sem változik.",
   "picks.calc.duel": "Párbajok {points} pont = ×{value} (szavazatok: {count})"
 }

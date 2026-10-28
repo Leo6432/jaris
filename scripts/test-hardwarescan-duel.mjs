@@ -47,6 +47,7 @@ function setup(votes, { vramMib = 8 * 1024, ramGb = 32 } = {}) {
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   exports.setOllamaVersionSource(() => '0.40.10')
   if (votes) exports.setDuelStrengthSource((category) => duel.rankDuels(votes.filter((v) => v.category === category)))
+  exports.setDuelProbability((c, i) => duel.probabilityBetter(c, i))
   return exports
 }
 
@@ -65,15 +66,68 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
 })
 
-test('Conversation : des victoires font passer un modèle devant une fois SÛR (étape 359), pour le Chat ET la voix', async () => {
-  // Trois victoires de suite : pas encore sûr, rien ne change.
-  assert.equal((await setup(wins(3, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()).models.large, 'qwen3.5:27b')
+test('Conversation : sans modèle en service, les votes décident tout de suite, pour le Chat ET la voix', async () => {
   const picks = await setup(wins(8, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()
   assert.equal(picks.models.large, LARGE)
   // La voix suit les votes Conversation tant qu'elle n'a pas les siens : rien ne la sépare du Chat.
   assert.equal(picks.voiceModels, undefined)
   // Le Code, lui, n'est pas concerné par des votes de Conversation.
   assert.equal(picks.codeModel, 'ornith-1.5:35b')
+})
+
+test('modèle en service (étape 360) : remplacé seulement s’il est PROUVÉ meilleur (5 duels, plus de 95 %, note devant)', async () => {
+  const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' }, codeModel: 'ornith-1.5:35b' }
+  const pick = async (votes) => (await setup(votes).pickBestModelsFromBenchmark(new Set(), inService)).models.large
+  // Aucun vote : le modèle en service reste (il est déjà le meilleur choix).
+  assert.equal(await pick([]), 'qwen3.5:27b')
+  // Trois victoires : devant, mais pas prouvé — rien ne change.
+  assert.equal(await pick(wins(3, LARGE, 'qwen3.5:27b', 'conversation')), 'qwen3.5:27b')
+  // Victoires et défaites presque égales : jamais un changement entre deux modèles presque équivalents.
+  assert.equal(await pick([...wins(7, LARGE, 'qwen3.5:27b', 'conversation'), ...wins(6, 'qwen3.5:27b', LARGE, 'conversation')]), 'qwen3.5:27b')
+  // Neuf duels, devant (7 victoires, 2 défaites) mais 94 % seulement : pas assez sûr, le modèle reste.
+  assert.equal(await pick([...wins(7, LARGE, 'qwen3.5:27b', 'conversation'), ...wins(2, 'qwen3.5:27b', LARGE, 'conversation')]), 'qwen3.5:27b')
+  // Assez de victoires : prouvé, le modèle change.
+  assert.equal(await pick(wins(8, LARGE, 'qwen3.5:27b', 'conversation')), LARGE)
+  // Le même modèle en service pour le Code : des victoires Code tout juste ne suffisent pas non plus.
+  const code = async (n) => (await setup(wins(n, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark(new Set(), inService)).codeModel
+  assert.equal(await code(3), 'ornith-1.5:35b')
+  assert.equal(await code(8), LARGE)
+})
+
+test('modèle en service : moins de 5 duels ne suffit jamais, même avec une probabilité donnée à 99 %', async () => {
+  const m = setup(wins(4, LARGE, 'qwen3.5:27b', 'conversation'))
+  m.setDuelProbability(() => 0.99)
+  const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' }, codeModel: 'ornith-1.5:35b' }
+  assert.equal((await m.pickBestModelsFromBenchmark(new Set(), inService)).models.large, 'qwen3.5:27b')
+})
+
+test('modèle en service : prouvé meilleur en duel mais à peine devant une fois la fiabilité comptée, il reste', async () => {
+  // Force donnée à la main : on cherche la plus petite force de qwen3.8:27b qui le fait choisir sans modèle en service.
+  const m = setup(null)
+  m.setDuelProbability(() => 0.99)
+  const withStrength = (x) =>
+    m.setDuelStrengthSource((category) => new Map(category === 'conversation' ? [[LARGE, { strength: x, duels: 20 }], [CHALLENGER, { strength: 1, duels: 20 }]] : []))
+  let threshold = null
+  for (let x = 1; x <= 4 && threshold === null; x += 0.01) {
+    withStrength(x)
+    if ((await m.pickBestModelsFromBenchmark()).models.large === LARGE) threshold = x
+  }
+  assert.ok(threshold !== null)
+  // Juste au-dessus : choisi d'emblée, mais il ne remplace pas le modèle en service (gain de moins de 5 %).
+  withStrength(threshold * 1.02)
+  const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: CHALLENGER }, codeModel: 'ornith-1.5:35b' }
+  assert.equal((await m.pickBestModelsFromBenchmark()).models.large, LARGE)
+  assert.equal((await m.pickBestModelsFromBenchmark(new Set(), inService)).models.large, CHALLENGER)
+  // Nettement devant : il le remplace.
+  withStrength(threshold * 1.2)
+  assert.equal((await m.pickBestModelsFromBenchmark(new Set(), inService)).models.large, LARGE)
+})
+
+test('modèle en service : sans la probabilité branchée, rien n’est jamais remplacé', async () => {
+  const m = setup(wins(20, LARGE, 'qwen3.5:27b', 'conversation'))
+  m.setDuelProbability(null)
+  const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' }, codeModel: 'ornith-1.5:35b' }
+  assert.equal((await m.pickBestModelsFromBenchmark(new Set(), inService)).models.large, 'qwen3.5:27b')
 })
 
 test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils mènent ailleurs', async () => {
@@ -163,6 +217,7 @@ test('main.ts branche la source des votes, et le classement de l’écran est ce
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   assert.match(main, /setDuelStrengthSource\(\(category: DuelCategory\) => \{/)
   assert.match(main, /rankDuels\(votes\.filter\(\(v\) => v\.category === category\)\)/)
+  assert.match(main, /setDuelProbability\(\(challenger, incumbent\) => probabilityBetter\(/)
   const session = readFileSync(new URL('../electron/services/duelSession.ts', import.meta.url), 'utf8')
   assert.match(session, /rankDuels\(votes\)/)
 })

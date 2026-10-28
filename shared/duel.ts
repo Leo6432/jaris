@@ -165,12 +165,14 @@ export interface DuelStanding {
   score: number
   /** Demi-largeur de l'intervalle de confiance à 95 %, en points. */
   margin: number
-  /**
-   * Multiplicateur de la note de Jaris, seulement pour ce qui est SÛR (étape 359, seuil de confiance) : 1 tant que la
-   * marge englobe 0 (pas encore distinguable d'un modèle moyen), sinon la borne de la marge la plus proche de 0, × 10
-   * tous les 400 points. Un modèle ne prend donc la place d'un autre qu'une fois sûrement devant.
-   */
+  /** Multiplicateur de la note de Jaris : 1 à 0 point, × 10 tous les 400 points (estimation, sans la marge). */
   strength: number
+  /**
+   * Étape 360 : covariance de la force de ce modèle avec chaque modèle voté (échelle naturelle, pas en points).
+   * Sert à comparer DIRECTEMENT deux modèles (probabilityBetter) : l'incertitude d'une différence n'est pas la somme
+   * des deux marges, les deux forces sont estimées sur les mêmes votes.
+   */
+  covariance: Record<string, number>
   /** Meilleur et pire rang possibles compte tenu de l'incertitude (1 = premier). */
   rankBest: number
   rankWorst: number
@@ -193,7 +195,7 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
   const standing = (model: string): DuelStanding => {
     let s = standings.get(model)
     if (!s) {
-      s = { model, score: 0, margin: 0, strength: 1, rankBest: 1, rankWorst: 1, wins: 0, losses: 0, ties: 0, duels: 0 }
+      s = { model, score: 0, margin: 0, strength: 1, covariance: {}, rankBest: 1, rankWorst: 1, wins: 0, losses: 0, ties: 0, duels: 0 }
       standings.set(model, s)
     }
     return s
@@ -279,7 +281,14 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
     const variance = inverse[k][k] - 2 * rowMean[k] + allMean
     s.score = theta * DUEL_POINTS_PER_UNIT
     s.margin = Z_95 * Math.sqrt(Math.max(0, variance)) * DUEL_POINTS_PER_UNIT
-    s.strength = sureStrength(s.score, s.margin)
+    s.strength = Math.exp(theta)
+    // Covariance centrée (comme la marge) : ce sont les écarts qui comptent.
+    s.covariance = Object.fromEntries(
+      models.map((other) => {
+        const j = index.get(other) as number
+        return [other, inverse[k][j] - rowMean[k] - rowMean[j] + allMean]
+      })
+    )
   }
   const all = [...standings.values()]
   for (const s of all) {
@@ -290,11 +299,31 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
   return standings
 }
 
-/** Force retenue pour le choix : seulement la part sûre du score (voir DuelStanding.strength). */
-export function sureStrength(score: number, margin: number): number {
-  if (Math.abs(score) <= margin) return 1
-  const sure = score > 0 ? score - margin : score + margin
-  return Math.pow(10, sure / 400)
+/**
+ * Étape 360 (relecture de ChatGPT, acceptée par Léo) : probabilité que `challenger` soit réellement meilleur que
+ * `incumbent`, d'après la différence de leurs forces et l'incertitude de CETTE différence (approximation normale,
+ * vérifiée contre un bootstrap dans test-duel.mjs). `null` si l'un des deux n'a jamais été voté.
+ */
+export function probabilityBetter(
+  challenger: Pick<DuelStanding, 'model' | 'score' | 'covariance'> | undefined,
+  incumbent: Pick<DuelStanding, 'model' | 'score' | 'covariance'> | undefined
+): number | null {
+  if (!challenger || !incumbent) return null
+  const cc = challenger.covariance[challenger.model]
+  const ii = incumbent.covariance[incumbent.model]
+  const ci = challenger.covariance[incumbent.model]
+  if (cc === undefined || ii === undefined || ci === undefined) return null
+  const diff = (challenger.score - incumbent.score) / DUEL_POINTS_PER_UNIT
+  const sd = Math.sqrt(Math.max(1e-12, cc + ii - 2 * ci))
+  return normalCdf(diff / sd)
+}
+
+/** Fonction de répartition de la loi normale (approximation d'Abramowitz et Stegun, erreur < 1e-7). */
+export function normalCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x))
+  const d = 0.3989422804014327 * Math.exp((-x * x) / 2)
+  const tail = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+  return x >= 0 ? 1 - tail : tail
 }
 
 /** Inverse d'une matrice symétrique définie positive (Gauss-Jordan, petites tailles : quelques dizaines de modèles). */

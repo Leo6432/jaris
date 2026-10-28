@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Tästä kaksintaistelusta ei voi äänestää: Jariksen työkalu epäonnistui.",
   "role.voice": "Ääni · {role}",
   "picks.duel": "Kaksintaistelut {value}",
-  "picks.duel.title": "Varmat pisteet kaksintaisteluistasi (ääniä: {count}): 95 %:n marginaali vähennetään. Niin kauan kuin malli ei ole varmasti edellä tai jäljessä, se pysyy nollassa.",
+  "picks.duel.title": "Pisteet kaksintaisteluistasi (ääniä: {count}). Käytössä oleva malli vaihdetaan vain malliin, jolla on vähintään 5 kaksintaistelua, yli 95 %:n todennäköisyys olla parempi ja joka on yhä selvästi edellä luotettavuus huomioiden. Muuten mikään ei muutu.",
   "picks.calc.duel": "Kaksintaistelut {points} p = ×{value} (ääniä: {count})"
 }

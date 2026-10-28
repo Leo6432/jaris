@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Selle duelli üle ei saa hääletada: Jarise tööriist ebaõnnestus.",
   "role.voice": "Hääl · {role}",
   "picks.duel": "Duellid {value}",
-  "picks.duel.title": "Kindlad punktid sinu duellidest (hääli: {count}): 95% veapiir on maha arvatud. Kuni mudel pole kindlalt ees ega taga, jääb ta nulli.",
+  "picks.duel.title": "Punktid sinu duellidest (hääli: {count}). Juba kasutusel olev mudel asendatakse ainult mudeliga, millel on vähemalt 5 duelli, üle 95% tõenäosus olla parem ja mis jääb ka usaldusväärsust arvestades selgelt ette. Muidu ei muutu midagi.",
   "picks.calc.duel": "Duellid {points} p = ×{value} (hääli: {count})"
 }

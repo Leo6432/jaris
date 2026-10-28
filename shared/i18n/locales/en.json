@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "This duel can't be voted on: a Jaris tool failed.",
   "role.voice": "Voice · {role}",
   "picks.duel": "Duels {value}",
-  "picks.duel.title": "Certain points from your duels (votes: {count}): the 95% margin is subtracted. Until a model is surely ahead or behind, it stays at 0.",
+  "picks.duel.title": "Points from your duels (votes: {count}). A model already in use is only replaced by one with at least 5 duels, a more than 95% chance of being better, and still clearly ahead once its reliability is counted. Otherwise, nothing changes.",
   "picks.calc.duel": "Duels {points} pts = ×{value} (votes: {count})"
 }

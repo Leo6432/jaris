@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Der kan ikke stemmes på denne duel: et værktøj i Jaris fejlede.",
   "role.voice": "Stemme · {role}",
   "picks.duel": "Dueller {value}",
-  "picks.duel.title": "Sikre point fra dine dueller (stemmer: {count}): marginen på 95 % trækkes fra. Indtil en model er sikkert foran eller bagud, bliver den på 0.",
+  "picks.duel.title": "Point fra dine dueller (stemmer: {count}). En model, der allerede bruges, erstattes kun af en model med mindst 5 dueller, over 95 % chance for at være bedre, og som stadig ligger klart foran, når dens pålidelighed tælles med. Ellers ændres intet.",
   "picks.calc.duel": "Dueller {points} p = ×{value} (stemmer: {count})"
 }

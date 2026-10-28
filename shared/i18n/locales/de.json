@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Dieses Duell kann nicht bewertet werden: Ein Werkzeug von Jaris ist fehlgeschlagen.",
   "role.voice": "Sprache · {role}",
   "picks.duel": "Duelle {value}",
-  "picks.duel.title": "Sichere Punkte aus deinen Duellen (Stimmen: {count}): Die 95-%-Spanne wird abgezogen. Solange ein Modell nicht sicher vorn oder hinten liegt, bleibt es bei 0.",
+  "picks.duel.title": "Punkte aus deinen Duellen (Stimmen: {count}). Ein bereits genutztes Modell wird nur durch eines ersetzt, das mindestens 5 Duelle hat, zu mehr als 95 % besser ist und auch mit seiner Zuverlässigkeit klar vorn liegt. Sonst ändert sich nichts.",
   "picks.calc.duel": "Duelle {points} Pkt. = ×{value} (Stimmen: {count})"
 }

@@ -133,12 +133,23 @@ test('la vraie RAM de la machine compte pour Puissant (choix personnalisé)', as
 
 // Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger".
 // La carte affichait le modèle IDÉAL, pas celui du profil (celui que Jaris utilise vraiment).
+// Étape 360 : à note égale, le modèle en service reste (pas de changement entre modèles équivalents). Le meilleur choix
+// signalé ici l'est donc par une vraie différence : la fiabilité du modèle en service est moins bonne.
+const VERIFIED_MD_UPGRADE = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 5/6 |', '| gemma4:12b | 6/6 |'].join('\n')
+
 test('la carte montre le modèle RÉELLEMENT utilisé (profil), et le meilleur à part s\'il diffère', async () => {
-  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD_UPGRADE, vramMib: 12 * 1024 })
   const picks = await getMyModelPicks({ name: 'Léo', models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' } })
   assert.equal(picks.medium.model, 'qwen3.5:4b', 'la ligne Médium doit montrer le modèle utilisé, pas l\'idéal')
   assert.equal(picks.upgrades.medium?.model, 'gemma4:12b', 'le meilleur choix (gemma4:12b) doit être signalé à part')
   assert.equal(picks.upgrades.medium?.blockedReason, null, 'pas bloqué : il suffit de retester')
+})
+
+test('étape 360 : à note égale (aucun vote, même fiabilité), le modèle en service reste, aucun meilleur choix signalé', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const picks = await getMyModelPicks({ name: 'Léo', models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' } })
+  assert.equal(picks.medium.model, 'qwen3.5:4b')
+  assert.equal(picks.upgrades.medium, undefined)
 })
 
 // 03/10/2026, Léo : « qwen3.8:27b 46 tok/s Intelligence 33,7 — » sur la ligne Code. Un modèle de conversation
@@ -151,7 +162,7 @@ test('ligne Code : un modèle de conversation affiche son score de conversation,
 })
 
 test('un meilleur modèle bloqué au téléchargement est signalé avec sa raison', async () => {
-  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD_UPGRADE, vramMib: 12 * 1024 })
   const picks = await getMyModelPicks({
     name: 'Léo',
     models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' },

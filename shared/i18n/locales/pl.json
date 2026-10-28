@@ -1548,6 +1548,6 @@
   "duel.error.trouble": "Nie można głosować w tym pojedynku: zawiodło narzędzie Jarisa.",
   "role.voice": "Głos · {role}",
   "picks.duel": "Pojedynki {value}",
-  "picks.duel.title": "Pewne punkty z twoich pojedynków (głosy: {count}): margines 95 % jest odejmowany. Dopóki model nie jest pewnie przed lub za innymi, zostaje na 0.",
+  "picks.duel.title": "Punkty z twoich pojedynków (głosy: {count}). Model już używany zostaje zastąpiony tylko przez model, który ma co najmniej 5 pojedynków, ponad 95% szans, że jest lepszy, i nadal wyraźnie prowadzi po uwzględnieniu niezawodności. W przeciwnym razie nic się nie zmienia.",
   "picks.calc.duel": "Pojedynki {points} pkt = ×{value} (głosy: {count})"
 }

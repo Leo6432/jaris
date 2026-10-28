@@ -622,7 +622,8 @@ export async function endDuel(): Promise<DuelSummary> {
   const installed = await listInstalledModels().catch(() => [] as string[])
   const changes: DuelSummary['changes'] = []
   if (current.history.length && profile) {
-    const picks = await pickModelsForDuelCategory(current.category)
+    // Étape 360 : un modèle en service n'est remplacé que s'il est PROUVÉ moins bon (comparaison directe).
+    const picks = await pickModelsForDuelCategory(current.category, profile)
     if (current.category === 'code') {
       if (!profile.codeModel || !sameModel(profile.codeModel, picks.code)) {
         const applied = isInstalled(picks.code, installed)

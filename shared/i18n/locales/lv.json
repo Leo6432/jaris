@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "Par šo dueli nevar balsot: neizdevās Jaris rīks.",
   "role.voice": "Balss · {role}",
   "picks.duel": "Dueļi {value}",
-  "picks.duel.title": "Droši punkti no taviem dueļiem (balsis: {count}): 95 % robeža ir atņemta. Kamēr modelis nav droši priekšā vai aizmugurē, tam paliek 0.",
+  "picks.duel.title": "Punkti no taviem dueļiem (balsis: {count}). Jau izmantotu modeli aizstāj tikai ar modeli, kuram ir vismaz 5 dueļi, vairāk nekā 95 % iespēja būt labākam un kurš paliek skaidri priekšā arī, ņemot vērā uzticamību. Citādi nekas nemainās.",
   "picks.calc.duel": "Dueļi {points} p. = ×{value} (balsis: {count})"
 }

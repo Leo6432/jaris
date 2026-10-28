@@ -27,7 +27,9 @@ import { formatDecimal, t } from '../../shared/i18n'
  */
 export async function runQuickSetup(onLine: (line: string) => void, onProgress?: PullProgressListener): Promise<CapacityScanResult> {
   onLine(t('bench.detecting'))
-  let picked = await pickBestModelsFromBenchmark()
+  // Étape 360 : les modèles déjà en service restent, sauf preuve par les duels qu'un autre est meilleur.
+  const inService = await getProfile()
+  let picked = await pickBestModelsFromBenchmark(new Set(), inService)
   onLine(
     picked.vramGb !== null
       ? t('bench.gpuVram', { gpu: picked.gpuName ?? t('bench.unknownGpu'), vram: formatDecimal(picked.vramGb) })
@@ -96,7 +98,7 @@ export async function runQuickSetup(onLine: (line: string) => void, onProgress?:
       }
     }
     if (!newFailure) break
-    picked = await pickBestModelsFromBenchmark(excluded)
+    picked = await pickBestModelsFromBenchmark(excluded, inService)
   }
 
   // Étape 175, Léo : le modèle d'image « doit s'installer dans la page modèles comme tous les modèles » —

@@ -9761,3 +9761,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   étaient déjà faits ; tout refaire aurait coûté sans rien apporter. Régression : `test-duel.mjs` (seuil : sûr entre
   5 et 12 victoires ; bootstrap à 10 et 300 votes ; vérifié en retirant le seuil : 3 tests échouent),
   `test-hardwarescan-duel.mjs` (3 victoires ne changent rien, 8 oui).
+
+- **Étape 360 (v0.40.2), relecture de ChatGPT acceptée par Léo : un modèle en service n'est remplacé que s'il est
+  PROUVÉ moins bon.** Avant, le choix prenait la meilleure note du moment : un modèle pouvait changer sur peu de votes,
+  ou osciller entre deux modèles presque équivalents. Maintenant, quand un rôle (Faible, Moyen, Élevé, Code, et les
+  rôles de la voix) a déjà un modèle en service, le gagnant du calcul ne le remplace que si les trois conditions sont
+  réunies (`provenBetter` + `DUEL_SWITCH_*`, hardwareScan.ts) :
+  - au moins 5 duels pour le challenger (`DUEL_MIN_FOR_SWITCH`) — nécessaire, jamais suffisant seul ;
+  - plus de 95 % de chances d'être meilleur, en comparant DIRECTEMENT les deux modèles (`probabilityBetter`,
+    shared/duel.ts : écart des forces divisé par l'écart-type de cette différence, covariance de Laplace comprise) ;
+  - une note (force × fiabilité aux tests × demandes) au moins 5 % au-dessus (`DUEL_SWITCH_MIN_GAIN`).
+  Sinon le modèle en service reste. La preuve ne porte que sur ce que disent les duels : si le gagnant passe devant
+  même sans eux (meilleure fiabilité aux tests, nouvelle machine…), il remplace le modèle comme avant ; à note
+  strictement égale, le modèle en service reste. Sans modèle en service (première configuration), le calcul prend directement la
+  meilleure note. La force affichée et utilisée redevient la force entière (10^(points/400)) : la prudence de
+  l'étape 359 (« part sûre ») est remplacée par cette comparaison directe, plus juste. Pour la voix, ses propres votes
+  quand les deux modèles y figurent, sinon ceux de la Conversation. Le choix manuel (sélecteur de modèle du Chat et
+  du Vocal) n'est pas concerné. La probabilité est branchée par main.ts (`setDuelProbability`), comme la source des
+  votes : sans elle, rien n'est jamais remplacé. Mesuré : entre deux modèles seuls, 5 victoires de suite donnent
+  96 %, 7 victoires pour 2 défaites seulement 94 % ; en simulation, quand la probabilité dit plus de 95 %, le
+  challenger est vraiment meilleur au moins 9 fois sur 10.
+  Régression : `test-duel.mjs` (probabilité, contrôle par simulation) et `test-hardwarescan-duel.mjs` (aucun vote,
+  3 victoires, 7-6, 7-2 : gardé ; 8 victoires : remplacé ; 4 duels même à 99 % : gardé ; gain sous 5 % : gardé ; sans
+  probabilité branchée : gardé). Chaque garde vérifiée en la retirant.

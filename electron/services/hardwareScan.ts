@@ -1488,23 +1488,66 @@ export function intelligenceStrength(model: string): number | null {
 /** Échelle des points de duel (shared/duel.ts, DUEL_POINTS_PER_UNIT) : recopiée pour garder ce module sans import de plus. */
 const DUEL_POINTS_PER_UNIT = 400 / Math.LN10
 
-export type DuelStrengthSource = (category: DuelCategory) => ReadonlyMap<string, { strength: number; duels: number }>
+/** Ce que le classement des duels dit d'un modèle (DuelStanding, shared/duel.ts). */
+export interface DuelVotedStanding {
+  model?: string
+  strength: number
+  duels: number
+  score?: number
+  covariance?: Record<string, number>
+}
+export type DuelStrengthSource = (category: DuelCategory) => ReadonlyMap<string, DuelVotedStanding>
 let duelStrengthSource: DuelStrengthSource | null = null
 export function setDuelStrengthSource(source: DuelStrengthSource | null): void {
   duelStrengthSource = source
 }
 
+/**
+ * Étape 360 : probabilité qu'un modèle soit réellement meilleur qu'un autre d'après leurs duels (probabilityBetter,
+ * shared/duel.ts), branchée par main.ts comme la source des votes. Sans elle, aucun modèle en service n'est remplacé.
+ */
+export type DuelProbability = (challenger: DuelVotedStanding, incumbent: DuelVotedStanding) => number | null
+let duelProbability: DuelProbability | null = null
+export function setDuelProbability(fn: DuelProbability | null): void {
+  duelProbability = fn
+}
+
+/**
+ * Étape 360 (relecture de ChatGPT, acceptée par Léo) : quand un modèle est déjà en service pour un rôle, un autre ne
+ * le remplace que s'il est PROUVÉ meilleur — comparaison directe des deux, pas chacun contre la moyenne :
+ * - au moins DUEL_MIN_FOR_SWITCH duels (nécessaire, jamais suffisant seul) ;
+ * - plus de DUEL_SWITCH_PROBABILITY de chances d'être meilleur (différence des deux forces et son incertitude) ;
+ * - et toujours devant une fois la fiabilité aux tests comptée, d'au moins DUEL_SWITCH_MIN_GAIN : deux modèles
+ *   presque équivalents ne justifient pas un changement.
+ * Sinon, le modèle en service reste, et les duels continuent. Le choix manuel (sélecteur de modèle) n'est pas concerné.
+ */
+export const DUEL_MIN_FOR_SWITCH = 5
+export const DUEL_SWITCH_PROBABILITY = 0.95
+export const DUEL_SWITCH_MIN_GAIN = 1.05
+
+function provenBetter(category: DuelCategory, challenger: string, incumbent: string): boolean {
+  if (!duelProbability) return false
+  // Voix : ses propres votes quand les deux modèles y figurent, sinon ceux de la Conversation.
+  const own = duelStandings(category)
+  const standings =
+    category === 'voice' && !(own.has(challenger) && own.has(incumbent)) ? duelStandings('conversation') : own
+  const c = standings.get(challenger)
+  const i = standings.get(incumbent)
+  if (!c || !i || c.duels < DUEL_MIN_FOR_SWITCH) return false
+  const p = duelProbability({ ...c, model: challenger }, { ...i, model: incumbent })
+  return p !== null && p > DUEL_SWITCH_PROBABILITY
+}
+
 /** Les modèles votés dans cette catégorie (vide sans vote, ou sans source branchée). */
-function duelStandings(category: DuelCategory): ReadonlyMap<string, { strength: number; duels: number }> {
+function duelStandings(category: DuelCategory): ReadonlyMap<string, DuelVotedStanding> {
   return duelStrengthSource?.(category) ?? new Map()
 }
 
 /**
  * Étape 358, Léo : « fais comme Arena en point de départ, au début tous les modèles vont être à 0 ». La force d'un
  * modèle pour une catégorie vient UNIQUEMENT des duels : 1 (0 point) tant qu'il n'a pas été voté, puis × 10 tous les
- * 400 points, en ne gardant que la part SÛRE du score (étape 359 : marge à 95 % déduite, 1 tant qu'elle englobe 0 —
- * un modèle ne prend la place d'un autre qu'une fois sûrement devant). Artificial Analysis ne compte plus pour Faible,
- * Moyen, Élevé et Code (Vision n'a pas de duel). Pour la
+ * 400 points. Remplacer un modèle déjà en service demande en plus une preuve (provenBetter, étape 360). Artificial
+ * Analysis ne compte plus pour Faible, Moyen, Élevé et Code (Vision n'a pas de duel). Pour la
  * VOIX, à défaut de votes « Vocal », ceux de la Conversation : ce sont les mêmes modèles qui répondent.
  */
 export function duelStrength(category: DuelCategory): (model: string) => number {
@@ -1513,15 +1556,12 @@ export function duelStrength(category: DuelCategory): (model: string) => number 
 
 /**
  * Les votes qui donnent sa force à un modèle pour cette catégorie, ou `undefined` : ceux de la catégorie, et pour la
- * voix, tant que ses propres votes ne sont pas sûrs, ceux de la Conversation.
+ * voix, à défaut, ceux de la Conversation.
  */
-function votedStanding(category: DuelCategory, model: string): { strength: number; duels: number } | undefined {
+function votedStanding(category: DuelCategory, model: string): DuelVotedStanding | undefined {
   const own = duelStandings(category).get(model)
-  if (category !== 'voice') return own
-  // Voix : ses propres votes seulement une fois SÛRS (étape 359) ; avant, ceux de la Conversation, sinon des votes
-  // Vocal encore indécis remettraient à 0 un modèle déjà départagé en Conversation.
-  if (own && own.strength !== 1) return own
-  return duelStandings('conversation').get(model) ?? own
+  if (own || category !== 'voice') return own
+  return duelStandings('conversation').get(model)
 }
 const VISION_CHAIN_LENGTH = 1
 
@@ -1823,7 +1863,9 @@ function computeModelPicks(
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
   exclude: ReadonlySet<string> = new Set(),
   // Étape 355 : la voix a son propre classement de duels (« Vocal ») pour Faible, Moyen et Élevé.
-  conversationCategory: 'conversation' | 'voice' = 'conversation'
+  conversationCategory: 'conversation' | 'voice' = 'conversation',
+  // Étape 360 : les modèles déjà en service, gardés sauf preuve qu'un autre est meilleur (provenBetter).
+  current: Partial<Record<'flash' | 'medium' | 'large' | 'code', string>> = {}
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -2007,7 +2049,8 @@ function computeModelPicks(
     rank: (scored: Scored[], chain: number) => Scored[],
     chain: number = TOOL_CHAIN_LENGTH,
     withDemands = false,
-    strengthOf: (model: string) => number | null = intelligenceStrength
+    strengthOf: (model: string) => number | null = intelligenceStrength,
+    incumbent?: { model: string | undefined; category: DuelCategory }
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
@@ -2055,6 +2098,17 @@ function computeModelPicks(
 
     // Fiabilité et intelligence mises en balance (TOOL_CHAIN_LENGTH), plus de « meilleur score exact d'abord ».
     const winner = rank(scored, chain)[0] ?? scored[0]
+    // Étape 360 : un modèle en service qui tient toujours n'est remplacé que sur preuve.
+    const kept = incumbent?.model && incumbent.model !== winner.model ? scored.find((c) => c.model === incumbent.model) : undefined
+    // La preuve ne porte que sur ce que disent les DUELS : si le gagnant passe devant même sans eux (meilleure fiabilité,
+    // modèle en service qui ne tient plus aussi bien…), il remplace le modèle en service comme avant l'étape 360.
+    const withoutDuels = (c: Scored): number => modelNote(1, c.result.toolCalling, chain, c.demands) ?? 0
+    if (kept && withoutDuels(winner) <= withoutDuels(kept)) {
+      const winnerNote = noteOf(winner, chain) ?? 0
+      const keptNote = noteOf(kept, chain) ?? 0
+      const proven = provenBetter(incumbent!.category, winner.model, kept.model) && winnerNote >= keptNote * DUEL_SWITCH_MIN_GAIN
+      if (!proven) return entryOf(kept.model, kept.vramGb, kept.result)
+    }
     return entryOf(winner.model, winner.vramGb, winner.result)
   }
 
@@ -2071,11 +2125,11 @@ function computeModelPicks(
 
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
-    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote),
+    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.flash, category: conversationCategory }),
     // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
-    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote),
+    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.medium, category: conversationCategory }),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote),
+    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.large, category: conversationCategory }),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
@@ -2085,18 +2139,25 @@ function computeModelPicks(
       VISION_CHAIN_LENGTH
     ),
     // Code : le plus fort de tous en code, même lent (choix de Léo, étape 160) — Terminal-Bench 2.1 depuis l'étape 328.
-    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote)
+    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote, { model: current.code, category: 'code' })
   }
 }
 
-export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set()): Promise<CapacityScanResult> {
+/** Étape 360 : les modèles en service d'un profil, par rôle (la voix : les siens, sinon ceux du Chat). */
+function inServiceModels(profile: Profile | null | undefined, category: 'conversation' | 'voice'): Partial<Record<'flash' | 'medium' | 'large' | 'code', string>> {
+  if (!profile) return {}
+  const models = category === 'voice' ? profile.voiceModels ?? profile.models : profile.models
+  return { ...(models ?? {}), ...(profile.codeModel ? { code: profile.codeModel } : {}) }
+}
+
+export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set(), profile?: Profile | null): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
   const ramGb = detectRamGb()
   const scores = parseVerifiedToolScores()
-  const picks = computeModelPicks(vramGb, ramGb, scores, exclude)
+  const picks = computeModelPicks(vramGb, ramGb, scores, exclude, 'conversation', inServiceModels(profile, 'conversation'))
   const models = { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model }
   // Étape 355 : la voix suit les votes « Vocal » — seulement quand ils mènent à d'autres modèles que ceux du Chat.
-  const voice = computeModelPicks(vramGb, ramGb, scores, exclude, 'voice')
+  const voice = computeModelPicks(vramGb, ramGb, scores, exclude, 'voice', inServiceModels(profile, 'voice'))
   const voiceModels = { flash: voice.flash.model, medium: voice.medium.model, large: voice.large.model }
   const voiceDiffers = voiceModels.flash !== models.flash || voiceModels.medium !== models.medium || voiceModels.large !== models.large
   return {
@@ -2195,9 +2256,20 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
  * Étape 355 : ce que les votes des duels choisissent pour CETTE machine — les rôles de conversation (ceux du Chat, ou
  * ceux de la voix pour les duels « Vocal ») et le modèle Code. Même calcul que « Retester la configuration ».
  */
-export async function pickModelsForDuelCategory(category: DuelCategory): Promise<{ flash: string; medium: string; large: string; code: string }> {
+export async function pickModelsForDuelCategory(
+  category: DuelCategory,
+  profile?: Profile | null
+): Promise<{ flash: string; medium: string; large: string; code: string }> {
   const { vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), parseVerifiedToolScores(), new Set(), category === 'voice' ? 'voice' : 'conversation')
+  const conversationCategory = category === 'voice' ? 'voice' : 'conversation'
+  const picks = computeModelPicks(
+    vramGb,
+    detectRamGb(),
+    parseVerifiedToolScores(),
+    new Set(),
+    conversationCategory,
+    inServiceModels(profile, conversationCategory)
+  )
   return { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model, code: picks.code.model }
 }
 
@@ -2232,7 +2304,9 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
   const { name, vramGb } = await detectGpu()
   const ramGb = detectRamGb()
   const verifiedToolScores = parseVerifiedToolScores()
-  const ideal = computeModelPicks(vramGb, ramGb, verifiedToolScores)
+  // Étape 360 : le « meilleur choix » signalé est celui qui remplacerait vraiment le modèle en service (preuve par
+  // les duels), jamais un modèle seulement un peu devant.
+  const ideal = computeModelPicks(vramGb, ramGb, verifiedToolScores, new Set(), 'conversation', inServiceModels(profile, 'conversation'))
 
   // Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger".
   // La carte affichait le modèle IDÉAL, alors que Jaris utilise celui enregistré dans le profil — les deux

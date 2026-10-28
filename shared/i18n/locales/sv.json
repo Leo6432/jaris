@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Det går inte att rösta på den här duellen: ett verktyg i Jaris misslyckades.",
   "role.voice": "Röst · {role}",
   "picks.duel": "Dueller {value}",
-  "picks.duel.title": "Säkra poäng från dina dueller (röster: {count}): felmarginalen på 95 % dras av. Tills en modell säkert ligger före eller efter stannar den på 0.",
+  "picks.duel.title": "Poäng från dina dueller (röster: {count}). En modell som redan används ersätts bara av en modell med minst 5 dueller, över 95 % chans att vara bättre och som fortfarande ligger klart före när dess tillförlitlighet räknas in. Annars ändras inget.",
   "picks.calc.duel": "Dueller {points} p = ×{value} (röster: {count})"
 }

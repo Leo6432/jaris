@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "O tomto dueli sa nedá hlasovať: zlyhal nástroj Jarisa.",
   "role.voice": "Hlas · {role}",
   "picks.duel": "Súboje {value}",
-  "picks.duel.title": "Isté body z tvojich duelov (hlasy: {count}): rozpätie 95 % je odpočítané. Kým model nie je isto vpredu alebo vzadu, zostáva na 0.",
+  "picks.duel.title": "Body z tvojich duelov (hlasy: {count}). Už používaný model nahradí len model, ktorý má aspoň 5 duelov, viac než 95 % šancu, že je lepší, a aj po započítaní spoľahlivosti zostáva jasne vpredu. Inak sa nič nemení.",
   "picks.calc.duel": "Duely {points} b. = ×{value} (hlasy: {count})"
 }

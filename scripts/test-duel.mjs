@@ -31,11 +31,9 @@ test('classement façon Arena (étape 358) : tout part de 0, un vote suffit à d
   assert.ok(many.get('a').margin < one.get('a').margin)
   assert.deepEqual([many.get('a').rankBest, many.get('a').rankWorst], [1, 1])
   assert.deepEqual([many.get('b').rankBest, many.get('b').rankWorst], [2, 2])
-  // La force sert de multiplicateur à la note, avec seulement la part SÛRE du score (étape 359) : marge déduite.
+  // La force sert de multiplicateur à la note : × 10 tous les 400 points (la prudence est dans le changement de modèle).
   const s = many.get('a')
-  assert.ok(Math.abs(s.strength - Math.pow(10, (s.score - s.margin) / 400)) < 1e-9)
-  assert.equal(one.get('a').strength, 1, 'un seul vote : pas encore sûr, la force ne bouge pas')
-  assert.equal(one.get('b').strength, 1, 'ni dans un sens, ni dans l’autre')
+  assert.ok(Math.abs(s.strength - Math.pow(10, s.score / 400)) < 1e-9)
   // Égalité parfaite : 0 point chacun.
   const tied = duel.rankDuels([vote('a', 'b', 'a'), vote('a', 'b', 'b')])
   assert.ok(Math.abs(tied.get('a').score) < 1e-9 && Math.abs(tied.get('a').strength - 1) < 1e-9)
@@ -48,13 +46,36 @@ test('classement : battre un modèle fort rapporte plus que battre un faible (Br
   assert.ok(beatsStrong.get('x').score > beatsWeak.get('x').score)
 })
 
-test('seuil de confiance (étape 359) : un modèle ne compte comme meilleur qu’une fois sûrement devant', () => {
-  const after = (n) => duel.rankDuels(Array.from({ length: n }, () => vote('a', 'b', 'a'))).get('a')
+test('probabilité d’être meilleur (étape 360) : comparaison directe des deux modèles, jamais sur un seul vote', () => {
+  const after = (n, losses = 0) => {
+    const votes = [...Array.from({ length: n }, () => vote('a', 'b', 'a')), ...Array.from({ length: losses }, () => vote('a', 'b', 'b'))]
+    const r = duel.rankDuels(votes)
+    return duel.probabilityBetter({ ...r.get('a'), model: 'a' }, { ...r.get('b'), model: 'b' })
+  }
+  assert.ok(after(1) > 0.5 && after(1) < 0.95, `un vote : ${after(1)}`)
   let first = null
-  for (let n = 1; n <= 30 && first === null; n++) if (after(n).strength > 1) first = n
-  assert.ok(first !== null && first >= 5 && first <= 12, `sûr après ${first} victoires de suite`)
-  assert.equal(duel.sureStrength(100, 150), 1)
-  assert.ok(Math.abs(duel.sureStrength(-500, 100) - Math.pow(10, -1)) < 1e-12)
+  for (let n = 1; n <= 30 && first === null; n++) if (after(n) > 0.95) first = n
+  assert.ok(first !== null && first >= 4 && first <= 12, `plus de 95 % après ${first} victoires de suite`)
+  assert.ok(after(6, 6) > 0.4 && after(6, 6) < 0.6, 'à égalité : environ une chance sur deux')
+  assert.equal(duel.probabilityBetter(undefined, undefined), null)
+  assert.ok(Math.abs(duel.normalCdf(1.6448536) - 0.95) < 1e-6)
+  // Contrôle par simulation : quand la probabilité dit 95 %, le challenger est vraiment meilleur ~95 % du temps.
+  let seed = 11
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  let confident = 0
+  let right = 0
+  for (let k = 0; k < 400; k++) {
+    const gap = (rnd() - 0.5) * 200
+    const p = 1 / (1 + Math.pow(10, -gap / 400))
+    const votes = Array.from({ length: 12 }, () => vote('c', 'i', rnd() < p ? 'a' : 'b'))
+    const r = duel.rankDuels(votes)
+    const prob = duel.probabilityBetter({ ...r.get('c'), model: 'c' }, { ...r.get('i'), model: 'i' })
+    if (prob > 0.95) {
+      confident++
+      if (gap > 0) right++
+    }
+  }
+  assert.ok(confident > 0 && right / confident >= 0.9, `${right}/${confident} justes`)
 })
 
 test('marge à 95 % : comparée à un bootstrap sur des votes simulés (étape 359)', () => {

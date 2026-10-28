@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "O tomto duelu nelze hlasovat: selhal nástroj Jarise.",
   "role.voice": "Hlas · {role}",
   "picks.duel": "Souboje {value}",
-  "picks.duel.title": "Jisté body z tvých duelů (hlasy: {count}): rozpětí 95 % je odečteno. Dokud model není jistě vpředu nebo vzadu, zůstává na 0.",
+  "picks.duel.title": "Body z tvých duelů (hlasy: {count}). Již používaný model nahradí jen model, který má alespoň 5 duelů, více než 95% šanci, že je lepší, a i po započtení spolehlivosti zůstává jasně vpředu. Jinak se nic nemění.",
   "picks.calc.duel": "Duely {points} b. = ×{value} (hlasy: {count})"
 }
