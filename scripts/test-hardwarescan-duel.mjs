@@ -9,9 +9,10 @@ import { withI18n } from './i18n-test-module.mjs'
 import { loadTsModule } from './load-ts-module.mjs'
 
 /**
- * Étape 355 (Léo : « on vote, à la place d'Artificial Analysis ») : sur les VRAIS scores du dépôt et une machine
- * comme celle de Léo (8 Go, 32 Go), les votes des duels décident du choix des modèles — par catégorie, pour les seuls
- * modèles déjà passés en duel. La source des votes est branchée comme dans main.ts, avec le vrai classement.
+ * Étape 355 (Léo : « on vote, à la place d'Artificial Analysis »), puis étape 358 (« fais comme Arena, au début tous
+ * les modèles vont être à 0 ») : sur les VRAIS scores du dépôt et une machine comme celle de Léo (8 Go, 32 Go), seuls
+ * les votes des duels donnent leur force aux modèles de Faible, Moyen, Élevé et Code — 0 point pour tous sans vote.
+ * La source des votes est branchée comme dans main.ts, avec le vrai classement.
  */
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
@@ -45,7 +46,7 @@ function setup(votes, { vramMib = 8 * 1024, ramGb = 32 } = {}) {
   const exports = {}
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   exports.setOllamaVersionSource(() => '0.40.10')
-  if (votes) exports.setDuelStrengthSource((category, prior) => duel.rankDuels(votes.filter((v) => v.category === category), prior))
+  if (votes) exports.setDuelStrengthSource((category) => duel.rankDuels(votes.filter((v) => v.category === category)))
   return exports
 }
 
@@ -53,22 +54,24 @@ let nextId = 0
 const wins = (n, winner, loser, category) =>
   Array.from({ length: n }, () => ({ id: `v${nextId++}`, category, at: nextId, sessionId: 's', modelA: winner, modelB: loser, outcome: 'a', prompt: '' }))
 
-test('sans vote : exactement le choix d’avant (aucune source branchée, ou une source vide)', async () => {
-  const before = await setup(null).pickBestModelsFromBenchmark()
+test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Artificial Analysis mais de la fiabilité', async () => {
+  const none = await setup(null).pickBestModelsFromBenchmark()
   const empty = await setup([]).pickBestModelsFromBenchmark()
-  assert.deepEqual(JSON.parse(JSON.stringify(empty)), JSON.parse(JSON.stringify(before)))
-  assert.equal(before.models.large, LARGE)
-  assert.equal(before.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
+  assert.deepEqual(JSON.parse(JSON.stringify(empty)), JSON.parse(JSON.stringify(none)))
+  // Machine de Léo, avec les vrais scores : ce que Jaris choisit quand personne n'a encore voté (calculé, pas deviné).
+  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' })
+  assert.equal(none.codeModel, 'ornith-1.5:35b')
+  assert.equal(none.visionModel, LARGE, 'Vision n’a pas de duel : elle garde Artificial Analysis')
+  assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
 })
 
-test('Conversation : jamais un seul vote, mais des victoires constantes changent le modèle Élevé — pour le Chat ET la voix', async () => {
-  assert.equal((await setup(wins(1, CHALLENGER, LARGE, 'conversation')).pickBestModelsFromBenchmark()).models.large, LARGE, 'un seul vote')
-  const picks = await setup(wins(4, CHALLENGER, LARGE, 'conversation')).pickBestModelsFromBenchmark()
-  assert.equal(picks.models.large, CHALLENGER)
-  // La voix suit les votes Conversation tant qu'elle n'a pas les siens (duelPrior) : rien ne la sépare du Chat.
+test('Conversation : des victoires font passer un modèle devant, pour le Chat ET la voix', async () => {
+  const picks = await setup(wins(3, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()
+  assert.equal(picks.models.large, LARGE)
+  // La voix suit les votes Conversation tant qu'elle n'a pas les siens : rien ne la sépare du Chat.
   assert.equal(picks.voiceModels, undefined)
   // Le Code, lui, n'est pas concerné par des votes de Conversation.
-  assert.equal(picks.codeModel, LARGE)
+  assert.equal(picks.codeModel, 'ornith-1.5:35b')
 })
 
 test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils mènent ailleurs', async () => {
@@ -83,12 +86,12 @@ test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils m
 })
 
 test('Code : les votes Code décident du modèle Code, pas des rôles de conversation', async () => {
-  const picks = await setup(wins(6, K2_7B, LARGE, 'code')).pickBestModelsFromBenchmark()
-  assert.notEqual(picks.codeModel, LARGE, 'six défaites de suite font perdre sa place au modèle Code')
-  assert.equal(picks.models.large, LARGE, 'les rôles de conversation ne bougent pas')
+  const picks = await setup(wins(3, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark()
+  assert.equal(picks.codeModel, LARGE)
+  assert.equal(picks.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
 })
 
-test('le calcul affiché dit d’où vient la note : les votes (et combien), sinon Artificial Analysis', async () => {
+test('le calcul affiché dit d’où vient la note : les duels (points et nombre de votes), 0 point sans vote', async () => {
   const m = setup([...wins(4, CHALLENGER, LARGE, 'conversation'), ...wins(5, LARGE, CHALLENGER, 'voice')])
   const profile = {
     models: { flash: 'granite4.2:8b', medium: K2_7B, large: CHALLENGER },
@@ -99,13 +102,16 @@ test('le calcul affiché dit d’où vient la note : les votes (et combien), sin
   const picks = await m.getMyModelPicks(profile)
   assert.equal(picks.large.note.base.kind, 'duel')
   assert.equal(picks.large.note.base.duels, 4)
-  assert.equal(picks.large.note.omniscienceShare, null, 'les votes remplacent toute la note de départ, « n’invente pas » compris')
+  assert.ok(picks.large.note.base.points > 0)
+  assert.equal(picks.large.note.omniscienceShare, null, 'les duels remplacent toute la note de départ, « n’invente pas » compris')
   // Les rôles de la voix : SES votes (5 duels Vocal), pas les 4 de la Conversation.
   assert.equal(picks.voice.large.model, LARGE)
   assert.deepEqual([picks.voice.large.note.base.kind, picks.voice.large.note.base.duels], ['duel', 5])
-  // Jamais en duel : Artificial Analysis, inchangé.
-  assert.equal(picks.medium.note.base.kind, 'intelligence')
-  assert.equal(picks.code.note.base.kind, 'terminalBench', 'aucun vote Code : le Code garde Terminal-Bench')
+  // Jamais en duel : 0 point, force 1 — plus d'Artificial Analysis ni de Terminal-Bench pour ces rôles.
+  assert.deepEqual([picks.medium.note.base.kind, picks.medium.note.base.value, picks.medium.note.base.points], ['duel', 1, 0])
+  assert.deepEqual([picks.code.note.base.kind, picks.code.note.base.duels], ['duel', 0])
+  // Vision n'a pas de duel : elle garde l'intelligence d'Artificial Analysis.
+  assert.equal(picks.vision.note.base.kind, 'intelligence')
   // Le produit des parts affichées fait toujours la note.
   const note = picks.large.note
   assert.ok(Math.abs(note.base.value * note.toolsShare * (note.demandsShare ?? 1) - note.total) < 1e-9)
@@ -151,11 +157,12 @@ test('une session sur la machine de Léo : les modèles déjà utilisés, puis u
   assert.ok(sizes.get(chosen[3]) > 7 !== sizes.get(chosen[4]) > 7, `un gros et un petit challenger : ${chosen.slice(3)}`)
 })
 
-test('main.ts branche la source des votes, et le classement de l’écran part de la même note que le choix', () => {
+test('main.ts branche la source des votes, et le classement de l’écran est celui du choix (tous partent de 0)', () => {
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
-  assert.match(main, /setDuelStrengthSource\(\(category: DuelCategory, prior\) => \{/)
+  assert.match(main, /setDuelStrengthSource\(\(category: DuelCategory\) => \{/)
+  assert.match(main, /rankDuels\(votes\.filter\(\(v\) => v\.category === category\)\)/)
   const session = readFileSync(new URL('../electron/services/duelSession.ts', import.meta.url), 'utf8')
-  assert.match(session, /rankDuels\(votes, duelPrior\(category\)\)/)
+  assert.match(session, /rankDuels\(votes\)/)
 })
 
 test('sans carte graphique détectée : les modèles tournent dans la RAM, le Duel a de quoi faire (petits et gros)', async () => {

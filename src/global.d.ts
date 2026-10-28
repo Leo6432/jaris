@@ -236,6 +236,7 @@ declare global {
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>
+      duelNext: () => Promise<DuelSessionView>
       onDuelChanged: (cb: (view: DuelSessionView | null) => void) => () => void
       setOptionsOpen: (open: boolean) => void
       getWindowChrome: () => Promise<WindowChrome>

@@ -516,7 +516,7 @@ export interface ModelNoteBreakdown {
    * Mesure de départ : Intelligence Index (Faible, Moyen, Élevé, Vision) ou Terminal-Bench 2.1 (Code) — ou, étape 355,
    * la force donnée par les votes des duels (`duel`, avec leur nombre), qui remplace Artificial Analysis pour ce modèle.
    */
-  base: { kind: 'intelligence' | 'terminalBench' | 'duel'; value: number; duels?: number } | null
+  base: { kind: 'intelligence' | 'terminalBench' | 'duel'; value: number; duels?: number; points?: number } | null
   /** Part gardée selon AA-Omniscience : (100 + Omniscience) / 200. Faible, Moyen et Élevé seulement. */
   omniscienceShare: number | null
   /** Part gardée selon le test d'appel d'outils : taux de réussite puissance `chain` (actions d'affilée). */
@@ -1020,6 +1020,8 @@ export interface DuelRoundView {
   prompt: string | null
   a: DuelSideView
   b: DuelSideView
+  /** Étape 358 : après le vote, les noms sont révélés (comme sur Arena) ; `null` avant le vote. */
+  revealed: { a: string; b: string; outcome: DuelOutcome } | null
 }
 
 export interface DuelSessionView {
@@ -1038,8 +1040,15 @@ export interface DuelSessionView {
 
 export interface DuelStandingView {
   model: string
-  /** Force après les votes, sur l'échelle de la note de départ. */
+  /** Points façon Arena (étape 358) : tous les modèles partent de 0. */
+  score: number
+  /** Marge de l'intervalle de confiance à 95 %, en points (score ± margin). */
+  margin: number
+  /** Multiplicateur de la note de Jaris (1 à 0 point). */
   strength: number
+  /** Rangs possibles compte tenu de l'incertitude (« Rank Spread » d'Arena). */
+  rankBest: number
+  rankWorst: number
   wins: number
   losses: number
   ties: number
@@ -1064,7 +1073,7 @@ export interface DuelRankingView {
   ranking: DuelStandingView[]
 }
 
-/** Un duel voté, pour l'historique. Les noms de la session EN COURS restent cachés (`null`) jusqu'à sa fin. */
+/** Un duel voté, pour l'historique (noms révélés dès le vote, étape 358 ; `null` gardé pour la forme). */
 export interface DuelHistoryEntry {
   id: string
   category: DuelCategory
@@ -1331,6 +1340,8 @@ export const IPC_CHANNELS = {
   duelHistoryApp: 'jaris:duel-history-app',
   duelRetry: 'jaris:duel-retry',
   duelSkip: 'jaris:duel-skip',
+  /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */
+  duelNext: 'jaris:duel-next',
   /** main -> écran : nouvel état de la session (ou `null` quand il n'y en a plus). */
   duelChanged: 'jaris:duel-changed',
   /**

@@ -150,7 +150,7 @@ async function readySession(env, count = 4) {
   return started
 }
 
-test('une session entière reste anonyme pour l’écran : préparation, réponses, vote, duel suivant', async () => {
+test('anonyme jusqu’au vote, puis noms révélés tout de suite (étape 358, comme Arena), puis duel suivant', async () => {
   const env = setup({ installed: ['alpha-model:3b', 'bravo-model:8b'] })
   const returned = [await readySession(env)]
   // Téléchargés : seulement les deux qui manquaient, et jamais un message qui les nomme.
@@ -165,12 +165,19 @@ test('une session entière reste anonyme pour l’écran : préparation, répons
   const round = env.session.getDuelView().round
   assert.equal(round.a.text, 'C’est ouvert.')
   assert.deepEqual(round.a.actions, [{ tool: 'open_app', detail: 'Bloc-notes' }], 'ce qu’il a fait sur le PC, à vérifier')
-  returned.push(await env.session.voteDuel('a'))
-  assert.equal(env.session.getDuelView().round.number, 2, 'duel suivant')
-  assert.equal(env.session.getDuelView().round.prompt, null)
-
-  assertAnonymous(env.emitted, 'pendant la session')
-  assertAnonymous(returned, 'réponses aux actions de l’écran')
+  assertAnonymous(env.emitted, 'avant le vote')
+  assertAnonymous(returned, 'réponses aux actions de l’écran avant le vote')
+  const voted = await env.session.voteDuel('a')
+  // Le vote est enregistré AVANT la révélation : seuls les votes à l'aveugle comptent.
+  assert.equal(env.votes.length, 1)
+  assert.equal(voted.round.number, 1, 'le même duel, noms révélés')
+  assert.deepEqual([voted.round.revealed.a, voted.round.revealed.b, voted.round.revealed.outcome], [env.votes[0].modelA, env.votes[0].modelB, 'a'])
+  await assert.rejects(env.session.voteDuel('b'), /déjà voté/, 'pas de second vote une fois les noms connus')
+  const next = env.session.nextDuel()
+  assert.equal(next.round.number, 2, 'duel suivant')
+  assert.equal(next.round.prompt, null)
+  assert.equal(next.round.revealed, null)
+  assertAnonymous([next], 'duel suivant')
   // Le vote, lui, garde les vrais noms (dans le fichier des votes, jamais à l'écran).
   assert.equal(env.votes.length, 1)
   assert.ok(MODELS.includes(env.votes[0].modelA) && MODELS.includes(env.votes[0].modelB))
@@ -478,7 +485,7 @@ test('une page web « introuvable » (adresse inventée) ou une application inco
   assert.equal(duelModule.isJarisToolFailure('type_text', 'Error'), false)
 })
 
-test('historique : chaque vote garde les deux réponses et ce qu’elles ont fait ; noms cachés tant que la session dure', async () => {
+test('historique : chaque vote garde les deux réponses et ce qu’elles ont fait, avec les noms révélés au vote', async () => {
   const env = setup({ installed: MODELS })
   await readySession(env)
   env.session.askDuel('Ouvre le Bloc-notes')
@@ -492,14 +499,10 @@ test('historique : chaque vote garde les deux réponses et ce qu’elles ont fai
   assert.ok(stored.a.durationMs >= 0)
   assert.equal(stored.a.app, false)
 
-  const during = env.session.duelHistory()
-  assert.equal(during.length, 1)
-  assert.equal(during[0].modelA, null, 'session en cours : nom caché')
-  assert.equal(during[0].modelB, null)
-  assertAnonymous(during, 'historique pendant la session')
-  await env.session.endDuel()
+  // Étape 358 : les noms sont révélés dès le vote, l'historique les montre donc aussi pendant la session.
   const after = env.session.duelHistory()
-  assert.ok(MODELS.includes(after[0].modelA) && MODELS.includes(after[0].modelB), 'session finie : noms révélés')
+  assert.equal(after.length, 1)
+  assert.ok(MODELS.includes(after[0].modelA) && MODELS.includes(after[0].modelB), 'noms révélés dès le vote')
   assert.equal(after[0].sides.b.text, 'C’est ouvert.')
 })
 

@@ -9243,6 +9243,13 @@ ol.reply-list > li::marker {
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: var(--hud-text-dim);
+  text-align: right;
+}
+
+/* Étape 358 : les points façon Arena, la donnée principale de la ligne. */
+.duel-ranking__score {
+  font-weight: 600;
+  color: var(--hud-text);
   white-space: nowrap;
 }
 
@@ -9428,6 +9435,17 @@ ol.reply-list > li::marker {
   gap: 8px;
   font-size: 14px;
   font-weight: 550;
+}
+
+/* Étape 358 : nom du modèle révélé après le vote. */
+.duel-side__model {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--hud-accent);
 }
 
 .duel-side__letter {

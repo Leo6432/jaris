@@ -40,6 +40,12 @@ function formatSpeed(entry: ModelOverviewEntry): string {
   return typeof entry.artificialAnalysisSpeed === 'number' ? `${formatDecimal(entry.artificialAnalysisSpeed)} tok/s` : '—'
 }
 
+/** Points de duel façon Arena (étape 358) : « 0 », « +120 », « -45 ». */
+function formatDuelPoints(points: number): string {
+  const rounded = Math.round(points)
+  return `${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`
+}
+
 /** Libellé collé à la valeur : ce tableau n'a pas d'en-tête, un nombre nu serait incompréhensible (étape 130). */
 function formatIntelligence(entry: ModelOverviewEntry): string {
   return entry.artificialAnalysisIndex === null ? '—' : t('picks.intelligence', { value: formatIntelligenceIndex(entry.artificialAnalysisIndex) })
@@ -60,7 +66,7 @@ function formatMeasure(entry: ModelOverviewEntry, role: string): { text: string;
   // chiffre-là qui décide, c'est donc lui qui s'affiche (leçon de l'étape 329).
   const base = entry.note?.base
   if (base?.kind === 'duel') {
-    return { text: t('picks.duel', { value: formatDecimal(base.value, 1) }), empty: false, title: t('picks.duel.title', { count: base.duels ?? 0 }) }
+    return { text: t('picks.duel', { value: formatDuelPoints(base.points ?? 0) }), empty: false, title: t('picks.duel.title', { count: base.duels ?? 0 }) }
   }
   if (role === 'code') {
     const value = entry.terminalBench ?? null
@@ -90,7 +96,7 @@ export function formatNoteCalc(entry: ModelOverviewEntry): string | null {
   const base = note.base
   const parts = [
     base.kind === 'duel'
-      ? t('picks.calc.duel', { value: formatDecimal(base.value, 1), count: base.duels ?? 0 })
+      ? t('picks.calc.duel', { points: formatDuelPoints(base.points ?? 0), value: formatDecimal(base.value, 2), count: base.duels ?? 0 })
       : base.kind === 'terminalBench'
         ? base.value > (entry.terminalBench ?? 0)
           ? t('picks.calc.floor', { value: formatTerminalBench(base.value) })

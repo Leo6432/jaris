@@ -83,6 +83,7 @@ import {
   runDuelB,
   setDuelEnvironment,
   skipDuel,
+  nextDuel,
   startDuel,
   stopDuelRun,
   voteDuel
@@ -224,12 +225,12 @@ setOllamaVersionSource(() => getLocalOllamaVersion())
 // Étape 355 : la force que les votes des duels donnent aux modèles remplace leur note d'Artificial Analysis. Recalculée
 // seulement quand les votes changent (le choix des modèles la demande à chaque calcul).
 let duelStrengthCache: { votes: unknown; byCategory: Map<string, ReturnType<typeof rankDuels>> } | null = null
-setDuelStrengthSource((category: DuelCategory, prior) => {
+setDuelStrengthSource((category: DuelCategory) => {
   const votes = getDuelVotes()
   if (duelStrengthCache?.votes !== votes) duelStrengthCache = { votes, byCategory: new Map() }
   let standings = duelStrengthCache.byCategory.get(category)
   if (!standings) {
-    standings = rankDuels(votes.filter((v) => v.category === category), prior)
+    standings = rankDuels(votes.filter((v) => v.category === category))
     duelStrengthCache.byCategory.set(category, standings)
   }
   return standings
@@ -1739,6 +1740,7 @@ app.whenReady().then(async () => {
     return retryDuel()
   })
   ipcMain.handle(IPC_CHANNELS.duelSkip, () => skipDuel())
+  ipcMain.handle(IPC_CHANNELS.duelNext, () => nextDuel())
   ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => displayedWidgetMode)
   ipcMain.on(IPC_CHANNELS.setChatWidgetHeight, (_event, height: number | null) => {
     chatWidgetHeight = height

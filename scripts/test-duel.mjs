@@ -20,66 +20,50 @@ const vote = (modelA, modelB, outcome, category = 'conversation') => ({
   outcome,
   prompt: 'Ouvre le Bloc-notes'
 })
-const PRIORS = { strong: 30, weak: 10, mid: 20 }
-const prior = (model) => PRIORS[model] ?? null
-
-test('lecture des votes : un vote abîmé est écarté, jamais tout le fichier', () => {
-  const good = vote('a', 'b', 'a')
-  assert.deepEqual(duel.parseDuelVotes([good, { ...good, id: '' }, { ...good, outcome: 'nul' }, { ...good, modelB: 'a' }, null, 'texte']), [good])
-  assert.equal(duel.parseDuelVotes({ votes: [] }), null, 'pas une liste : le fichier entier est illisible')
-  assert.equal(duel.parseDuelVote({ ...good, category: 'image' }), null, 'pas de duel d’images')
-  // Champs facultatifs absents (fichier d'une autre version) : le vote reste lisible.
-  const { sessionId: _s, prompt: _p, ...minimal } = good
-  assert.deepEqual(duel.parseDuelVote(minimal), { ...good, sessionId: '', prompt: '' })
+test('classement façon Arena (étape 358) : tout part de 0, un vote suffit à départager, la marge dit combien c’est sûr', () => {
+  // Un seul vote : le gagnant passe devant, mais la marge est large et les rangs restent ouverts (1 à 2).
+  const one = duel.rankDuels([vote('a', 'b', 'a')])
+  assert.ok(one.get('a').score > 0 && one.get('b').score < 0)
+  assert.ok(Math.abs(one.get('a').score + one.get('b').score) < 1e-6, 'centré sur 0')
+  assert.deepEqual([one.get('a').rankBest, one.get('a').rankWorst], [1, 2])
+  // Beaucoup de votes constants : la marge se réduit, le rang devient sûr.
+  const many = duel.rankDuels(Array.from({ length: 30 }, () => vote('a', 'b', 'a')))
+  assert.ok(many.get('a').margin < one.get('a').margin)
+  assert.deepEqual([many.get('a').rankBest, many.get('a').rankWorst], [1, 1])
+  assert.deepEqual([many.get('b').rankBest, many.get('b').rankWorst], [2, 2])
+  // La force sert de multiplicateur à la note : 1 à 0 point, × 10 tous les 400 points.
+  const s = many.get('a')
+  assert.ok(Math.abs(s.strength - Math.pow(10, s.score / 400)) < 1e-9)
+  // Égalité parfaite : 0 point chacun.
+  const tied = duel.rankDuels([vote('a', 'b', 'a'), vote('a', 'b', 'b')])
+  assert.ok(Math.abs(tied.get('a').score) < 1e-9 && Math.abs(tied.get('a').strength - 1) < 1e-9)
 })
 
-test('classement : jamais un seul vote, mais des victoires constantes finissent par décider (le tableau de shared/duel.ts)', () => {
-  // Le tableau écrit dans shared/duel.ts (PRIOR_SIGMA_KNOWN = 0,5) : vérifié ici, pas seulement affirmé.
-  const flipsAfter = (ratio) => {
-    for (let n = 1; n <= 20; n++) {
-      const votes = Array.from({ length: n }, () => vote('weak', 'strong', 'a'))
-      const standings = duel.rankDuels(votes, (model) => (model === 'strong' ? 10 * ratio : 10))
-      if (standings.get('weak').strength > standings.get('strong').strength) return n
-    }
-    return null
-  }
-  assert.deepEqual([1.5, 2, 3].map(flipsAfter), [2, 3, 5])
-  // Un seul vote ne renverse rien, mais fait déjà monter le gagnant.
-  const one = duel.rankDuels([vote('weak', 'strong', 'a')], prior)
-  assert.ok(one.get('weak').strength > PRIORS.weak && one.get('weak').strength < one.get('strong').strength)
-  // Avec beaucoup de votes, ce sont les votes qui décident, plus Artificial Analysis.
-  const many = duel.rankDuels(Array.from({ length: 30 }, () => vote('weak', 'strong', 'a')), prior)
-  assert.ok(many.get('weak').strength > 3 * many.get('strong').strength)
+test('classement : battre un modèle fort rapporte plus que battre un faible (Bradley-Terry, pas un simple compte)', () => {
+  const base = [...Array.from({ length: 6 }, () => vote('fort', 'faible', 'a'))]
+  const beatsStrong = duel.rankDuels([...base, vote('x', 'fort', 'a')])
+  const beatsWeak = duel.rankDuels([...base, vote('x', 'faible', 'a')])
+  assert.ok(beatsStrong.get('x').score > beatsWeak.get('x').score)
 })
 
 test('classement : le même ensemble de votes donne le même résultat dans n’importe quel ordre (pas un Elo)', () => {
   const votes = [vote('weak', 'strong', 'a'), vote('mid', 'strong', 'b'), vote('weak', 'mid', 'tie'), vote('strong', 'weak', 'bothBad'), vote('mid', 'weak', 'a')]
-  const forward = duel.rankDuels(votes, prior)
-  const backward = duel.rankDuels([...votes].reverse(), prior)
+  const forward = duel.rankDuels(votes)
+  const backward = duel.rankDuels([...votes].reverse())
   for (const model of ['weak', 'mid', 'strong']) {
-    assert.ok(Math.abs(forward.get(model).strength - backward.get(model).strength) < 1e-6, `${model} dépend de l’ordre des votes`)
+    assert.ok(Math.abs(forward.get(model).score - backward.get(model).score) < 1e-6, `${model} dépend de l’ordre des votes`)
+    assert.ok(Math.abs(forward.get(model).margin - backward.get(model).margin) < 1e-6)
   }
 })
 
 test('classement : victoires, défaites et égalités comptées ; « les deux sont nuls » compte comme une égalité', () => {
-  const standings = duel.rankDuels([vote('weak', 'strong', 'a'), vote('strong', 'weak', 'a'), vote('weak', 'strong', 'tie'), vote('weak', 'strong', 'bothBad')], prior)
-  assert.deepEqual(
-    { ...standings.get('weak'), strength: undefined },
-    { model: 'weak', strength: undefined, wins: 1, losses: 1, ties: 2, duels: 4 }
-  )
+  const standings = duel.rankDuels([vote('weak', 'strong', 'a'), vote('strong', 'weak', 'a'), vote('weak', 'strong', 'tie'), vote('weak', 'strong', 'bothBad')])
+  const w = standings.get('weak')
+  assert.deepEqual({ wins: w.wins, losses: w.losses, ties: w.ties, duels: w.duels }, { wins: 1, losses: 1, ties: 2, duels: 4 })
+  assert.ok(Math.abs(w.score) < 1e-9, '1 victoire, 1 défaite, 2 égalités : à égalité')
   assert.equal(duel.scoreOfA('bothBad'), 0.5)
-  // Sans aucun vote : rien n'est classé (les modèles gardent leur note d'Artificial Analysis).
-  assert.equal(duel.rankDuels([], prior).size, 0)
-})
-
-test('classement : un modèle sans note publiée part de la moyenne des modèles votés, et ses votes lui en donnent une', () => {
-  const standings = duel.rankDuels([vote('inconnu', 'weak', 'a'), vote('inconnu', 'strong', 'a')], prior)
-  const inconnu = standings.get('inconnu').strength
-  assert.ok(Number.isFinite(inconnu) && inconnu > 0)
-  assert.ok(inconnu > standings.get('weak').strength, 'il a gagné ses deux duels')
-  // Aucun modèle voté n'a de note : un départ neutre, et le gagnant passe quand même devant.
-  const blind = duel.rankDuels([vote('x', 'y', 'a')], () => null)
-  assert.ok(blind.get('x').strength > blind.get('y').strength)
+  // Sans aucun vote : rien n'est classé (tous les modèles sont à 0 point).
+  assert.equal(duel.rankDuels([]).size, 0)
 })
 
 test('session : les modèles déjà utilisés par Jaris d’abord, puis les moins essayés ; toujours les mêmes pour les mêmes données', () => {

@@ -33,7 +33,7 @@ window.__plan = window.__plan || {
   sizes: [{ count: 4, toDownload: 1, downloadGb: 5.2, fitsDisk: true }, { count: 5, toDownload: 2, downloadGb: 9.8, fitsDisk: true }, { count: 6, toDownload: 3, downloadGb: 15.1, fitsDisk: true }]
 }
 window.__rankings = window.__rankings || [
-  { category: 'conversation', votes: 3, ranking: [{ model: 'granite4.2:8b', strength: 14, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', strength: 9, wins: 0, losses: 2, ties: 1, duels: 3 }] },
+  { category: 'conversation', votes: 3, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
   { category: 'code', votes: 0, ranking: [] },
   { category: 'voice', votes: 0, ranking: [] }
 ]
@@ -67,7 +67,12 @@ window.jaris = {
   duelVote: async (outcome) => {
     window.__calls.push(['vote', outcome])
     window.__votes = (window.__votes || 0) + 1
-    return ready({ number: 2, prompt: null, a: side(), b: side() })
+    // Étape 358 : le même duel, noms révélés juste après le vote.
+    return ready({ ...window.__view.round, revealed: { a: 'qwen3.8:27b', b: 'granite4.2:8b', outcome } })
+  },
+  duelNext: async () => {
+    window.__calls.push('next')
+    return ready({ number: 2, prompt: null, a: side(), b: side(), revealed: null })
   },
   duelEnd: async () => {
     window.__calls.push('end')
@@ -91,7 +96,7 @@ window.jaris = {
 window.__summary = {
   category: 'conversation',
   rounds: [{ prompt: 'Ouvre le Bloc-notes et écris une liste de courses', modelA: 'qwen3.5:9b', modelB: 'granite4.2:8b', outcome: 'b' }],
-  ranking: [{ model: 'granite4.2:8b', strength: 15, wins: 3, losses: 0, ties: 1, duels: 4 }, { model: 'qwen3.5:9b', strength: 8, wins: 0, losses: 3, ties: 1, duels: 4 }],
+  ranking: [{ model: 'granite4.2:8b', score: 180, margin: 250, strength: 2.8, rankBest: 1, rankWorst: 1, wins: 3, losses: 0, ties: 1, duels: 4 }, { model: 'qwen3.5:9b', score: -180, margin: 250, strength: 0.35, rankBest: 2, rankWorst: 2, wins: 0, losses: 3, ties: 1, duels: 4 }],
   changes: [{ role: 'medium', from: 'qwen3.5:9b', to: 'granite4.2:8b', applied: true }, { role: 'large', from: 'qwen3.8:27b', to: 'gemma4:26b', applied: false }],
   downloaded: [{ model: 'granite4.2:8b', sizeGb: 5.2, inUse: true }, { model: 'ministral-3:8b', sizeGb: 6.0, inUse: false }]
 }
@@ -152,6 +157,10 @@ test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images)
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 1 \(5,2 Go\)/)
     // Le classement des votes déjà donnés, avec les noms : ce sont des duels passés, plus rien n'est anonyme.
     assert.match(await page.textContent('.duel-ranking__list'), /granite4\.2.*Victoires 2 · Défaites 0 · Égalités 1/s)
+    // Étape 358, comme Arena : points (tous partent de 0), marge à 95 % et rangs possibles.
+    assert.match(await page.textContent('.duel-ranking__list'), /granite4\.2.*\+120 pts ± 310 · Rang 1 à 2/s)
+    assert.match(await page.textContent('.duel-ranking__list'), /qwen3\.5.*-120 pts ± 310/s)
+    assert.match(await page.textContent('.duel-ranking'), /Tous les modèles partent de 0 point/)
     // Changer de catégorie redemande ce que la session téléchargerait.
     await page.click('.duel-category:has-text("Code")')
     await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'plan' && c[1] === 'code'))
@@ -242,7 +251,17 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
 
       await page.click('.duel-vote__button:has-text("A est meilleur")')
       assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'vote'), ['vote', 'a'])
+      // Étape 358, comme Arena : les noms sont révélés juste après le vote, sur chaque côté et dans le résultat.
+      await page.waitForSelector('.duel-vote--revealed')
+      assert.equal(await page.locator('.duel-vote__button').count(), 0, 'plus de vote une fois les noms connus')
+      assert.deepEqual(await page.locator('.duel-side__model').allTextContents(), ['qwen3.8:27b', 'granite4.2:8b'])
+      assert.match(await page.textContent('.duel-vote--revealed'), /Noms révélés/)
+      assert.match(await page.textContent('.duel-vote--revealed'), /Gagnant : qwen3\.8:27b/)
+      assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/, 'on reste sur ce duel tant qu’on n’a pas demandé le suivant')
+      await page.click('.duel-vote--revealed .duel-btn--primary')
+      assert.ok((await page.evaluate(() => window.__calls)).includes('next'))
       await page.waitForSelector('.duel__ask .empty-state')
+      assert.equal(await page.locator('.duel-side__model').count(), 0, 'le duel suivant est de nouveau anonyme')
       assert.match(await page.textContent('.duel__bar'), /Duel 2 · Conversation/)
       assert.match(await page.textContent('.duel__bar'), /Votes : 1/)
     },
@@ -356,7 +375,7 @@ test('passer un duel gâché revient à la demande suivante, sans vote', options
 })
 
 const HISTORY = `window.__history = [
-  { id: 'v3', category: 'conversation', at: Date.now() - 60000, prompt: 'Ouvre le Bloc-notes et écris une liste', outcome: 'a', modelA: null, modelB: null,
+  { id: 'v3', category: 'conversation', at: Date.now() - 60000, prompt: 'Ouvre le Bloc-notes et écris une liste', outcome: 'a', modelA: 'ministral-3:8b', modelB: 'gemma4:e4b',
     sides: { a: { text: 'C’est **fait**.', actions: [{ tool: 'open_app', detail: 'Bloc-notes' }], durationMs: 14000, error: null, app: false },
              b: { text: 'Je ne peux pas.', actions: [], durationMs: 5000, error: null, app: false } } },
   { id: 'v2', category: 'code', at: Date.now() - 3600000, prompt: 'Un jeu du serpent', outcome: 'b', modelA: 'qwen3.8:27b', modelB: 'granite4.2:8b',
@@ -364,16 +383,15 @@ const HISTORY = `window.__history = [
   { id: 'v1', category: 'voice', at: Date.now() - 90000000, prompt: 'Quelle heure est-il ?', outcome: 'tie', modelA: 'gemma4:e4b', modelB: 'ministral-3:8b', sides: null }
 ]`
 
-test('historique : un petit bouton ouvre tous les duels, avec les réponses, et les noms cachés de la session en cours', options, async () => {
+test('historique : un petit bouton ouvre tous les duels, avec les réponses et les noms (révélés dès le vote)', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.duel-history-button')
     await page.click('.duel-history-button')
     await page.waitForSelector('.duel-history__item')
     assert.equal(await page.$$eval('.duel-history__item', (els) => els.length), 3)
     const first = await page.textContent('.duel-history__item:nth-child(1)')
-    assert.match(first, /Modèles cachés jusqu'à la fin de la session en cours/)
-    assert.match(first, /A est meilleur/)
-    assert.ok(!/qwen|granite/.test(first), 'aucun nom pour la session en cours')
+    assert.match(first, /ministral-3:8b contre gemma4:e4b|ministral-3:8b/)
+    assert.match(first, /Gagnant : ministral-3:8b/)
     assert.match(await page.textContent('.duel-history__item:nth-child(2)'), /Gagnant : granite4.2:8b/)
     // Les réponses : déplier, voir ce que chaque modèle a fait et dit.
     await page.click('.duel-history__item:nth-child(1) .duel-history__toggle')

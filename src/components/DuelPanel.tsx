@@ -10,7 +10,7 @@ import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
 import { DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
-import type { DuelActivity, DuelHistoryEntry, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelSummary } from '../../shared/ipc'
+import type { DuelActivity, DuelHistoryEntry, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -137,9 +137,11 @@ interface SideCardProps {
   playing: boolean
   onStop: () => void
   onListen: () => void
+  /** Étape 358 : le nom du modèle, révélé après le vote ; `null` avant. */
+  model: string | null
 }
 
-function SideCard({ name, side, category, now, playing, onStop, onListen }: SideCardProps): JSX.Element {
+function SideCard({ name, side, category, now, playing, onStop, onListen, model }: SideCardProps): JSX.Element {
   const running = side.status === 'running'
   const final = finished(side)
   const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
@@ -152,6 +154,11 @@ function SideCard({ name, side, category, now, playing, onStop, onListen }: Side
             {name.toUpperCase()}
           </span>
           {t(name === 'a' ? 'duel.side.a' : 'duel.side.b')}
+          {model !== null && (
+            <span className="duel-side__model" title={model}>
+              {formatModelName(model)}
+            </span>
+          )}
         </span>
         <span className="duel-side__status">{statusLabel(side)}</span>
       </header>
@@ -238,11 +245,29 @@ function HistoryButton({ onClick }: { onClick: () => void }): JSX.Element {
   )
 }
 
-function outcomeLabel(entry: DuelHistoryEntry): string {
+/**
+ * Étape 358 : une ligne du classement façon Arena — points (tous partent de 0), marge à 95 %, rangs possibles, puis
+ * victoires, défaites et égalités.
+ */
+function RankingStats({ row }: { row: DuelStandingView }): JSX.Element {
+  const signed = (value: number): string => `${value > 0 ? '+' : ''}${formatDecimal(Math.round(value))}`
+  return (
+    <span className="duel-ranking__record">
+      <span className="duel-ranking__score">{t('duel.ranking.score', { score: signed(row.score), margin: formatDecimal(Math.round(row.margin)) })}</span>
+      {' · '}
+      {row.rankBest === row.rankWorst
+        ? t('duel.ranking.rankOne', { rank: row.rankBest })
+        : t('duel.ranking.rank', { best: row.rankBest, worst: row.rankWorst })}
+      {' · '}
+      {t('duel.ranking.record', { wins: row.wins, losses: row.losses, ties: row.ties })}
+    </span>
+  )
+}
+
+function outcomeLabel(entry: Pick<DuelHistoryEntry, 'outcome' | 'modelA' | 'modelB'>): string {
   if (entry.outcome === 'tie') return t('duel.vote.tie')
   if (entry.outcome === 'bothBad') return t('duel.outcome.bothBad')
   const winner = entry.outcome === 'a' ? entry.modelA : entry.modelB
-  // Noms encore cachés (session en cours) : « A est meilleur », jamais le nom.
   if (winner === null) return t(entry.outcome === 'a' ? 'duel.vote.a' : 'duel.vote.b')
   return t('duel.outcome.winner', { model: formatModelName(winner) })
 }
@@ -383,7 +408,6 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
           <ol className="duel-history__list">
             {shown.map((entry) => {
               const expanded = open === entry.id
-              const hidden = entry.modelA === null || entry.modelB === null
               return (
                 <li key={entry.id} className="duel-history__item">
                   <p className="duel-history__meta">
@@ -391,9 +415,7 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
                   </p>
                   <p className="duel-summary__round-prompt">{entry.prompt}</p>
                   <p className="duel-summary__round-models">
-                    {hidden
-                      ? t('duel.history.hidden')
-                      : t('duel.summary.versus', { a: formatModelName(entry.modelA as string), b: formatModelName(entry.modelB as string) })}
+                    {t('duel.summary.versus', { a: formatModelName(entry.modelA ?? '—'), b: formatModelName(entry.modelB ?? '—') })}
                   </p>
                   <p className={`duel-summary__outcome duel-summary__outcome--${entry.outcome}`}>{outcomeLabel(entry)}</p>
                   <button
@@ -434,7 +456,7 @@ export default function DuelPanel(): JSX.Element {
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
-  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'vote' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
+  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'vote' | 'next' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [deleted, setDeleted] = useState<{ deleted: string[]; failed: { model: string; error: string }[] } | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -609,6 +631,11 @@ export default function DuelPanel(): JSX.Element {
     void run('vote', async () => setView(await window.jaris.duelVote(outcome)))
   }
 
+  const next = (): void => {
+    stopAudio()
+    void run('next', async () => setView(await window.jaris.duelNext()))
+  }
+
   const retry = (): void => {
     stopAudio()
     void run('retry', async () => setView(await window.jaris.duelRetry()))
@@ -756,13 +783,14 @@ export default function DuelPanel(): JSX.Element {
                     <span className="duel-ranking__model" title={row.model}>
                       {formatModelName(row.model)}
                     </span>
-                    <span className="duel-ranking__record">{t('duel.ranking.record', { wins: row.wins, losses: row.losses, ties: row.ties })}</span>
+                    <RankingStats row={row} />
                   </li>
                 ))}
               </ol>
             ) : (
               <p className="duel-home__note">{t('duel.ranking.empty')}</p>
             )}
+            <p className="duel-home__note">{t('duel.ranking.legend')}</p>
           </section>
         </div>
       </div>
@@ -848,6 +876,7 @@ export default function DuelPanel(): JSX.Element {
                   playing={playing === 'a'}
                   onStop={stop}
                   onListen={() => void play('a')}
+                  model={round.revealed?.a ?? null}
                 />
                 {round.b.status === 'idle' ? (
                   <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
@@ -882,6 +911,7 @@ export default function DuelPanel(): JSX.Element {
                     playing={playing === 'b'}
                     onStop={stop}
                     onListen={() => void play('b')}
+                    model={round.revealed?.b ?? null}
                   />
                 )}
               </div>
@@ -903,7 +933,25 @@ export default function DuelPanel(): JSX.Element {
                 </div>
               )}
 
-              {bothDone && !trouble && (
+              {round.revealed && (
+                <div className="duel-vote duel-vote--revealed" role="group" aria-labelledby="duel-revealed-title">
+                  <h2 id="duel-revealed-title" className="duel-vote__title">
+                    {t('duel.revealed.title')}
+                  </h2>
+                  <p className="duel-vote__text">
+                    {t('duel.summary.versus', { a: formatModelName(round.revealed.a), b: formatModelName(round.revealed.b) })}
+                    {' · '}
+                    {outcomeLabel({ outcome: round.revealed.outcome, modelA: round.revealed.a, modelB: round.revealed.b })}
+                  </p>
+                  <div className="duel-vote__buttons">
+                    <button type="button" className="duel-btn duel-btn--primary" onClick={next} disabled={pending !== null}>
+                      {t('duel.next')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {bothDone && !trouble && !round.revealed && (
                 <div className="duel-vote" role="group" aria-labelledby="duel-vote-title">
                   <h2 id="duel-vote-title" className="duel-vote__title">
                     {t('duel.vote.title')}
@@ -1001,7 +1049,7 @@ export default function DuelPanel(): JSX.Element {
                         <span className="duel-ranking__model" title={row.model}>
                           {formatModelName(row.model)}
                         </span>
-                        <span className="duel-ranking__record">{t('duel.ranking.record', { wins: row.wins, losses: row.losses, ties: row.ties })}</span>
+                        <RankingStats row={row} />
                       </li>
                     ))}
                   </ol>

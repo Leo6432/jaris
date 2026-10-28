@@ -50,28 +50,24 @@ const ROLES = ['flash', 'medium', 'large', 'vision', 'code']
 const product = (note) => note.base.value * (note.omniscienceShare ?? 1) * note.toolsShare * (note.demandsShare ?? 1)
 
 test('machine de Léo (8 Go, 32 Go) : chaque mesure du calcul vient de la bonne source, et le produit fait la note', async () => {
+  // Étape 358 : sans vote de duel, Faible, Moyen, Élevé et Code partent tous de 0 point (force 1) — plus
+  // d'Artificial Analysis ni de Terminal-Bench ; seule la fiabilité les sépare. Vision garde l'intelligence publiée.
   const picks = await setup({ vramMib: 8 * 1024 }).getMyModelPicks(null)
   const large = picks.large
-  assert.equal(large.model, 'qwen3.8:27b')
-  assert.deepEqual(JSON.parse(JSON.stringify(large.note.base)), { kind: 'intelligence', value: 33.7 })
-  close(large.note.omniscienceShare, (100 - 10) / 200, 'Élevé : part gardée par AA-Omniscience (-10)')
-  close(large.note.toolsShare, Math.pow(77 / 78, 5), 'Élevé : 77/78, sur 5 actions de suite')
-  close(large.note.demandsShare, 47 / 48, 'Élevé : demandes complètes 47/48')
+  assert.equal(large.model, 'qwen3.5:27b')
+  assert.deepEqual(JSON.parse(JSON.stringify(large.note.base)), { kind: 'duel', value: 1, duels: 0, points: 0 })
+  assert.equal(large.note.omniscienceShare, null, 'les duels remplacent toute la note de départ')
+  close(large.note.toolsShare, Math.pow(78 / 78, 5), 'Élevé : 78/78, sur 5 actions de suite')
   assert.equal(large.note.demandsEstimated, false)
-  close(large.note.total, 33.7 * 0.45 * Math.pow(77 / 78, 5) * (47 / 48), 'Élevé : la note')
 
-  // Code : Terminal-Bench 2.1 et le score de conversation (qwen3.8:27b n'a jamais passé le test de code) — ni
-  // l'intelligence générale, ni l'Omniscience, ni les demandes.
+  // Code : 0 point aussi, et le score de code (ou de conversation) — jamais les demandes.
   const code = picks.code
-  assert.equal(code.model, 'qwen3.8:27b')
-  assert.deepEqual(JSON.parse(JSON.stringify(code.note.base)), { kind: 'terminalBench', value: 79.8 })
+  assert.deepEqual([code.note.base.kind, code.note.base.value], ['duel', 1])
   assert.equal(code.note.omniscienceShare, null)
   assert.equal(code.note.demandsShare, null)
-  close(code.note.total, 79.8 * Math.pow(77 / 78, 5), 'Code : la note')
-  assert.equal(code.terminalBench, 79.8)
-  assert.equal(code.omniscience, -10)
 
-  // Vision : une seule lecture par demande (chaîne de 1).
+  // Vision : l'intelligence d'Artificial Analysis, une seule lecture par demande (chaîne de 1).
+  assert.equal(picks.vision.note.base.kind, 'intelligence')
   assert.equal(picks.vision.note.chain, 1)
   close(picks.vision.note.toolsShare, 1, 'Vision : 34/34')
 
@@ -100,18 +96,18 @@ test('cas sans note : jamais testé, mesure non publiée — jamais un zéro ; d
   const untested = noteBreakdown('granite4.2:8b', 'conversation', null, null)
   assert.equal(untested.toolsShare, null)
   assert.equal(untested.total, null, 'un modèle jamais testé n’a pas de note (pickRole l’écarte), pas 0')
-  // qwen2.5-coder:14b : rien de publié par Artificial Analysis pour lui.
+  // Étape 358 : un modèle sans rien de publié (qwen2.5-coder:14b) a quand même sa note : 0 point de duel, force 1.
   const unpublished = noteBreakdown('qwen2.5-coder:14b', 'code', '5/5', null)
-  assert.equal(unpublished.base, null)
-  assert.equal(unpublished.total, null)
+  assert.deepEqual([unpublished.base.kind, unpublished.base.value], ['duel', 1])
+  close(unpublished.total, 1, 'force 1 × 5/5')
+  // Vision sans intelligence publiée : toujours pas de note, jamais un zéro.
+  assert.equal(noteBreakdown('qwen2.5-coder:14b', 'vision', '5/5', null).total, null)
   // Sans score de demandes du test actuel : la part est estimée sur le test d'outils (jamais 1), et dite estimée.
   const estimated = noteBreakdown('granite4.2:8b', 'conversation', '70/78', null)
   assert.equal(estimated.demandsEstimated, true)
   close(estimated.demandsShare, 70 / 78, 'demandes estimées sur les questions')
   // Un score de demandes d'un ancien test (autre total) ne compte pas : estimé aussi.
   assert.equal(noteBreakdown('granite4.2:8b', 'conversation', '70/78', '10/17').demandsEstimated, true)
-  // Terminal-Bench à 0 % : le plancher d'une tâche sur 89, comme dans le choix (codeStrength).
-  close(noteBreakdown('qwen3.5:0.8b', 'code', '3/5', null).base.value, 100 / 89, 'plancher de Terminal-Bench')
 })
 
 test('une seule formule : la note du choix (noteOf) et celle du calcul affiché passent par modelNote', () => {

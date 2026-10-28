@@ -1471,86 +1471,47 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
 export const TOOL_CHAIN_LENGTH = 5
 
 /**
- * Force d'un modèle pour un rôle (étape 328), multipliée ensuite par sa fiabilité aux tests de Jaris (noteOf).
- * `null` quand Artificial Analysis n'a rien publié : le modèle passe alors après ceux qui sont mesurés, jamais un
- * zéro ni une valeur devinée.
- * - Vision : l'Intelligence Index, comme avant.
- * - Conversation (Faible, Moyen, Élevé) : l'Intelligence Index × la part « n'invente pas » d'AA-Omniscience,
- *   ramenée de -100..100 à 0..1. Même poids que l'intelligence : un modèle deux fois plus sûr de ne pas inventer
- *   vaut autant qu'un modèle deux fois plus intelligent. Choix de Léo (« n'invente pas », étape 328).
- * - Code : Terminal-Bench 2.1 seul (voir ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21), jamais l'intelligence générale.
+ * Force d'un modèle pour Vision (étape 328) : l'Intelligence Index d'Artificial Analysis, multiplié ensuite par sa
+ * fiabilité aux tests de Jaris (noteOf). `null` quand rien n'est publié : le modèle passe après ceux qui sont mesurés.
+ * Faible, Moyen, Élevé et Code ne regardent plus Artificial Analysis depuis l'étape 358 : leur force vient des duels
+ * (duelStrength), 0 point pour tous au départ, comme sur Arena.
  */
 export function intelligenceStrength(model: string): number | null {
   return ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
-}
-
-export function conversationStrength(model: string): number | null {
-  const index = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
-  const omniscience = ARTIFICIAL_ANALYSIS_OMNISCIENCE[model]
-  if (index === undefined || omniscience === undefined) return null
-  return index * ((100 + omniscience) / 200)
-}
-
-/**
- * Terminal-Bench 2.1 compte 89 tâches : une tâche vaut 1,1 %. En dessous, deux scores ne se distinguent pas (0 % et
- * 1,1 % = une seule tâche réussie, en moyenne, ou aucune) ; sans ce plancher, un modèle à 1,1 % battait un modèle à 0 % quelle que soit
- * sa fiabilité, puisque 0 × n'importe quoi = 0 — K2 Horizon 0.9B (1/5 au test de code de Jaris) passait devant
- * qwen3.5:0.8b sur une machine sans carte graphique, exactement le choix absurde corrigé à l'étape 318.
- */
-const TERMINAL_BENCH_ONE_TASK = 100 / 89
-
-export function codeStrength(model: string): number | null {
-  const score = ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model]
-  return score === undefined ? null : Math.max(score, TERMINAL_BENCH_ONE_TASK)
 }
 
 /**
  * Étape 355 (Duel, Léo : « on vote, à la place d'Artificial Analysis ») : la force que les votes donnent à chaque
  * modèle d'une catégorie, branchée par main.ts (votes lus par duelStore.ts, classement de shared/duel.ts) — par une
  * fonction plutôt qu'un import, pour que ce module reste sans dépendance de plus (il est chargé par de nombreux tests).
- * `prior` est la note de départ (Artificial Analysis) que les votes corrigent.
  */
-export type DuelStrengthSource = (
-  category: DuelCategory,
-  prior: (model: string) => number | null
-) => ReadonlyMap<string, { strength: number; duels: number }>
+/** Échelle des points de duel (shared/duel.ts, DUEL_POINTS_PER_UNIT) : recopiée pour garder ce module sans import de plus. */
+const DUEL_POINTS_PER_UNIT = 400 / Math.LN10
+
+export type DuelStrengthSource = (category: DuelCategory) => ReadonlyMap<string, { strength: number; duels: number }>
 let duelStrengthSource: DuelStrengthSource | null = null
 export function setDuelStrengthSource(source: DuelStrengthSource | null): void {
   duelStrengthSource = source
 }
 
-/**
- * La note de départ d'une catégorie, que ses votes corrigent : Artificial Analysis (Terminal-Bench pour le Code). Pour
- * la VOIX, les votes « Conversation » d'abord : ce sont les mêmes modèles qui répondent, et Léo les a déjà jugés — sans
- * ça, des duels Conversation seuls auraient séparé la voix du Chat (la voix restant sur Artificial Analysis).
- * Une seule définition, utilisée partout (choix, calcul affiché, classement) : la source des votes garde en mémoire un
- * classement par catégorie, qui doit toujours partir de la même note.
- */
-export function duelPrior(category: DuelCategory): (model: string) => number | null {
-  if (category === 'code') return codeStrength
-  if (category === 'conversation') return conversationStrength
-  return duelStrength('conversation')
-}
-
 /** Les modèles votés dans cette catégorie (vide sans vote, ou sans source branchée). */
 function duelStandings(category: DuelCategory): ReadonlyMap<string, { strength: number; duels: number }> {
-  return duelStrengthSource?.(category, duelPrior(category)) ?? new Map()
+  return duelStrengthSource?.(category) ?? new Map()
 }
 
 /**
- * La force d'un modèle pour une catégorie : celle de ses votes s'il a déjà été en duel, sinon sa note de départ
- * (duelPrior) — un modèle jamais passé en duel la garde en attendant le sien.
+ * Étape 358, Léo : « fais comme Arena en point de départ, au début tous les modèles vont être à 0 ». La force d'un
+ * modèle pour une catégorie vient UNIQUEMENT des duels : 1 (0 point) tant qu'il n'a pas été voté, puis × 10 tous les
+ * 400 points. Artificial Analysis ne compte plus pour Faible, Moyen, Élevé et Code (Vision n'a pas de duel). Pour la
+ * VOIX, à défaut de votes « Vocal », ceux de la Conversation : ce sont les mêmes modèles qui répondent.
  */
-export function duelStrength(category: DuelCategory): (model: string) => number | null {
-  const prior = duelPrior(category)
-  const voted = duelStandings(category)
-  if (!voted.size) return prior
-  return (model) => voted.get(model)?.strength ?? prior(model)
+export function duelStrength(category: DuelCategory): (model: string) => number {
+  return (model) => votedStanding(category, model)?.strength ?? 1
 }
 
 /**
  * Les votes qui donnent sa force à un modèle pour cette catégorie, ou `undefined` : ceux de la catégorie, et pour la
- * voix, à défaut, ceux de la Conversation (même règle que duelPrior).
+ * voix, à défaut, ceux de la Conversation.
  */
 function votedStanding(category: DuelCategory, model: string): { strength: number; duels: number } | undefined {
   const own = duelStandings(category).get(model)
@@ -1670,28 +1631,23 @@ export function noteBreakdown(
   conversationCategory: 'conversation' | 'voice' = 'conversation'
 ): ModelNoteBreakdown {
   const chain = role === 'vision' ? VISION_CHAIN_LENGTH : TOOL_CHAIN_LENGTH
-  const published = role === 'conversation' ? conversationStrength : role === 'code' ? codeStrength : intelligenceStrength
-  // Vision n'a pas de duel : ses votes ne remplacent rien.
+  // Étape 358 : Faible, Moyen, Élevé et Code sont notés par les duels seuls (0 point = force 1 sans vote) ; Vision n'a
+  // pas de duel et garde l'intelligence d'Artificial Analysis.
   const voted = role === 'vision' ? undefined : votedStanding(role === 'code' ? 'code' : conversationCategory, model)
-  const strength = voted ? voted.strength : published(model)
   const intelligence = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
-  const omniscience = ARTIFICIAL_ANALYSIS_OMNISCIENCE[model]
-  const code = codeStrength(model)
-  const base: ModelNoteBreakdown['base'] = voted
-    ? { kind: 'duel', value: voted.strength, duels: voted.duels }
-    : role === 'code'
-      ? code === null
-        ? null
-        : { kind: 'terminalBench', value: code }
-      : intelligence === undefined
+  const strength = role === 'vision' ? intelligenceStrength(model) : voted?.strength ?? 1
+  const base: ModelNoteBreakdown['base'] =
+    role === 'vision'
+      ? intelligence === undefined
         ? null
         : { kind: 'intelligence', value: intelligence }
+      : { kind: 'duel', value: strength as number, duels: voted?.duels ?? 0, points: Math.log(strength as number) * DUEL_POINTS_PER_UNIT }
   const rate = parseToolScore(toolCalling)
   const demands = role === 'conversation' ? demandsFactor(demandScore, toolCalling) : null
   return {
     base,
-    // Les votes remplacent TOUTE la note de départ, « n'invente pas » compris : pas de seconde part à afficher.
-    omniscienceShare: role === 'conversation' && !voted && omniscience !== undefined ? (100 + omniscience) / 200 : null,
+    // Les duels remplacent TOUTE la note de départ, « n'invente pas » compris : pas de seconde part à afficher.
+    omniscienceShare: null,
     toolsShare: rate >= 0 ? Math.pow(rate, chain) : null,
     chain,
     demandsShare: demands?.value ?? null,

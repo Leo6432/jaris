@@ -6,6 +6,7 @@ import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
 import { withI18n } from './i18n-test-module.mjs'
+import { EXPOSE_AA_TABLES, useAaAsDuels } from './aa-as-duels.mjs'
 
 /**
  * Étape 318, Léo (« oui » à « prendre le meilleur des petits modèles au lieu du plus léger ») : sur une petite
@@ -15,7 +16,7 @@ import { withI18n } from './i18n-test-module.mjs'
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText
+}).outputText + EXPOSE_AA_TABLES
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
 
 function setup({ scores, vramMib, ramGb = 32, ollamaVersion }) {
@@ -39,7 +40,8 @@ function setup({ scores, vramMib, ramGb = 32, ollamaVersion }) {
   const exports = {}
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   if (ollamaVersion !== undefined) exports.setOllamaVersionSource(() => ollamaVersion)
-  return exports
+  // Étape 358 : les exemples réels de ce fichier testent la mécanique du choix avec les anciennes notes publiées.
+  return useAaAsDuels(exports)
 }
 
 const TINY_K2 = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'

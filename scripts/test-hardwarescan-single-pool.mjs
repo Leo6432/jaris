@@ -6,6 +6,7 @@ import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
 import { withI18n } from './i18n-test-module.mjs'
+import { EXPOSE_AA_TABLES, useAaAsDuels } from './aa-as-duels.mjs'
 
 /**
  * Étape 160, Léo : « que tous les modèles soient au même endroit, pas des modèles code, pas des modèles
@@ -19,7 +20,7 @@ import { withI18n } from './i18n-test-module.mjs'
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText
+}).outputText + EXPOSE_AA_TABLES
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
 
 function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
@@ -44,7 +45,8 @@ function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
   }
   const exports = {}
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
-  return exports
+  // Étape 358 : les exemples réels de ce fichier testent la mécanique du choix avec les anciennes notes publiées.
+  return useAaAsDuels(exports)
 }
 
 async function picksFor(vramGb, ramGb) {
@@ -409,27 +411,6 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   assert.deepEqual(notAwaiting(scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))), [], 'tout passé : plus proposé')
   const withoutQuestions = lines.filter((l) => l.type !== 'question')
   assert.deepEqual(notAwaiting(scan.getUnscoredModels(scan.campaignCompletion(traces(withoutQuestions)))), [k2], 'les 78 questions manquent encore')
-})
-
-// Étape 328, Léo (« fait solution 1 et 2 ») : en conversation, la force d'un modèle = intelligence × part
-// « n'invente pas » d'AA-Omniscience ; en Code, Terminal-Bench 2.1. Sur les VRAIS scores du dépôt.
-test('force en conversation : intelligence × part « n’invente pas », jamais inventée quand rien n’est publié', () => {
-  const scan = setup({ vramMib: 8 * 1024 })
-  // qwen3.8:27b : 33,7 × (100 − 10) / 200.
-  assert.ok(Math.abs(scan.conversationStrength('qwen3.8:27b') - 33.7 * 0.45) < 1e-9)
-  // Un modèle qui refuse tout (Omniscience 0) garde la moitié de son intelligence, plus qu'un modèle qui invente.
-  assert.ok(scan.conversationStrength('hf.co/bartowski/ai9stars_G9v3-3B-GGUF') > scan.conversationStrength('qwen3.5:4b'))
-  // Intelligence publiée mais pas d'Omniscience : aucune force, jamais un facteur deviné.
-  assert.equal(scan.conversationStrength('qwen2.5-coder:7b'), null)
-  assert.equal(scan.conversationStrength('hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'), null)
-})
-
-test('force en Code : Terminal-Bench 2.1, avec un plancher d’une tâche sur 89', () => {
-  const scan = setup({ vramMib: 8 * 1024 })
-  assert.equal(scan.codeStrength('qwen3.8:27b'), 79.8)
-  // 0 % et 1,1 % ne se distinguent pas : même force.
-  assert.equal(scan.codeStrength('qwen3.5:0.8b'), scan.codeStrength('hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'))
-  assert.equal(scan.codeStrength('qwen3-coder:30b'), null, 'pas de Terminal-Bench 2.1 publié : passe après les modèles mesurés')
 })
 
 test('« n’invente pas » départage gemma4:12b et granite4.2:8b sur 12 Go', async () => {

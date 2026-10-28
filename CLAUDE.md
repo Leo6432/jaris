@@ -9750,3 +9750,35 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   quelle dans un autre (PC sans carte) — calculer ce qu'elle laisse sur les petites machines.** Régression :
   `test-hardwarescan-duel.mjs` (sans carte et 16 Go : au moins 4 modèles, en Conversation, Code et Vocal ; vérifié en
   remettant l'ancienne marge).
+
+- **Étape 358, le Duel comme Arena (Léo : « fais comme eux en point de départ, au début tous les modèles vont être
+  à 0 », « noms révélés après chaque vote, comme Arena », puis, à la question du choix des modèles : « tout part de 0,
+  au début ça va être bizarre, mais fais comme Arena »).** Le classement (Bradley-Terry, `rankDuels`, shared/duel.ts)
+  ne part plus d'Artificial Analysis : tous les modèles sont à 0 point, et seuls les votes les séparent. Points à
+  l'échelle Elo (400 points = 10 fois plus de chances d'être préféré). Un a priori très large (centré sur 0, écart 2 ≈
+  350 points) garde fini un modèle invaincu. Marge à 95 % par l'approximation de Laplace, et rang possible (« Rank
+  Spread ») : meilleur et pire rang compatibles avec les marges. **Piège attrapé par le test** : la marge d'un modèle
+  calculée sur la force brute garde la largeur de l'a priori, même après 30 votes, puisque le niveau commun de tous
+  les modèles n'est fixé par aucun vote. Elle est calculée sur la force CENTRÉE (écart à la moyenne des modèles votés,
+  covariance complète), comme Arena, qui ne mesure que des écarts.
+  **Le choix des modèles suit** : Faible, Moyen, Élevé et Code prennent leur force dans les duels seuls (0 point =
+  force 1 sans vote, × 10 tous les 400 points). Artificial Analysis et Terminal-Bench ne comptent plus pour ces rôles
+  (`conversationStrength`, `codeStrength` et le plancher de Terminal-Bench supprimés). Vision n'a pas de duel et garde
+  l'intelligence publiée ; la vitesse publiée sert toujours de plancher à Faible et Moyen. Sans vote, seule la
+  fiabilité aux tests de Jaris sépare les modèles. Calculé sur les vrais scores pour la machine de Léo (8 Go, 32 Go) :
+  Faible et Moyen granite4.2:8b, Élevé qwen3.5:27b, Code ornith-1.5:35b, au lieu de K2 Horizon 7B en Moyen et
+  qwen3.8:27b en Élevé et Code. Prévenu avant de coder, accepté par Léo. Ça ne change chez lui qu'au prochain
+  « Retester la configuration », ou à la fin d'une session de duel.
+  **Noms révélés après chaque vote** : le vote est enregistré AVANT la révélation (seuls les votes à l'aveugle
+  comptent). Le même duel reste affiché avec les deux noms et le gagnant, puis « Duel suivant » (`nextDuel`, canal
+  `duelNext`). Un second vote est refusé. L'historique montre tous les noms : il n'y a plus rien à cacher pendant la
+  session.
+  **Tests de la mécanique du choix gardés sur leurs exemples réels** : `scripts/aa-as-duels.mjs` branche des « duels »
+  dont la force reproduit l'ancienne note publiée (× 1000 : un modèle sans mesure passe toujours après). Les tests du
+  gabarit des petits, du plancher de vitesse et du repli n'avaient ainsi pas à être réécrits. Régression :
+  `test-duel.mjs` (départ à 0, marge qui se réduit et rang qui devient sûr, battre un fort rapporte plus, ordre des
+  votes sans effet ; vérifié en remettant la marge non centrée), `test-duel-session.mjs` (vote enregistré avant la
+  révélation, second vote refusé, duel suivant anonyme ; vérifié en remettant le passage direct au duel suivant),
+  `test-hardwarescan-duel.mjs` (choix sans vote sur la machine de Léo, votes qui décident), `test-duel-panel-ui.mjs`
+  (noms sur chaque côté, « Duel suivant », points ± marge et rang dans le classement).
+  **Non vérifié en usage réel** : une vraie session sur la machine de Léo.

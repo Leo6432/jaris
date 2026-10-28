@@ -287,6 +287,7 @@ const api = {
   duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),
   duelRetry: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRetry),
   duelSkip: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSkip),
+  duelNext: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelNext),
   onDuelChanged: (cb: (view: DuelSessionView | null) => void) => subscribe(IPC_CHANNELS.duelChanged, cb),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
   getWindowChrome: (): Promise<WindowChrome> => invoke(IPC_CHANNELS.getWindowChrome),

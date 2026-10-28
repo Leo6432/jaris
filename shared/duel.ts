@@ -144,26 +144,32 @@ export function scoreOfA(outcome: DuelOutcome): number {
 }
 
 /**
- * Ce que les votes changent à la force d'un modèle. Le classement (Bradley-Terry, comme LMArena) part de la note
- * d'Artificial Analysis — « a priori » de largeur PRIOR_SIGMA_KNOWN sur l'échelle logarithmique — et chaque vote la
- * corrige. Mesuré avant de choisir (victoires de suite du moins bien noté pour passer devant) :
- *   écart   1,5×  2×  3×
- *   σ 0,7    1    2   3   — un seul vote changeait souvent le modèle Élevé (les mieux notés sont proches)
- *   σ 0,5    2    3   5   — retenu : jamais un seul vote, mais des votes constants finissent toujours par décider
- * Avec beaucoup de votes, ce sont les votes qui décident, plus Artificial Analysis — la demande de Léo.
+ * Étape 358, Léo : « fais comme Arena en point de départ, au début tous les modèles vont être à 0 ». Le classement
+ * (Bradley-Terry, comme LMArena) ne part plus d'Artificial Analysis : tous les modèles partent de 0, et seuls les
+ * votes les séparent. Un modèle invaincu aurait une force infinie avec le maximum de vraisemblance pur : une très
+ * légère régularisation (a priori centré sur 0, écart ARENA_SIGMA, ≈ 350 points) la garde finie, sans peser sur
+ * le classement dès qu'il y a des votes.
  *
- * Un modèle qu'Artificial Analysis n'a jamais mesuré part de la moyenne des modèles votés, avec plus de marge : ses
- * votes lui donnent une note, qu'il n'avait pas.
+ * Points affichés : l'échelle des classements Elo (400 points = 10 fois plus de chances d'être préféré), partant de
+ * 0. Intervalle de confiance à 95 % : approximation de Laplace (inverse de la courbure au maximum), comme une marge
+ * d'Arena. Rang possible (« Rank Spread ») : meilleur et pire rang compatibles avec ces marges.
  */
-export const PRIOR_SIGMA_KNOWN = 0.5
-export const PRIOR_SIGMA_UNKNOWN = 1.0
-/** Centre de départ quand AUCUN modèle voté n'a de note publiée : une note moyenne (l'échelle compte peu ici). */
-const NEUTRAL_STRENGTH = 10
+export const ARENA_SIGMA = 2
+/** 400 / ln(10) : un écart de 400 points veut dire 10 fois plus de chances d'être préféré. */
+export const DUEL_POINTS_PER_UNIT = 400 / Math.LN10
+const Z_95 = 1.96
 
 export interface DuelStanding {
   model: string
-  /** Force après les votes, sur l'échelle de la note de départ (Artificial Analysis). */
+  /** Points façon Arena : 0 au départ, positif = préféré plus souvent que la moyenne. */
+  score: number
+  /** Demi-largeur de l'intervalle de confiance à 95 %, en points. */
+  margin: number
+  /** Multiplicateur de la note de Jaris : 1 sans vote (0 point), × 10 tous les 400 points. */
   strength: number
+  /** Meilleur et pire rang possibles compte tenu de l'incertitude (1 = premier). */
+  rankBest: number
+  rankWorst: number
   wins: number
   losses: number
   ties: number
@@ -171,21 +177,19 @@ export interface DuelStanding {
 }
 
 /**
- * Classement d'une catégorie : la force de chaque modèle VOTÉ (les autres gardent leur note d'Artificial Analysis,
- * ils n'apparaissent pas ici). `prior` donne la note de départ d'un modèle, `null` si rien n'est publié.
- *
- * Maximum a posteriori calculé par Newton coordonnée par coordonnée : le problème est concave (log-vraisemblance
- * logistique + a priori gaussien), la solution est unique et ne dépend pas de l'ordre des votes — contrairement à un
- * Elo, où le même ensemble de votes rejoué dans un autre ordre donne un autre classement.
+ * Classement d'une catégorie : seuls les modèles VOTÉS y figurent (les autres sont à 0 point, force 1).
+ * Maximum a posteriori calculé par Newton coordonnée par coordonnée : le problème est concave, la solution est unique
+ * et ne dépend pas de l'ordre des votes — contrairement à un Elo, où le même ensemble de votes rejoué dans un autre
+ * ordre donne un autre classement.
  */
-export function rankDuels(votes: readonly DuelVote[], prior: (model: string) => number | null): Map<string, DuelStanding> {
+export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding> {
   // Résultats regroupés par paire (i < j dans l'ordre alphabétique) : ce sont les paires qu'on parcourt, pas les votes.
   const pairs = new Map<string, { i: string; j: string; n: number; scoreI: number }>()
   const standings = new Map<string, DuelStanding>()
   const standing = (model: string): DuelStanding => {
     let s = standings.get(model)
     if (!s) {
-      s = { model, strength: 0, wins: 0, losses: 0, ties: 0, duels: 0 }
+      s = { model, score: 0, margin: 0, strength: 1, rankBest: 1, rankWorst: 1, wins: 0, losses: 0, ties: 0, duels: 0 }
       standings.set(model, s)
     }
     return s
@@ -215,16 +219,8 @@ export function rankDuels(votes: readonly DuelVote[], prior: (model: string) => 
   if (!standings.size) return standings
 
   const models = [...standings.keys()]
-  const known = models.map((m) => prior(m)).filter((v): v is number => v !== null && v > 0).map(Math.log)
-  const fallback = known.length ? known.reduce((sum, v) => sum + v, 0) / known.length : Math.log(NEUTRAL_STRENGTH)
-  const center = new Map<string, number>()
-  const precision = new Map<string, number>()
-  for (const m of models) {
-    const p = prior(m)
-    const has = p !== null && p > 0
-    center.set(m, has ? Math.log(p) : fallback)
-    precision.set(m, 1 / (has ? PRIOR_SIGMA_KNOWN : PRIOR_SIGMA_UNKNOWN) ** 2)
-  }
+  const index = new Map(models.map((m, k) => [m, k]))
+  const precision = 1 / ARENA_SIGMA ** 2
   const byModel = new Map<string, Array<{ other: string; n: number; score: number }>>()
   for (const m of models) byModel.set(m, [])
   for (const { i, j, n, scoreI } of pairs.values()) {
@@ -232,15 +228,14 @@ export function rankDuels(votes: readonly DuelVote[], prior: (model: string) => 
     byModel.get(j)?.push({ other: i, n, score: n - scoreI })
   }
 
-  const x = new Map(center)
+  const x = new Map(models.map((m) => [m, 0]))
   const logistic = (d: number): number => 1 / (1 + Math.exp(-d))
   for (let round = 0; round < 1000; round++) {
     let largest = 0
     for (const m of models) {
       const xm = x.get(m) as number
-      const prec = precision.get(m) as number
-      let gradient = -(xm - (center.get(m) as number)) * prec
-      let curvature = prec
+      let gradient = -xm * precision
+      let curvature = precision
       for (const { other, n, score } of byModel.get(m) as Array<{ other: string; n: number; score: number }>) {
         const p = logistic(xm - (x.get(other) as number))
         gradient += score - n * p
@@ -252,8 +247,63 @@ export function rankDuels(votes: readonly DuelVote[], prior: (model: string) => 
     }
     if (largest < 1e-10) break
   }
-  for (const m of models) standing(m).strength = Math.exp(x.get(m) as number)
+
+  // Incertitude : inverse de la courbure complète (Hessienne) au maximum — les forces sont liées entre elles.
+  const size = models.length
+  const hessian = models.map(() => new Array<number>(size).fill(0))
+  for (let k = 0; k < size; k++) hessian[k][k] = precision
+  for (const { i, j, n } of pairs.values()) {
+    const a = index.get(i) as number
+    const b = index.get(j) as number
+    const p = logistic((x.get(i) as number) - (x.get(j) as number))
+    const w = n * p * (1 - p)
+    hessian[a][a] += w
+    hessian[b][b] += w
+    hessian[a][b] -= w
+    hessian[b][a] -= w
+  }
+  // Comme Arena, le classement ne dit que des ÉCARTS : on mesure l'incertitude de chaque modèle par rapport à la
+  // moyenne des modèles votés (force centrée), sinon la marge garderait la largeur de l'a priori quels que soient les votes.
+  const inverse = inverseMatrix(hessian)
+  const rowMean = inverse.map((row) => row.reduce((sum, v) => sum + v, 0) / size)
+  const allMean = rowMean.reduce((sum, v) => sum + v, 0) / size
+  const meanTheta = models.reduce((sum, m) => sum + (x.get(m) as number), 0) / size
+  for (const m of models) {
+    const k = index.get(m) as number
+    const s = standing(m)
+    const theta = (x.get(m) as number) - meanTheta
+    const variance = inverse[k][k] - 2 * rowMean[k] + allMean
+    s.score = theta * DUEL_POINTS_PER_UNIT
+    s.margin = Z_95 * Math.sqrt(Math.max(0, variance)) * DUEL_POINTS_PER_UNIT
+    s.strength = Math.exp(theta)
+  }
+  const all = [...standings.values()]
+  for (const s of all) {
+    // Comme Arena : 1 + le nombre de modèles sûrement devant (leur bas de marge au-dessus de notre haut de marge).
+    s.rankBest = 1 + all.filter((o) => o !== s && o.score - o.margin > s.score + s.margin).length
+    s.rankWorst = 1 + all.filter((o) => o !== s && o.score + o.margin >= s.score - s.margin).length
+  }
   return standings
+}
+
+/** Inverse d'une matrice symétrique définie positive (Gauss-Jordan, petites tailles : quelques dizaines de modèles). */
+function inverseMatrix(matrix: number[][]): number[][] {
+  const n = matrix.length
+  const a = matrix.map((row, r) => [...row, ...Array.from({ length: n }, (_, c) => (c === r ? 1 : 0))])
+  for (let col = 0; col < n; col++) {
+    let pivot = col
+    for (let r = col + 1; r < n; r++) if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r
+    ;[a[col], a[pivot]] = [a[pivot], a[col]]
+    const div = a[col][col]
+    for (let c = 0; c < 2 * n; c++) a[col][c] /= div
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue
+      const factor = a[r][col]
+      if (factor === 0) continue
+      for (let c = 0; c < 2 * n; c++) a[r][c] -= factor * a[col][c]
+    }
+  }
+  return a.map((row) => row.slice(n))
 }
 
 /** Ce qu'il faut savoir d'un modèle pour composer une session (rempli par hardwareScan.ts, getDuelCandidates). */

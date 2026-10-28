@@ -4,7 +4,6 @@ import { generateApp } from './codeGenerator'
 import { createGeneratedAppPreview } from './generatedAppPreview'
 import {
   duelMachine,
-  duelPrior,
   getDuelCandidates,
   pickModelsForDuelCategory,
   type DuelCandidate
@@ -82,6 +81,8 @@ interface RoundState {
   pair: [string, string]
   prompt: string | null
   sides: Record<DuelSide, SideState>
+  /** Étape 358 : noms révélés après le vote, comme sur Arena. */
+  revealed: { a: string; b: string; outcome: DuelOutcome } | null
 }
 
 interface Session {
@@ -152,7 +153,9 @@ export function getDuelView(): DuelSessionView | null {
     preparing: session.preparing,
     dropped: session.dropped,
     votes: session.history.length,
-    round: round ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b) } : null,
+    round: round
+      ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed }
+      : null,
     error: session.error
   }
 }
@@ -184,8 +187,8 @@ function isInstalled(model: string, installed: readonly string[]): boolean {
 /** Le classement d'une catégorie, tous les votes compris. */
 export function duelRanking(category: DuelCategory): DuelStandingView[] {
   const votes = getDuelVotes().filter((v) => v.category === category)
-  // La même note de départ que le choix des modèles (duelPrior, hardwareScan.ts) : le classement affiché est le sien.
-  return [...rankDuels(votes, duelPrior(category)).values()].sort((a, b) => b.strength - a.strength)
+  // Le même classement que le choix des modèles (duelStrength, hardwareScan.ts) : tous partent de 0 (étape 358).
+  return [...rankDuels(votes).values()].sort((a, b) => b.score - a.score)
 }
 
 export function duelRankings(): DuelRankingView[] {
@@ -315,7 +318,7 @@ function nextRound(current: Session): void {
     current.round = null
     return
   }
-  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() } }
+  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null }
 }
 
 function sideFinished(side: SideState): boolean {
@@ -484,11 +487,16 @@ export function duelAudio(sideName: DuelSide): Uint8Array | null {
   return data ? new Uint8Array(data) : null
 }
 
-/** Le vote de Léo, puis le duel suivant (une autre paire). */
+/**
+ * Le vote de Léo. Étape 358 (« pour noms révélés, fais après chaque vote, comme Arena ») : les noms des deux modèles
+ * sont révélés tout de suite ; le duel suivant attend que Léo les ait vus (nextDuel). Le vote est enregistré AVANT de
+ * révéler quoi que ce soit : seuls les votes donnés à l'aveugle comptent.
+ */
 export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   const current = session
   const round = current?.round
   if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
+  if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
   // Un outil de Jaris a échoué : ce duel ne dit rien des modèles, il se rejoue ou se passe (retryDuel, skipDuel).
   if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
@@ -531,6 +539,16 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   const key = pairKey(modelA, modelB)
   current.played.set(key, (current.played.get(key) ?? 0) + 1)
   current.last = round.pair
+  round.revealed = { a: modelA, b: modelB, outcome }
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
+/** Après la révélation des noms : le duel suivant (une autre paire). */
+export function nextDuel(): DuelSessionView {
+  const current = session
+  const round = current?.round
+  if (!current || !round || !round.revealed) throw new Error(t('duel.error.noRound'))
   nextRound(current)
   emitNow()
   return getDuelView() as DuelSessionView
@@ -561,27 +579,20 @@ export function skipDuel(): DuelSessionView {
   return getDuelView() as DuelSessionView
 }
 
-/**
- * Tous les duels votés, du plus récent au plus ancien. Ceux de la session EN COURS gardent leurs noms cachés : ils ne
- * sont révélés qu'à la fin de la session, comme à l'écran du duel.
- */
+/** Tous les duels votés, du plus récent au plus ancien, noms compris : ils sont révélés dès le vote (étape 358). */
 export function duelHistory(): DuelHistoryEntry[] {
-  const hiddenSession = session && session.phase !== 'ended' ? session.id : null
   return [...getDuelVotes()]
     .sort((x, y) => y.at - x.at)
-    .map((vote) => {
-      const hidden = hiddenSession !== null && vote.sessionId === hiddenSession
-      return {
-        id: vote.id,
-        category: vote.category,
-        at: vote.at,
-        prompt: vote.prompt,
-        outcome: vote.outcome,
-        modelA: hidden ? null : vote.modelA,
-        modelB: hidden ? null : vote.modelB,
-        sides: vote.sides ?? null
-      }
-    })
+    .map((vote) => ({
+      id: vote.id,
+      category: vote.category,
+      at: vote.at,
+      prompt: vote.prompt,
+      outcome: vote.outcome,
+      modelA: vote.modelA,
+      modelB: vote.modelB,
+      sides: vote.sides ?? null
+    }))
 }
 
 /** L'application d'un duel Code de l'historique, dans l'aperçu isolé (`null` si elle n'a pas été gardée). */
