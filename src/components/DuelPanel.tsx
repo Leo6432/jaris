@@ -689,7 +689,17 @@ export default function DuelPanel(): JSX.Element {
             {plan === null ? (
               <p className="duel-home__note">{t('duel.size.searching')}</p>
             ) : tooFew ? (
-              <p className="duel-home__note duel-home__note--warn">{t('duel.notEnough')}</p>
+              <p className="duel-home__note duel-home__note--warn">
+                {t('duel.notEnough')}{' '}
+                {t('duel.notEnough.machine', {
+                  gpu:
+                    plan.machine?.vramGb == null
+                      ? t('duel.machine.noGpu')
+                      : t('duel.machine.gpu', { vram: formatDecimal(plan.machine.vramGb) }),
+                  ram: plan.machine?.ramGb ?? '?',
+                  count: plan.available
+                })}
+              </p>
             ) : (
               <>
                 <div className="duel-sizes" role="radiogroup" aria-labelledby="duel-size-title">

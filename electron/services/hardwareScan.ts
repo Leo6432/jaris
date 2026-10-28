@@ -2151,6 +2151,9 @@ export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> =
 /** Étape 355 : sous ce taux au test d'appel d'outils, un modèle n'est jamais proposé en duel (Jaris ne le choisirait pas). */
 export const DUEL_MIN_TOOL_RATE = 0.75
 
+/** Sans carte graphique : taille jusqu'à laquelle un modèle compte parmi les « petits » d'une session de duel. */
+const CARDLESS_SMALL_MODEL_GB = 6
+
 /** Un modèle qui peut entrer dans une session de duel sur CETTE machine (voir selectDuelModels, shared/duel.ts). */
 export interface DuelCandidate {
   model: string
@@ -2171,10 +2174,19 @@ export interface DuelCandidate {
  * Code), qu'Ollama sait charger, et qui réussissent le test d'appel d'outils : les votes ne mesurent pas les actions,
  * ce test reste le filtre de base.
  */
+/** Ce que le Duel a détecté sur ce PC, affiché quand il n'y a pas assez de modèles (au lieu d'un message sans cause). */
+export async function duelMachine(): Promise<{ vramGb: number | null; ramGb: number }> {
+  const { vramGb } = await detectGpu()
+  return { vramGb, ramGb: Math.round(detectRamGb()) }
+}
+
 export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null): Promise<DuelCandidate[]> {
   const { vramGb } = await detectGpu()
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
   const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
+  // Sans carte graphique détectée, TOUS les modèles tournent sur le processeur, dans la RAM : la règle « Faible et
+  // Moyen sur la carte » ne laissait alors que deux ou trois gros modèles, et le Duel disait « pas assez de modèles ».
+  const cardless = vramGb === null
   const scores = parseVerifiedToolScores()
   const tooNew = modelsNeedingNewerOllama()
   const blocked = new Set(Object.keys(profile?.blockedModels ?? {}))
@@ -2190,7 +2202,7 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
   return ALL_MODELS.filter((c) => {
     if (tooNew.has(c.model) || blocked.has(c.model)) return false
     if (parseToolScore(toolScore(c.model)) < DUEL_MIN_TOOL_RATE) return false
-    return c.vramGb <= (LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
+    return c.vramGb <= (cardless || LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb)
   }).map((c) => {
     const tools = toolScore(c.model)
     const demands = category === 'code' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value
@@ -2202,7 +2214,9 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
       inUse: inUse.has(c.model),
       // Conversation et Vocal : Faible et Moyen doivent tenir sur la carte, Élevé peut déborder sur la RAM — une session
       // propose des challengers des deux côtés (selectDuelModels). Le Code n'a qu'un rôle, même lent.
-      group: category === 'code' ? 'code' : c.vramGb <= budgetGb ? 'card' : 'ram'
+      // Sans carte, les « petits » (6 Go au plus) tiennent le rôle de ceux qui tiendraient sur une carte : une session
+      // garde des challengers rapides au lieu de n'aligner que des modèles de 20 Go et plus, très lents sur processeur.
+      group: category === 'code' ? 'code' : c.vramGb <= (cardless ? CARDLESS_SMALL_MODEL_GB : budgetGb) ? 'card' : 'ram'
     }
   })
 }

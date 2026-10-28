@@ -174,9 +174,11 @@ test('accueil : pas assez de place sur le disque ou pas assez de modèles — on
     async (page) => {
       await page.waitForSelector('.duel-home__note--warn')
       assert.match(await page.textContent('.duel-home__note--warn'), /Pas assez de modèles pour un duel/)
+      // La cause se voit : ce que Jaris a détecté sur ce PC, et combien de modèles conviennent.
+      assert.match(await page.textContent('.duel-home__note--warn'), /aucune carte graphique détectée, 16 Go de RAM\. Modèles qui conviennent : 1\./)
       assert.equal(await page.isDisabled('.duel-home__start'), true)
     },
-    "window.__plan = { category: 'conversation', available: 1, freeDiskGb: 100, sizes: [] }"
+    "window.__plan = { category: 'conversation', available: 1, freeDiskGb: 100, sizes: [], machine: { vramGb: null, ramGb: 16 } }"
   )
 })
 

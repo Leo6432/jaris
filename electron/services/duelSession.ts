@@ -3,6 +3,7 @@ import { converse, type ConverseRestrictions } from './assistant'
 import { generateApp } from './codeGenerator'
 import { createGeneratedAppPreview } from './generatedAppPreview'
 import {
+  duelMachine,
   duelPrior,
   getDuelCandidates,
   pickModelsForDuelCategory,
@@ -202,10 +203,11 @@ async function candidatesFor(category: DuelCategory, profile: Profile | null): P
 /** Ce qu'une session proposerait, taille par taille, avant de la lancer : rien n'est téléchargé ici. */
 export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
   const profile = await getProfile()
-  const [candidates, installed, freeDiskGb] = await Promise.all([
+  const [candidates, installed, freeDiskGb, machine] = await Promise.all([
     candidatesFor(category, profile),
     listInstalledModels().catch(() => [] as string[]),
-    detectFreeDiskGb().catch(() => null)
+    detectFreeDiskGb().catch(() => null),
+    duelMachine()
   ])
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
   const counts = [...new Set(DUEL_SESSION_SIZES.map((size) => Math.min(size, candidates.length)))].filter((n) => n >= DUEL_MIN_MODELS)
@@ -213,6 +215,7 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
     category,
     available: candidates.length,
     freeDiskGb,
+    machine,
     sizes: counts.map((count) => {
       const missing = selectDuelModels(candidates, count).filter((m) => !isInstalled(m, installed))
       const downloadGb = missing.reduce((sum, m) => sum + (sizeOf.get(m) ?? 0), 0)

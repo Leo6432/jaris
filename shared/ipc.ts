@@ -986,6 +986,8 @@ export interface DuelPlan {
   /** Chaque taille de session possible : combien de modèles à télécharger, leur poids, et si le disque a la place. */
   sizes: { count: number; toDownload: number; downloadGb: number; fitsDisk: boolean }[]
   freeDiskGb: number | null
+  /** Ce que Jaris a détecté sur ce PC : carte graphique (`null` = aucune détectée) et RAM, en Go. */
+  machine: { vramGb: number | null; ramGb: number }
 }
 
 /** Ce que fait un modèle pendant son tour, en données (l'écran l'écrit dans sa langue). */

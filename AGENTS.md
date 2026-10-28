@@ -9665,3 +9665,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-duel-store.mjs`, `test-assistant-history.mjs` ; chaque garde vérifiée en la retirant. **Non vérifié en usage
   réel** : une vraie session sur la machine de Léo (téléchargements, actions sur le PC). Votes et historique restent
   LOCAUX à ce PC ; un classement commun à tous les utilisateurs demanderait un serveur (à décider avec Léo).
+
+- **Étape 356, Léo : « pourquoi ça met : Pas assez de modèles pour un duel sur ce PC ».** Cause exacte chez lui non
+  confirmée (pas d'accès à sa machine). Simulé avec les vrais scores : 8 Go de carte + 32 Go de RAM donnent 31
+  modèles, mais SANS carte graphique détectée, `getDuelCandidates` ne gardait que les modèles autorisés à déborder
+  sur la RAM (2 sur 32 Go) — or sans carte, tous les modèles tournent sur le processeur. Corrigé : sans carte, tout
+  modèle qui tient dans la RAM convient, et ceux de 6 Go au plus servent de « petits » challengers (sinon une session
+  n'alignait que des modèles de 20 Go, très lents sur processeur). Et le message dit maintenant ce que Jaris a
+  détecté (`duelMachine` : carte et RAM, nombre de modèles qui conviennent), 24 langues — si le cas revient, la
+  cause se lit à l'écran. **Leçon : un message « pas assez de X » doit dire ce qui a été compté et sur quoi.**
+  Régression : `test-hardwarescan-duel.mjs` (sans carte : au moins 10 modèles, dont des petits ; vérifié en retirant
+  le correctif) et `test-duel-panel-ui.mjs` (détection affichée).

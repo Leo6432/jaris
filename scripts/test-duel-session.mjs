@@ -51,6 +51,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     },
     './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` },
     './hardwareScan': {
+      duelMachine: async () => ({ vramGb: 8, ramGb: 32 }),
       duelPrior: (category) => () => (category === 'code' ? 20 : 10),
       getDuelCandidates: async () =>
         MODELS.map((model, index) => ({ model, vramGb: index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),

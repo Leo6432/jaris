@@ -157,3 +157,14 @@ test('main.ts branche la source des votes, et le classement de l’écran part d
   const session = readFileSync(new URL('../electron/services/duelSession.ts', import.meta.url), 'utf8')
   assert.match(session, /rankDuels\(votes, duelPrior\(category\)\)/)
 })
+
+test('sans carte graphique détectée : les modèles tournent dans la RAM, le Duel a de quoi faire (petits et gros)', async () => {
+  const m = setup([], { vramMib: 'x', ramGb: 32 })
+  const candidates = await m.getDuelCandidates('conversation', null)
+  assert.ok(candidates.length >= 10, `seulement ${candidates.length} modèles`)
+  assert.ok(candidates.some((c) => c.group === 'card') && candidates.some((c) => c.group === 'ram'))
+  const chosen = duel.selectDuelModels(candidates, 4)
+  const sizes = new Map(candidates.map((c) => [c.model, c.vramGb]))
+  assert.ok(chosen.some((model) => sizes.get(model) <= 6), `que des gros modèles : ${chosen}`)
+  assert.deepEqual(JSON.parse(JSON.stringify(await m.duelMachine())), { vramGb: null, ramGb: 32 })
+})
