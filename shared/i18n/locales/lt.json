@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "Dėl šios dvikovos balsuoti negalima: nesuveikė Jaris įrankis.",
   "role.voice": "Balsas · {role}",
   "picks.duel": "Dvikovos {value}",
-  "picks.duel.title": "Taškai iš tavo dvikovų (balsai: {count}): visi modeliai pradeda nuo 0, kaip Arenoje.",
+  "picks.duel.title": "Tikri taškai iš tavo dvikovų (balsai: {count}): 95 % paklaida atimta. Kol modelis nėra tikrai priekyje ar gale, jis lieka ties 0.",
   "picks.calc.duel": "Dvikovos {points} tšk. = ×{value} (balsai: {count})"
 }

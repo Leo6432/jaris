@@ -9743,3 +9743,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-hardwarescan-duel.mjs` (choix sans vote sur la machine de Léo, votes qui décident), `test-duel-panel-ui.mjs`
   (noms sur chaque côté, « Duel suivant », points ± marge et rang dans le classement).
   **Non vérifié en usage réel** : une vraie session sur la machine de Léo.
+
+- **Étape 359, deux suites d'une relecture de ChatGPT, acceptées par Léo (« oui »).** Avant d'y toucher, chaque point
+  a été vérifié dans le code. La plupart étaient déjà faits : départ commun, échelle Elo, A/B au hasard, paires
+  équilibrées, catégories séparées, panne d'outil de Jaris non votable, 75 % comme filtre. Deux restaient ouverts :
+  1. **Seuil de confiance pour le choix des modèles.** Avant, un seul vote pouvait changer le modèle en service. La
+     force utilisée pour le choix ne garde plus que la part SÛRE du score (`sureStrength`, shared/duel.ts) : 1 tant
+     que la marge à 95 % englobe 0, sinon la borne de la marge la plus proche de 0. Mesuré : entre deux modèles, il
+     faut 7 victoires de suite pour qu'un modèle passe sûrement devant. Le classement affiché garde le score et sa
+     marge. La voix prend ses propres votes seulement une fois sûrs ; avant, ceux de la Conversation (sinon des votes
+     Vocal indécis remettaient à 0 un modèle déjà départagé).
+  2. **Marge de Laplace comparée à un bootstrap** (cinq modèles de forces connues, votes simulés, 200 à 400
+     rééchantillonnages). Dès 100 votes, les deux méthodes s'accordent à 15 % près. Avec 10 votes, la marge de Jaris
+     est plus large que le bootstrap, qui est connu pour être trop optimiste avec peu de données. Laplace est donc
+     gardée : elle est plus prudente.
+  **Leçon : une relecture externe se vérifie point par point dans le code avant d'agir.** Ici, sept points sur neuf
+  étaient déjà faits ; tout refaire aurait coûté sans rien apporter. Régression : `test-duel.mjs` (seuil : sûr entre
+  5 et 12 victoires ; bootstrap à 10 et 300 votes ; vérifié en retirant le seuil : 3 tests échouent),
+  `test-hardwarescan-duel.mjs` (3 victoires ne changent rien, 8 oui).

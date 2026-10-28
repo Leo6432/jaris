@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "Acest duel nu poate fi votat: un instrument al lui Jaris a eșuat.",
   "role.voice": "Voce · {role}",
   "picks.duel": "Dueluri {value}",
-  "picks.duel.title": "Puncte din duelurile tale (voturi: {count}): toate modelele pornesc de la 0, ca pe Arena.",
+  "picks.duel.title": "Puncte sigure din duelurile tale (voturi: {count}): marja de 95 % este scăzută. Cât timp un model nu e sigur înainte sau în urmă, rămâne la 0.",
   "picks.calc.duel": "Dueluri {points} p. = ×{value} (voturi: {count})"
 }

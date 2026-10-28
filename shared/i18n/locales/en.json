@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "This duel can't be voted on: a Jaris tool failed.",
   "role.voice": "Voice · {role}",
   "picks.duel": "Duels {value}",
-  "picks.duel.title": "Points from your duels (votes: {count}): every model starts at 0, as on Arena.",
+  "picks.duel.title": "Certain points from your duels (votes: {count}): the 95% margin is subtracted. Until a model is surely ahead or behind, it stays at 0.",
   "picks.calc.duel": "Duels {points} pts = ×{value} (votes: {count})"
 }

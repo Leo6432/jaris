@@ -65,8 +65,10 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
 })
 
-test('Conversation : des victoires font passer un modèle devant, pour le Chat ET la voix', async () => {
-  const picks = await setup(wins(3, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()
+test('Conversation : des victoires font passer un modèle devant une fois SÛR (étape 359), pour le Chat ET la voix', async () => {
+  // Trois victoires de suite : pas encore sûr, rien ne change.
+  assert.equal((await setup(wins(3, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()).models.large, 'qwen3.5:27b')
+  const picks = await setup(wins(8, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()
   assert.equal(picks.models.large, LARGE)
   // La voix suit les votes Conversation tant qu'elle n'a pas les siens : rien ne la sépare du Chat.
   assert.equal(picks.voiceModels, undefined)
@@ -75,24 +77,24 @@ test('Conversation : des victoires font passer un modèle devant, pour le Chat E
 })
 
 test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils mènent ailleurs', async () => {
-  const votes = [...wins(4, CHALLENGER, LARGE, 'conversation'), ...wins(5, LARGE, CHALLENGER, 'voice')]
+  const votes = [...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, LARGE, CHALLENGER, 'voice')]
   const picks = await setup(votes).pickBestModelsFromBenchmark()
   assert.equal(picks.models.large, CHALLENGER, 'le Chat suit les votes Conversation')
   assert.equal(picks.voiceModels.large, LARGE, 'la voix suit ses propres votes')
   assert.equal(picks.voiceModels.flash, picks.models.flash)
   // Des votes Vocal qui confirment la Conversation : rien à séparer.
-  const agree = await setup([...wins(4, CHALLENGER, LARGE, 'conversation'), ...wins(2, CHALLENGER, LARGE, 'voice')]).pickBestModelsFromBenchmark()
+  const agree = await setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(2, CHALLENGER, LARGE, 'voice')]).pickBestModelsFromBenchmark()
   assert.equal(agree.voiceModels, undefined)
 })
 
 test('Code : les votes Code décident du modèle Code, pas des rôles de conversation', async () => {
-  const picks = await setup(wins(3, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark()
+  const picks = await setup(wins(8, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark()
   assert.equal(picks.codeModel, LARGE)
   assert.equal(picks.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
 })
 
 test('le calcul affiché dit d’où vient la note : les duels (points et nombre de votes), 0 point sans vote', async () => {
-  const m = setup([...wins(4, CHALLENGER, LARGE, 'conversation'), ...wins(5, LARGE, CHALLENGER, 'voice')])
+  const m = setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, LARGE, CHALLENGER, 'voice')])
   const profile = {
     models: { flash: 'granite4.2:8b', medium: K2_7B, large: CHALLENGER },
     voiceModels: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE },
@@ -101,12 +103,12 @@ test('le calcul affiché dit d’où vient la note : les duels (points et nombre
   }
   const picks = await m.getMyModelPicks(profile)
   assert.equal(picks.large.note.base.kind, 'duel')
-  assert.equal(picks.large.note.base.duels, 4)
+  assert.equal(picks.large.note.base.duels, 8)
   assert.ok(picks.large.note.base.points > 0)
   assert.equal(picks.large.note.omniscienceShare, null, 'les duels remplacent toute la note de départ, « n’invente pas » compris')
-  // Les rôles de la voix : SES votes (5 duels Vocal), pas les 4 de la Conversation.
+  // Les rôles de la voix : SES votes (9 duels Vocal), pas les 8 de la Conversation.
   assert.equal(picks.voice.large.model, LARGE)
-  assert.deepEqual([picks.voice.large.note.base.kind, picks.voice.large.note.base.duels], ['duel', 5])
+  assert.deepEqual([picks.voice.large.note.base.kind, picks.voice.large.note.base.duels], ['duel', 9])
   // Jamais en duel : 0 point, force 1 — plus d'Artificial Analysis ni de Terminal-Bench pour ces rôles.
   assert.deepEqual([picks.medium.note.base.kind, picks.medium.note.base.value, picks.medium.note.base.points], ['duel', 1, 0])
   assert.deepEqual([picks.code.note.base.kind, picks.code.note.base.duels], ['duel', 0])

@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Er kan niet op dit duel worden gestemd: een hulpmiddel van Jaris is mislukt.",
   "role.voice": "Spraak · {role}",
   "picks.duel": "Duels {value}",
-  "picks.duel.title": "Punten uit je duels (stemmen: {count}): alle modellen beginnen op 0, zoals bij Arena.",
+  "picks.duel.title": "Zekere punten uit je duels (stemmen: {count}): de marge van 95 % gaat eraf. Zolang een model niet zeker voor of achter staat, blijft het op 0.",
   "picks.calc.duel": "Duels {points} ptn = ×{value} (stemmen: {count})"
 }

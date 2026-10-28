@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "O tomto dueli sa nedá hlasovať: zlyhal nástroj Jarisa.",
   "role.voice": "Hlas · {role}",
   "picks.duel": "Súboje {value}",
-  "picks.duel.title": "Body z tvojich duelov (hlasy: {count}): všetky modely začínajú na 0, ako v Aréne.",
+  "picks.duel.title": "Isté body z tvojich duelov (hlasy: {count}): rozpätie 95 % je odpočítané. Kým model nie je isto vpredu alebo vzadu, zostáva na 0.",
   "picks.calc.duel": "Duely {points} b. = ×{value} (hlasy: {count})"
 }

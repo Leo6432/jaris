@@ -1502,7 +1502,9 @@ function duelStandings(category: DuelCategory): ReadonlyMap<string, { strength: 
 /**
  * Étape 358, Léo : « fais comme Arena en point de départ, au début tous les modèles vont être à 0 ». La force d'un
  * modèle pour une catégorie vient UNIQUEMENT des duels : 1 (0 point) tant qu'il n'a pas été voté, puis × 10 tous les
- * 400 points. Artificial Analysis ne compte plus pour Faible, Moyen, Élevé et Code (Vision n'a pas de duel). Pour la
+ * 400 points, en ne gardant que la part SÛRE du score (étape 359 : marge à 95 % déduite, 1 tant qu'elle englobe 0 —
+ * un modèle ne prend la place d'un autre qu'une fois sûrement devant). Artificial Analysis ne compte plus pour Faible,
+ * Moyen, Élevé et Code (Vision n'a pas de duel). Pour la
  * VOIX, à défaut de votes « Vocal », ceux de la Conversation : ce sont les mêmes modèles qui répondent.
  */
 export function duelStrength(category: DuelCategory): (model: string) => number {
@@ -1511,12 +1513,15 @@ export function duelStrength(category: DuelCategory): (model: string) => number 
 
 /**
  * Les votes qui donnent sa force à un modèle pour cette catégorie, ou `undefined` : ceux de la catégorie, et pour la
- * voix, à défaut, ceux de la Conversation.
+ * voix, tant que ses propres votes ne sont pas sûrs, ceux de la Conversation.
  */
 function votedStanding(category: DuelCategory, model: string): { strength: number; duels: number } | undefined {
   const own = duelStandings(category).get(model)
-  if (own || category !== 'voice') return own
-  return duelStandings('conversation').get(model)
+  if (category !== 'voice') return own
+  // Voix : ses propres votes seulement une fois SÛRS (étape 359) ; avant, ceux de la Conversation, sinon des votes
+  // Vocal encore indécis remettraient à 0 un modèle déjà départagé en Conversation.
+  if (own && own.strength !== 1) return own
+  return duelStandings('conversation').get(model) ?? own
 }
 const VISION_CHAIN_LENGTH = 1
 

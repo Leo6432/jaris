@@ -1548,6 +1548,6 @@
   "duel.error.trouble": "Nie można głosować w tym pojedynku: zawiodło narzędzie Jarisa.",
   "role.voice": "Głos · {role}",
   "picks.duel": "Pojedynki {value}",
-  "picks.duel.title": "Punkty z twoich pojedynków (głosy: {count}): każdy model zaczyna od 0, jak w Arenie.",
+  "picks.duel.title": "Pewne punkty z twoich pojedynków (głosy: {count}): margines 95 % jest odejmowany. Dopóki model nie jest pewnie przed lub za innymi, zostaje na 0.",
   "picks.calc.duel": "Pojedynki {points} pkt = ×{value} (głosy: {count})"
 }

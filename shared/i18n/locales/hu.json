@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "Erre a párbajra nem lehet szavazni: a Jaris egyik eszköze hibázott.",
   "role.voice": "Hang · {role}",
   "picks.duel": "Párbajok {value}",
-  "picks.duel.title": "Pontok a párbajaidból (szavazatok: {count}): minden modell 0-ról indul, mint az Arenán.",
+  "picks.duel.title": "Biztos pontok a párbajaidból (szavazatok: {count}): a 95%-os hibahatár le van vonva. Amíg egy modell nincs biztosan elöl vagy hátul, 0 marad.",
   "picks.calc.duel": "Párbajok {points} pont = ×{value} (szavazatok: {count})"
 }

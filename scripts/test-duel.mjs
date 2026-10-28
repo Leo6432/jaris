@@ -31,9 +31,11 @@ test('classement façon Arena (étape 358) : tout part de 0, un vote suffit à d
   assert.ok(many.get('a').margin < one.get('a').margin)
   assert.deepEqual([many.get('a').rankBest, many.get('a').rankWorst], [1, 1])
   assert.deepEqual([many.get('b').rankBest, many.get('b').rankWorst], [2, 2])
-  // La force sert de multiplicateur à la note : 1 à 0 point, × 10 tous les 400 points.
+  // La force sert de multiplicateur à la note, avec seulement la part SÛRE du score (étape 359) : marge déduite.
   const s = many.get('a')
-  assert.ok(Math.abs(s.strength - Math.pow(10, s.score / 400)) < 1e-9)
+  assert.ok(Math.abs(s.strength - Math.pow(10, (s.score - s.margin) / 400)) < 1e-9)
+  assert.equal(one.get('a').strength, 1, 'un seul vote : pas encore sûr, la force ne bouge pas')
+  assert.equal(one.get('b').strength, 1, 'ni dans un sens, ni dans l’autre')
   // Égalité parfaite : 0 point chacun.
   const tied = duel.rankDuels([vote('a', 'b', 'a'), vote('a', 'b', 'b')])
   assert.ok(Math.abs(tied.get('a').score) < 1e-9 && Math.abs(tied.get('a').strength - 1) < 1e-9)
@@ -44,6 +46,51 @@ test('classement : battre un modèle fort rapporte plus que battre un faible (Br
   const beatsStrong = duel.rankDuels([...base, vote('x', 'fort', 'a')])
   const beatsWeak = duel.rankDuels([...base, vote('x', 'faible', 'a')])
   assert.ok(beatsStrong.get('x').score > beatsWeak.get('x').score)
+})
+
+test('seuil de confiance (étape 359) : un modèle ne compte comme meilleur qu’une fois sûrement devant', () => {
+  const after = (n) => duel.rankDuels(Array.from({ length: n }, () => vote('a', 'b', 'a'))).get('a')
+  let first = null
+  for (let n = 1; n <= 30 && first === null; n++) if (after(n).strength > 1) first = n
+  assert.ok(first !== null && first >= 5 && first <= 12, `sûr après ${first} victoires de suite`)
+  assert.equal(duel.sureStrength(100, 150), 1)
+  assert.ok(Math.abs(duel.sureStrength(-500, 100) - Math.pow(10, -1)) < 1e-12)
+})
+
+test('marge à 95 % : comparée à un bootstrap sur des votes simulés (étape 359)', () => {
+  // Cinq modèles de forces connues, votes tirés au hasard (graine fixe) ; 200 rééchantillonnages des votes.
+  let seed = 7
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  const TRUE = { a: 200, b: 100, c: 0, d: -100, e: -200 }
+  const models = Object.keys(TRUE)
+  const simulate = (n) =>
+    Array.from({ length: n }, () => {
+      const i = Math.floor(rnd() * 5)
+      let j = Math.floor(rnd() * 4)
+      if (j >= i) j++
+      const p = 1 / (1 + Math.pow(10, (TRUE[models[j]] - TRUE[models[i]]) / 400))
+      return vote(models[i], models[j], rnd() < 0.1 ? 'tie' : rnd() < p ? 'a' : 'b')
+    })
+  const compare = (n) => {
+    const votes = simulate(n)
+    const laplace = duel.rankDuels(votes)
+    const samples = Object.fromEntries(models.map((m) => [m, []]))
+    for (let b = 0; b < 200; b++) {
+      const resampled = Array.from({ length: votes.length }, () => votes[Math.floor(rnd() * votes.length)])
+      const r = duel.rankDuels(resampled)
+      for (const m of models) if (r.has(m)) samples[m].push(r.get(m).score)
+    }
+    return models.map((m) => {
+      const sorted = samples[m].sort((x, y) => x - y)
+      const boot = (sorted[Math.floor(0.975 * sorted.length)] - sorted[Math.floor(0.025 * sorted.length)]) / 2
+      return laplace.get(m).margin / boot
+    })
+  }
+  // Avec assez de votes, les deux méthodes s'accordent (mesuré : ±15 % dès 100 votes).
+  for (const ratio of compare(300)) assert.ok(ratio > 0.75 && ratio < 1.4, `300 votes : rapport ${ratio}`)
+  // Avec peu de votes, la marge de Jaris n'est jamais plus étroite que le bootstrap : elle reste prudente.
+  const few = compare(10)
+  assert.ok(few.reduce((sum, r) => sum + r, 0) / few.length >= 1, `10 votes : rapports ${few}`)
 })
 
 test('classement : le même ensemble de votes donne le même résultat dans n’importe quel ordre (pas un Elo)', () => {

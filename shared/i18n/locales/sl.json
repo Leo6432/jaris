@@ -1548,6 +1548,6 @@
   "duel.error.trouble": "Za ta dvoboj ni mogoče glasovati: orodje Jarisa ni uspelo.",
   "role.voice": "Glas · {role}",
   "picks.duel": "Dvoboji {value}",
-  "picks.duel.title": "Točke iz tvojih dvobojev (glasovi: {count}): vsi modeli začnejo pri 0, kot v Areni.",
+  "picks.duel.title": "Zanesljive točke iz tvojih dvobojev (glasovi: {count}): meja 95 % je odšteta. Dokler model ni zanesljivo spredaj ali zadaj, ostane pri 0.",
   "picks.calc.duel": "Dvoboji {points} t. = ×{value} (glasovi: {count})"
 }

@@ -1506,6 +1506,6 @@
   "duel.error.trouble": "No se puede votar este duelo: una herramienta de Jaris falló.",
   "role.voice": "Voz · {role}",
   "picks.duel": "Duelos {value}",
-  "picks.duel.title": "Puntos de tus duelos (votos: {count}): todos los modelos empiezan en 0, como en Arena.",
+  "picks.duel.title": "Puntos seguros de tus duelos (votos: {count}): se resta el margen del 95 %. Mientras un modelo no esté claramente delante o detrás, se queda en 0.",
   "picks.calc.duel": "Duelos {points} pts = ×{value} (votos: {count})"
 }

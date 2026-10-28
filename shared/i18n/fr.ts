@@ -1519,6 +1519,6 @@ export const fr = {
   "duel.error.trouble": "Ce duel ne peut pas être voté : un outil de Jaris a échoué.",
   "role.voice": "Voix · {role}",
   "picks.duel": "Duels {value}",
-  "picks.duel.title": "Points de tes duels (votes : {count}) : tous les modèles partent de 0, comme sur Arena.",
+  "picks.duel.title": "Points sûrs de tes duels (votes : {count}) : la marge à 95 % est déduite. Tant qu'un modèle n'est pas sûrement devant ou derrière, il reste à 0.",
   "picks.calc.duel": "Duels {points} pts = ×{value} (votes : {count})",
 } as const

@@ -165,7 +165,11 @@ export interface DuelStanding {
   score: number
   /** Demi-largeur de l'intervalle de confiance à 95 %, en points. */
   margin: number
-  /** Multiplicateur de la note de Jaris : 1 sans vote (0 point), × 10 tous les 400 points. */
+  /**
+   * Multiplicateur de la note de Jaris, seulement pour ce qui est SÛR (étape 359, seuil de confiance) : 1 tant que la
+   * marge englobe 0 (pas encore distinguable d'un modèle moyen), sinon la borne de la marge la plus proche de 0, × 10
+   * tous les 400 points. Un modèle ne prend donc la place d'un autre qu'une fois sûrement devant.
+   */
   strength: number
   /** Meilleur et pire rang possibles compte tenu de l'incertitude (1 = premier). */
   rankBest: number
@@ -275,7 +279,7 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
     const variance = inverse[k][k] - 2 * rowMean[k] + allMean
     s.score = theta * DUEL_POINTS_PER_UNIT
     s.margin = Z_95 * Math.sqrt(Math.max(0, variance)) * DUEL_POINTS_PER_UNIT
-    s.strength = Math.exp(theta)
+    s.strength = sureStrength(s.score, s.margin)
   }
   const all = [...standings.values()]
   for (const s of all) {
@@ -284,6 +288,13 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
     s.rankWorst = 1 + all.filter((o) => o !== s && o.score + o.margin >= s.score - s.margin).length
   }
   return standings
+}
+
+/** Force retenue pour le choix : seulement la part sûre du score (voir DuelStanding.strength). */
+export function sureStrength(score: number, margin: number): number {
+  if (Math.abs(score) <= margin) return 1
+  const sure = score > 0 ? score - margin : score + margin
+  return Math.pow(10, sure / 400)
 }
 
 /** Inverse d'une matrice symétrique définie positive (Gauss-Jordan, petites tailles : quelques dizaines de modèles). */

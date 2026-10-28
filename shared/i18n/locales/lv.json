@@ -1527,6 +1527,6 @@
   "duel.error.trouble": "Par šo dueli nevar balsot: neizdevās Jaris rīks.",
   "role.voice": "Balss · {role}",
   "picks.duel": "Dueļi {value}",
-  "picks.duel.title": "Punkti no taviem dueļiem (balsis: {count}): visi modeļi sāk no 0, kā Arena.",
+  "picks.duel.title": "Droši punkti no taviem dueļiem (balsis: {count}): 95 % robeža ir atņemta. Kamēr modelis nav droši priekšā vai aizmugurē, tam paliek 0.",
   "picks.calc.duel": "Dueļi {points} p. = ×{value} (balsis: {count})"
 }
