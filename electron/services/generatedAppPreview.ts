@@ -116,6 +116,33 @@ export function previewPath(pathname: string): string | null {
   return parts.join('/')
 }
 
+/**
+ * Étape 368 (Léo : « je peux pas cliquer sur Ajouter ») : la page est isolée (sandbox sans allow-same-origin), donc
+ * `localStorage` et `sessionStorage` lèvent une erreur dès qu'on y touche. Une appli qui enregistre AVANT d'afficher
+ * (une liste de tâches, typiquement) ne réagissait alors jamais au clic, alors que la consigne du mode Code demande
+ * justement localStorage. Ce script, placé avant tous ceux de la page, les remplace par une mémoire tenue le temps
+ * de l'aperçu (perdue à sa fermeture), seulement si l'accès est refusé. L'isolation ne change pas.
+ */
+export const MEMORY_STORAGE_SCRIPT =
+  '<script>(function(){function m(){var d=Object.create(null),s={' +
+  'getItem:function(k){k=String(k);return k in d?d[k]:null},setItem:function(k,v){d[String(k)]=String(v)},' +
+  'removeItem:function(k){delete d[String(k)]},clear:function(){for(var k in d)delete d[k]},' +
+  'key:function(i){var k=Object.keys(d);return i>=0&&i<k.length?k[i]:null}};' +
+  "Object.defineProperty(s,'length',{get:function(){return Object.keys(d).length}});return s}" +
+  "['localStorage','sessionStorage'].forEach(function(n){try{window[n].getItem('jaris')}catch(e){" +
+  'try{Object.defineProperty(window,n,{configurable:true,value:m()})}catch(e2){}}})})();</script>'
+
+/**
+ * Le HTML avec MEMORY_STORAGE_SCRIPT placé juste après `<head>` (sinon `<html>`, sinon le doctype) : jamais avant le
+ * doctype, qui ferait passer la page en mode de compatibilité.
+ */
+export function withMemoryStorage(html: string): string {
+  const anchor = /<head(?:\s[^>]*)?>/i.exec(html) ?? /<html(?:\s[^>]*)?>/i.exec(html) ?? /^\s*<!doctype[^>]*>/i.exec(html)
+  if (!anchor) return MEMORY_STORAGE_SCRIPT + html
+  const end = anchor.index + anchor[0].length
+  return html.slice(0, end) + MEMORY_STORAGE_SCRIPT + html.slice(end)
+}
+
 const BASE_HEADERS = {
   'Cache-Control': 'no-store',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), display-capture=(), clipboard-read=(), clipboard-write=()'
@@ -131,7 +158,9 @@ export async function serveFilesPreview(source: FilesPreviewSource, pathname: st
   let content = await source.read(path)
   if (content === undefined && entryDir && !path.startsWith(`${entryDir}/`)) content = await source.read(`${entryDir}/${path}`)
   if (content === undefined) return new Response(t('preview.fileMissing'), { status: 404 })
-  return new Response(typeof content === 'string' ? content : new Uint8Array(content), {
+  const isHtml = previewContentType(path).startsWith('text/html')
+  const body = isHtml ? withMemoryStorage(typeof content === 'string' ? content : new TextDecoder().decode(content)) : content
+  return new Response(typeof body === 'string' ? body : new Uint8Array(body), {
     headers: {
       ...BASE_HEADERS,
       'Content-Type': previewContentType(path),
@@ -151,7 +180,7 @@ export function registerPreviewHandler(): void {
     if (source?.kind === 'files') return serveFilesPreview(source, url.pathname)
     const html = source?.kind === 'html' && url.pathname === '/index.html' && !url.search ? source.html : undefined
     if (html === undefined) return new Response(t('preview.missing'), { status: 404 })
-    return new Response(html, {
+    return new Response(withMemoryStorage(html), {
       headers: {
         ...BASE_HEADERS,
         'Content-Type': 'text/html; charset=utf-8',

@@ -9982,3 +9982,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   médiane, relu après redémarrage, enregistreur appelé en flux et sans, sans mesure = choix identique sur la machine
   de Léo, un modèle mesuré lent perd Faible ; trois gardes vérifiées en les retirant). **Non vérifié en usage réel** :
   les vitesses mesurées sur la carte de Léo.
+
+- **Étape 368 (v0.40.10), Léo : « une IA m'a fait ça et je ne peux pas cliquer sur Ajouter, c'est mal codé ou c'est
+  nous ? » (liste de tâches générée).** C'était nous. L'aperçu isole la page (CSP `sandbox` sans `allow-same-origin`),
+  donc `localStorage`/`sessionStorage` lèvent une erreur dès qu'on y touche — alors que la consigne du mode Code
+  (`APP_RULES`, codeGenerator.ts) demande justement d'utiliser localStorage. La page enregistrait la tâche AVANT de
+  l'afficher et avalait l'erreur : le clic ne faisait rien, sans message. Choix de Léo (question à choix) : une mémoire
+  temporaire. `withMemoryStorage` (generatedAppPreview.ts) place juste après `<head>` (sinon `<html>`, jamais avant le
+  doctype, qui ferait passer la page en mode de compatibilité) un petit script qui remplace les deux stockages par une
+  mémoire tenue le temps de l'aperçu, seulement si l'accès est refusé. Appliqué aux applications générées et aux pages
+  HTML d'un aperçu de dépôt ; l'isolation ne change pas. Le test des modèles (benchmark-browser.mjs) garde l'ancien
+  refus : les scores de code ont été mesurés ainsi. **Leçon : quand une consigne donnée au modèle (« utilise
+  localStorage ») et l'environnement qui exécute son code (aperçu isolé) se contredisent, le défaut paraît venir du
+  code généré alors qu'il vient de nous.** Régression : `node --test scripts/test-preview-memory-storage-ui.mjs` (la
+  page de Léo dans un vrai navigateur avec la vraie CSP : sans le script, le clic ne fait rien ; avec, la tâche
+  s'affiche et le champ se vide ; doctype gardé).

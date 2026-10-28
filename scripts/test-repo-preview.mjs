@@ -48,7 +48,7 @@ test('la page et ses fichiers sont servis avec leur vrai type, depuis l’adress
   const page = await get(url)
   assert.equal(page.status, 200)
   assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8')
-  assert.equal(await page.text(), FILES['index.html'])
+  assert.equal(await page.text(), preview.withMemoryStorage(FILES['index.html']))
   assert.equal((await get(`${base}/style.css`)).headers.get('content-type'), 'text/css; charset=utf-8')
   assert.equal((await get(`${base}/jeu.js`)).headers.get('content-type'), 'text/javascript; charset=utf-8')
   const image = await get(`${base}/img/pomme.png`)
@@ -56,7 +56,7 @@ test('la page et ses fichiers sont servis avec leur vrai type, depuis l’adress
   assert.deepEqual([...new Uint8Array(await image.arrayBuffer())], [137, 80, 78, 71])
   // Un cache-busting « ?v=2 » ne casse rien ; un dossier sert son index.html.
   assert.equal((await get(`${base}/style.css?v=2`)).status, 200)
-  assert.equal(await (await get(`${base}/`)).text(), FILES['index.html'])
+  assert.equal(await (await get(`${base}/`)).text(), preview.withMemoryStorage(FILES['index.html']))
   assert.equal((await get(`${base}/absent.js`)).status, 404)
 })
 
@@ -99,7 +99,7 @@ test('l’aperçu d’une application générée ne change pas (une seule page, 
   const url = preview.createGeneratedAppPreview('<h1>App</h1>')
   const base = url.slice(0, url.lastIndexOf('/'))
   const page = await get(url)
-  assert.equal(await page.text(), '<h1>App</h1>')
+  assert.equal(await page.text(), preview.withMemoryStorage('<h1>App</h1>'))
   assert.equal(page.headers.get('content-security-policy'), preview.PREVIEW_CSP)
   assert.equal((await get(`${base}/style.css`)).status, 404)
   assert.equal((await get(`${url}?x=1`)).status, 404)

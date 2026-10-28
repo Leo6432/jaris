@@ -16,7 +16,7 @@ function setup(){
 test('sert seulement le HTML enregistré avec une CSP isolée',async()=>{
  const {api,request,schemes}=setup();const html='<button>Jouer</button><script>test()</script>'
  const res=request(api.createGeneratedAppPreview(html))
- assert.equal(res.status,200);assert.equal(await res.text(),html)
+ assert.equal(res.status,200);assert.equal(await res.text(),api.withMemoryStorage(html))
  const csp=res.headers.get('Content-Security-Policy')
  assert.match(csp,/script-src 'unsafe-inline'/);assert.match(csp,/sandbox allow-scripts allow-forms$/);assert.match(csp,/form-action 'none'/)
  assert.ok(!csp.includes('allow-same-origin'));assert.match(csp,/connect-src 'none'/)
@@ -31,5 +31,5 @@ test('aucun accès à un chemin de fichier ou à une URL inconnue',()=>{
 })
 test('chaque nouvelle génération obtient son propre aperçu',async()=>{
  const {api,request}=setup();const first=api.createGeneratedAppPreview('premier');const next=api.createGeneratedAppPreview('suivant')
- assert.notEqual(first,next);assert.equal(await request(next).text(),'suivant');assert.equal(await request(first).text(),'premier')
+ assert.notEqual(first,next);assert.equal(await request(next).text(),api.withMemoryStorage('suivant'));assert.equal(await request(first).text(),api.withMemoryStorage('premier'))
 })

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Liste de tâches</title>
+</head>
+<body>
+    <div class="task-input">
+        <input type="text" id="newTaskInput" placeholder="Ajouter une nouvelle tâche">
+        <button id="addTaskButton">Ajouter</button>
+    </div>
+    <ul class="task-list" id="taskList"></ul>
+    <script>
+        // Logique reprise telle quelle de la page générée envoyée par Léo (étape 368) : elle enregistre la tâche
+        // dans localStorage AVANT de l'afficher, et avale l'erreur si le stockage est refusé.
+        document.addEventListener('DOMContentLoaded', function() {
+            const taskList = document.getElementById('taskList');
+            const newTaskInput = document.getElementById('newTaskInput');
+            const addTaskButton = document.getElementById('addTaskButton');
+            function loadTasks() {
+                try { renderTasks(JSON.parse(localStorage.getItem('tasks')) || []); } catch (e) { renderTasks([]); }
+            }
+            function saveTasks(tasks) {
+                try { localStorage.setItem('tasks', JSON.stringify(tasks)); } catch (e) { console.error(e); }
+            }
+            function renderTasks(tasks) {
+                taskList.innerHTML = '';
+                tasks.forEach(function(task) {
+                    const li = document.createElement('li');
+                    li.className = 'task-item';
+                    li.textContent = task.text;
+                    taskList.appendChild(li);
+                });
+            }
+            function addTask() {
+                const taskText = newTaskInput.value.trim();
+                if (taskText === '') return;
+                try {
+                    const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+                    tasks.push({ text: taskText, completed: false });
+                    saveTasks(tasks);
+                    newTaskInput.value = '';
+                    loadTasks();
+                } catch (e) { console.error(e); }
+            }
+            addTaskButton.addEventListener('click', addTask);
+            loadTasks();
+        });
+    </script>
+</body>
+</html>
