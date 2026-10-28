@@ -17,7 +17,7 @@ import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
 import { synthesizeSpeech } from './tts'
-import { addDuelVote, getDuelVotes, readDuelApp, saveDuelApp } from './duelStore'
+import { addDuelVote, getDuelVotes, getRankingVotes, readDuelApp, saveDuelApp } from './duelStore'
 import {
   DUEL_CATEGORIES,
   DUEL_FORBIDDEN_TOOLS,
@@ -211,7 +211,7 @@ function isInstalled(model: string, installed: readonly string[]): boolean {
 
 /** Le classement d'une catégorie, tous les votes compris. */
 export function duelRanking(category: DuelCategory): DuelStandingView[] {
-  const votes = getDuelVotes().filter((v) => v.category === category)
+  const votes = getRankingVotes().filter((v) => v.category === category)
   // Le même classement que le choix des modèles (duelStrength, hardwareScan.ts) : tous partent de 0 (étape 358).
   return [...rankDuels(votes).values()].sort((a, b) => b.score - a.score)
 }
@@ -219,7 +219,7 @@ export function duelRanking(category: DuelCategory): DuelStandingView[] {
 export function duelRankings(): DuelRankingView[] {
   return DUEL_CATEGORIES.map((category) => ({
     category,
-    votes: getDuelVotes().filter((v) => v.category === category).length,
+    votes: getRankingVotes().filter((v) => v.category === category).length,
     ranking: duelRanking(category)
   }))
 }

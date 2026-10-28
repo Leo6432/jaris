@@ -38,6 +38,8 @@ extraResources:
     to: scripts
     filter:
       - verified-tool-scores.md
+      # Étape 369 : votes des duels de Léo, comptés pour tout le monde (loadSharedDuelVotes, duelStore.ts).
+      - shared-duel-votes.json
       - benchmark-models.mjs
       - benchmark-cases.mjs
       - benchmark-scenarios.mjs

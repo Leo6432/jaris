@@ -70,7 +70,7 @@ import {
   setLocalSpeedResolver,
   detectGpu
 } from './services/hardwareScan'
-import { buildDuelVotesExport, defaultDuelExportName, getDuelVotes, loadDuelVotes } from './services/duelStore'
+import { buildDuelVotesExport, defaultDuelExportName, getRankingVotes, loadDuelVotes, loadSharedDuelVotes } from './services/duelStore'
 import {
   abortDuel,
   askDuel,
@@ -233,7 +233,7 @@ setOllamaVersionSource(() => getLocalOllamaVersion())
 // seulement quand les votes changent (le choix des modèles la demande à chaque calcul).
 let duelStrengthCache: { votes: unknown; byCategory: Map<string, ReturnType<typeof rankDuels>> } | null = null
 setDuelStrengthSource((category: DuelCategory) => {
-  const votes = getDuelVotes()
+  const votes = getRankingVotes()
   if (duelStrengthCache?.votes !== votes) duelStrengthCache = { votes, byCategory: new Map() }
   let standings = duelStrengthCache.byCategory.get(category)
   if (!standings) {
@@ -247,7 +247,7 @@ setDuelStrengthSource((category: DuelCategory) => {
 // catégorie, mise en cache par jeu de votes comme la force.
 let switchCache: { votes: unknown; results: Map<string, number | null> } | null = null
 setDuelProbability((category, challenger, incumbent) => {
-  const votes = getDuelVotes()
+  const votes = getRankingVotes()
   if (switchCache?.votes !== votes) switchCache = { votes, results: new Map() }
   const key = `${category}\u0000${challenger}\u0000${incumbent}`
   if (!switchCache.results.has(key)) {
@@ -1726,6 +1726,7 @@ app.whenReady().then(async () => {
     emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view)
   })
   void loadDuelVotes()
+  void loadSharedDuelVotes(join(resourcesRoot(), 'scripts', 'shared-duel-votes.json'))
   void loadModelSpeeds()
   const duelCategory = (value: unknown): DuelCategory => {
     if (!isDuelCategory(value)) throw new Error(t('duel.error.badRequest'))

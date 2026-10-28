@@ -10036,3 +10036,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   code généré alors qu'il vient de nous.** Régression : `node --test scripts/test-preview-memory-storage-ui.mjs` (la
   page de Léo dans un vrai navigateur avec la vraie CSP : sans le script, le clic ne fait rien ; avec, la tâche
   s'affiche et le champ se vide ; doctype gardé).
+
+- **Étape 369 (v0.40.11), Léo envoie son export des votes (« mets-les dans Jaris ») : ses votes comptent pour tout le
+  monde.** `scripts/shared-duel-votes.json` (livré, extraResources), lu au démarrage par `loadSharedDuelVotes`
+  (duelStore.ts, chemin passé par main.ts pour ne pas ajouter d'import aux bancs de test). `getRankingVotes()` = votes
+  du PC + votes livrés, un même identifiant compté une fois (le PC de Léo a les deux), même objet tant que rien ne
+  change (les caches de main.ts comparent par référence) : classement et choix des modèles. Historique, export et
+  « vote déjà fait » restent sur `getDuelVotes()` (local seul). Seuls les champs du calcul sont livrés (`id, category,
+  at, sessionId, modelA, modelB, outcome`) : jamais la demande ni les réponses de Léo. Pour un prochain fichier :
+  `node scripts/import-duel-votes.mjs <export.json>` (vérifie le format, sans doublon, trié par date). 3 votes Code
+  aujourd'hui : aucun modèle en service ne change (règle ≥ 5 duels et > 95 %). Régression :
+  `node --test scripts/test-shared-duel-votes.mjs` (vérifié en retirant le dédoublonnage).

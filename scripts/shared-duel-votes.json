@@ -1,0 +1,29 @@
+[
+  {
+    "id": "745b44a9-422a-46e6-83d9-00c4c7321f8a",
+    "category": "code",
+    "at": 1793221662312,
+    "sessionId": "509d8ba7-9f8c-4625-a41b-8f217d7a0899",
+    "modelA": "gemma4:26b",
+    "modelB": "qwen3.8:27b",
+    "outcome": "b"
+  },
+  {
+    "id": "c8f112f0-1ad3-444e-8d7c-8337f8cc17be",
+    "category": "code",
+    "at": 1793222834982,
+    "sessionId": "509d8ba7-9f8c-4625-a41b-8f217d7a0899",
+    "modelA": "gemma4:26b",
+    "modelB": "devstral-small-2:24b",
+    "outcome": "a"
+  },
+  {
+    "id": "3764d00d-04cc-45a9-8f81-b11ee52ca7ba",
+    "category": "code",
+    "at": 1793225228201,
+    "sessionId": "509d8ba7-9f8c-4625-a41b-8f217d7a0899",
+    "modelA": "devstral-small-2:24b",
+    "modelB": "qwen3.8:27b",
+    "outcome": "tie"
+  }
+]

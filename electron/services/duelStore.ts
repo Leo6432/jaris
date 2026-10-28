@@ -40,6 +40,38 @@ export function getDuelVotes(): readonly DuelVote[] {
   return cache
 }
 
+/**
+ * Étape 369 (Léo : « mets mes votes dans Jaris ») : les votes de Léo livrés avec Jaris
+ * (scripts/shared-duel-votes.json, comme verified-tool-scores.md) comptent pour tout le monde dans le classement et
+ * le choix des modèles. Seuls les champs utiles au calcul y sont : ni la demande ni les réponses de Léo. Ils ne
+ * s'affichent jamais dans l'historique d'un autre PC (getDuelVotes reste local).
+ */
+let shared: DuelVote[] = []
+
+/** Relit le fichier livré une fois au démarrage. Absent ou illisible : aucun vote partagé, jamais une erreur. */
+export async function loadSharedDuelVotes(file: string): Promise<readonly DuelVote[]> {
+  try {
+    shared = parseDuelVotes(JSON.parse(await readFile(file, 'utf8'))) ?? []
+  } catch {
+    shared = []
+  }
+  return shared
+}
+
+let merged: { local: readonly DuelVote[]; shared: readonly DuelVote[]; votes: readonly DuelVote[] } | null = null
+
+/**
+ * Votes du classement : ceux de ce PC + ceux livrés avec Jaris, un même identifiant compté une fois (le PC de Léo a
+ * les deux). Même objet tant que rien ne change : main.ts met ses calculs en cache par référence.
+ */
+export function getRankingVotes(): readonly DuelVote[] {
+  if (merged?.local === cache && merged.shared === shared) return merged.votes
+  const ids = new Set(cache.map((v) => v.id))
+  const votes = shared.length ? [...cache, ...shared.filter((v) => !ids.has(v.id))] : cache
+  merged = { local: cache, shared, votes }
+  return votes
+}
+
 export function duelVotesLoaded(): boolean {
   return loaded
 }
