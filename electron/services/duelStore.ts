@@ -79,6 +79,46 @@ export async function saveDuelApp(voteId: string, side: 'a' | 'b', html: string)
   await writeFileAtomic(path, html)
 }
 
+/**
+ * Étape 362 (Léo : « un bouton télécharger les votes, toutes les sessions depuis le début ») : tout l'historique des
+ * duels en un seul fichier — chaque vote avec sa demande, ses deux réponses, ce qu'elles ont fait sur le PC, et les
+ * applications des duels Code. Relu depuis le disque, pas depuis la mémoire, pour exporter exactement ce qui est gardé.
+ */
+export const DUEL_EXPORT_FORMAT = 'jaris-duel-votes'
+export const DUEL_EXPORT_VERSION = 1
+
+export async function buildDuelVotesExport(appVersion: string, now: Date): Promise<{ json: string; count: number }> {
+  const votes = (await readVotes()).sort((a, b) => a.at - b.at)
+  const apps: Record<string, string> = {}
+  for (const vote of votes) {
+    for (const side of ['a', 'b'] as const) {
+      if (!vote.sides?.[side]?.app) continue
+      const html = await readDuelApp(vote.id, side)
+      if (html !== null) apps[`${vote.id}-${side}`] = html
+    }
+  }
+  const json = JSON.stringify(
+    {
+      format: DUEL_EXPORT_FORMAT,
+      version: DUEL_EXPORT_VERSION,
+      appVersion,
+      exportedAt: now.toISOString(),
+      sessions: new Set(votes.map((v) => v.sessionId)).size,
+      votes,
+      apps
+    },
+    null,
+    2
+  )
+  return { json, count: votes.length }
+}
+
+/** Nom proposé pour le fichier : jaris-votes-AAAA-MM-JJ.json (date locale). */
+export function defaultDuelExportName(now: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `jaris-votes-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`
+}
+
 /** L'application gardée, ou `null` (identifiant inconnu, fichier absent). */
 export async function readDuelApp(voteId: string, side: 'a' | 'b'): Promise<string | null> {
   const path = appPath(voteId, side)

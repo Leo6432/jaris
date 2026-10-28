@@ -9828,3 +9828,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   nets < 5 % à tort intervalle compris, presque équivalents : perte et nuisibles ≤ v0.40.2) et
   `test-hardwarescan-duel.mjs` (5-0 gardé, 6-0 remplacé, 7-2 gardé, 8-0 remplacé, 5-0 + 3 égalités gardé, Vocal sur
   ses propres votes). Mutations attrapées : a priori large remis, a priori à 300, catégorie ignorée, seuil à 0,6.
+
+- **Étape 362 (v0.40.4), Léo : « fais-moi un bouton télécharger les votes, et ça télécharge toutes les sessions
+  qu'on a faites depuis le début, tout l'historique ».** Les votes ne comptent que sur le PC qui les a faits (aucun
+  fichier de votes livré avec Jaris, pas de serveur) : pour qu'ils puissent un jour compter pour tout le monde, Léo
+  doit pouvoir les sortir. Bouton « Télécharger les votes » dans l'historique des duels (à droite de « Retour »,
+  désactivé sans aucun vote) : fenêtre « Enregistrer sous » de Windows (garde `dialogOpen`, étape 93), dans Documents,
+  nom `jaris-votes-AAAA-MM-JJ.json`. Le fichier (`buildDuelVotesExport`, duelStore.ts, relu depuis le disque) contient
+  `format: "jaris-duel-votes"`, sa version, la version de Jaris, la date, le nombre de sessions, TOUS les votes du
+  plus ancien au plus récent (catégorie, session, modèles, résultat, demande, les deux réponses et ce qu'elles ont
+  fait sur le PC) et les applications des duels Code (`apps`, par `<vote>-a|b`). Après l'enregistrement, « Votes
+  enregistrés : N » (libellé : valeur, pour éviter les pluriels dans les 24 langues) ; une annulation n'affiche rien,
+  un échec donne le vrai message. **Pas encore fait** : relire ce fichier pour l'embarquer dans Jaris (partager les
+  votes de Léo avec tout le monde) — à faire une fois que Léo l'envoie, comme verified-tool-scores.md.
+  Régression : `test-duel-store.mjs` (vrai dossier : deux sessions, ordre, réponses et application gardées, nom du
+  fichier) et `test-duel-panel-ui.mjs` (vrai navigateur : bouton à côté de « Retour », résultat affiché, annulation
+  muette, échec relayé, désactivé sans vote).

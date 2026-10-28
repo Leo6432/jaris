@@ -9830,6 +9830,21 @@ ol.reply-list > li::marker {
 
 .duel-history__head {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.duel-history__download {
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  font-size: 13px;
+}
+
+.duel-history__exported {
+  margin: -12px 0 0;
+  font-size: 13px;
+  color: var(--hud-text-dim);
 }
 
 .duel-history__back {

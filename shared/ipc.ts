@@ -678,6 +678,14 @@ export const IMAGE_TYPES_BY_EXTENSION: Record<string, string> = {
 }
 
 /** Résultat de « Enregistrer l'image » (étape 185) : `saved` false si Léo a annulé ou si l'écriture a échoué. */
+/** Étape 362 : résultat de « Télécharger les votes » (rien sur une simple annulation). */
+export interface DuelExportResult {
+  saved: boolean
+  /** Nombre de votes écrits dans le fichier. */
+  count?: number
+  error?: string
+}
+
 export interface SaveImageResult {
   saved: boolean
   /** Message lisible par Léo quand l'écriture a échoué (jamais sur une simple annulation). */
@@ -1342,6 +1350,8 @@ export const IPC_CHANNELS = {
   duelSkip: 'jaris:duel-skip',
   /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */
   duelNext: 'jaris:duel-next',
+  /** renderer -> main, étape 362 : tout l'historique des duels dans un fichier choisi par Léo. */
+  duelExportVotes: 'jaris:duel-export-votes',
   /** main -> écran : nouvel état de la session (ou `null` quand il n'y en a plus). */
   duelChanged: 'jaris:duel-changed',
   /**

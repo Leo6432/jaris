@@ -52,6 +52,7 @@ import type {
   OllamaVersionStatus,
   PickedImageFile,
   SaveImageResult,
+  DuelExportResult,
   GeneratedImageSummary,
   GeneratedVideoSummary,
   ImageStudioStatus,
@@ -233,6 +234,7 @@ declare global {
       duelDeleteModels: (models: string[]) => Promise<{ deleted: string[]; failed: { model: string; error: string }[] }>
       duelRankings: () => Promise<DuelRankingView[]>
       duelHistory: () => Promise<DuelHistoryEntry[]>
+      duelExportVotes: () => Promise<DuelExportResult>
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>

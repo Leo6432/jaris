@@ -67,7 +67,7 @@ import {
   setDuelProbability,
   detectGpu
 } from './services/hardwareScan'
-import { getDuelVotes, loadDuelVotes } from './services/duelStore'
+import { buildDuelVotesExport, defaultDuelExportName, getDuelVotes, loadDuelVotes } from './services/duelStore'
 import {
   abortDuel,
   askDuel,
@@ -188,6 +188,7 @@ import {
   type ModelChoiceMode,
   type PickedImageFile,
   type SaveImageResult,
+  type DuelExportResult,
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
@@ -1745,6 +1746,31 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.duelRankings, () => duelRankings())
   ipcMain.handle(IPC_CHANNELS.duelHistory, () => duelHistory())
+  // Étape 362 : « Télécharger les votes ». Même garde dialogOpen que les autres « Enregistrer sous » (étape 93).
+  ipcMain.handle(IPC_CHANNELS.duelExportVotes, async (): Promise<DuelExportResult> => {
+    const now = new Date()
+    const dialogOptions = {
+      title: t('main.dialog.saveVotes'),
+      defaultPath: join(app.getPath('documents'), defaultDuelExportName(now)),
+      filters: [{ name: t('main.dialog.votesFilter'), extensions: ['json'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      const { json, count } = await buildDuelVotesExport(app.getVersion(), now)
+      await writeFile(/\.json$/i.test(target) ? target : `${target}.json`, json, 'utf8')
+      return { saved: true, count }
+    } catch (err) {
+      return { saved: false, error: t('main.saveVotesFailed', { error: err instanceof Error ? err.message : String(err) }) }
+    }
+  })
   ipcMain.handle(IPC_CHANNELS.duelHistoryApp, (_event, voteId: unknown, side: unknown) => {
     if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
     return duelHistoryApp(voteId, side)

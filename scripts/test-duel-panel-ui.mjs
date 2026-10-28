@@ -83,6 +83,7 @@ window.jaris = {
   duelDeleteModels: async (models) => { window.__calls.push(['delete', models]); return { deleted: models, failed: [] } },
   getProfile: async () => null,
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
+  duelExportVotes: async () => { window.__calls.push('export'); return window.__exportResult || { saved: true, count: 3 } },
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
   duelRetry: async () => {
     window.__calls.push('retry')
@@ -416,6 +417,40 @@ test('historique : un petit bouton ouvre tous les duels, avec les réponses et l
     await page.waitForSelector('.duel-categories')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   }, HISTORY)
+})
+
+test('étape 362 : « Télécharger les votes » enregistre tout l’historique et dit combien de votes sont partis', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.duel-history-button')
+    await page.waitForSelector('.duel-history__item')
+    const button = '.duel-history__download'
+    assert.equal(await page.textContent(button), 'Télécharger les votes')
+    // Même famille de boutons que « Retour » : habillé par le CSS de Jaris, sur la même ligne.
+    const [back, dl] = await Promise.all(['.duel-history__back', button].map((s) => page.$eval(s, (el) => el.getBoundingClientRect().toJSON())))
+    assert.ok(Math.abs(back.top - dl.top) < 4 && dl.left > back.right, 'à droite de « Retour »')
+    assert.equal(await page.$eval(button, (el) => getComputedStyle(el).cursor), 'pointer')
+    await page.click(button)
+    await page.waitForSelector('.duel-history__exported')
+    assert.equal(await page.textContent('.duel-history__exported'), 'Votes enregistrés : 3')
+    assert.ok((await page.evaluate(() => window.__calls)).includes('export'))
+    // Annulé : rien d'affiché. Échec : le vrai message.
+    await page.evaluate(() => (window.__exportResult = { saved: false }))
+    await page.click(button)
+    await page.waitForFunction(() => !document.querySelector('.duel-history__exported') && !document.querySelector('.duel__error'))
+    await page.evaluate(() => (window.__exportResult = { saved: false, error: 'Disque plein' }))
+    await page.click(button)
+    await page.waitForSelector('.duel__error')
+    assert.equal(await page.textContent('.duel__error'), 'Disque plein')
+  }, HISTORY)
+})
+
+test('étape 362 : sans aucun duel voté, rien à télécharger', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.duel-history-button')
+    await page.waitForSelector('.duel-history__download')
+    await page.waitForFunction(() => document.querySelector('.duel-home__note')?.textContent?.includes('Aucun duel'))
+    assert.equal(await page.$eval('.duel-history__download', (el) => el.disabled), true)
+  }, '')
 })
 
 test('historique : accessible aussi pendant un duel, sans rien perdre du duel en cours', options, async () => {

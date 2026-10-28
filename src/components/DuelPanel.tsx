@@ -358,6 +358,21 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<DuelCategory | 'all'>('all')
   const [open, setOpen] = useState<string | null>(null)
+  // Étape 362 : « Télécharger les votes » — résultat affiché sous le bouton (rien sur une annulation).
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<{ count: number } | { error: string } | null>(null)
+  const exportVotes = (): void => {
+    setExporting(true)
+    setExported(null)
+    window.jaris
+      .duelExportVotes()
+      .then((result) => {
+        if (result.saved) setExported({ count: result.count ?? 0 })
+        else if (result.error) setExported({ error: result.error })
+      })
+      .catch((err) => setExported({ error: ipcErrorMessage(err) }))
+      .finally(() => setExporting(false))
+  }
 
   useEffect(() => {
     let alive = true
@@ -380,7 +395,21 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
             <LineIcon d="M15 6l-6 6 6 6" size={16} />
             {t('duel.history.back')}
           </button>
+          <button
+            type="button"
+            className="duel-btn duel-history__download"
+            onClick={exportVotes}
+            disabled={exporting || !entries?.length}
+          >
+            <LineIcon d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" size={16} />
+            {exporting ? t('common.loading') : t('duel.history.download')}
+          </button>
         </div>
+        {exported && (
+          <p className={'error' in exported ? 'duel__error' : 'duel-history__exported'} role="status">
+            {'error' in exported ? exported.error : t('duel.history.downloaded', { count: exported.count })}
+          </p>
+        )}
         <h1 className="duel-summary__title">{t('duel.history.title')}</h1>
         <p className="duel-summary__lead">{t('duel.history.lead')}</p>
 
