@@ -91,6 +91,25 @@ test('Duel : « Salut » et « Ouvre le Bloc-notes » vont au modèle du duel, s
   }
 })
 
+test('étape 365 : en duel, la réflexion imposée (la même pour les deux modèles) l’emporte sur le palier de la question', async () => {
+  for (const imposed of ['medium', true, false]) {
+    const seen = []
+    const converse = setup(
+      async (_messages, _tools, model, think) => {
+        seen.push(think)
+        return { role: 'assistant', content: 'Réponse du modèle' }
+      },
+      async () => assert.fail('aucun outil attendu'),
+      undefined,
+      { tools: DUEL_TOOLS, installed: ['test', 'duel-a:7b'], thinking: { canThink: true, values: ['low', 'medium', 'xhigh'], default: 'xhigh' } }
+    )
+    // Une question longue et complexe : sans réflexion imposée, le palier Élevé demanderait « high ».
+    const prompt = 'Explique-moi en détail, étape par étape, comment fonctionne un moteur de voiture et compare-le à un moteur électrique.'
+    await converse(prompt, null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, { ...duelRestrictions('duel-a:7b'), think: imposed })
+    assert.deepEqual(seen, [imposed], String(imposed))
+  }
+})
+
 test('Duel : un modèle qui appelle quand même l’extinction du PC reçoit le refus, et rien n’est exécuté', async () => {
   const converse = setup(
     async () => ({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'shutdown_pc', arguments: {} } }] }),

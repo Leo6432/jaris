@@ -3,7 +3,7 @@ import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import { setVoiceOutputDevice } from '@/components/JarisOrb'
-import { formatDuration } from '@/lib/formatCodeGenProgress'
+import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatModelName } from '@/lib/formatModelName'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
@@ -101,6 +101,31 @@ export function actionLabel(action: DuelAction): string {
 function activityLabel(activity: DuelActivity | null): string {
   if (!activity) return t('code.phase.thinking')
   return activity.kind === 'action' ? actionLabel(activity.action) : t(PHASE_LABEL[activity.kind])
+}
+
+/**
+ * Étape 365 (Léo : duels Code figés jusqu'à 40 min, « rien ne bougeait ») : la preuve que le modèle avance — l'étape,
+ * les caractères de réflexion puis de code reçus — et, s'il se tait, depuis combien de temps (même règle que le mode
+ * Code, formatCodeLive). Seulement des nombres : le texte de la réflexion pourrait nommer le modèle.
+ */
+function codeProgress(activity: DuelActivity | null): { parts: string[]; stall: string | null } | null {
+  if (!activity || activity.kind === 'action' || !activity.code) return null
+  const code = activity.code
+  const parts: string[] = []
+  if (code.steps > 1) parts.push(t('media.step', { step: code.step, total: code.steps }))
+  if (code.thinkingChars > 0) parts.push(t('duel.progress.thinkingChars', { count: formatDecimal(code.thinkingChars) }))
+  if (code.charsWritten > 0) parts.push(t('duel.progress.writtenChars', { count: formatDecimal(code.charsWritten) }))
+  const { stall } = formatCodeLive(null, {
+    label: '',
+    stepIndex: code.step,
+    stepCount: code.steps,
+    charsWritten: code.charsWritten,
+    thinking: activity.kind !== 'writing',
+    idleMs: code.idleMs,
+    elapsedMs: code.elapsedMs,
+    phase: activity.kind
+  })
+  return parts.length || stall ? { parts, stall } : null
 }
 
 const finished = (side: DuelSideView): boolean => side.status === 'done' || side.status === 'error' || side.status === 'stopped'
@@ -264,6 +289,7 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model 
   const final = finished(side)
   const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
   const empty = final && side.status === 'done' && !side.text.trim() && !side.previewUrl
+  const progress = codeProgress(side.activity)
   return (
     <section className={`duel-side duel-side--${side.status}`} aria-label={t(name === 'a' ? 'duel.side.a' : 'duel.side.b')}>
       <header className="duel-side__head">
@@ -286,6 +312,12 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model 
           <span className="duel-side__pulse" aria-hidden="true" />
           <span className="duel-side__activity-text">{activityLabel(side.activity)}</span>
           {side.startedAt !== null && <span className="duel-side__elapsed">{formatDuration(Math.max(0, now - side.startedAt))}</span>}
+        </p>
+      )}
+      {running && progress && (
+        <p className="duel-side__progress">
+          {progress.parts.length > 0 && <span className="duel-side__progress-text">{progress.parts.join(' · ')}</span>}
+          {progress.stall && <span className="duel-side__stall">{progress.stall}</span>}
         </p>
       )}
 
@@ -984,6 +1016,9 @@ export default function DuelPanel(): JSX.Element {
           <h1 className="duel-preparing__title">{t('duel.preparing.title')}</h1>
           <p className="duel-preparing__step">
             {preparing ? t('duel.preparing.download', { index: preparing.done + 1, total: preparing.total }) : t('duel.preparing.ready')}
+            {preparing && preparing.installed > 0 && (
+              <span className="duel-preparing__installed"> · {t('duel.preparing.installed', { count: preparing.installed })}</span>
+            )}
           </p>
           {preparing && (
             <div className="duel-progress" aria-hidden="true">

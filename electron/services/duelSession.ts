@@ -9,7 +9,7 @@ import {
   pickModelsForDuelCategory,
   type DuelCandidate
 } from './hardwareScan'
-import { deleteModel, listInstalledModels, pullModelIfMissing } from './ollama'
+import { deleteModel, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
 import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
@@ -45,6 +45,7 @@ import type {
   Profile
 } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
+import { equivalentThink, type ThinkValue } from '../../shared/effort'
 
 /**
  * Étape 355 — le Duel. Léo : « un bouton duel, une session télécharge 4-6 modèles qui tiennent, anonymes, on choisit
@@ -53,11 +54,19 @@ import { t } from '../../shared/i18n'
  * A d'abord, puis B quand Léo a vérifié. Les noms restent ici : l'écran ne reçoit que « A » et « B » jusqu'à la fin.
  */
 
+/**
+ * Étape 365 (Léo : « ça se fait pas un modèle avec raisonnement low et un autre max et un autre qui n'en a pas ») : la
+ * réflexion demandée à TOUS les modèles d'un duel, choisie par Léo — « moyen », comme les tests d'appel d'outils —,
+ * traduite dans les réglages de chacun (equivalentThink, shared/effort.ts).
+ */
+export const DUEL_THINK_LEVEL = 'medium'
+
 /** Ce que Jaris ne fait jamais pendant un duel : un modèle qui se trompe ne doit pas éteindre le PC de Léo. */
 export const DUEL_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set(['shutdown_pc'])
 
-function duelRestrictions(model: string, onToolFailure?: ConverseRestrictions['onToolFailure']): ConverseRestrictions {
+function duelRestrictions(model: string, think: ThinkValue, onToolFailure?: ConverseRestrictions['onToolFailure']): ConverseRestrictions {
   return {
+    think,
     allowedTools: new Set(TOOLS.map((tool) => tool.function.name).filter((name) => !DUEL_FORBIDDEN_TOOLS.has(name))),
     // Aucune consigne de plus : le modèle doit répondre exactement comme en usage normal.
     note: '',
@@ -210,7 +219,7 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
   const profile = await getProfile()
   const [candidates, installed, freeDiskGb, machine, list] = await Promise.all([
     candidatesFor(category, profile),
-    listInstalledModels().catch(() => [] as string[]),
+    installedModelsSeen(),
     detectFreeDiskGb().catch(() => null),
     duelMachine(),
     getDuelModelList(category, profile)
@@ -235,6 +244,17 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
       }
     })
   }
+}
+
+/**
+ * Étape 365 : la liste des modèles installés, après la réparation des étapes 289/313 si Ollama n'en voit AUCUN (il
+ * regarde alors le mauvais dossier). Sans elle, des modèles déjà sur le PC passaient pour « à télécharger » : l'écran
+ * annonçait des téléchargements qui n'avaient pas lieu.
+ */
+async function installedModelsSeen(): Promise<string[]> {
+  const list = await listInstalledModels().catch(() => [] as string[])
+  if (list.length || !(await repairModelsViewIfNeeded())) return list
+  return listInstalledModels().catch(() => [] as string[])
 }
 
 function busy(): boolean {
@@ -264,7 +284,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     if (chosen.some((m) => !available.has(m))) throw new Error(t('duel.error.notAvailable'))
     if (chosen.length < DUEL_MIN_CHOSEN) throw new Error(t('duel.error.chooseMin', { min: DUEL_MIN_CHOSEN }))
   }
-  const installed = await listInstalledModels().catch(() => [] as string[])
+  const installed = await installedModelsSeen()
   const missing = chosen.filter((m) => !isInstalled(m, installed))
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
   // L'ordre des modèles est mélangé : la position dans la session ne dit rien de qui ils sont.
@@ -275,7 +295,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     phase: 'preparing',
     models: shuffled,
     downloaded: new Map(),
-    preparing: missing.length ? { done: 0, total: missing.length, percent: null } : null,
+    preparing: missing.length ? { done: 0, total: missing.length, percent: null, installed: chosen.length - missing.length } : null,
     dropped: 0,
     played: new Map(),
     last: null,
@@ -292,23 +312,26 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
 async function prepare(current: Session, missing: string[], sizeOf: Map<string, number>): Promise<void> {
   prepareController = new AbortController()
   const signal = prepareController.signal
+  const installed = current.preparing?.installed ?? 0
   for (const [index, model] of missing.entries()) {
     if (signal.aborted || session !== current) return
-    current.preparing = { done: index, total: missing.length, percent: 0 }
+    current.preparing = { done: index, total: missing.length, percent: 0, installed }
     emitNow()
     try {
       // Aucun message de téléchargement transmis : ils portent le nom du modèle.
-      await pullModelIfMissing(
+      const pulled = await pullModelIfMissing(
         model,
         undefined,
         (progress) => {
           if (!progress || session !== current) return
-          current.preparing = { done: index, total: missing.length, percent: progress.percent }
+          current.preparing = { done: index, total: missing.length, percent: progress.percent, installed }
           emitSoon()
         },
         signal
       )
-      current.downloaded.set(model, sizeOf.get(model) ?? 0)
+      // Seulement un modèle VRAIMENT téléchargé : un modèle déjà sur le PC (liste d'Ollama vide au départ, puis réparée
+      // par pullModelIfMissing) ne doit jamais être proposé à la suppression à la fin de la session.
+      if (pulled) current.downloaded.set(model, sizeOf.get(model) ?? 0)
     } catch (err) {
       if (signal.aborted) return
       console.error('[jaris] Duel : modèle non téléchargé —', err)
@@ -407,8 +430,13 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   side.activity = { kind: current.category === 'code' ? 'loading' : 'thinking' }
   emitNow()
   try {
-    if (current.category === 'code') await runCode(current, side, model, prompt, controller.signal)
-    else await runConversation(current, side, model, prompt, controller.signal)
+    // Ollama arrêté : `null`, et le niveau part tel quel (Ollama le ramène à un niveau du modèle).
+    const think = equivalentThink(DUEL_THINK_LEVEL, await getModelThinking(model))
+    // « Arrêter » pendant cette lecture : le modèle ne doit pas partir quand même (le signal est déjà donné).
+    if (!controller.signal.aborted) {
+      if (current.category === 'code') await runCode(current, side, model, prompt, think, controller.signal)
+      else await runConversation(current, side, model, prompt, think, controller.signal)
+    }
     if (controller.signal.aborted) side.status = 'stopped'
     else side.status = 'done'
   } catch (err) {
@@ -425,8 +453,10 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   }
 }
 
-async function runConversation(current: Session, side: SideState, model: string, prompt: string, signal: AbortSignal): Promise<void> {
+async function runConversation(current: Session, side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
   const profile = await getProfile()
+  // « Arrêter » pendant cette lecture : rien ne part au modèle.
+  if (signal.aborted) return
   const channel = current.category === 'voice' ? 'voice' : 'chat'
   let streamed = ''
   const reply = await converse(
@@ -455,7 +485,7 @@ async function runConversation(current: Session, side: SideState, model: string,
     },
     undefined,
     undefined,
-    duelRestrictions(model, (tool, error) => {
+    duelRestrictions(model, think, (tool, error) => {
       if (side.trouble) return
       const name = error instanceof Error ? error.name : null
       if (!isJarisToolFailure(tool, name)) return
@@ -480,12 +510,23 @@ async function runConversation(current: Session, side: SideState, model: string,
 }
 
 function codeActivity(progress: CodeGenProgress): DuelActivity {
-  return { kind: progress.phase }
+  return {
+    kind: progress.phase,
+    code: {
+      step: progress.stepIndex,
+      steps: progress.stepCount,
+      charsWritten: progress.charsWritten,
+      thinkingChars: progress.thinkingChars ?? 0,
+      idleMs: progress.idleMs,
+      elapsedMs: progress.elapsedMs
+    }
+  }
 }
 
-async function runCode(_current: Session, side: SideState, model: string, prompt: string, signal: AbortSignal): Promise<void> {
+async function runCode(_current: Session, side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
   const app = await generateApp(prompt, () => {}, undefined, undefined, {
     model,
+    think,
     persist: false,
     signal,
     onProgress: (progress) => {
@@ -655,7 +696,7 @@ export async function endDuel(): Promise<DuelSummary> {
   emitNow()
 
   const profile = await getProfile()
-  const installed = await listInstalledModels().catch(() => [] as string[])
+  const installed = await installedModelsSeen()
   const changes: DuelSummary['changes'] = []
   if (current.history.length && profile) {
     // Étape 360 : un modèle en service n'est remplacé que s'il est PROUVÉ moins bon (comparaison directe).

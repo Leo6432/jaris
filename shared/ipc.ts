@@ -864,6 +864,12 @@ export interface CodeGenProgress {
    * de l'eau, pendant qu'il réfléchit seulement — l'écran la montre sous une petite flèche, comme Claude ou ChatGPT.
    */
   thinkingText?: string
+  /**
+   * Étape 365 (duels Code figés jusqu'à 40 min, Léo : « rien ne bougeait ») : le nombre TOTAL de caractères de réflexion
+   * reçus pendant cette étape — `thinkingText` n'en garde que la fin. Un compteur qui monte prouve que le modèle
+   * travaille, sans montrer ce qu'il pense (en duel, ce texte pourrait nommer le modèle).
+   */
+  thinkingChars?: number
 }
 
 /**
@@ -1020,9 +1026,23 @@ export interface DuelPlan {
   downloadBudgetGb: number | null
 }
 
+/**
+ * Étape 365 (duels Code figés jusqu'à 40 min, Léo : « rien ne bougeait ») : où en est la génération d'un côté — des
+ * NOMBRES seulement, jamais le texte de la réflexion (il pourrait nommer le modèle et casser l'anonymat du duel).
+ */
+export interface DuelCodeProgress {
+  step: number
+  steps: number
+  charsWritten: number
+  thinkingChars: number
+  /** Temps depuis le dernier fragment reçu du modèle : dit « rien reçu depuis… » au lieu de laisser deviner. */
+  idleMs: number
+  elapsedMs: number
+}
+
 /** Ce que fait un modèle pendant son tour, en données (l'écran l'écrit dans sa langue). */
 export type DuelActivity =
-  | { kind: 'loading' | 'reading' | 'thinking' | 'writing' }
+  | { kind: 'loading' | 'reading' | 'thinking' | 'writing'; code?: DuelCodeProgress }
   | { kind: 'action'; action: DuelAction }
 
 export interface DuelSideView {
@@ -1060,7 +1080,8 @@ export interface DuelSessionView {
   phase: 'preparing' | 'ready' | 'ended'
   modelCount: number
   /** Téléchargement des modèles de la session, sans leur nom. */
-  preparing: { done: number; total: number; percent: number | null } | null
+  /** `installed` (étape 365) : modèles choisis déjà sur le PC, que la session ne télécharge pas. */
+  preparing: { done: number; total: number; percent: number | null; installed: number } | null
   /** Modèles retirés de la session faute d'avoir pu être téléchargés. */
   dropped: number
   votes: number

@@ -62,7 +62,7 @@ window.jaris = {
   duelStart: async (category, count) => {
     window.__calls.push(['start', category, count])
     window.__category = category
-    return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37 }, dropped: 0, votes: 0, round: null, error: null }
+    return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
   },
   duelAsk: async (prompt) => {
     window.__calls.push(['ask', prompt])
@@ -211,6 +211,8 @@ test('préparation : l’avancement du téléchargement, sans nom de modèle', o
     await page.waitForSelector('.duel-preparing')
     assert.match(await page.textContent('.duel-preparing'), /Téléchargement du modèle 1 sur 2/)
     assert.match(await page.textContent('.duel-preparing'), /37\s%/)
+    // Étape 365 (Léo : « je choisis 7 modèles, ça met téléchargement des 5 ») : ceux déjà sur le PC sont dits.
+    assert.match(await page.textContent('.duel-preparing__step'), /Déjà sur ton PC\s:\s3/)
     assert.equal(await page.$eval('.duel-progress__fill', (el) => el.style.width), '37%')
   })
 })
@@ -355,7 +357,7 @@ test('outil de Jaris en panne : le côté le dit, le vote disparaît, « Rejouer
     await page.waitForSelector('.duel-side__trouble')
     assert.match(await page.textContent('.duel-side__trouble'), /Un outil de Jaris a échoué \(Chercher sur internet\) : ce n'est pas la faute du modèle\./)
     assert.match(await page.textContent('.duel-side__trouble'), /anti-robot/)
-    assert.equal(await page.$('.duel-side--idle .duel-btn--primary'), null, 'B ne peut plus départager un duel gâché')
+    assert.equal((await page.$('.duel-side--idle .duel-btn--primary')) === null, true, 'B ne peut plus départager un duel gâché')
     assert.equal(await page.$$eval('.duel-vote__button', (els) => els.length), 0, 'aucun bouton de vote')
     assert.match(await page.textContent('.duel-vote--trouble'), /Ce duel ne compte pas/)
     const buttons = await page.$$eval('.duel-vote--trouble button', (els) => els.map((el) => el.textContent))
@@ -366,7 +368,7 @@ test('outil de Jaris en panne : le côté le dit, le vote disparaît, « Rejouer
     await page.click('.duel-vote--trouble .duel-btn--primary')
     await page.waitForFunction(() => window.__calls.includes('retry'))
     await page.waitForSelector('.duel-side--running')
-    assert.equal(await page.$('.duel-vote--trouble'), null, 'pendant le nouvel essai, plus de panneau')
+    assert.equal((await page.$('.duel-vote--trouble')) === null, true, 'pendant le nouvel essai, plus de panneau')
   }, init)
 })
 
@@ -567,4 +569,31 @@ test('étape 364 : le code d’un duel Code de l’historique se lit aussi', opt
     assert.match(await page.textContent('.duel-history__item:nth-child(2) .duel-app__code'), /serpent/)
     assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'historyCode' && c[1] === 'v2' && c[2] === 'a'))
   }, HISTORY)
+})
+
+test('étape 365 : en duel Code, la génération montre qu’elle avance (étape, caractères), puis son silence', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-side__progress')
+    const first = await page.textContent('.duel-side__progress')
+    assert.match(first, /Étape 1 sur 2/)
+    assert.match(first, /Caractères de réflexion\s:\s12\s400/)
+    // Jamais un ElementHandle dans assert (piège de l'étape 126 : le message d'échec bloque tout) : un booléen.
+    assert.equal((await page.$('.duel-side__stall')) === null, true, 'pas d’alerte tant que des fragments arrivent')
+    // Le modèle avait commencé puis se tait depuis 45 s : on le dit, comme en mode Code.
+    await page.evaluate(() => {
+      const r = window.__view.round
+      window.__emit(window.__ready({ ...r, a: { ...r.a, activity: { kind: 'writing', code: { step: 2, steps: 2, charsWritten: 3200, thinkingChars: 0, idleMs: 45000, elapsedMs: 600000 } } } }))
+    })
+    await settle(page)
+    const second = await page.textContent('.duel-side__progress')
+    assert.match(second, /Étape 2 sur 2/)
+    assert.match(second, /Caractères écrits\s:\s3\s200/)
+    assert.match(await page.textContent('.duel-side__stall'), /rien reçu du modèle depuis 45 s/)
+    const color = await page.$eval('.duel-side__stall', (el) => getComputedStyle(el).color)
+    assert.notEqual(color, await page.$eval('.duel-side__progress', (el) => getComputedStyle(el).color), 'l’alerte se distingue')
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
+  }, `window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null,
+    round: { number: 1, prompt: 'Un compteur', revealed: null,
+      a: { status: 'running', text: '', activity: { kind: 'thinking', code: { step: 1, steps: 2, charsWritten: 0, thinkingChars: 12400, idleMs: 0, elapsedMs: 90000 } }, startedAt: Date.now() - 90000, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null },
+      b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }`)
 })

@@ -10,6 +10,21 @@ import { loadTsModule } from './load-ts-module.mjs'
  * Le point le plus important : l'écran ne reçoit JAMAIS le nom d'un modèle avant la fin (Léo : « anonyme »).
  */
 const duelModule = loadTsModule('shared/duel.ts')
+const effortModule = loadTsModule('shared/effort.ts')
+/**
+ * Étape 365 : ce que chaque faux modèle annonce de sa réflexion (`/api/show`) — un modèle à niveaux comme qwen3.8, un
+ * modèle « avec ou sans » comme gemma4, un modèle sans réflexion, et un modèle à deux niveaux seulement.
+ */
+const THINKING = {
+  // Les défauts tels qu'Ollama les annonce vraiment (server/model_thinking.go : « medium » pour qwen3.8, « activée »
+  // pour un modèle avec ou sans comme gemma4).
+  'alpha-model:3b': effortModule.parseModelThinking({ capabilities: ['thinking'], thinking: { values: [false, 'low', 'medium', 'xhigh'], default: 'medium' } }),
+  'bravo-model:8b': effortModule.parseModelThinking({ capabilities: ['thinking'], thinking: { values: [false, true], default: true } }),
+  'charlie-model:4b': effortModule.parseModelThinking({ capabilities: ['completion', 'tools'] }),
+  'delta-model:7b': effortModule.parseModelThinking({ capabilities: ['thinking'], thinking: { values: ['low', 'high'], default: 'high' } })
+}
+/** La réflexion attendue pour chacun : l'équivalent de « moyen » dans SES réglages. */
+const EXPECTED_THINK = { 'alpha-model:3b': 'medium', 'bravo-model:8b': true, 'charlie-model:4b': false, 'delta-model:7b': 'low' }
 const MODELS = ['alpha-model:3b', 'bravo-model:8b', 'charlie-model:4b', 'delta-model:7b']
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 
@@ -18,10 +33,16 @@ async function waitFor(predicate, what) {
     if (predicate()) return
     await tick()
   }
+  // Étape 365 : la fausse génération de code attend une vraie mise à jour de l'écran (200 ms) — on patiente en vrai temps.
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [] }
   const votes = []
   const apps = new Map()
@@ -45,7 +66,21 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     './codeGenerator': {
       generateApp: async (prompt, _onStatus, _current, _image, options) => {
         calls.generate.push({ prompt, options })
-        options.onProgress?.({ phase: 'writing', step: 1, totalSteps: 2, chars: 10, elapsedMs: 1000, idleMs: 0 })
+        // Étape 365 : un vrai avancement de génération (CodeGenProgress), réflexion comprise.
+        options.onProgress?.({
+          label: 'Génération',
+          stepIndex: 1,
+          stepCount: 2,
+          charsWritten: 0,
+          thinking: true,
+          idleMs: 0,
+          elapsedMs: 1000,
+          phase: 'thinking',
+          thinkingChars: 12400,
+          thinkingText: `Je suis ${options.model} et je réfléchis`
+        })
+        // Le temps qu'une mise à jour parte vers l'écran (au plus une toutes les 120 ms).
+        await new Promise((resolve) => setTimeout(resolve, 200))
         return { html: `<html><body>${options.model.length}</body></html>`, issues: [], dir: '' }
       }
     },
@@ -66,14 +101,26 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         calls.deleted.push(model)
         installedNow = installedNow.filter((m) => m !== model)
       },
-      listInstalledModels: async () => [...installedNow],
+      // Étape 365 : `blind` = Ollama ne voit aucun modèle du disque (étapes 289/313) tant qu'il n'a pas été réparé.
+      listInstalledModels: async () => (blind ? [] : [...installedNow]),
+      repairModelsViewIfNeeded: async () => {
+        calls.repairs = (calls.repairs ?? 0) + 1
+        if (!repairs) return false
+        blind = false
+        return true
+      },
+      getModelThinking: async (model) => THINKING[model] ?? null,
       pullModelIfMissing: async (model, _onStatus, onProgress, signal) => {
         calls.pulls.push(model)
+        // Comme le vrai : la vue est réparée, et un modèle déjà sur le disque n'est pas retéléchargé (`false`).
+        blind = false
+        if (installedNow.includes(model)) return false
         if (pullGates.has(model)) await pullGates.get(model).promise
         if (signal?.aborted) throw new Error('arrêté')
         onProgress?.({ percent: 50 })
         if (failPull.includes(model)) throw new Error(`pull model manifest: ${model} introuvable`)
         installedNow.push(model)
+        return true
       }
     },
     './profileStore': {
@@ -104,7 +151,8 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       },
       readDuelApp: async (id, side) => apps.get(`${id}-${side}`) ?? null
     },
-    '../../shared/duel': duelModule
+    '../../shared/duel': duelModule,
+    '../../shared/effort': effortModule
   }
   const session = loadTsModule('electron/services/duelSession.ts', modules)
   session.setDuelEnvironment({ onReminderFire: () => {}, emit: (view) => emitted.push(JSON.parse(JSON.stringify(view))) })
@@ -394,6 +442,13 @@ test('duel Code : l’application est écrite par CE modèle, montrée dans l’
   assert.ok(env.session.duelSideCode('a').startsWith('<html>'))
   assert.equal(env.session.duelSideCode('b'), null)
   assert.equal(JSON.stringify(env.session.getDuelView()).includes('<html>'), false, 'le code ne voyage pas avec chaque mise à jour')
+  // Étape 365 : pendant la génération, l'écran reçoit l'étape et les compteurs — jamais le texte de la réflexion.
+  const live = env.emitted.map((v) => v?.round?.a?.activity).find((activity) => activity?.code)
+  assert.deepEqual(
+    { kind: live?.kind, ...live?.code },
+    { kind: 'thinking', step: 1, steps: 2, charsWritten: 0, thinkingChars: 12400, idleMs: 0, elapsedMs: 1000 }
+  )
+  assert.equal(JSON.stringify(env.emitted).includes('je réfléchis'), false, 'la réflexion pourrait nommer le modèle')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
   await env.session.voteDuel('a')
@@ -563,5 +618,59 @@ test('étape 363 : un modèle choisi et absent est téléchargé, sans jamais en
   await env.session.startDuel('conversation', MODELS)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
   assert.deepEqual(env.calls.pulls, [MODELS[3]])
+  // Étape 365 (Léo : « je choisis 7 modèles, ça met téléchargement des 5 ») : l'écran sait combien sont déjà là.
+  const preparing = env.emitted.filter((v) => v?.preparing).map((v) => v.preparing)
+  assert.ok(preparing.length > 0)
+  assert.ok(preparing.every((p) => p.total === 1 && p.installed === 3), JSON.stringify(preparing))
   assertAnonymous(env.emitted, 'téléchargement')
+})
+
+test('étape 365 : en duel, tous les modèles reçoivent « moyen », traduit dans leurs propres réglages', async () => {
+  // Conversation : la réflexion part avec les restrictions du duel, et l'emporte sur le palier de la question.
+  const env = setup({ installed: MODELS })
+  await env.session.startDuel('conversation', MODELS)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  for (let i = 0; i < 2; i++) {
+    env.session.askDuel(`Question ${i}`)
+    await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+    env.session.runDuelB()
+    await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+    await env.session.voteDuel('tie')
+    env.session.nextDuel()
+  }
+  assert.equal(env.calls.converse.length, 4)
+  for (const args of env.calls.converse) {
+    const { model, think } = args[11]
+    assert.equal(think, EXPECTED_THINK[model], model)
+  }
+  // Code : la même règle, passée à la génération de l'application.
+  const code = setup({ installed: MODELS })
+  await code.session.startDuel('code', MODELS)
+  await waitFor(() => code.session.getDuelView()?.phase === 'ready', 'prête')
+  code.session.askDuel('Un compteur')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B')
+  for (const { options } of code.calls.generate) assert.equal(options.think, EXPECTED_THINK[options.model], options.model)
+})
+
+test('étape 365 : Ollama ne voit pas les modèles (étapes 289/313) — rien n’est annoncé à télécharger ni proposé à la suppression', async () => {
+  // La vue est réparée avant de compter : les 4 modèles choisis sont déjà là, aucun téléchargement annoncé.
+  const env = setup({ installed: MODELS, blind: true })
+  await env.session.startDuel('conversation', MODELS)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  assert.ok(env.calls.repairs >= 1)
+  assert.deepEqual(env.calls.pulls, [])
+  assert.equal(env.emitted.some((v) => v?.preparing), false)
+  // Réparation impossible au départ : les modèles passent par le téléchargement, qui les trouve déjà là — et la fin de
+  // session ne les compte JAMAIS comme téléchargés pour elle (sinon proposés à la suppression : des Go qui étaient à Léo).
+  const blindToTheEnd = setup({ installed: MODELS, blind: true, repairs: false })
+  await blindToTheEnd.session.startDuel('conversation', MODELS)
+  await waitFor(() => blindToTheEnd.session.getDuelView()?.phase === 'ready', 'prête')
+  assert.equal(blindToTheEnd.calls.pulls.length, 4)
+  const summary = await blindToTheEnd.session.endDuel()
+  assert.deepEqual(summary.downloaded, [])
+  const result = await blindToTheEnd.session.deleteDuelModels(MODELS)
+  assert.deepEqual(result.deleted, [])
+  assert.deepEqual(blindToTheEnd.calls.deleted, [])
 })

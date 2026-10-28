@@ -9909,3 +9909,48 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   jamais dans la vue envoyée à chaque mise à jour. Il est lu seulement une fois ce côté fini, sans nom de modèle
   (`withoutModelNames`), et un identifiant de vote inconnu ne renvoie rien. Régression : `test-duel-session.mjs` et
   `test-duel-panel-ui.mjs` (aperçu puis code numéroté, retour à l'aperçu, historique ; vérifié en coupant le bouton).
+
+- **Étape 365 (v0.40.7), Léo : « je choisis 7 modèles, ça met téléchargement des 5 modèles », « des requêtes qui
+  bloquent jusqu'à 40 min » (questions à choix : en duel **Code**, **rien ne bougeait**), puis « tous les modèles
+  utilisent quoi comme raisonnement, ça se fait pas un modèle avec low, un autre max et un autre qui n'en a pas ».**
+  1. **« 5 sur 7 » n'était pas un bug** : 2 des modèles choisis étaient déjà sur le PC. L'écran le dit maintenant
+     (« Téléchargement du modèle 1 sur 5 · Déjà sur ton PC : 2 », `preparing.installed`).
+  2. **Une fausse cause, écartée par la relecture adverse AVANT publication.** J'avais conclu que qwen3.8 réfléchissait
+     au maximum (xhigh) : Jaris lui demande « high », qu'il n'annonce pas, et `ResolveThinking`
+     (model/renderers/thinking.go) remplace un niveau inconnu par le défaut, xhigh dans le renderer (qwen35.go). Faux :
+     `Model.Thinking()` (server/model_thinking.go, vérifié en 0.40.3, 0.40.5 et 0.40.10) REMPLACE ce défaut par
+     « medium » pour qwen3.8. Il passe aussi à « activée » le défaut des modèles « avec ou sans » (gemma4). C'est lui
+     que lisent `/api/show` et `/api/chat`. La règle « jamais plus de réflexion que demandé » écrite pour ça ne
+     changeait la valeur envoyée pour AUCUN modèle de Jaris : retirée. Mes tests passaient parce qu'ils inventaient
+     un `/api/show` avec `default: 'xhigh'`. **Leçon générale : pour savoir ce qu'un serveur fait d'une valeur, lire le
+     chemin COMPLET jusqu'à la réponse qu'il renvoie, pas la première fonction qui semble décider. Et ne jamais écrire
+     un faux `/api/show` à partir de ce qu'on croit qu'il dit : le relever sur la source.** Cause réelle des 40 min
+     non établie. La plus probable : un modèle de 27 milliards de paramètres qui déborde sur la RAM d'une carte de 8 Go
+     écrit lentement, sur 2 à 4 étapes (écriture, relecture, réparation), et l'écran ne montrait que « Réfléchit… ».
+  3. **Le duel Code montre que ça avance** : `DuelActivity.code` (étape, caractères de réflexion via le nouveau
+     `CodeGenProgress.thinkingChars`, caractères écrits, silence). La carte affiche « Étape 1 sur 2 · Caractères de
+     réflexion : 12 400 », puis l'alerte de silence du mode Code (`formatCodeLive`). Seulement des NOMBRES : le texte
+     de la réflexion pourrait nommer le modèle et casser l'anonymat (vérifié par test).
+  4. **Même réflexion pour tous les modèles d'un duel.** Avant, en Code, chaque modèle recevait « high » : qwen3.8 →
+     medium, gpt-oss → high, les modèles on/off → activée, les autres → aucune. Léo a choisi, par question à choix,
+     « moyen » pour tous, comme les tests d'appel d'outils (`DUEL_THINK_LEVEL`). `equivalentThink` (shared/effort.ts)
+     le traduit dans les réglages de chaque modèle : niveaux nommés → ce niveau, sinon le plus haut qui ne le dépasse
+     pas ; on/off → activée ; sans réflexion → false. Ollama accepte `false` pour tous les modèles : seul un `think`
+     vrai est refusé (server/routes.go). La valeur passe par `ConverseRestrictions.think` (conversation et voix, elle
+     l'emporte sur le palier de la question) et `GenerateAppOptions.think` (Code). Une égalité parfaite n'existe pas,
+     certains modèles ne réfléchissent pas du tout. Trouvé par les tests au passage : « Arrêter » pendant la lecture des
+     réglages du modèle ne doit rien envoyer au modèle (signal vérifié après chaque attente).
+  5. **Vrai défaut trouvé par la relecture, et qui existait déjà avant** : quand Ollama ne voyait aucun modèle (étapes
+     289/313), un duel comptait comme « téléchargés pour la session » des modèles déjà sur le PC. La fin de session
+     proposait ensuite de les SUPPRIMER (des dizaines de Go qui étaient à Léo). `pullModelIfMissing` renvoie maintenant
+     s'il a vraiment téléchargé (`true`/`false`), et seul un vrai téléchargement est proposé à la suppression. La
+     liste est aussi réparée avant de compter (`installedModelsSeen`).
+  **Non corrigé, à dessein** : `chatWithOllama` refait un échec sans `think`. En duel, un tel second essai prend le
+  défaut du modèle et non « moyen » : un cas rare, et changer ce repli toucherait toutes les conversations. Régression :
+  - `test-effort.mjs` (équivalent de « moyen » pour chaque type de modèle) ;
+  - `test-duel-session.mjs` (réflexion de chaque modèle en Conversation et en Code ; Ollama aveugle : rien d'annoncé,
+    rien proposé à la suppression) ;
+  - `test-assistant-history.mjs` (réflexion imposée plus forte que le palier) ;
+  - `test-codegen-progress.mjs`, `test-ollama-pull-repair.mjs` et `test-duel-panel-ui.mjs`.
+
+  Chaque garde a été vérifiée en la retirant.

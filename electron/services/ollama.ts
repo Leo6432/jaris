@@ -646,15 +646,18 @@ export async function pullModelIfMissing(
   onProgress?: PullProgressListener,
   // Étape 355 (Duel) : arrêter la session arrête aussi le téléchargement en cours.
   signal?: AbortSignal
-): Promise<void> {
+): Promise<boolean> {
+  // Étape 365 : `true` seulement si le modèle a vraiment été téléchargé ; `false` s'il était déjà là (le Duel ne propose
+  // de supprimer que ce qu'il a lui-même téléchargé, jamais un modèle présent avant la session).
   let installed = await listInstalledModels()
   // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un
   // téléchargement « réussi » en 2 s, puis « model not found »). Retélécharger n'y changerait rien.
   if (installed.length === 0 && modelsViewRepair && (await modelsViewRepair())) installed = await listInstalledModels()
-  if (installed.includes(model) || installed.includes(withTag(model))) return
+  if (installed.includes(model) || installed.includes(withTag(model))) return false
 
   try {
     await pullWithOllama(model, onStatus, onProgress, signal)
+    return true
   } catch (err) {
     if (signal?.aborted) throw err
     // Étape 139 : Ollama 0.34.2 bloque tout `pull hf.co/...` (redirection entre hôtes, voir
@@ -666,6 +669,7 @@ export async function pullModelIfMissing(
     onStatus?.(t('ollama.pull.hfFallback', { model }))
     try {
       await importHuggingFaceModel(model, onStatus)
+      return true
     } catch (importErr) {
       if (importErr instanceof ModelTooLargeError || importErr instanceof DiskFullError) throw importErr
       // Les deux voies ont échoué : on remonte l'erreur d'ORIGINE (celle d'Ollama, que runQuickSetup sait

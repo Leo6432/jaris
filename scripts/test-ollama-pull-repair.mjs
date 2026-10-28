@@ -48,7 +48,8 @@ test('Ollama ne voit aucun modèle : réparé d’abord, et le modèle déjà l�
     state.repaired = true
     return true
   })
-  await ollama.pullModelIfMissing('qwen3.8:27b')
+  // Étape 365 : `false` = rien téléchargé (le Duel ne le proposera jamais à la suppression).
+  assert.equal(await ollama.pullModelIfMissing('qwen3.8:27b'), false)
   assert.deepEqual({ repairs: state.repairs, pulls: state.pulls }, { repairs: 1, pulls: 0 })
 })
 
@@ -58,7 +59,7 @@ test('la réparation n’y change rien (vraiment rien sur le disque) : le télé
     state.repairs++
     return false
   })
-  await ollama.pullModelIfMissing('qwen3.8:27b')
+  assert.equal(await ollama.pullModelIfMissing('qwen3.8:27b'), true, 'vraiment téléchargé')
   assert.deepEqual({ repairs: state.repairs, pulls: state.pulls }, { repairs: 1, pulls: 1 })
 })
 
@@ -68,7 +69,7 @@ test('Ollama voit déjà des modèles : aucune réparation tentée', async () =>
     state.repairs++
     return true
   })
-  await ollama.pullModelIfMissing('granite4.2:8b')
+  assert.equal(await ollama.pullModelIfMissing('granite4.2:8b'), false)
   assert.deepEqual({ repairs: state.repairs, pulls: state.pulls }, { repairs: 0, pulls: 0 })
 })
 

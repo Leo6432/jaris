@@ -39,7 +39,7 @@ const VALID_HTML =
  * vrai `chatWithOllama` le fait quand on lui passe ce callback. `onAbort` permet de simuler un arrêt
  * pendant l'appel.
  */
-function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
+function setup(responses, { onBeforeCall, loaded = async () => true, thoughts = ['réflexion…'] } = {}) {
   const calls = []
   const statusLines = []
   const progress = []
@@ -63,7 +63,7 @@ function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
         const next = responses.shift()
         if (next === undefined) throw new Error('plus de réponse simulée disponible')
         // Un modèle qui réfléchit avant d'écrire : le seul signe de vie pendant ce temps.
-        onThinking?.('réflexion…')
+        for (const thought of thoughts) onThinking?.(thought)
         for (let i = 0; i < next.length; i += 200) {
           if (signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' })
           onToken?.(next.slice(i, i + 200))
@@ -217,4 +217,15 @@ test('étape 326 : pendant qu’il réfléchit, ce qu’il pense part avec l’a
     app.progress.filter((p) => p.phase !== 'thinking').every((p) => p.thinkingText === undefined),
     'la réflexion ne doit plus s’afficher une fois que le modèle écrit (ou avant qu’il commence)'
   )
+})
+
+test('étape 365 : le nombre TOTAL de caractères de réflexion part avec l’avancement, pas seulement la fin gardée', async () => {
+  // 6 000 caractères de réflexion : plus que la fin gardée pour l'écran (THINKING_TAIL_CHARS = 4 000).
+  const app = setup([VALID_HTML, VALID_HTML], { thoughts: Array.from({ length: 6 }, () => 'x'.repeat(1000)) })
+  await run(app, 'une liste de courses')
+  const first = app.progress.filter((p) => p.stepIndex === 1)
+  assert.equal(Math.max(...first.map((p) => p.thinkingChars ?? 0)), 6000)
+  assert.ok(first.every((p) => (p.thinkingText ?? '').length <= 4000), 'la fin gardée pour l’écran reste bornée')
+  const second = app.progress.filter((p) => p.stepIndex === 2)
+  assert.equal(second[0].thinkingChars, 0, 'chaque étape repart de zéro')
 })

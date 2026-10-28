@@ -14,7 +14,7 @@ const source = ts.transpileModule(readFileSync(new URL('../shared/effort.ts', im
 }).outputText
 const exports = {}
 vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n(() => ({})))
-const { thinkingKind, thinkOptions, isAcceptedThink, chosenThink, thinkLabel, parseModelThinking } = exports
+const { thinkingKind, thinkOptions, isAcceptedThink, chosenThink, thinkLabel, parseModelThinking, equivalentThink } = exports
 
 // Réponses /api/show réduites à ce qui compte, d'après les fiches officielles vérifiées à l'étape 191.
 const QWEN38 = parseModelThinking({ capabilities: ['completion', 'tools', 'thinking'], thinking: { values: [false, 'low', 'medium', 'xhigh'], default: 'xhigh' } })
@@ -74,4 +74,21 @@ test('libellés et lecture tolérante de /api/show', () => {
   assert.equal(meta.canThink, null)
   assert.deepEqual([...meta.values], ['low'])
   assert.doesNotThrow(() => parseModelThinking(null))
+})
+
+// Étape 365 : réglages réels relus dans Ollama (server/model_thinking.go) — gemma4 « avec ou sans », défaut ramené à
+// « activée » par Ollama ; un modèle sans « off » ni niveau le plus bas.
+const GEMMA4 = parseModelThinking({ capabilities: ['completion', 'thinking'], thinking: { values: [false, true], default: true } })
+const LEVELS_NO_OFF = parseModelThinking({ capabilities: ['thinking'], thinking: { values: ['medium', 'xhigh'], default: 'xhigh' } })
+
+test('étape 365 : en duel, l’équivalent de « moyen » pour chaque modèle (Léo : « pas un low, un max et un sans »)', () => {
+  assert.equal(equivalentThink('medium', QWEN38), 'medium')
+  assert.equal(equivalentThink('medium', GPT_OSS), 'medium')
+  assert.equal(equivalentThink('medium', GEMMA4), true, 'gemma4 réfléchit aussi')
+  assert.equal(equivalentThink('medium', QWEN35), true)
+  assert.equal(equivalentThink('medium', CODER), false, 'sans réflexion : false, accepté par Ollama')
+  assert.equal(equivalentThink('medium', null), 'medium', 'Ollama muet : tel quel')
+  assert.equal(equivalentThink('medium', parseModelThinking({ capabilities: ['thinking'], thinking: { values: ['low', 'high'], default: 'high' } })), 'low')
+  assert.equal(equivalentThink('medium', LEVELS_NO_OFF), 'medium')
+  assert.equal(equivalentThink('low', LEVELS_NO_OFF), 'medium', 'rien en dessous : le plus petit niveau')
 })

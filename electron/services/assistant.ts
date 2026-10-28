@@ -321,6 +321,11 @@ export interface ConverseRestrictions {
    * pas compter contre un modèle une panne de Jaris ou d'internet (recherche bloquée, vision injoignable…).
    */
   onToolFailure?: (tool: string, error: unknown) => void
+  /**
+   * Étape 365 (Duel, Léo : « ça se fait pas un modèle avec raisonnement low et un autre max ») : la réflexion imposée,
+   * le MÊME niveau pour les deux modèles d'un duel, traduit dans les réglages de chacun (equivalentThink).
+   */
+  think?: ThinkValue
 }
 
 /**
@@ -769,6 +774,7 @@ async function conversation(
   // Étape 355 : jamais en duel — le réglage choisi pour un modèle avantagerait un seul des deux.
   const thinkChoice = restrictions?.model ? undefined : profile?.thinkChoices?.[channel]
   const withEffort = async (r: { model: string; think: ThinkLevel | ThinkValue }): Promise<{ model: string; think: ThinkLevel | ThinkValue }> => {
+    if (restrictions?.think !== undefined) return { model: r.model, think: restrictions.think }
     if (!thinkChoice) return r
     const think = chosenThink(thinkChoice, r.model, await getModelThinking(r.model))
     return think === undefined ? r : { model: r.model, think }

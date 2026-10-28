@@ -104,6 +104,33 @@ export function chosenThink(stored: StoredThinkChoice | null | undefined, model:
   return isAcceptedThink(stored.think, meta) ? stored.think : undefined
 }
 
+/** Rang des niveaux nommés connus, du plus léger au plus poussé (« off » compte comme aucune réflexion). */
+const THINK_RANK: Record<string, number> = { off: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5 }
+
+/**
+ * Étape 365 (Léo : « ça se fait pas un modèle avec raisonnement low, un autre max et un autre qui n'en a pas ») : en
+ * duel, TOUS les modèles reçoivent le même niveau, chacun traduit dans SES réglages — Léo a choisi « moyen », comme
+ * les tests d'appel d'outils. Niveaux nommés : ce niveau s'il existe, sinon le plus haut qui ne le dépasse pas (sinon le
+ * plus petit) ; avec ou sans : activée ; aucune réflexion : false, qu'Ollama
+ * accepte pour tous les modèles (server/routes.go : seul un `think` vrai est refusé) ; Ollama muet : le niveau tel quel.
+ */
+export function equivalentThink(level: string, meta: ModelThinking | null): ThinkValue {
+  const kind = thinkingKind(meta)
+  const wanted = THINK_RANK[level]
+  if (kind === 'unknown' || wanted === undefined) return level
+  if (kind === 'none') return false
+  if (kind === 'toggle') return wanted > 0
+  const values = meta?.values ?? []
+  if (values.includes(level)) return level
+  if (wanted === 0 && values.includes(false)) return false
+  const named = values
+    .filter((v): v is string => typeof v === 'string' && THINK_RANK[v] !== undefined)
+    .sort((a, b) => THINK_RANK[a] - THINK_RANK[b])
+  if (!named.length) return level
+  const notAbove = named.filter((v) => THINK_RANK[v] <= wanted)
+  return notAbove.length ? notAbove[notAbove.length - 1] : named[0]
+}
+
 /** Lecture tolérante de la réponse de `/api/show` : un champ absent ou d'un type inattendu vaut « inconnu ». */
 export function parseModelThinking(data: unknown): ModelThinking {
   const body = (data ?? {}) as { capabilities?: unknown; thinking?: { values?: unknown; default?: unknown } }

@@ -124,6 +124,8 @@ export interface GenerateAppOptions {
    */
   model?: string
   persist?: boolean
+  /** Étape 365 (Duel) : la réflexion imposée, la même pour les deux modèles (equivalentThink). */
+  think?: ThinkLevel | ThinkValue
 }
 
 /** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
@@ -198,6 +200,8 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
     let charsWritten = 0
     let thinking = true
     let thoughts = ''
+    // Étape 365 : toute la réflexion reçue, pas seulement la fin gardée dans `thoughts`.
+    let thinkingChars = 0
     let lastActivity = Date.now()
     // Étape 325 : début de l'appel, pour dire depuis combien de temps le modèle se charge, lit ou réfléchit.
     let startedAt = lastActivity
@@ -238,6 +242,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         idleMs: now - lastActivity,
         elapsedMs: now - startedAt,
         phase,
+        thinkingChars,
         ...(phase === 'thinking' && thoughts ? { thinkingText: thoughts } : {})
       })
     }
@@ -276,6 +281,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
           const changed = phase !== 'writing' && phase !== 'thinking'
           if (phase !== 'writing') phase = 'thinking'
           thoughts = (thoughts + delta).slice(-THINKING_TAIL_CHARS)
+          thinkingChars += delta.length
           lastActivity = Date.now()
           emit(!changed)
         }
@@ -297,6 +303,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         charsWritten = 0
         thinking = true
         thoughts = ''
+        thinkingChars = 0
         phase = 'reading'
         lastActivity = Date.now()
         startedAt = lastActivity
@@ -883,7 +890,7 @@ export async function generateApp(
   const model = options.model ?? (await resolveCodeModel(onStatus, profile))
   const modelMaxContext = await readModelMaxContext(model)
 
-  const think = options.model ? 'high' : await resolveCodeThink(profile, model)
+  const think = options.think ?? (options.model ? 'high' : await resolveCodeThink(profile, model))
   const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string => withImageDescription(base, imageDescription)

@@ -9580,6 +9580,21 @@ ol.reply-list > li::marker {
   color: var(--hud-text-faint);
 }
 
+/* Étape 365 : la preuve que le modèle avance (étape, caractères), et son silence dit en clair. */
+.duel-side__progress {
+  margin: -4px 0 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-text-faint);
+}
+
+.duel-side__stall {
+  color: var(--hud-gold);
+}
+
 .duel-side__pulse {
   flex-shrink: 0;
   width: 8px;
