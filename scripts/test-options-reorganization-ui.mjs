@@ -119,7 +119,7 @@ const overrides = {
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
-      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0 },
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
       { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5 },
       { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4 }
     ]
@@ -411,20 +411,19 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     // Étape 243 : la colonne des demandes complètes, à côté de l'appel d'outils ; « — » sans score.
     assert.equal(rows[0][5], '33/48', `score de demandes attendu : ${rows[0][5]}`)
     assert.equal(rows[1][5], '—', `pas de score de demandes : ${rows[1][5]}`)
-    assert.equal(rows[0][6], '4,8', `Intelligence Index attendu (4,8, avec sa décimale) : ${rows[0][6]}`)
-    // Étape 329 (Léo : « il y a pas écrit le score Terminal-Bench ») : les deux mesures qui comptent dans le choix
-    // depuis l'étape 328 ont leur colonne. Un 0 % publié s'écrit « 0 % », jamais « — » (ce n'est pas une absence).
-    const spaces = (text) => text.replace(/[\u00a0\u202f]/g, ' ')
-    assert.equal(rows[0][7], '-64', `Omniscience attendue : ${rows[0][7]}`)
-    assert.equal(spaces(rows[0][8]), '0 %', `Terminal-Bench publié à 0 % : ${rows[0][8]}`)
-    assert.equal(spaces(rows[2][8]), '43,4 %', `Terminal-Bench attendu : ${rows[2][8]}`)
-    // qwen3:1.7b n'a pas de champ terminalBench du tout (réponse d'une version plus ancienne) : « — », jamais « undefined ».
-    assert.equal(rows[1][8], '—', `pas de Terminal-Bench publié : ${rows[1][8]}`)
-    // "Vitesse (Artificial Analysis)" : "—" quand Artificial Analysis n'a pas publié de mesure fiable.
+    // Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — les points de duel par
+    // catégorie (Conversation, Code, Vocal), « — » pour un modèle jamais passé en duel.
+    const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent?.trim() ?? ''))
+    assert.ok(!headers.some((h) => /Intelligence|Omniscience|Terminal|Artificial/.test(h)), `colonnes d'Artificial Analysis encore là : ${headers}`)
+    assert.ok(headers[6].startsWith('Duels Conversation') && headers[7].startsWith('Duels Code') && headers[8].startsWith('Duels Vocal'), `colonnes de duels : ${headers}`)
+    assert.equal(rows[0][6], '0', `points de duel Conversation : ${rows[0][6]}`)
+    assert.equal(rows[0][7], '+120', `points de duel Code : ${rows[0][7]}`)
+    assert.equal(rows[0][8], '—', `jamais en duel Vocal : ${rows[0][8]}`)
+    assert.equal(rows[1][7], '—', `jamais en duel : ${rows[1][7]}`)
+    assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(8)', (el) => el.getAttribute('title')), 'Duels : 3')
+    // Vitesse : « — » sans mesure.
     assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
-    // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
-    assert.equal(rows[1][6], 'Non publié', `absence de score officiel attendue : ${rows[1][6]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')
@@ -451,6 +450,7 @@ const LONG_OVERVIEW = [
   toolCalling: `${50 + i}/78`, demands: /vl|coder|GLM/.test(model) ? null : `${20 + i}/48`, intelligence: null,
   artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null,
   omniscience: i % 7 === 0 ? null : -77.5 + i * 2.3, terminalBench: i % 6 === 0 ? null : 10 + i * 2.9,
+  duels: i % 4 === 0 ? {} : { conversation: { points: -345 + i * 31, duels: i }, code: { points: 1234 - i * 97, duels: i }, voice: { points: -9 * i, duels: i } },
   quantization: i % 9 === 4 ? 'Q8_0' : 'Q4_K_M'
 }))
 
@@ -684,7 +684,7 @@ test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à devin
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Intelligence', 'Omniscience', 'Terminal-Bench', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.
@@ -697,11 +697,11 @@ test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à devin
     assert.equal(style.cursor, 'pointer', 'la pastille doit se signaler comme cliquable')
 
     // Cliquer une pastille trie pour de vrai, et la pastille active se distingue des autres.
-    await page.locator('.options-menu__sort-chip', { hasText: 'Intelligence' }).first().click()
+    await page.locator('.options-menu__sort-chip', { hasText: 'Duels Code' }).first().click()
     const pressed = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) =>
       els.filter((el) => el.getAttribute('aria-pressed') === 'true').map((el) => el.textContent?.trim())
     )
-    assert.deepEqual(pressed, ['Intelligence ▼'], `une seule pastille active attendue : ${pressed.join(', ')}`)
+    assert.deepEqual(pressed, ['Duels Code ▼'], `une seule pastille active attendue : ${pressed.join(', ')}`)
   })
 })
 
@@ -739,12 +739,13 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.locator('.options-menu__sort-button', { hasText: 'Demandes complètes' }).first().click()
     assert.equal((await models())[0], 'ministral-3:3b', 'le seul modèle avec un score de demandes doit passer en tête')
 
-    // Étape 329 : Omniscience et Terminal-Bench se trient du meilleur au moins bon au premier clic ; une mesure
-    // absente finit en dernier, mais un 0 % publié reste une vraie valeur (avant l'absence).
-    await page.locator('.options-menu__sort-button', { hasText: 'Omniscience' }).first().click()
-    assert.deepEqual(await models(), ['gemma4:31b', 'ministral-3:3b', 'qwen3:1.7b'], 'Omniscience : la plus haute en tête')
-    await page.locator('.options-menu__sort-button', { hasText: 'Terminal-Bench' }).first().click()
-    assert.deepEqual(await models(), ['gemma4:31b', 'ministral-3:3b', 'qwen3:1.7b'], 'Terminal-Bench : 43,4 %, puis 0 %, puis rien de publié')
+    // Étape 370 : les points de duel se trient du meilleur au moins bon ; un modèle jamais en duel finit en dernier,
+    // mais 0 point (déjà en duel, à égalité) reste une vraie valeur.
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    await page.locator('.options-menu__sort-button', { hasText: 'Duels Code' }).first().click()
+    assert.equal((await models())[0], 'ministral-3:3b', 'Duels Code : le seul modèle voté en tête')
+    await page.locator('.options-menu__sort-button', { hasText: 'Duels Conversation' }).first().click()
+    assert.equal((await models())[0], 'ministral-3:3b', '0 point (voté) passe devant « jamais en duel »')
   })
 })
 

@@ -508,6 +508,11 @@ export interface ModelOverviewEntry {
   /** Étape 331 : version compressée téléchargée (« Q4_K_M », « Q8_0 », « MXFP4 »), voir MODEL_QUANTIZATION. */
   quantization?: string | null
   /**
+   * Étape 370, Léo (« pourquoi il y a encore les anciens scores de Terminal-Bench et d'Artificial Analysis ») : les
+   * points de duel de ce modèle par catégorie (ce qui décide maintenant), absents tant qu'il n'a jamais été voté.
+   */
+  duels?: Partial<Record<'conversation' | 'code' | 'voice', { points: number; duels: number }>>
+  /**
    * Étape 329, Léo (« ça utilise combien de pourcentage ») : le calcul de la note de ce modèle pour le rôle où il
    * est affiché, facteur par facteur. Seulement dans « Modèles utilisés sur ta machine » (une note n'a de sens que
    * pour UN rôle) ; absent ailleurs.

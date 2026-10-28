@@ -10047,3 +10047,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `node scripts/import-duel-votes.mjs <export.json>` (vérifie le format, sans doublon, trié par date). 3 votes Code
   aujourd'hui : aucun modèle en service ne change (règle ≥ 5 duels et > 95 %). Régression :
   `node --test scripts/test-shared-duel-votes.mjs` (vérifié en retirant le dédoublonnage).
+
+- **Étape 370 (v0.40.12), Léo : « pourquoi il y a encore les anciens scores de Terminal-Bench et d'Artificial
+  Analysis » puis « tout enlever ».** Depuis l'étape 358, ce sont les duels qui décident pour Faible, Moyen, Élevé et
+  Code, mais « Tous les modèles » montrait encore Intelligence, Omniscience et Terminal-Bench. Ces trois colonnes (et
+  leurs tris, 7 clés retirées des 24 langues) sont remplacées par les points de duel de chaque catégorie (Duels
+  Conversation, Code, Vocal), triables, « — » pour un modèle jamais voté, nombre de duels en infobulle
+  (`ModelOverviewEntry.duels`, `duelPointsOf`, hardwareScan.ts : votes de la catégorie elle-même, sans le repli Vocal →
+  Conversation). Texte d'aide réécrit. Les tables d'Artificial Analysis restent dans le code : l'intelligence sert
+  encore au choix du modèle Vision, la vitesse publiée de repli. **Piège de manipulation** :
+  `open(p,'w').write(f(open(p).read()))` en Python vide le fichier AVANT de le lire (l'ouverture en écriture est
+  évaluée la première) — fr.ts entier perdu, restauré par git ; toujours lire, puis écrire en deux instructions.
+  Régression : `scripts/test-options-reorganization-ui.mjs` (plus aucune colonne d'Artificial Analysis, points et
+  « — », infobulle, tri, largeur à 1000 px avec des points de duel).

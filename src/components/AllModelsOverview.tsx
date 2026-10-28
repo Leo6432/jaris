@@ -4,9 +4,8 @@ import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
-import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
-import { formatDecimal, formatPercent, t } from '@/lib/i18n'
+import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 import { FUTURE_MODELS } from '../../shared/futureModels'
 import { shownSpeed } from '../lib/shownSpeed'
@@ -69,7 +68,7 @@ const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash
  * comptent dans le choix depuis l'étape 328 ont leur colonne — Omniscience (« n'invente pas », Faible/Moyen/Élevé)
  * et Terminal-Bench 2.1 (Code) —, triables comme les autres, du meilleur au moins bon au premier clic.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'artificialAnalysisIndex' | 'omniscience' | 'terminalBench' | 'artificialAnalysisSpeed'
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'artificialAnalysisSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -78,9 +77,9 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   vramGb: 'asc',
   toolCalling: 'desc',
   demands: 'desc',
-  artificialAnalysisIndex: 'desc',
-  omniscience: 'desc',
-  terminalBench: 'desc',
+  duelConversation: 'desc',
+  duelCode: 'desc',
+  duelVoice: 'desc',
   artificialAnalysisSpeed: 'desc'
 }
 
@@ -88,9 +87,9 @@ const SORT_LABELS: Record<SortKey, MessageKey> = {
   vramGb: 'models.sort.vram',
   toolCalling: 'models.sort.tools',
   demands: 'models.sort.demands',
-  artificialAnalysisIndex: 'models.sort.intelligence',
-  omniscience: 'models.sort.omniscience',
-  terminalBench: 'models.sort.terminalBench',
+  duelConversation: 'models.sort.duelConversation',
+  duelCode: 'models.sort.duelCode',
+  duelVoice: 'models.sort.duelVoice',
   artificialAnalysisSpeed: 'models.sort.speed'
 }
 
@@ -100,13 +99,13 @@ const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
   vramGb: 'models.chip.vram',
   toolCalling: 'models.sort.tools',
   demands: 'options.score.requests',
-  artificialAnalysisIndex: 'models.chip.intelligence',
-  omniscience: 'models.chip.omniscience',
-  terminalBench: 'models.chip.terminalBench',
+  duelConversation: 'models.sort.duelConversation',
+  duelCode: 'models.sort.duelCode',
+  duelVoice: 'models.sort.duelVoice',
   artificialAnalysisSpeed: 'models.chip.speed'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'artificialAnalysisIndex', 'omniscience', 'terminalBench', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'duelConversation', 'duelCode', 'duelVoice', 'artificialAnalysisSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -140,7 +139,21 @@ function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'demands') return toolScoreValue(entry.demands ?? null)
   // `?? null` : une mesure absente (y compris d'une réponse plus ancienne sans ce champ) reste toujours en fin de liste.
   if (key === 'artificialAnalysisSpeed') return shownSpeed(entry).value
+  if (key === 'duelConversation') return entry.duels?.conversation?.points ?? null
+  if (key === 'duelCode') return entry.duels?.code?.points ?? null
+  if (key === 'duelVoice') return entry.duels?.voice?.points ?? null
   return entry[key] ?? null
+}
+
+/** Points de duel façon Arena (étape 358) : « 0 », « +120 », « -45 » ; « — » pour un modèle jamais passé en duel. */
+function DuelCell({ cell }: { cell: { points: number; duels: number } | undefined }): JSX.Element {
+  if (!cell) return <td className="options-menu__col-num">—</td>
+  const rounded = Math.round(cell.points)
+  return (
+    <td className="options-menu__col-num" title={t('models.duel.count', { count: cell.duels })}>
+      {`${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`}
+    </td>
+  )
 }
 
 function sortEntries(entries: ModelOverviewEntry[], sort: SortState): ModelOverviewEntry[] {
@@ -314,17 +327,13 @@ export default function AllModelsOverview(): JSX.Element {
                               <th className="options-menu__col-num" title={t('models.col.demands.title')}>
                                 <SortButton sortKey="demands" sort={sort} onSort={toggleSort} />
                               </th>
-                              {/* Intelligence Index lu directement chez Artificial Analysis. */}
-                              <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
-                                <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
-                              </th>
-                              {/* Étape 329 : les deux mesures qui comptent dans le choix depuis l'étape 328. */}
-                              <th className="options-menu__col-num" title={t('picks.omniscience.title')}>
-                                <SortButton sortKey="omniscience" sort={sort} onSort={toggleSort} />
-                              </th>
-                              <th className="options-menu__col-num" title={t('picks.terminalBench.title')}>
-                                <SortButton sortKey="terminalBench" sort={sort} onSort={toggleSort} />
-                              </th>
+                              {/* Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — ce sont
+                                  les points de duel qui décident, une colonne par catégorie de duel. */}
+                              {(['duelConversation', 'duelCode', 'duelVoice'] as const).map((key) => (
+                                <th key={key} className="options-menu__col-num" title={t('models.col.duel.title')}>
+                                  <SortButton sortKey={key} sort={sort} onSort={toggleSort} />
+                                </th>
+                              ))}
                               <th className="options-menu__col-num" title={t('models.col.speed.title')}>
                                 <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
                               </th>
@@ -354,9 +363,9 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.demands ?? null} />
                                 </td>
-                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? t('models.notPublished') : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
-                                <td className="options-menu__col-num">{entry.omniscience == null ? '—' : formatDecimal(entry.omniscience)}</td>
-                                <td className="options-menu__col-num">{entry.terminalBench == null ? '—' : formatPercent(entry.terminalBench / 100)}</td>
+                                <DuelCell cell={entry.duels?.conversation} />
+                                <DuelCell cell={entry.duels?.code} />
+                                <DuelCell cell={entry.duels?.voice} />
                                 <SpeedCell entry={entry} />
                               </tr>
                             ))}
@@ -380,7 +389,7 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>
-                                <td className="options-menu__col-num">{t('models.notPublished')}</td>
+                                <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>

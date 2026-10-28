@@ -1659,7 +1659,7 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
 }
 
 /** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
-function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'localSpeed' | 'localSpeedKind' | 'omniscience' | 'terminalBench' | 'quantization'> {
+function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'localSpeed' | 'localSpeedKind' | 'omniscience' | 'terminalBench' | 'quantization' | 'duels'> {
   return {
     quantization: MODEL_QUANTIZATION[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
@@ -1669,8 +1669,21 @@ function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAna
       return { localSpeed: local.speed, localSpeedKind: local.kind }
     })(),
     omniscience: ARTIFICIAL_ANALYSIS_OMNISCIENCE[model] ?? null,
-    terminalBench: ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model] ?? null
+    terminalBench: ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model] ?? null,
+    duels: duelPointsOf(model)
   }
+}
+
+/** Étape 370 : points de duel par catégorie (votes de la catégorie elle-même, sans le repli Vocal → Conversation). */
+function duelPointsOf(model: string): NonNullable<ModelOverviewEntry['duels']> {
+  const out: NonNullable<ModelOverviewEntry['duels']> = {}
+  for (const category of ['conversation', 'code', 'voice'] as const) {
+    const standing = duelStandings(category).get(model)
+    if (standing && standing.duels > 0) {
+      out[category] = { points: Math.log(standing.strength) * DUEL_POINTS_PER_UNIT, duels: standing.duels }
+    }
+  }
+  return out
 }
 
 /**
