@@ -188,7 +188,7 @@ export interface DuelStanding {
  * et ne dépend pas de l'ordre des votes — contrairement à un Elo, où le même ensemble de votes rejoué dans un autre
  * ordre donne un autre classement.
  */
-export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding> {
+export function rankDuels(votes: readonly DuelVote[], sigma: number = ARENA_SIGMA): Map<string, DuelStanding> {
   // Résultats regroupés par paire (i < j dans l'ordre alphabétique) : ce sont les paires qu'on parcourt, pas les votes.
   const pairs = new Map<string, { i: string; j: string; n: number; scoreI: number }>()
   const standings = new Map<string, DuelStanding>()
@@ -226,7 +226,7 @@ export function rankDuels(votes: readonly DuelVote[]): Map<string, DuelStanding>
 
   const models = [...standings.keys()]
   const index = new Map(models.map((m, k) => [m, k]))
-  const precision = 1 / ARENA_SIGMA ** 2
+  const precision = 1 / sigma ** 2
   const byModel = new Map<string, Array<{ other: string; n: number; score: number }>>()
   for (const m of models) byModel.set(m, [])
   for (const { i, j, n, scoreI } of pairs.values()) {
@@ -316,6 +316,22 @@ export function probabilityBetter(
   const diff = (challenger.score - incumbent.score) / DUEL_POINTS_PER_UNIT
   const sd = Math.sqrt(Math.max(1e-12, cc + ii - 2 * ci))
   return normalCdf(diff / sd)
+}
+
+/**
+ * Étape 361 (relecture de ChatGPT, acceptée par Léo) : pour REMPLACER un modèle en service, l'a priori large du
+ * classement affiché (ARENA_SIGMA, plus de 490 points d'écart possibles entre deux modèles) est trop optimiste — 5
+ * victoires sur 5 y donnaient déjà 96 %. La décision suppose donc un écart a priori de SWITCH_PRIOR_ELO points entre
+ * deux modèles (écart-type de la différence), soit SWITCH_SIGMA par modèle. Vérifié contre un calcul exact et par
+ * simulation (test-duel.mjs, notes de l'étape 361). Le classement affiché, lui, ne change pas.
+ */
+export const SWITCH_PRIOR_ELO = 150
+export const SWITCH_SIGMA = SWITCH_PRIOR_ELO / DUEL_POINTS_PER_UNIT / Math.SQRT2
+
+/** Probabilité, pour la décision de remplacement, que `challenger` soit meilleur que `incumbent` (votes d'UNE catégorie). */
+export function switchProbability(votes: readonly DuelVote[], challenger: string, incumbent: string): number | null {
+  const standings = rankDuels(votes, SWITCH_SIGMA)
+  return probabilityBetter(standings.get(challenger), standings.get(incumbent))
 }
 
 /** Fonction de répartition de la loi normale (approximation d'Abramowitz et Stegun, erreur < 1e-7). */

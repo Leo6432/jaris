@@ -47,7 +47,7 @@ function setup(votes, { vramMib = 8 * 1024, ramGb = 32 } = {}) {
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   exports.setOllamaVersionSource(() => '0.40.10')
   if (votes) exports.setDuelStrengthSource((category) => duel.rankDuels(votes.filter((v) => v.category === category)))
-  exports.setDuelProbability((c, i) => duel.probabilityBetter(c, i))
+  exports.setDuelProbability((category, c, i) => (votes ? duel.switchProbability(votes.filter((v) => v.category === category), c, i) : null))
   return exports
 }
 
@@ -84,14 +84,27 @@ test('modèle en service (étape 360) : remplacé seulement s’il est PROUVÉ m
   assert.equal(await pick(wins(3, LARGE, 'qwen3.5:27b', 'conversation')), 'qwen3.5:27b')
   // Victoires et défaites presque égales : jamais un changement entre deux modèles presque équivalents.
   assert.equal(await pick([...wins(7, LARGE, 'qwen3.5:27b', 'conversation'), ...wins(6, 'qwen3.5:27b', LARGE, 'conversation')]), 'qwen3.5:27b')
-  // Neuf duels, devant (7 victoires, 2 défaites) mais 94 % seulement : pas assez sûr, le modèle reste.
+  // Neuf duels, devant (7 victoires, 2 défaites) mais 90 % seulement (étape 361) : pas assez sûr, le modèle reste.
   assert.equal(await pick([...wins(7, LARGE, 'qwen3.5:27b', 'conversation'), ...wins(2, 'qwen3.5:27b', LARGE, 'conversation')]), 'qwen3.5:27b')
+  // Étape 361, a priori prudent de 150 points : 5 sur 5 donne 93,7 % (gardé), 6 sur 6 donne 95,9 % (remplacé).
+  assert.equal(await pick(wins(5, LARGE, 'qwen3.5:27b', 'conversation')), 'qwen3.5:27b')
+  assert.equal(await pick(wins(6, LARGE, 'qwen3.5:27b', 'conversation')), LARGE)
+  // 5 victoires et 3 égalités : 91 %, gardé (une égalité n'est pas une preuve).
+  const ties = Array.from({ length: 3 }, () => ({ ...wins(1, LARGE, 'qwen3.5:27b', 'conversation')[0], outcome: 'tie' }))
+  assert.equal(await pick([...wins(5, LARGE, 'qwen3.5:27b', 'conversation'), ...ties]), 'qwen3.5:27b')
   // Assez de victoires : prouvé, le modèle change.
   assert.equal(await pick(wins(8, LARGE, 'qwen3.5:27b', 'conversation')), LARGE)
   // Le même modèle en service pour le Code : des victoires Code tout juste ne suffisent pas non plus.
   const code = async (n) => (await setup(wins(n, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark(new Set(), inService)).codeModel
   assert.equal(await code(3), 'ornith-1.5:35b')
   assert.equal(await code(8), LARGE)
+})
+
+test('modèle en service, Vocal (étape 361) : la probabilité est calculée sur les votes de la catégorie retenue', async () => {
+  const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' }, codeModel: 'ornith-1.5:35b' }
+  const picks = await setup(wins(8, LARGE, 'qwen3.5:27b', 'voice')).pickBestModelsFromBenchmark(new Set(), inService)
+  assert.equal(picks.models.large, 'qwen3.5:27b', 'le Chat n’a aucun vote : il garde son modèle')
+  assert.equal(picks.voiceModels?.large, LARGE, 'la voix a ses propres votes, qui prouvent le challenger')
 })
 
 test('modèle en service : moins de 5 duels ne suffit jamais, même avec une probabilité donnée à 99 %', async () => {
@@ -217,7 +230,8 @@ test('main.ts branche la source des votes, et le classement de l’écran est ce
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   assert.match(main, /setDuelStrengthSource\(\(category: DuelCategory\) => \{/)
   assert.match(main, /rankDuels\(votes\.filter\(\(v\) => v\.category === category\)\)/)
-  assert.match(main, /setDuelProbability\(\(challenger, incumbent\) => probabilityBetter\(/)
+  assert.match(main, /setDuelProbability\(\(category, challenger, incumbent\) => \{/)
+  assert.match(main, /switchProbability\(votes\.filter\(\(v\) => v\.category === category\), challenger, incumbent\)/)
   const session = readFileSync(new URL('../electron/services/duelSession.ts', import.meta.url), 'utf8')
   assert.match(session, /rankDuels\(votes\)/)
 })

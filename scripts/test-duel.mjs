@@ -78,6 +78,89 @@ test('probabilité d’être meilleur (étape 360) : comparaison directe des deu
   assert.ok(confident > 0 && right / confident >= 0.9, `${right}/${confident} justes`)
 })
 
+test('étape 361 : probabilité de remplacement avec l’a priori prudent (150 points), cas limites', () => {
+  const votes = (w, l, t = 0) => [
+    ...Array.from({ length: w }, () => vote('c', 'i', 'a')),
+    ...Array.from({ length: l }, () => vote('c', 'i', 'b')),
+    ...Array.from({ length: t }, () => vote('c', 'i', 'tie'))
+  ]
+  const p = (w, l, t) => duel.switchProbability(votes(w, l, t), 'c', 'i')
+  assert.ok(p(5, 0) < 0.95 && p(5, 0) > 0.93, `5-0 : ${p(5, 0)}`)
+  assert.ok(p(6, 0) > 0.95, `6-0 : ${p(6, 0)}`)
+  assert.ok(p(7, 2) < 0.95, `7-2 : ${p(7, 2)}`)
+  assert.ok(p(8, 0) > 0.98, `8-0 : ${p(8, 0)}`)
+  assert.ok(p(5, 0, 3) < 0.95, `5-0 + 3 égalités : ${p(5, 0, 3)}`)
+  assert.ok(Math.abs(p(3, 3) - 0.5) < 1e-9)
+  assert.equal(duel.switchProbability([], 'c', 'i'), null)
+  assert.equal(duel.switchProbability(votes(5, 0), 'c', 'absent'), null)
+  // Le classement affiché ne change pas : même résultat qu'avant, a priori ARENA_SIGMA.
+  const v = votes(7, 2, 1)
+  const shown = duel.rankDuels(v)
+  const explicit = duel.rankDuels(v, duel.ARENA_SIGMA)
+  for (const m of ['c', 'i']) assert.equal(shown.get(m).score, explicit.get(m).score)
+  // Et l'ancienne probabilité (v0.40.2) aurait déjà dit plus de 95 % à 5-0 : c'est le défaut corrigé.
+  const old = duel.rankDuels(votes(5, 0))
+  assert.ok(duel.probabilityBetter(old.get('c'), old.get('i')) > 0.95)
+})
+
+test('étape 361 : Laplace ne dépasse jamais le calcul exact, à moins d’un point (cas testés : 2 modèles, 0 à 12 votes, égalités)', () => {
+  // Calcul exact : a priori N(0, 2·SWITCH_SIGMA²) sur l'écart, vraisemblance Bradley-Terry (égalité = demi-victoire).
+  const sd = duel.SWITCH_SIGMA * Math.SQRT2
+  const exact = (w, l, t) => {
+    let num = 0
+    let den = 0
+    for (let k = -4000; k <= 4000; k++) {
+      const d = (k / 4000) * 8 * sd
+      const p = 1 / (1 + Math.exp(-d))
+      const logw = -(d * d) / (2 * sd * sd) + (w + t / 2) * Math.log(p) + (l + t / 2) * Math.log(1 - p)
+      const weight = Math.exp(logw)
+      den += weight
+      if (d > 0) num += weight
+      else if (d === 0) num += weight / 2
+    }
+    return num / den
+  }
+  for (let w = 0; w <= 12; w++) {
+    for (let l = 0; w + l <= 12; l++) {
+      for (const t of [0, 3]) {
+        if (w + l + t === 0) continue
+        const votes = [
+          ...Array.from({ length: w }, () => vote('c', 'i', 'a')),
+          ...Array.from({ length: l }, () => vote('c', 'i', 'b')),
+          ...Array.from({ length: t }, () => vote('c', 'i', 'tie'))
+        ]
+        const lap = duel.switchProbability(votes, 'c', 'i')
+        const ex = exact(w, l, t)
+        const gap = w >= l ? ex - lap : lap - ex
+        assert.ok(gap > -1e-3 && gap < 0.01, `${w}-${l}+${t} : Laplace ${lap}, exact ${ex}`)
+      }
+    }
+  }
+})
+
+test('étape 361 : simulation des 3 conditions ensemble (graine fixe, sessions indépendantes, 4 modèles)', async () => {
+  const sim = await import('./duel-switch-sim.mjs')
+  const run = (sigmaElo, votesPerSession, prob) => sim.simulate({ sigmaElo, votesPerSession, sessions: 1500, prob })
+  // Écarts nets entre modèles : presque aucun changement à tort, intervalle de Wilson compris.
+  for (const sigma of [100, 300]) {
+    const r = run(sigma, 40, sim.switchProb)
+    assert.ok(r.switches > 50, `σ=${sigma} : trop peu de changements (${r.switches})`)
+    assert.ok(r.wrongCi[1] < 0.05, `σ=${sigma} : ${r.wrong}/${r.switches} à tort`)
+  }
+  // Modèles presque équivalents : le risque n'est pas nul, mais la perte moyenne est plus faible qu'en v0.40.2.
+  for (const [sigma, n] of [[25, 12], [50, 12], [50, 40]]) {
+    const neu = run(sigma, n, sim.switchProb)
+    const old = run(sigma, n, sim.oldProb)
+    assert.ok(neu.meanLoss <= old.meanLoss, `σ=${sigma}, ${n} votes : perte ${neu.meanLoss} contre ${old.meanLoss}`)
+    assert.ok(neu.harmful <= old.harmful, `σ=${sigma}, ${n} votes : nuisibles ${neu.harmful} contre ${old.harmful}`)
+  }
+  // Reproductible : même graine, mêmes chiffres.
+  const a = run(50, 12, sim.switchProb)
+  const b = run(50, 12, sim.switchProb)
+  assert.equal(JSON.stringify(a), JSON.stringify(b))
+  assert.ok(Math.abs(sim.wilson(5, 100)[0] - 0.0215) < 1e-3 && Math.abs(sim.wilson(5, 100)[1] - 0.1118) < 1e-3)
+})
+
 test('marge à 95 % : comparée à un bootstrap sur des votes simulés (étape 359)', () => {
   // Cinq modèles de forces connues, votes tirés au hasard (graine fixe) ; 200 rééchantillonnages des votes.
   let seed = 7

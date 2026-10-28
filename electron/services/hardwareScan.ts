@@ -1493,8 +1493,6 @@ export interface DuelVotedStanding {
   model?: string
   strength: number
   duels: number
-  score?: number
-  covariance?: Record<string, number>
 }
 export type DuelStrengthSource = (category: DuelCategory) => ReadonlyMap<string, DuelVotedStanding>
 let duelStrengthSource: DuelStrengthSource | null = null
@@ -1503,10 +1501,11 @@ export function setDuelStrengthSource(source: DuelStrengthSource | null): void {
 }
 
 /**
- * Étape 360 : probabilité qu'un modèle soit réellement meilleur qu'un autre d'après leurs duels (probabilityBetter,
- * shared/duel.ts), branchée par main.ts comme la source des votes. Sans elle, aucun modèle en service n'est remplacé.
+ * Étape 360 : probabilité qu'un modèle soit réellement meilleur qu'un autre d'après leurs duels d'UNE catégorie
+ * (switchProbability, shared/duel.ts : a priori prudent de l'étape 361, pas celui du classement affiché), branchée par
+ * main.ts comme la source des votes. Sans elle, aucun modèle en service n'est remplacé.
  */
-export type DuelProbability = (challenger: DuelVotedStanding, incumbent: DuelVotedStanding) => number | null
+export type DuelProbability = (category: DuelCategory, challenger: string, incumbent: string) => number | null
 let duelProbability: DuelProbability | null = null
 export function setDuelProbability(fn: DuelProbability | null): void {
   duelProbability = fn
@@ -1529,12 +1528,13 @@ function provenBetter(category: DuelCategory, challenger: string, incumbent: str
   if (!duelProbability) return false
   // Voix : ses propres votes quand les deux modèles y figurent, sinon ceux de la Conversation.
   const own = duelStandings(category)
-  const standings =
-    category === 'voice' && !(own.has(challenger) && own.has(incumbent)) ? duelStandings('conversation') : own
+  const source: DuelCategory =
+    category === 'voice' && !(own.has(challenger) && own.has(incumbent)) ? 'conversation' : category
+  const standings = source === category ? own : duelStandings(source)
   const c = standings.get(challenger)
   const i = standings.get(incumbent)
   if (!c || !i || c.duels < DUEL_MIN_FOR_SWITCH) return false
-  const p = duelProbability({ ...c, model: challenger }, { ...i, model: incumbent })
+  const p = duelProbability(source, challenger, incumbent)
   return p !== null && p > DUEL_SWITCH_PROBABILITY
 }
 

@@ -9823,3 +9823,47 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-duel.mjs` (probabilité, contrôle par simulation) et `test-hardwarescan-duel.mjs` (aucun vote,
   3 victoires, 7-6, 7-2 : gardé ; 8 victoires : remplacé ; 4 duels même à 99 % : gardé ; gain sous 5 % : gardé ; sans
   probabilité branchée : gardé). Chaque garde vérifiée en la retirant.
+
+- **Étape 361 (v0.40.3), relecture de ChatGPT acceptée par Léo : la probabilité de remplacement de l'étape 360
+  était trop optimiste.** Elle réutilisait l'a priori du classement AFFICHÉ (ARENA_SIGMA = 2 par modèle, soit plus
+  de 490 points d'écart possibles entre deux modèles) : 5 victoires sur 5 donnaient déjà 96 %, alors que deux
+  modèles locaux sont souvent proches. La DÉCISION de remplacer utilise maintenant un a priori prudent : écart
+  a priori de 150 points entre deux modèles (`SWITCH_PRIOR_ELO`, `SWITCH_SIGMA = 150 / DUEL_POINTS_PER_UNIT / √2`
+  par modèle, `switchProbability`, shared/duel.ts), sur les votes de la catégorie retenue (voix si les deux modèles
+  y ont des votes, sinon conversation ; `DuelProbability(category, challenger, incumbent)`, cache par jeu de votes
+  dans main.ts). Le classement affiché ne change pas. Les 3 conditions restent (≥ 5 duels, > 95 %, note ≥ +5 %).
+  **Pas de double comptage** : la probabilité ne lit que les votes ; la note = force des duels × réussite⁵ ×
+  demandes ; le +5 % compare les notes.
+  Cas limites (deux modèles, Laplace de Jaris / calcul exact par intégration) : 5-0 93,7 / 94,5 % (gardé) ; 6-0
+  95,9 / 96,7 % (remplacé) ; 7-2 90,4 / 91,2 % (gardé) ; 8-0 98,3 / 98,8 % (remplacé) ; 5-0 + 3 égalités 91,1 /
+  91,9 % (gardé) ; 3-3 50 %. Laplace est un peu sous le calcul exact, à moins d'un point — **vérifié seulement pour
+  les cas testés** (2 modèles, 0 à 12 votes, 0 ou 3 égalités), pas une garantie générale.
+  **Simulation des 3 conditions ensemble** (`scripts/duel-switch-sim.mjs`, graine 361, 4 000 sessions
+  indépendantes par case, une graine dérivée par session). Protocole : 4 modèles, vraie force de chacun tirée de
+  N(0, σ) (l'écart entre deux modèles a donc un écart-type σ√2) ; paires « les moins essayées d'abord », A/B au
+  hasard ; 15 % d'égalités ; modèle en service = le premier ; en fin de session, le meilleur du classement affiché
+  le remplace s'il remplit les 3 conditions. « À tort » = vers un modèle vraiment moins bon ; « nuisible » = moins
+  bon de plus de 25 points ; perte = points perdus par session (0 sans changement). Taux en part des changements,
+  intervalles de Wilson à 95 % ; perte avec un intervalle bootstrap :
+  | σ | votes | v0.40.2 : changements / à tort / nuisibles / perte | v0.40.3 : changements / à tort / nuisibles / perte |
+  |---|---|---|---|
+  | 25 | 12 | 200 / 42,0 % (35,4-48,9) / 15,5 % (11,1-21,2) / 0,46 (0,34-0,59) | 19 / 47,4 % (27,3-68,3) / 10,5 % (2,9-31,4) / 0,03 (0,01-0,06) |
+  | 25 | 40 | 358 / 24,6 % (20,4-29,3) / 7,0 % (4,8-10,1) / 0,39 (0,28-0,49) | 179 / 23,5 % (17,9-30,2) / 5,6 % (3,1-10,0) / 0,17 (0,10-0,24) |
+  | 50 | 12 | 213 / 26,3 % (20,8-32,6) / 13,1 % (9,3-18,3) / 0,46 (0,31-0,61) | 18 / 33,3 % (16,3-56,3) / 11,1 % (3,1-32,8) / 0,04 (0,01-0,08) |
+  | 50 | 40 | 509 / 11,4 % (8,9-14,4) / 4,9 % (3,3-7,2) / 0,39 (0,26-0,52) | 294 / 8,2 % (5,5-11,9) / 2,4 % (1,2-4,8) / 0,11 (0,05-0,17) |
+  | 100 | 12 | 346 / 8,4 % (5,9-11,8) / 4,3 % (2,6-7,0) / 0,31 (0,16-0,46) | 34 / 2,9 % (0,5-14,9) / 0,0 % (0,0-10,2) / 0,00 (0,00-0,01) |
+  | 100 | 40 | 958 / 2,5 % (1,7-3,7) / 0,7 % (0,4-1,5) / 0,15 (0,07-0,24) | 708 / 1,3 % (0,7-2,4) / 0,1 % (0,0-0,8) / 0,03 (0,01-0,06) |
+  | 300 | 12 | 787 / 0,4 % (0,1-1,1) / 0,4 % (0,1-1,1) / 0,03 (0,00-0,06) | 169 / 0,0 % (0,0-2,2) / 0,0 % (0,0-2,2) / 0,00 (0,00-0,00) |
+  | 300 | 40 | 1911 / 0,4 % (0,2-0,8) / 0,2 % (0,1-0,5) / 0,05 (0,01-0,09) | 1669 / 0,1 % (0,0-0,3) / 0,0 % (0,0-0,2) / 0,01 (0,00-0,02) |
+  Lecture : beaucoup moins de changements sur peu de votes, perte moyenne plus faible partout. **Le risque n'est pas
+  nul** : entre modèles presque équivalents (σ = 25-50), une part notable des rares changements reste à tort (jusqu'à
+  ~47 %, intervalle large), pour une perte faible. Les intervalles mesurent l'incertitude de la SIMULATION, pas
+  l'écart entre ces hypothèses (forces normales, 15 % d'égalités, votes sans biais) et les vrais votes de Léo.
+  Piste écartée pour l'instant : estimer l'a priori à partir des votes eux-mêmes (plus juste, plus complexe).
+  **Leçon générale : un a priori choisi pour AFFICHER un classement (assez large pour ne rien écraser) n'est pas
+  celui qu'il faut pour DÉCIDER d'une action ; vérifier une probabilité de décision contre un calcul exact et une
+  simulation à graine fixe des conditions réelles, et publier les erreurs avec leurs intervalles.**
+  Régression : `test-duel.mjs` (cas limites, Laplace vs exact sur les cas testés, simulation reproductible : écarts
+  nets < 5 % à tort intervalle compris, presque équivalents : perte et nuisibles ≤ v0.40.2) et
+  `test-hardwarescan-duel.mjs` (5-0 gardé, 6-0 remplacé, 7-2 gardé, 8-0 remplacé, 5-0 + 3 égalités gardé, Vocal sur
+  ses propres votes). Mutations attrapées : a priori large remis, a priori à 300, catégorie ignorée, seuil à 0,6.

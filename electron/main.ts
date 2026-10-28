@@ -89,7 +89,7 @@ import {
   stopDuelRun,
   voteDuel
 } from './services/duelSession'
-import { isDuelCategory, isDuelOutcome, probabilityBetter, rankDuels, type DuelCategory } from '../shared/duel'
+import { isDuelCategory, isDuelOutcome, rankDuels, switchProbability, type DuelCategory } from '../shared/duel'
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -237,7 +237,18 @@ setDuelStrengthSource((category: DuelCategory) => {
   return standings
 })
 // Étape 360 : un challenger ne remplace le modèle en service que s'il a plus de 95 % de chances d'être meilleur.
-setDuelProbability((challenger, incumbent) => probabilityBetter(challenger as never, incumbent as never))
+// Étape 361 : probabilité calculée avec l'a priori prudent de la décision (switchProbability), sur les votes de la
+// catégorie, mise en cache par jeu de votes comme la force.
+let switchCache: { votes: unknown; results: Map<string, number | null> } | null = null
+setDuelProbability((category, challenger, incumbent) => {
+  const votes = getDuelVotes()
+  if (switchCache?.votes !== votes) switchCache = { votes, results: new Map() }
+  const key = `${category}\u0000${challenger}\u0000${incumbent}`
+  if (!switchCache.results.has(key)) {
+    switchCache.results.set(key, switchProbability(votes.filter((v) => v.category === category), challenger, incumbent))
+  }
+  return switchCache.results.get(key) ?? null
+})
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
 // Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).
