@@ -10086,3 +10086,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sert (ici la page du téléphone, avec ses propres couleurs écrites en dur) — elles ne suivent pas toutes seules.**
   Régression : `scripts/test-phone-page-ui.mjs` (vrai navigateur au format téléphone, 4 onglets en sombre et en
   clair : aucune couleur vive hors couleurs de sens, fond qui suit le thème ; vérifié avec l'ancien CSS : échoue).
+
+- **Étape 374 (v0.40.16), Léo (capture de l'app Muse de Meta) : « utilise tes skills design, et fais un peu comme
+  Muse », pour la page du téléphone seule et avec les couleurs de Jaris (questions à choix).** Captures validées par
+  Léo avant publication (leçon de l'étape 147). Repris de Muse : la FORME, jamais ses couleurs (leçon de l'étape 199).
+  En-tête centré (orbe dans un cercle, pastille d'état), réponses de Jaris dans des cartes douces avec une petite
+  ombre, bulle grise à droite pour la demande, carte d'action pendant que Jaris travaille (tuile avec l'orbe qui
+  tourne, « Jaris », étape en cours), barre de message flottante en pilule, bouton rond pour passer au Vocal
+  (`#to-voice`). Citations sur un fond doux au lieu d'un trait coloré à gauche (interdit par le skill impeccable).
+  Sélection, curseur et contour de focus aux couleurs de la page. Cache du service worker monté (`jaris-page-v4`).
+  Régression : `scripts/test-phone-page-ui.mjs` (« façon Muse », en clair et en sombre : carte d'action, réponse en
+  carte avec ombre, demande à droite, bouton qui ouvre le Vocal).
+
+- **Étape 375 (v0.40.16), Léo envoie un nouvel export des votes (29/10/2026).** 6 votes, dont 3 déjà livrés à
+  l'étape 369 : `node scripts/import-duel-votes.mjs` n'ajoute que les 3 nouveaux (dédoublonnage par identifiant,
+  total 6, toujours sans demande ni réponses). Sur un PC qui a déjà ces votes, Jaris les compte aussi une seule fois
+  (`getRankingVotes`). Choix des modèles calculé avant/après de 0 à 24 Go de carte : identique partout.

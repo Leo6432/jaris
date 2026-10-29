@@ -25,5 +25,32 @@
     "modelA": "devstral-small-2:24b",
     "modelB": "qwen3.8:27b",
     "outcome": "tie"
+  },
+  {
+    "id": "c3ebcaac-94f2-403b-b3f2-c39ab687f21c",
+    "category": "conversation",
+    "at": 1793271666592,
+    "sessionId": "595938c0-b4f9-4917-b5bb-622a16b9c4d7",
+    "modelA": "hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M",
+    "modelB": "qwen3.5:9b",
+    "outcome": "tie"
+  },
+  {
+    "id": "81094935-917c-4950-84ec-01138cd33cb6",
+    "category": "code",
+    "at": 1793283405703,
+    "sessionId": "2e65de5a-e889-471d-85b9-4bfa9334df88",
+    "modelA": "gpt-oss:20b",
+    "modelB": "granite4.2:30b",
+    "outcome": "a"
+  },
+  {
+    "id": "ec187b1b-b019-4653-894b-b0baa1806536",
+    "category": "code",
+    "at": 1793285224992,
+    "sessionId": "2e65de5a-e889-471d-85b9-4bfa9334df88",
+    "modelA": "qwen3.8:27b",
+    "modelB": "gpt-oss:20b",
+    "outcome": "a"
   }
 ]
