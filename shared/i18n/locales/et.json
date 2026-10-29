@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Arutluse märgid: {count}",
   "duel.progress.writtenChars": "Kirjutatud märgid: {count}",
   "duel.dropped": "Eemaldatud mudeleid (allalaadimine ebaõnnestus): {count}",
+  "duel.dropReason": "Viimane viga: {reason}",
   "duel.stopSession": "Peata seanss",
   "duel.end": "Lõpeta seanss",
   "duel.header": "Duell {number} · {category}",

@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Gondolkodás karakterei: {count}",
   "duel.progress.writtenChars": "Megírt karakterek: {count}",
   "duel.dropped": "Eltávolított modellek (a letöltés nem sikerült): {count}",
+  "duel.dropReason": "Utolsó hiba: {reason}",
   "duel.stopSession": "Munkamenet leállítása",
   "duel.end": "Munkamenet befejezése",
   "duel.header": "Párbaj {number} · {category}",

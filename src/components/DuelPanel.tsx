@@ -1181,7 +1181,12 @@ export default function DuelPanel(): JSX.Element {
           {preparing?.percent != null && <p className="duel-preparing__percent">{formatPercent(preparing.percent / 100)}</p>}
           <p className="duel-home__note">{t('duel.preparing.hidden')}</p>
           {view.remote && <p className="duel-home__note">{t('duel.preparing.remote')}</p>}
-          {view.dropped > 0 && <p className="duel-home__note duel-home__note--warn">{t('duel.dropped', { count: view.dropped })}</p>}
+          {view.dropped > 0 && (
+            <p className="duel-home__note duel-home__note--warn">
+              {t('duel.dropped', { count: view.dropped })}
+              {view.dropReason && ` ${t('duel.dropReason', { reason: view.dropReason })}`}
+            </p>
+          )}
           <button type="button" className="duel-btn" onClick={end} disabled={pending !== null}>
             {t('duel.stopSession')}
           </button>

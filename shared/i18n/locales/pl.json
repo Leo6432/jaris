@@ -1477,6 +1477,7 @@
   "duel.progress.thinkingChars": "Znaki rozumowania: {count}",
   "duel.progress.writtenChars": "Zapisane znaki: {count}",
   "duel.dropped": "Usunięte modele (pobieranie się nie udało): {count}",
+  "duel.dropReason": "Ostatni błąd: {reason}",
   "duel.stopSession": "Zatrzymaj sesję",
   "duel.end": "Zakończ sesję",
   "duel.header": "Pojedynek {number} · {category}",

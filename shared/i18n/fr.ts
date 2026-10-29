@@ -1448,6 +1448,7 @@ export const fr = {
   "duel.progress.thinkingChars": "Caractères de réflexion : {count}",
   "duel.progress.writtenChars": "Caractères écrits : {count}",
   "duel.dropped": "Modèles retirés (téléchargement impossible) : {count}",
+  "duel.dropReason": "Dernière erreur : {reason}",
   "duel.stopSession": "Arrêter la session",
   "duel.end": "Terminer la session",
   "duel.header": "Duel {number} · {category}",

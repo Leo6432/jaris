@@ -348,6 +348,10 @@ test('un téléchargement impossible retire le modèle sans le nommer ; moins de
   await waitFor(() => env2.session.getDuelView()?.phase === 'ended', 'session arrêtée')
   assert.match(env2.session.getDuelView().error, /Moins de deux modèles/)
   assert.equal(env2.session.getDuelView().round, null)
+  // Étape 380 : la vraie raison est dite (ici « introuvable »), sans le nom du modèle qui a échoué.
+  assert.match(env2.session.getDuelView().error, /Dernière erreur : pull model manifest: … introuvable/)
+  assert.match(env.session.getDuelView().dropReason, /introuvable/)
+  assertAnonymous(env2.emitted, 'raison d’un téléchargement raté')
 })
 
 test('« Arrêter la session » pendant un téléchargement l’arrête, et rien n’est voté', async () => {

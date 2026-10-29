@@ -1477,6 +1477,7 @@
   "duel.progress.thinkingChars": "Символи міркування: {count}",
   "duel.progress.writtenChars": "Написано символів: {count}",
   "duel.dropped": "Вилучені моделі (не вдалося завантажити): {count}",
+  "duel.dropReason": "Остання помилка: {reason}",
   "duel.stopSession": "Зупинити сесію",
   "duel.end": "Завершити сесію",
   "duel.header": "Дуель {number} · {category}",

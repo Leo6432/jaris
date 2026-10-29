@@ -1109,6 +1109,8 @@ export interface DuelSessionView {
   preparing: { done: number; total: number; percent: number | null; installed: number } | null
   /** Modèles retirés de la session faute d'avoir pu être téléchargés. */
   dropped: number
+  /** Étape 380 : pourquoi le dernier téléchargement a échoué, sans nom de modèle (`null` = aucun échec). */
+  dropReason?: string | null
   votes: number
   round: DuelRoundView | null
   error: string | null

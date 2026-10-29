@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Thinking characters: {count}",
   "duel.progress.writtenChars": "Characters written: {count}",
   "duel.dropped": "Models removed (download failed): {count}",
+  "duel.dropReason": "Last error: {reason}",
   "duel.stopSession": "Stop the session",
   "duel.end": "End the session",
   "duel.header": "Duel {number} · {category}",

@@ -148,6 +148,11 @@ interface Session {
   downloaded: Map<string, number>
   preparing: DuelSessionView['preparing']
   dropped: number
+  /**
+   * Étape 380 : pourquoi le dernier téléchargement a échoué (sans nom de modèle). Avant, seul « moins de deux modèles »
+   * s'affichait : impossible de savoir si c'était la place, le réseau ou un Ollama arrêté.
+   */
+  dropReason: string | null
   played: Map<string, number>
   last: [string, string] | null
   round: RoundState | null
@@ -210,6 +215,7 @@ export function getDuelView(): DuelSessionView | null {
     modelCount: session.models.length,
     preparing: session.preparing,
     dropped: session.dropped,
+    dropReason: session.dropReason,
     votes: session.history.length,
     round: round
       ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
@@ -405,6 +411,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     downloaded: new Map(),
     preparing: missing.length ? { done: 0, total: missing.length, percent: null, installed: chosen.length - missing.length } : null,
     dropped: 0,
+    dropReason: null,
     played: new Map(),
     last: null,
     round: null,
@@ -443,6 +450,9 @@ async function prepare(current: Session, missing: string[], sizeOf: Map<string, 
     } catch (err) {
       if (signal.aborted) return
       console.error('[jaris] Duel : modèle non téléchargé —', err)
+      const message = err instanceof Error ? err.message : String(err)
+      // Masqué avec TOUS les modèles choisis (celui-ci compris) : le nom d'un modèle ne sort jamais avant les votes.
+      current.dropReason = withoutModelNames(message, [...current.models, ...missing], ['', '']).slice(0, 400)
       current.models = current.models.filter((m) => m !== model)
       current.dropped += 1
     }
@@ -451,7 +461,9 @@ async function prepare(current: Session, missing: string[], sizeOf: Map<string, 
   current.preparing = null
   if (current.models.length < DUEL_MIN_MODELS) {
     current.phase = 'ended'
-    current.error = t('duel.error.downloads')
+    current.error = current.dropReason
+      ? `${t('duel.error.downloads')} ${t('duel.dropReason', { reason: current.dropReason })}`
+      : t('duel.error.downloads')
   } else {
     current.phase = 'ready'
     nextRound(current)
@@ -480,7 +492,8 @@ function sideFinished(side: SideState): boolean {
  * « Modèle B », ou « … » pour un autre modèle de la session. Le texte écrit par le modèle lui-même n'est pas touché.
  */
 export function withoutModelNames(text: string, models: readonly string[], pair: readonly [string, string]): string {
-  const all = [...new Set([...models, ...pair])]
+  // Un nom vide (pas de paire : téléchargement raté) serait « trouvé » entre chaque caractère.
+  const all = [...new Set([...models, ...pair])].filter(Boolean)
   // La famille seule (« qwen3.5 » de « qwen3.5:9b ») révèle aussi le modèle — « … » quand deux modèles la partagent.
   const familyOf = (model: string): string => {
     const colon = model.lastIndexOf(':')

@@ -10143,3 +10143,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   lancés ensemble, B pas relançable, « Arrêter » arrête les deux, pas de parallèle en Code sur 8 Go ni en Conversation
   sur 288 Go ; vérifié en retirant le lancement de B puis en remettant un arrêt commun), `test-duel-panel-ui.mjs`.
   **Non vérifié en usage réel** : deux modèles lancés en même temps sur un vrai Ollama distant.
+
+- **Étape 380 (v0.40.21), premier essai réel sur RunPod (H200) : « Moins de deux modèles ont pu être téléchargés »,
+  sans aucune raison.** Cause trouvée avec Léo dans le terminal du pod : Ollama s'était arrêté en pleine session. Je lui
+  avais donné une commande de lancement simplifiée SANS `nohup` : Ollama était lié au terminal web, et s'arrêtait dès
+  que celui-ci se fermait ou se reconnectait. Commande à donner pour un pod (une ligne, à taper, le terminal web de
+  RunPod ne colle pas toujours ; essayer Ctrl+Maj+V) :
+  `OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=30m OLLAMA_NOPRUNE=1 setsid nohup ollama serve > /root/ollama.log 2>&1 &`
+  (`setsid nohup` : survit au terminal ; `OLLAMA_NOPRUNE=1` : un téléchargement coupé reprend). Le relais RunPod
+  répond 404, puis « Waiting for service to respond », tant qu'aucun service n'écoute sur le port : ce n'est pas un
+  défaut de Jaris. **Défaut de Jaris corrigé** : un téléchargement raté retirait le modèle sans dire pourquoi. La
+  dernière erreur est maintenant affichée (« Dernière erreur : … », 24 langues), pendant la préparation et à la fin,
+  sans nom de modèle (`withoutModelNames`, qui ignore désormais un nom vide : passé tel quel, il était « trouvé »
+  entre chaque caractère et remplaçait tout le texte). **Leçons : une commande simplifiée pour un utilisateur ne doit
+  jamais perdre ce qui la fait tenir (ici `nohup`) ; et un échec qui retire quelque chose doit toujours dire
+  pourquoi.** Régression : `scripts/test-duel-session.mjs` (raison affichée, aucun nom de modèle).

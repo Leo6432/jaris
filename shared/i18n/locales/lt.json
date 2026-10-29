@@ -1456,6 +1456,7 @@
   "duel.progress.thinkingChars": "Samprotavimo simboliai: {count}",
   "duel.progress.writtenChars": "Parašyti simboliai: {count}",
   "duel.dropped": "Pašalinti modeliai (nepavyko atsisiųsti): {count}",
+  "duel.dropReason": "Paskutinė klaida: {reason}",
   "duel.stopSession": "Sustabdyti sesiją",
   "duel.end": "Baigti sesiją",
   "duel.header": "Dvikova {number} · {category}",

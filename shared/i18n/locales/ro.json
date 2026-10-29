@@ -1456,6 +1456,7 @@
   "duel.progress.thinkingChars": "Caractere de raționament: {count}",
   "duel.progress.writtenChars": "Caractere scrise: {count}",
   "duel.dropped": "Modele eliminate (descărcare eșuată): {count}",
+  "duel.dropReason": "Ultima eroare: {reason}",
   "duel.stopSession": "Oprește sesiunea",
   "duel.end": "Încheie sesiunea",
   "duel.header": "Duelul {number} · {category}",

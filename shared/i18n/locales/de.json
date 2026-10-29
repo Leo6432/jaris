@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Zeichen beim Nachdenken: {count}",
   "duel.progress.writtenChars": "Geschriebene Zeichen: {count}",
   "duel.dropped": "Entfernte Modelle (Download fehlgeschlagen): {count}",
+  "duel.dropReason": "Letzter Fehler: {reason}",
   "duel.stopSession": "Sitzung abbrechen",
   "duel.end": "Sitzung beenden",
   "duel.header": "Duell {number} · {category}",

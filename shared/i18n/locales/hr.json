@@ -1456,6 +1456,7 @@
   "duel.progress.thinkingChars": "Znakovi razmišljanja: {count}",
   "duel.progress.writtenChars": "Napisani znakovi: {count}",
   "duel.dropped": "Uklonjeni modeli (preuzimanje nije uspjelo): {count}",
+  "duel.dropReason": "Posljednja pogreška: {reason}",
   "duel.stopSession": "Zaustavi sesiju",
   "duel.end": "Završi sesiju",
   "duel.header": "Dvoboj {number} · {category}",

@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Χαρακτήρες σκέψης: {count}",
   "duel.progress.writtenChars": "Γραμμένοι χαρακτήρες: {count}",
   "duel.dropped": "Μοντέλα που αφαιρέθηκαν (αποτυχία λήψης): {count}",
+  "duel.dropReason": "Τελευταίο σφάλμα: {reason}",
   "duel.stopSession": "Διακοπή συνεδρίας",
   "duel.end": "Τέλος συνεδρίας",
   "duel.header": "Μονομαχία {number} · {category}",

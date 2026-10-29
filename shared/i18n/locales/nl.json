@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Tekens bij het nadenken: {count}",
   "duel.progress.writtenChars": "Geschreven tekens: {count}",
   "duel.dropped": "Verwijderde modellen (downloaden mislukt): {count}",
+  "duel.dropReason": "Laatste fout: {reason}",
   "duel.stopSession": "Sessie stoppen",
   "duel.end": "Sessie beëindigen",
   "duel.header": "Duel {number} · {category}",

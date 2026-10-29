@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Tecken i resonemanget: {count}",
   "duel.progress.writtenChars": "Skrivna tecken: {count}",
   "duel.dropped": "Borttagna modeller (nedladdningen misslyckades): {count}",
+  "duel.dropReason": "Senaste fel: {reason}",
   "duel.stopSession": "Stoppa sessionen",
   "duel.end": "Avsluta sessionen",
   "duel.header": "Duell {number} · {category}",

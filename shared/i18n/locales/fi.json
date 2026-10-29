@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Päättelyn merkit: {count}",
   "duel.progress.writtenChars": "Kirjoitetut merkit: {count}",
   "duel.dropped": "Poistettuja malleja (lataus epäonnistui): {count}",
+  "duel.dropReason": "Viimeisin virhe: {reason}",
   "duel.stopSession": "Keskeytä istunto",
   "duel.end": "Lopeta istunto",
   "duel.header": "Kaksintaistelu {number} · {category}",

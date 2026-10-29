@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Tegn i ræsonnementet: {count}",
   "duel.progress.writtenChars": "Skrevne tegn: {count}",
   "duel.dropped": "Fjernede modeller (download mislykkedes): {count}",
+  "duel.dropReason": "Seneste fejl: {reason}",
   "duel.stopSession": "Stop sessionen",
   "duel.end": "Afslut sessionen",
   "duel.header": "Duel {number} · {category}",

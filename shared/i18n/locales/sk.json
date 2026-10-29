@@ -1456,6 +1456,7 @@
   "duel.progress.thinkingChars": "Znaky uvažovania: {count}",
   "duel.progress.writtenChars": "Napísané znaky: {count}",
   "duel.dropped": "Odobraté modely (sťahovanie zlyhalo): {count}",
+  "duel.dropReason": "Posledná chyba: {reason}",
   "duel.stopSession": "Zastaviť reláciu",
   "duel.end": "Ukončiť reláciu",
   "duel.header": "Súboj {number} · {category}",

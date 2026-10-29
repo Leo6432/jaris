@@ -1477,6 +1477,7 @@
   "duel.progress.thinkingChars": "Символы рассуждения: {count}",
   "duel.progress.writtenChars": "Написано символов: {count}",
   "duel.dropped": "Удалённые модели (загрузка не удалась): {count}",
+  "duel.dropReason": "Последняя ошибка: {reason}",
   "duel.stopSession": "Остановить сессию",
   "duel.end": "Завершить сессию",
   "duel.header": "Дуэль {number} · {category}",

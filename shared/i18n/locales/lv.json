@@ -1456,6 +1456,7 @@
   "duel.progress.thinkingChars": "Spriešanas rakstzīmes: {count}",
   "duel.progress.writtenChars": "Uzrakstītās rakstzīmes: {count}",
   "duel.dropped": "Noņemtie modeļi (lejupielāde neizdevās): {count}",
+  "duel.dropReason": "Pēdējā kļūda: {reason}",
   "duel.stopSession": "Apturēt sesiju",
   "duel.end": "Beigt sesiju",
   "duel.header": "Duelis {number} · {category}",

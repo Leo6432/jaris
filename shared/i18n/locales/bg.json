@@ -1435,6 +1435,7 @@
   "duel.progress.thinkingChars": "Знаци на разсъждението: {count}",
   "duel.progress.writtenChars": "Написани знаци: {count}",
   "duel.dropped": "Премахнати модели (неуспешно изтегляне): {count}",
+  "duel.dropReason": "Последна грешка: {reason}",
   "duel.stopSession": "Спри сесията",
   "duel.end": "Приключи сесията",
   "duel.header": "Дуел {number} · {category}",
