@@ -10197,3 +10197,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   entre chaque caractère et remplaçait tout le texte). **Leçons : une commande simplifiée pour un utilisateur ne doit
   jamais perdre ce qui la fait tenir (ici `nohup`) ; et un échec qui retire quelque chose doit toujours dire
   pourquoi.** Régression : `scripts/test-duel-session.mjs` (raison affichée, aucun nom de modèle).
+
+- **Étape 381 (v0.40.22), Léo : « envoyer par exemple 6 prompts, il tourne 2, 3 ou 4 modèles s'il peut, et on vote à
+  la fin ».** En duel Code, « Plusieurs demandes d'un coup » (2 à 12 demandes, « Remplir avec des idées » complète
+  jusqu'à 6). Chaque demande devient un duel avec sa paire, choisie comme pour des duels joués l'un après l'autre
+  (jamais la même paire d'affilée, vrais comptes inchangés jusqu'au vote). Jaris fait tourner la file pendant que Léo
+  attend (`pumpBatch`, duelSession.ts), autant à la fois que la carte peut en tenir (`batchSlotsToStart`,
+  shared/duel.ts) : au plus 4, même règle de mémoire que l'étape 379, un modèle déjà chargé compté une fois, dans
+  l'ordre de la file (on s'arrête au premier qui ne tient pas : un gros modèle n'attend jamais sans fin derrière des
+  petits), toujours un quand rien ne tourne. Sur la carte de 8 Go de Léo : un à la fois ; sur une H200 : 4. Liste
+  « Tes duels » (En attente, En cours, À voter, Voté) ; on ouvre un duel fini, on vote, les noms sont révélés, retour à
+  la liste ; tout voté = retour au duel ordinaire. Un duel de la file ne se lance pas à la main (B part tout seul).
+  « Arrêter » dans un duel ouvert abandonne CE duel ; « Tout arrêter » depuis la liste retire tout ce qui n'est pas
+  prêt pour le vote (un duel à moitié fait ne se vote pas). Rejouer remet le duel dans la file, Passer le retire.
+  Seulement en Code (même raison qu'à l'étape 379). Sur un pod, `OLLAMA_MAX_LOADED_MODELS=4` permet d'avoir 4 modèles
+  chargés à la fois (Ollama en garde 3 par carte par défaut ; au-delà, les demandes attendent). Même version : 2 votes
+  de plus livrés (10 au total). Régression : `test-duel.mjs` (règle de la file), `test-duel-session.mjs` (4 au plus
+  sur 80 Go, un seul sur 8 Go, vote duel par duel puis fin de file, arrêts, refus), `test-duel-panel-ui.mjs`
+  (éditeur, liste, ouverture, retour, B sans bouton). Chaque garde vérifiée en la retirant.

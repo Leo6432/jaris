@@ -614,3 +614,48 @@ export function canRunDuelTogether(category: DuelCategory, sizesGb: readonly [nu
   const needGb = sizesGb.reduce((sum, size) => sum + size * 1.3 + 2, 0)
   return needGb <= vramGb - DUEL_TOGETHER_GPU_RESERVE_GB
 }
+
+/**
+ * Étape 381 (Léo : « envoyer par exemple 6 prompts, il tourne 2, 3 ou 4 modèles si il peut, et on vote à la fin ») :
+ * plusieurs duels Code d'un coup. Seulement en Code, pour la même raison que canRunDuelTogether : en Conversation et en
+ * Vocal, les modèles agissent sur le PC.
+ */
+export const DUEL_BATCH_MIN = 2
+export const DUEL_BATCH_MAX = 12
+/** Au plus 4 générations en même temps, même sur une très grosse carte (Léo : « 2, 3 ou 4 »). */
+export const DUEL_BATCH_MAX_TOGETHER = 4
+
+export interface DuelBatchSlot {
+  key: string
+  model: string
+  sizeGb: number
+}
+
+/**
+ * Les côtés à lancer maintenant, dans l'ordre de la file : on s'arrête au premier qui ne tient pas, pour ne jamais
+ * laisser un gros modèle attendre indéfiniment derrière des petits. Un modèle déjà en train de tourner ne compte pas
+ * deux fois (Ollama ne le charge qu'une fois). Rien ne tourne : on lance toujours le premier, même sans place pour deux
+ * (A puis B, comme un duel ordinaire) ; carte inconnue = un seul à la fois.
+ */
+export function batchSlotsToStart(
+  running: readonly { model: string; sizeGb: number }[],
+  waiting: readonly DuelBatchSlot[],
+  vramGb: number | null
+): string[] {
+  const budget = vramGb === null || !Number.isFinite(vramGb) ? null : vramGb - DUEL_TOGETHER_GPU_RESERVE_GB
+  const need = (size: number): number => (Number.isFinite(size) && size > 0 ? size * 1.3 + 2 : Number.POSITIVE_INFINITY)
+  const loaded = new Map<string, number>()
+  for (const r of running) loaded.set(r.model, need(r.sizeGb))
+  let count = running.length
+  const start: string[] = []
+  for (const slot of waiting) {
+    if (count >= DUEL_BATCH_MAX_TOGETHER) break
+    const extra = loaded.has(slot.model) ? 0 : need(slot.sizeGb)
+    const used = [...loaded.values()].reduce((sum, v) => sum + v, 0)
+    if (count > 0 && (budget === null || used + extra > budget)) break
+    start.push(slot.key)
+    if (!loaded.has(slot.model)) loaded.set(slot.model, need(slot.sizeGb))
+    count++
+  }
+  return start
+}

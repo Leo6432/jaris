@@ -70,5 +70,23 @@
     "modelA": "qwen3.5:0.8b",
     "modelB": "ornith-1.5:9b",
     "outcome": "b"
+  },
+  {
+    "id": "1f70ab5e-8205-440e-959e-2a3953d8ca8d",
+    "category": "code",
+    "at": 1793312785887,
+    "sessionId": "c8b074a7-20ce-40e7-91a3-e167f4092236",
+    "modelA": "hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M",
+    "modelB": "ministral-3:8b",
+    "outcome": "b"
+  },
+  {
+    "id": "533115fe-6854-468a-a2c7-0cf7cab5be53",
+    "category": "code",
+    "at": 1793313204233,
+    "sessionId": "c8b074a7-20ce-40e7-91a3-e167f4092236",
+    "modelA": "qwen3.8:27b",
+    "modelB": "ministral-3:8b",
+    "outcome": "a"
   }
 ]

@@ -242,6 +242,9 @@ declare global {
       duelRetry: () => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>
       duelNext: () => Promise<DuelSessionView>
+      duelBatchStart: (prompts: string[]) => Promise<DuelSessionView>
+      duelBatchOpen: (number: number) => Promise<DuelSessionView>
+      duelBatchClose: () => Promise<DuelSessionView>
       onDuelChanged: (cb: (view: DuelSessionView | null) => void) => () => void
       setOptionsOpen: (open: boolean) => void
       getWindowChrome: () => Promise<WindowChrome>

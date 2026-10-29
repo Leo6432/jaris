@@ -25,7 +25,10 @@ import {
   DUEL_HISTORY_TEXT_MAX,
   DUEL_MIN_CHOSEN,
   DUEL_MIN_MODELS,
+  DUEL_BATCH_MAX,
+  DUEL_BATCH_MIN,
   DUEL_SESSION_SIZES,
+  batchSlotsToStart,
   canRunDuelTogether,
   duelActionFromLog,
   duelOfferedTools,
@@ -156,6 +159,11 @@ interface Session {
   played: Map<string, number>
   last: [string, string] | null
   round: RoundState | null
+  /**
+   * Étape 381 : une file de duels Code lancés d'un coup (`null` = un duel à la fois, comme avant). `round` est alors le
+   * duel de la file que Léo a ouvert, ou `null` quand il regarde la liste.
+   */
+  batch: RoundState[] | null
   history: DuelSummary['rounds']
   error: string | null
 }
@@ -173,8 +181,11 @@ export function setDuelEnvironment(env: DuelEnvironment): void {
 }
 
 let session: Session | null = null
-/** Étape 379 : un arrêt par côté — en Code, A et B peuvent travailler en même temps. */
-const runControllers = new Map<DuelSide, AbortController>()
+/**
+ * Étape 379 : un arrêt par côté — en Code, A et B peuvent travailler en même temps. Étape 381 : rangé par duel ET par
+ * côté (« 3:a »), plusieurs duels d'une file tournant en même temps.
+ */
+const runControllers = new Map<string, AbortController>()
 function abortRuns(): void {
   for (const controller of runControllers.values()) controller.abort()
 }
@@ -219,6 +230,15 @@ export function getDuelView(): DuelSessionView | null {
     votes: session.history.length,
     round: round
       ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
+      : null,
+    batch: session.batch
+      ? session.batch.map((r) => ({
+          number: r.number,
+          prompt: r.prompt ?? '',
+          a: r.sides.a.status,
+          b: r.sides.b.status,
+          revealed: r.revealed
+        }))
       : null,
     error: session.error
   }
@@ -415,6 +435,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     played: new Map(),
     last: null,
     round: null,
+    batch: null,
     history: [],
     error: null
   }
@@ -534,11 +555,139 @@ export function runDuelB(): DuelSessionView {
   const round = current?.round
   if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   if (!sideFinished(round.sides.a) || round.sides.b.status !== 'idle') throw new Error(t('duel.error.notYourTurn'))
+  // Étape 381 : dans une file, c'est Jaris qui lance B quand la carte a de la place.
+  if (current.batch?.includes(round)) throw new Error(t('duel.error.notYourTurn'))
   void runSide(current, round, 'b')
   return getDuelView() as DuelSessionView
 }
 
+/**
+ * Étape 381 (Léo : « envoyer par exemple 6 prompts, il tourne 2, 3 ou 4 modèles si il peut, et on vote à la fin ») :
+ * plusieurs duels Code d'un coup. Chaque demande devient un duel avec sa paire (choisie comme pour un duel ordinaire,
+ * sans répéter la même paire d'affilée), puis Jaris les fait tourner pendant que Léo attend, autant à la fois que la
+ * carte peut en tenir (pumpBatch). Léo ouvre ensuite chaque duel terminé et vote ; les noms sont révélés après chaque
+ * vote, comme avant. Les demandes viennent de l'écran : revérifiées ici.
+ */
+export function startDuelBatch(prompts: readonly unknown[]): DuelSessionView {
+  const current = session
+  if (!current || current.phase !== 'ready') throw new Error(t('duel.error.noRound'))
+  if (current.category !== 'code') throw new Error(t('duel.error.batchCodeOnly'))
+  if (current.batch || (current.round && current.round.prompt !== null)) throw new Error(t('duel.error.alreadyAsked'))
+  const texts = prompts.map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean)
+  if (texts.length < DUEL_BATCH_MIN || texts.length > DUEL_BATCH_MAX || texts.some((text) => text.length > 20_000)) {
+    throw new Error(t('duel.error.batchCount', { min: DUEL_BATCH_MIN, max: DUEL_BATCH_MAX }))
+  }
+  // Les paires de la file : comme des duels joués l'un après l'autre (les moins jouées d'abord, jamais deux fois la
+  // même d'affilée), sans toucher aux vrais comptes, qui ne bougent qu'au vote.
+  const planned = new Map(current.played)
+  let last = current.last
+  const rounds: RoundState[] = []
+  for (const [index, prompt] of texts.entries()) {
+    const pair = nextDuelPair(current.models, planned, last)
+    if (!pair) break
+    planned.set(pairKey(pair[0], pair[1]), (planned.get(pairKey(pair[0], pair[1])) ?? 0) + 1)
+    last = pair
+    rounds.push({
+      number: current.history.length + index + 1,
+      pair,
+      prompt,
+      sides: { a: emptySide(), b: emptySide() },
+      revealed: null,
+      tools: null,
+      together: false
+    })
+  }
+  if (rounds.length < DUEL_BATCH_MIN) throw new Error(t('duel.error.noRound'))
+  current.batch = rounds
+  current.round = null
+  pumpBatch(current)
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
+/** Étape 381 : lance les côtés en attente de la file, autant que la carte peut en tenir (batchSlotsToStart). */
+function pumpBatch(current: Session): void {
+  const batch = current.batch
+  if (!batch) return
+  const running: { model: string; sizeGb: number }[] = []
+  const waiting: { key: string; model: string; sizeGb: number }[] = []
+  const where = new Map<string, { round: RoundState; side: DuelSide }>()
+  for (const round of batch) {
+    for (const side of ['a', 'b'] as const) {
+      const model = round.pair[side === 'a' ? 0 : 1]
+      const sizeGb = current.sizes.get(model) ?? Number.NaN
+      const status = round.sides[side].status
+      if (status === 'running') running.push({ model, sizeGb })
+      else if (status === 'idle') {
+        const key = `${round.number}:${side}`
+        waiting.push({ key, model, sizeGb })
+        where.set(key, { round, side })
+      }
+    }
+  }
+  for (const key of batchSlotsToStart(running, waiting, current.vramGb)) {
+    const slot = where.get(key)
+    if (slot) void runSide(current, slot.round, slot.side)
+  }
+}
+
+/** Étape 381 : ouvre un duel de la file (pour le regarder tourner, ou voter quand il est fini). */
+export function openBatchRound(number: number): DuelSessionView {
+  const current = session
+  const round = current?.batch?.find((r) => r.number === number)
+  if (!current || !round) throw new Error(t('duel.error.noRound'))
+  current.round = round
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
+/** Étape 381 : retour à la liste de la file, sans voter. */
+export function closeBatchRound(): DuelSessionView {
+  const current = session
+  if (!current?.batch) throw new Error(t('duel.error.noRound'))
+  current.round = null
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
+/** Étape 381 : un duel de la file prêt pour le vote (ses deux côtés ont fini sans être arrêtés). */
+function batchRoundComplete(round: RoundState): boolean {
+  const ok = (side: SideState): boolean => side.status === 'done' || side.status === 'error'
+  return ok(round.sides.a) && ok(round.sides.b)
+}
+
+/** Étape 381 : quand tous les duels restants de la file sont votés, retour au duel ordinaire. */
+function finishBatchIfDone(current: Session): void {
+  if (!current.batch || !current.batch.every((r) => r.revealed)) return
+  current.batch = null
+  if (current.round === null || current.round.revealed) nextRound(current)
+}
+
+/** Étape 381 : retire des duels de la file (arrêtés, passés) ; ce qu'ils faisaient encore est arrêté. */
+function dropBatchRounds(current: Session, rounds: readonly RoundState[]): void {
+  if (!current.batch) return
+  for (const round of rounds) {
+    for (const side of ['a', 'b'] as const) runControllers.get(`${round.number}:${side}`)?.abort()
+  }
+  current.batch = current.batch.filter((r) => !rounds.includes(r))
+  if (current.round && rounds.includes(current.round)) current.round = null
+  finishBatchIfDone(current)
+  pumpBatch(current)
+}
+
 export function stopDuelRun(): void {
+  const current = session
+  if (current?.batch) {
+    // Étape 381 : dans un duel ouvert de la file, « Arrêter » abandonne CE duel ; depuis la liste, tout ce qui n'est
+    // pas encore prêt pour le vote. Un duel à moitié fait ne se vote pas : il quitte la file.
+    const target = current.round && current.batch.includes(current.round) ? [current.round] : current.batch
+    dropBatchRounds(
+      current,
+      target.filter((r) => !r.revealed && !batchRoundComplete(r))
+    )
+    emitNow()
+    return
+  }
   abortRuns()
 }
 
@@ -546,9 +695,10 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   const side = round.sides[sideName]
   const model = round.pair[sideName === 'a' ? 0 : 1]
   const prompt = round.prompt as string
-  runControllers.get(sideName)?.abort()
+  const runKey = `${round.number}:${sideName}`
+  runControllers.get(runKey)?.abort()
   const controller = new AbortController()
-  runControllers.set(sideName, controller)
+  runControllers.set(runKey, controller)
   side.status = 'running'
   side.startedAt = Date.now()
   side.activity = { kind: current.category === 'code' ? 'loading' : 'thinking' }
@@ -578,8 +728,12 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   } finally {
     side.activity = null
     side.durationMs = side.startedAt === null ? null : Date.now() - side.startedAt
-    if (runControllers.get(sideName) === controller) runControllers.delete(sideName)
-    if (session === current) emitNow()
+    if (runControllers.get(runKey) === controller) runControllers.delete(runKey)
+    if (session === current) {
+      // Étape 381 : un côté de la file a fini — de la place pour le suivant.
+      if (current.batch && current.phase === 'ready') pumpBatch(current)
+      emitNow()
+    }
   }
 }
 
@@ -761,6 +915,13 @@ export function nextDuel(): DuelSessionView {
   const current = session
   const round = current?.round
   if (!current || !round || !round.revealed) throw new Error(t('duel.error.noRound'))
+  // Étape 381 : dans une file, retour à la liste ; une fois tout voté, retour au duel ordinaire.
+  if (current.batch) {
+    current.round = null
+    finishBatchIfDone(current)
+    emitNow()
+    return getDuelView() as DuelSessionView
+  }
   nextRound(current)
   emitNow()
   return getDuelView() as DuelSessionView
@@ -776,6 +937,12 @@ export function retryDuel(): DuelSessionView {
   round.sides = { a: emptySide(), b: emptySide() }
   // Relus au nouveau tour de A : le modèle d'images a peut-être été installé entre-temps.
   round.tools = null
+  if (current.batch?.includes(round)) {
+    // Étape 381 : le duel reprend sa place dans la file.
+    pumpBatch(current)
+    emitNow()
+    return getDuelView() as DuelSessionView
+  }
   void runSide(current, round, 'a')
   if (round.together) void runSide(current, round, 'b')
   return getDuelView() as DuelSessionView
@@ -789,6 +956,12 @@ export function skipDuel(): DuelSessionView {
   if (round.sides.a.status === 'running' || round.sides.b.status === 'running') throw new Error(t('duel.error.notFinished'))
   if (!round.sides.a.trouble && !round.sides.b.trouble) throw new Error(t('duel.error.badRequest'))
   current.last = round.pair
+  if (current.batch?.includes(round)) {
+    // Étape 381 : passé sans vote, il quitte la file.
+    dropBatchRounds(current, [round])
+    emitNow()
+    return getDuelView() as DuelSessionView
+  }
   nextRound(current)
   emitNow()
   return getDuelView() as DuelSessionView
@@ -850,6 +1023,7 @@ export async function endDuel(): Promise<DuelSummary> {
   current.phase = 'ended'
   current.preparing = null
   current.round = null
+  current.batch = null
   emitNow()
 
   const profile = await getProfile()

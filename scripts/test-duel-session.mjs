@@ -784,3 +784,106 @@ test('étape 379 : en Code sans assez de mémoire, ou en Conversation même avec
   await waitFor(() => big.session.getDuelView().round.a.status === 'done', 'A a fini')
   assert.equal(big.calls.converse.length, 1, 'B n’a pas commencé')
 })
+
+async function readyCode(env) {
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
+}
+
+const running = (view) => view.batch.flatMap((r) => [r.a, r.b]).filter((s) => s === 'running').length
+
+test('étape 381 : 6 demandes d’un coup — au plus 4 générations à la fois sur une grosse carte, puis vote duel par duel', async () => {
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const env = setup({ installed: MODELS, vramGb: 80, generateGate: gate })
+  await readyCode(env)
+  const prompts = ['Un compteur', 'Une horloge', 'Un morpion', 'Un pendu', 'Un minuteur', 'Un dé']
+  const started = env.session.startDuelBatch(prompts)
+  assert.equal(started.round, null, 'Léo regarde la liste')
+  assert.deepEqual(started.batch.map((r) => r.prompt), prompts)
+  assert.equal(running(started), 4, 'quatre générations en même temps, pas plus')
+  for (const r of started.batch) assert.notEqual(r.a, undefined)
+  release()
+  await waitFor(() => env.session.getDuelView().batch.every((r) => r.a === 'done' && r.b === 'done'), 'tous les duels finis')
+  assert.equal(env.calls.generate.length, 12, 'deux générations par demande')
+  assert.equal(env.votes.length, 0, 'rien n’est voté tout seul')
+  assertAnonymous(env.emitted, 'file avant les votes')
+  // Les paires varient, jamais la même deux fois d'affilée.
+  const pairs = env.calls.generate.reduce((byPrompt, g) => ({ ...byPrompt, [g.prompt]: [...(byPrompt[g.prompt] ?? []), g.options.model] }), {})
+  const keys = prompts.map((p) => [...pairs[p]].sort().join('|'))
+  for (let i = 1; i < keys.length; i++) assert.notEqual(keys[i], keys[i - 1], 'deux duels de suite avec la même paire')
+
+  for (const [index, item] of env.session.getDuelView().batch.entries()) {
+    const opened = env.session.openBatchRound(item.number)
+    assert.equal(opened.round.prompt, prompts[index])
+    const voted = await env.session.voteDuel('a')
+    assert.ok(voted.round.revealed, 'noms révélés après le vote')
+    const back = env.session.nextDuel()
+    if (index < prompts.length - 1) {
+      assert.equal(back.round, null, 'retour à la liste')
+      assert.equal(back.batch.filter((r) => r.revealed).length, index + 1)
+    } else {
+      assert.equal(back.batch, null, 'tout est voté : fin de la file')
+      assert.equal(back.round.prompt, null, 'un duel ordinaire attend sa demande')
+    }
+  }
+  assert.equal(env.votes.length, 6)
+  assert.deepEqual(env.votes.map((v) => v.prompt), prompts)
+})
+
+test('étape 381 : sur une petite carte, un seul modèle à la fois — la file avance quand même jusqu’au bout', async () => {
+  const env = setup({ installed: MODELS, vramGb: 8 })
+  await readyCode(env)
+  const started = env.session.startDuelBatch(['Un compteur', 'Une horloge'])
+  assert.equal(running(started), 1, 'un seul à la fois')
+  let most = 0
+  await waitFor(() => {
+    most = Math.max(most, running(env.session.getDuelView()))
+    return env.session.getDuelView().batch.every((r) => r.a === 'done' && r.b === 'done')
+  }, 'tout fini')
+  assert.equal(most, 1, 'jamais deux à la fois sur 8 Go')
+  // B ne se lance pas à la main dans une file : c'est Jaris qui le fait.
+  env.session.openBatchRound(env.session.getDuelView().batch[0].number)
+  assert.throws(() => env.session.runDuelB())
+})
+
+test('étape 381 : « Tout arrêter » retire ce qui n’est pas fini, garde ce qui est prêt pour le vote', async () => {
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const env = setup({ installed: MODELS, vramGb: 80, generateGate: gate })
+  await readyCode(env)
+  env.session.startDuelBatch(['Un', 'Deux', 'Trois', 'Quatre'])
+  env.session.stopDuelRun()
+  release()
+  // Tout tournait ou attendait : rien n'est prêt, la file disparaît et un duel ordinaire reprend.
+  await waitFor(() => env.session.getDuelView().batch === null, 'file vidée')
+  const view = env.session.getDuelView()
+  assert.equal(view.round.prompt, null)
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.ok(env.calls.generate.length <= 4, 'les demandes qui attendaient ne partent jamais')
+  assert.equal(env.votes.length, 0)
+})
+
+test('étape 381 : arrêter un duel ouvert de la file n’arrête que lui ; les autres continuent', async () => {
+  const env = setup({ installed: MODELS, vramGb: 80 })
+  await readyCode(env)
+  const started = env.session.startDuelBatch(['Un', 'Deux'])
+  env.session.openBatchRound(started.batch[0].number)
+  env.session.stopDuelRun()
+  const after = env.session.getDuelView()
+  assert.equal(after.round, null, 'retour à la liste')
+  assert.deepEqual(after.batch.map((r) => r.prompt), ['Deux'])
+  await waitFor(() => env.session.getDuelView().batch[0].a === 'done' && env.session.getDuelView().batch[0].b === 'done', 'l’autre a fini')
+})
+
+test('étape 381 : refusé en Conversation, sous 2 ou au-delà de 12 demandes, ou pendant une file', async () => {
+  const conv = setup({ installed: MODELS, vramGb: 80 })
+  await readySession(conv)
+  assert.throws(() => conv.session.startDuelBatch(['Un', 'Deux']), /Code/)
+  const env = setup({ installed: MODELS, vramGb: 80 })
+  await readyCode(env)
+  assert.throws(() => env.session.startDuelBatch(['Un', '   ']), /entre 2 et 12/)
+  assert.throws(() => env.session.startDuelBatch(Array.from({ length: 13 }, (_, i) => `D${i}`)), /entre 2 et 12/)
+  env.session.startDuelBatch(['Un', 'Deux'])
+  assert.throws(() => env.session.startDuelBatch(['Trois', 'Quatre']))
+})

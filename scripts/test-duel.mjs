@@ -344,3 +344,21 @@ test('étape 379 : deux modèles en même temps seulement en Code, et seulement 
   assert.equal(duel.canRunDuelTogether('code', [2, 3], null), false)
   assert.equal(duel.canRunDuelTogether('code', [Number.NaN, 3], 288), false)
 })
+
+test('étape 381 : file de duels Code — combien de générations à la fois', () => {
+  const slot = (key, model, sizeGb) => ({ key, model, sizeGb })
+  const waiting = ['a', 'b', 'c', 'd', 'e', 'f'].map((k, i) => slot(k, `m${i}`, 5))
+  // Grosse carte : 4 au plus, même s'il reste de la place.
+  assert.deepEqual(duel.batchSlotsToStart([], waiting, 288), ['a', 'b', 'c', 'd'])
+  // 32 Go (31 utilisables) : 8,5 Go par modèle de 5 Go → 3.
+  assert.deepEqual(duel.batchSlotsToStart([], waiting, 32), ['a', 'b', 'c'])
+  // Petite carte : toujours un, jamais zéro, quand rien ne tourne.
+  assert.deepEqual(duel.batchSlotsToStart([], waiting, 8), ['a'])
+  assert.deepEqual(duel.batchSlotsToStart([{ model: 'x', sizeGb: 5 }], waiting, 8), [])
+  // Carte inconnue : un à la fois.
+  assert.deepEqual(duel.batchSlotsToStart([], waiting, null), ['a'])
+  // Un modèle déjà chargé ne compte pas deux fois.
+  assert.deepEqual(duel.batchSlotsToStart([{ model: 'm0', sizeGb: 20 }], [slot('a', 'm0', 20), slot('b', 'm0', 20)], 32), ['a', 'b'])
+  // Dans l'ordre de la file : un gros modèle qui ne tient pas bloque ceux qui suivent (il ne patiente jamais sans fin).
+  assert.deepEqual(duel.batchSlotsToStart([], [slot('a', 'p', 3), slot('b', 'g', 30), slot('c', 'q', 3)], 32), ['a'])
+})

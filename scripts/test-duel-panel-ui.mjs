@@ -106,6 +106,23 @@ window.jaris = {
     window.__calls.push('retry')
     return ready({ ...window.__view.round, a: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' } }), b: side() })
   },
+  duelBatchStart: async (prompts) => {
+    window.__calls.push(['batchStart', prompts])
+    const batch = prompts.map((prompt, i) => ({ number: i + 1, prompt, a: i < 2 ? 'running' : 'idle', b: i < 2 ? 'running' : 'idle', revealed: null }))
+    return (window.__view = { ...ready(null), batch })
+  },
+  duelBatchOpen: async (number) => {
+    window.__calls.push(['batchOpen', number])
+    const batch = window.__view.batch
+    const item = batch.find((b) => b.number === number)
+    const done = side({ status: 'done', text: 'Fini', durationMs: 4000, previewUrl: 'data:text/html,<p>app</p>' })
+    return (window.__view = { ...ready({ number, prompt: item.prompt, a: done, b: done, revealed: null, together: false }), batch })
+  },
+  duelBatchClose: async () => {
+    window.__calls.push('batchClose')
+    const batch = window.__view.batch
+    return (window.__view = { ...ready(null), batch })
+  },
   duelSkip: async () => {
     window.__calls.push('skip')
     return ready({ number: 2, prompt: null, a: side(), b: side() })
@@ -735,4 +752,54 @@ test('étape 365 : en duel Code, la génération montre qu’elle avance (étape
     round: { number: 1, prompt: 'Un compteur', revealed: null,
       a: { status: 'running', text: '', activity: { kind: 'thinking', code: { step: 1, steps: 2, charsWritten: 0, thinkingChars: 12400, idleMs: 0, elapsedMs: 90000 } }, startedAt: Date.now() - 90000, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null },
       b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }`)
+})
+
+test('étape 381 : plusieurs demandes Code d’un coup — éditeur, liste des duels, ouverture et retour à la liste', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.click('button:has-text("Plusieurs demandes d\'un coup")')
+      await page.waitForSelector('.duel-batch-editor')
+      assert.equal(await page.locator('.duel > .composer').count(), 0, 'pas de second champ pendant l’édition')
+      const start = page.locator('button:has-text("Lancer les duels")')
+      assert.equal(await start.isDisabled(), true, 'il faut au moins 2 demandes')
+      await page.fill('.duel-batch-editor__row:nth-child(1) textarea', 'Un compteur')
+      await page.fill('.duel-batch-editor__row:nth-child(2) textarea', 'Une horloge')
+      await page.click('button:has-text("Remplir avec des idées")')
+      await settle(page)
+      const filled = await page.$$eval('.duel-batch-editor__row textarea', (els) => els.map((e) => e.value))
+      assert.equal(filled.length, 6, 'complété jusqu’à 6 demandes')
+      assert.deepEqual(filled.slice(0, 2), ['Un compteur', 'Une horloge'], 'les demandes écrites restent')
+      assert.ok(filled.every((v) => v.trim()), 'aucune case vide')
+      // Les champs sont habillés et ne débordent pas.
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      assert.ok(overflow <= 0, 'pas de défilement de côté')
+      await start.click()
+      await page.waitForSelector('.duel-batch__list')
+      const sent = await page.evaluate(() => window.__calls.find((c) => c[0] === 'batchStart'))
+      assert.equal(sent[1].length, 6)
+      const statuses = await page.$$eval('.duel-batch__status', (els) => els.map((e) => e.textContent))
+      assert.deepEqual(statuses.slice(0, 3), ['En cours', 'En cours', 'En attente'])
+      const item = await page.locator('.duel-batch__item').first().evaluate((el) => ({ cursor: getComputedStyle(el).cursor, bg: getComputedStyle(el).backgroundColor }))
+      assert.equal(item.cursor, 'pointer', 'une ligne est réellement un bouton habillé')
+      await page.locator('.duel-batch__item').first().click()
+      await page.waitForSelector('.duel-vote')
+      assert.match(await page.textContent('.duel-round__prompt'), /Un compteur/)
+      await page.click('.duel__bar button:has-text("Retour à la liste")')
+      await page.waitForSelector('.duel-batch__list')
+      const calls = await page.evaluate(() => window.__calls.map((c) => (Array.isArray(c) ? c[0] : c)))
+      assert.ok(calls.includes('batchOpen') && calls.includes('batchClose'))
+    },
+    "var i = { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }; window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: i, b: i, revealed: null, together: false } }"
+  )
+})
+
+test('étape 381 : dans une file, B attend son tour sans bouton « Au tour du modèle B »', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-side--idle')
+      assert.equal(await page.locator('button:has-text("Au tour du modèle B")').count(), 0)
+      assert.match(await page.textContent('.duel-side--idle'), /En attente/)
+    },
+    "var s = { status: 'done', text: 'Fini', activity: null, startedAt: null, durationMs: 3000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }; var i = Object.assign({}, s, { status: 'idle', text: '' }); window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, batch: [{ number: 1, prompt: 'Un compteur', a: 'done', b: 'idle', revealed: null }], round: { number: 1, prompt: 'Un compteur', a: s, b: i, revealed: null, together: false } }"
+  )
 })

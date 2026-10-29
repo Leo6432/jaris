@@ -10,8 +10,8 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
-import { DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, DUEL_MIN_CHOSEN, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
-import type { DuelActivity, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
+import { DUEL_BATCH_MAX, DUEL_BATCH_MIN, DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, DUEL_MIN_CHOSEN, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
+import type { DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -49,7 +49,7 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
 }
 
 /** 4 idées au hasard, en évitant celles déjà montrées (« Autres idées » montre vraiment d'autres phrases). */
-function pickIdeas(category: DuelCategory, shown: readonly MessageKey[] = []): MessageKey[] {
+function pickIdeas(category: DuelCategory, shown: readonly MessageKey[] = [], count: number = IDEAS_SHOWN): MessageKey[] {
   const shuffle = (keys: MessageKey[]): MessageKey[] => {
     const out = [...keys]
     for (let i = out.length - 1; i > 0; i--) {
@@ -59,7 +59,7 @@ function pickIdeas(category: DuelCategory, shown: readonly MessageKey[] = []): M
     return out
   }
   const pool = SUGGESTIONS[category]
-  return [...shuffle(pool.filter((k) => !shown.includes(k))), ...shuffle(pool.filter((k) => shown.includes(k)))].slice(0, IDEAS_SHOWN)
+  return [...shuffle(pool.filter((k) => !shown.includes(k))), ...shuffle(pool.filter((k) => shown.includes(k)))].slice(0, count)
 }
 
 /** Accueil d'un duel : la question, 4 idées et « Autres idées ». Remonté à chaque duel (key), donc tiré à nouveau. */
@@ -71,6 +71,131 @@ function DuelAsk({ category, onPick }: { category: DuelCategory; onPick: (text: 
         {t('duel.suggest.more')}
       </button>
     </EmptyState>
+  )
+}
+
+/**
+ * Étape 381 (Léo : « envoyer par exemple 6 prompts, il tourne 2, 3 ou 4 modèles si il peut, et on vote à la fin ») :
+ * plusieurs demandes Code d'un coup, une par duel.
+ */
+function DuelBatchEditor({
+  category,
+  busy,
+  onStart,
+  onCancel
+}: {
+  category: DuelCategory
+  busy: boolean
+  onStart: (prompts: string[]) => void
+  onCancel: () => void
+}): JSX.Element {
+  const [rows, setRows] = useState<string[]>(['', '', ''])
+  const filled = rows.map((r) => r.trim()).filter(Boolean)
+  const update = (index: number, value: string): void => setRows((current) => current.map((r, i) => (i === index ? value : r)))
+  const remove = (index: number): void => setRows((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : ['']))
+  // Remplit les cases vides, puis en ajoute jusqu'à 6 demandes, avec des idées pas encore écrites.
+  const fill = (): void =>
+    setRows((current) => {
+      const used = new Set(current.map((r) => r.trim()))
+      const ideas = pickIdeas(category, [], IDEAS_PER_CATEGORY)
+        .map((key) => t(key))
+        .filter((idea) => !used.has(idea))
+      const next = current.map((r) => (r.trim() ? r : ideas.shift() ?? r))
+      while (next.length < 6 && ideas.length) next.push(ideas.shift() as string)
+      return next.slice(0, DUEL_BATCH_MAX)
+    })
+  return (
+    <div className="duel-batch-editor">
+      <h2 className="duel-batch-editor__title">{t('duel.batch.open')}</h2>
+      <p className="duel-home__note">{t('duel.batch.lead')}</p>
+      <ol className="duel-batch-editor__rows">
+        {rows.map((row, index) => (
+          <li key={index} className="duel-batch-editor__row">
+            <textarea
+              value={row}
+              rows={2}
+              placeholder={t('duel.batch.placeholder', { number: index + 1 })}
+              aria-label={t('duel.batch.placeholder', { number: index + 1 })}
+              onChange={(event) => update(index, event.target.value)}
+            />
+            <button type="button" className="duel-btn duel-batch-editor__remove" onClick={() => remove(index)} aria-label={t('duel.batch.remove')}>
+              ×
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="duel-batch-editor__tools">
+        <button type="button" className="duel-btn" onClick={() => setRows((current) => [...current, ''])} disabled={rows.length >= DUEL_BATCH_MAX}>
+          {t('duel.batch.add')}
+        </button>
+        <button type="button" className="duel-btn" onClick={fill}>
+          {t('duel.batch.fill')}
+        </button>
+      </div>
+      <p className={`duel-home__note${filled.length >= DUEL_BATCH_MIN ? '' : ' duel-home__note--warn'}`} role="status">
+        {t('duel.batch.count', { count: filled.length, min: DUEL_BATCH_MIN, max: DUEL_BATCH_MAX })}
+      </p>
+      <div className="duel-batch-editor__actions">
+        <button
+          type="button"
+          className="duel-btn duel-btn--primary"
+          onClick={() => onStart(filled)}
+          disabled={busy || filled.length < DUEL_BATCH_MIN || filled.length > DUEL_BATCH_MAX}
+        >
+          {t('duel.batch.start')}
+        </button>
+        <button type="button" className="duel-btn" onClick={onCancel} disabled={busy}>
+          {t('duel.batch.single')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Étape 381 : où en est un duel de la file. */
+function batchStatus(item: DuelBatchItemView): 'waiting' | 'running' | 'ready' | 'voted' {
+  if (item.revealed) return 'voted'
+  const done = (status: DuelBatchItemView['a']): boolean => status === 'done' || status === 'error' || status === 'stopped'
+  if (done(item.a) && done(item.b)) return 'ready'
+  if (item.a === 'running' || item.b === 'running') return 'running'
+  return 'waiting'
+}
+
+const BATCH_STATUS_LABEL: Record<ReturnType<typeof batchStatus>, MessageKey> = {
+  waiting: 'duel.batch.status.waiting',
+  running: 'duel.batch.status.running',
+  ready: 'duel.batch.status.ready',
+  voted: 'duel.batch.status.voted'
+}
+
+function DuelBatchList({ batch, onOpen, disabled }: { batch: DuelBatchItemView[]; onOpen: (number: number) => void; disabled: boolean }): JSX.Element {
+  const done = batch.filter((item) => ['ready', 'voted'].includes(batchStatus(item))).length
+  return (
+    <div className="duel-batch">
+      <h1 className="duel-batch__title">{t('duel.batch.title')}</h1>
+      <p className="duel-home__note" role="status">
+        {t('duel.batch.progress', { done, total: batch.length })}
+      </p>
+      <p className="duel-home__note">{t('duel.batch.hint')}</p>
+      <ol className="duel-batch__list">
+        {batch.map((item) => {
+          const status = batchStatus(item)
+          return (
+            <li key={item.number}>
+              <button type="button" className={`duel-batch__item duel-batch__item--${status}`} onClick={() => onOpen(item.number)} disabled={disabled}>
+                <span className="duel-batch__number">{t('duel.batch.item', { number: item.number })}</span>
+                <span className="duel-batch__prompt">{item.prompt}</span>
+                <span className={`duel-batch__status duel-batch__status--${status}`}>
+                  {item.revealed
+                    ? outcomeLabel({ outcome: item.revealed.outcome, modelA: item.revealed.a, modelB: item.revealed.b })
+                    : t(BATCH_STATUS_LABEL[status])}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 
@@ -780,6 +905,8 @@ export default function DuelPanel(): JSX.Element {
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
   const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'vote' | 'next' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Étape 381 : l'éditeur « plusieurs demandes d'un coup » (Code seulement).
+  const [batchEditing, setBatchEditing] = useState(false)
   const [deleted, setDeleted] = useState<{ deleted: string[]; failed: { model: string; error: string }[] } | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
@@ -973,6 +1100,22 @@ export default function DuelPanel(): JSX.Element {
   const skip = (): void => {
     stopAudio()
     void run('skip', async () => setView(await window.jaris.duelSkip()))
+  }
+
+  const startBatch = (prompts: string[]): void => {
+    void run('ask', async () => {
+      setView(await window.jaris.duelBatchStart(prompts))
+      setBatchEditing(false)
+    })
+  }
+
+  const openBatch = (number: number): void => {
+    void run('next', async () => setView(await window.jaris.duelBatchOpen(number)))
+  }
+
+  const backToBatch = (): void => {
+    stopAudio()
+    void run('next', async () => setView(await window.jaris.duelBatchClose()))
   }
 
   const openHistory = (): void => setHistoryOpen(true)
@@ -1193,6 +1336,27 @@ export default function DuelPanel(): JSX.Element {
         </div>
       </div>
     )
+  } else if (view.phase === 'ready' && !round && view.batch) {
+    // Étape 381 : la file de duels Code, en attendant que Léo en ouvre un.
+    content = (
+      <>
+        <div className="duel__bar">
+          <span className="duel__bar-title">{t('duel.batch.title')}</span>
+          <span className="duel__bar-meta">{t('duel.votesCount', { count: view.votes })}</span>
+          <HistoryButton onClick={openHistory} />
+          <button type="button" className="duel-btn duel__bar-end" onClick={stop} disabled={pending !== null}>
+            {t('duel.batch.stop')}
+          </button>
+          <button type="button" className="duel-btn duel__bar-end" onClick={end} disabled={pending !== null}>
+            {t('duel.end')}
+          </button>
+        </div>
+        <div className="duel__scroll">
+          <DuelBatchList batch={view.batch} onOpen={openBatch} disabled={pending !== null} />
+        </div>
+        {error && <p className="duel__error">{error}</p>}
+      </>
+    )
   } else if (view.phase === 'ready' && !round) {
     // Ne devrait pas arriver (une session prête a toujours un duel) : de quoi terminer quand même.
     content = (
@@ -1221,14 +1385,28 @@ export default function DuelPanel(): JSX.Element {
             {view.dropped > 0 && ` · ${t('duel.dropped', { count: view.dropped })}`}
           </span>
           <HistoryButton onClick={openHistory} />
+          {view.batch && (
+            <button type="button" className="duel-btn duel__bar-end" onClick={backToBatch} disabled={pending !== null}>
+              {t('duel.batch.back')}
+            </button>
+          )}
           <button type="button" className="duel-btn duel__bar-end" onClick={end} disabled={pending !== null}>
             {t('duel.end')}
           </button>
         </div>
 
-        {round.prompt === null ? (
+        {round.prompt === null && batchEditing && view.category === 'code' ? (
+          <div className="duel__scroll">
+            <DuelBatchEditor category={view.category} busy={pending !== null} onStart={startBatch} onCancel={() => setBatchEditing(false)} />
+          </div>
+        ) : round.prompt === null ? (
           <div className="duel__ask">
             <DuelAsk key={`${view.category}-${view.votes}`} category={view.category} onPick={setPrompt} />
+            {view.category === 'code' && (
+              <button type="button" className="duel-btn duel-batch__open" onClick={() => setBatchEditing(true)}>
+                {t('duel.batch.open')}
+              </button>
+            )}
           </div>
         ) : (
           <div className="duel__scroll">
@@ -1262,6 +1440,9 @@ export default function DuelPanel(): JSX.Element {
                     </header>
                     {finished(round.a) && round.a.trouble ? (
                       <p className="duel-side__muted">{t('duel.trouble.waitB')}</p>
+                    ) : view.batch ? (
+                      // Étape 381 : dans une file, Jaris lance B tout seul quand la carte a de la place.
+                      <p className="duel-side__muted">{t('duel.batch.status.waiting')}</p>
                     ) : finished(round.a) ? (
                       <div className="duel-side__turn">
                         <p>{t('duel.waitB')}</p>
@@ -1316,7 +1497,7 @@ export default function DuelPanel(): JSX.Element {
                   </p>
                   <div className="duel-vote__buttons">
                     <button type="button" className="duel-btn duel-btn--primary" onClick={next} disabled={pending !== null}>
-                      {t('duel.next')}
+                      {t(view.batch ? 'duel.batch.back' : 'duel.next')}
                     </button>
                   </div>
                 </div>
@@ -1348,7 +1529,7 @@ export default function DuelPanel(): JSX.Element {
 
         {error && <p className="duel__error">{error}</p>}
 
-        {round.prompt === null && (
+        {round.prompt === null && !batchEditing && (
           <Composer
             value={prompt}
             onChange={setPrompt}

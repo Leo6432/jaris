@@ -1097,6 +1097,14 @@ export interface DuelRoundView {
   together?: boolean
 }
 
+export interface DuelBatchItemView {
+  number: number
+  prompt: string
+  a: DuelSideView['status']
+  b: DuelSideView['status']
+  revealed: { a: string; b: string; outcome: DuelOutcome } | null
+}
+
 export interface DuelSessionView {
   id: string
   category: DuelCategory
@@ -1113,6 +1121,11 @@ export interface DuelSessionView {
   dropReason?: string | null
   votes: number
   round: DuelRoundView | null
+  /**
+   * Étape 381 : la file de duels Code lancés d'un coup (`null` = un duel à la fois). `round` est le duel ouvert, ou
+   * `null` quand Léo regarde la liste. Les noms n'y apparaissent qu'une fois le duel voté (`revealed`).
+   */
+  batch?: DuelBatchItemView[] | null
   error: string | null
 }
 
@@ -1422,6 +1435,10 @@ export const IPC_CHANNELS = {
   duelSkip: 'jaris:duel-skip',
   /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */
   duelNext: 'jaris:duel-next',
+  /** renderer -> main, étape 381 : plusieurs duels Code d'un coup, ouvrir l'un d'eux, revenir à la liste. */
+  duelBatchStart: 'jaris:duel-batch-start',
+  duelBatchOpen: 'jaris:duel-batch-open',
+  duelBatchClose: 'jaris:duel-batch-close',
   /** renderer -> main, étape 362 : tout l'historique des duels dans un fichier choisi par Léo. */
   duelExportVotes: 'jaris:duel-export-votes',
   /** renderer -> main, étape 377 : la machine qui fait tourner les modèles des duels (`null` = ce PC). */

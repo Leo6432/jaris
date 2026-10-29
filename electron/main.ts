@@ -83,6 +83,9 @@ import {
   duelSideCode,
   duelRankings,
   saveDuelRemote,
+  startDuelBatch,
+  openBatchRound,
+  closeBatchRound,
   endDuel,
   getDuelView,
   planDuel,
@@ -1770,6 +1773,16 @@ app.whenReady().then(async () => {
     return deleteDuelModels(models)
   })
   ipcMain.handle(IPC_CHANNELS.duelRankings, () => duelRankings())
+  // Étape 381 : plusieurs duels Code d'un coup (revérifiés par startDuelBatch).
+  ipcMain.handle(IPC_CHANNELS.duelBatchStart, (_event, prompts: unknown) => {
+    if (!Array.isArray(prompts) || prompts.length > 50) throw new Error(t('duel.error.badRequest'))
+    return startDuelBatch(prompts)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelBatchOpen, (_event, number: unknown) => {
+    if (typeof number !== 'number' || !Number.isInteger(number)) throw new Error(t('duel.error.badRequest'))
+    return openBatchRound(number)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelBatchClose, () => closeBatchRound())
   // Étape 377 : la machine qui fait tourner les modèles des duels (revérifiée par saveDuelRemote).
   ipcMain.handle(IPC_CHANNELS.duelRemoteSave, (_event, settings: unknown) => saveDuelRemote(settings))
   ipcMain.handle(IPC_CHANNELS.duelHistory, () => duelHistory())
