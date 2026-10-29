@@ -1,6 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
 import { contextBridge, ipcRenderer } from 'electron'
 import { ipcErrorMessage } from '../shared/ipcError'
 import {
@@ -286,6 +286,7 @@ const api = {
   duelRankings: (): Promise<DuelRankingView[]> => invoke(IPC_CHANNELS.duelRankings),
   duelHistory: (): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistory),
   duelExportVotes: (): Promise<DuelExportResult> => invoke(IPC_CHANNELS.duelExportVotes),
+  duelRemoteSave: (settings: DuelRemoteSettings | null): Promise<DuelRemoteSettings | null> => invoke(IPC_CHANNELS.duelRemoteSave, settings),
   duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),
   duelHistoryCode: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryCode, voteId, side),
   duelSideCode: (side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelSideCode, side),

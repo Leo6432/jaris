@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks'
 import { config as loadDotenv } from 'dotenv'
 import { existsSync } from 'fs'
 import { join } from 'path'
@@ -39,6 +40,22 @@ export function setOllamaHost(host: string): void {
   if (!fixedOllamaHost) activeOllamaHost = host
 }
 
+/**
+ * Étape 377 (Léo : « tout se passe sur mon PC mais les modèles tournent sur leur site », pour les duels seulement) :
+ * une adresse d'Ollama propre à un travail en cours, sans toucher au reste de Jaris. Tout ce qui est lancé dans
+ * `runWithOllamaHost` (et tout ce qui en découle, `await` compris) parle à cette adresse ; `runWithLocalOllama` revient à
+ * l'Ollama de ce PC à l'intérieur (les outils de Jaris pendant un duel : regarder l'écran, dessiner…).
+ */
+const hostScope = new AsyncLocalStorage<string | null>()
+
+export function runWithOllamaHost<T>(host: string, fn: () => Promise<T>): Promise<T> {
+  return hostScope.run(host, fn)
+}
+
+export function runWithLocalOllama<T>(fn: () => Promise<T>): Promise<T> {
+  return hostScope.run(null, fn)
+}
+
 export const config = {
   python: {
     bin: readEnv('PYTHON_BIN', 'python')
@@ -57,7 +74,11 @@ export const config = {
   ollama: {
     /** Lu à chaque appel : passe de l'Ollama de Windows à celui de Jaris sans redémarrer (étape 336). */
     get host(): string {
-      return activeOllamaHost
+      return hostScope.getStore() ?? activeOllamaHost
+    },
+    /** Étape 377 : vrai pendant un travail envoyé à un Ollama d'une autre machine (rien de ce PC ne s'y applique). */
+    get remote(): boolean {
+      return Boolean(hostScope.getStore())
     },
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
     /**

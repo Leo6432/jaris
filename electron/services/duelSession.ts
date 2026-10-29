@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { config } from '../config'
+import { config, runWithLocalOllama, runWithOllamaHost } from '../config'
 import { converse, type ConverseRestrictions } from './assistant'
 import { generateApp } from './codeGenerator'
 import { createGeneratedAppPreview } from './generatedAppPreview'
@@ -10,9 +10,10 @@ import {
   getDuelModelList,
   imageReadingModels,
   pickModelsForDuelCategory,
-  type DuelCandidate
+  type DuelCandidate,
+  type DuelMachineOverride
 } from './hardwareScan'
-import { deleteModel, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
+import { deleteModel, fetchOllamaVersion, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
 import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
@@ -31,9 +32,12 @@ import {
   nextDuelPair,
   pairKey,
   rankDuels,
+  normalizeRemoteOllamaHost,
+  parseDuelRemote,
   selectDuelModels,
   type DuelCategory,
   type DuelOutcome,
+  type DuelRemoteSettings,
   type DuelSide,
   type DuelVoteSide
 } from '../../shared/duel'
@@ -70,9 +74,13 @@ function duelRestrictions(
   model: string,
   think: ThinkValue,
   tools: ReadonlySet<string>,
-  onToolFailure?: ConverseRestrictions['onToolFailure']
+  onToolFailure?: ConverseRestrictions['onToolFailure'],
+  remote = false
 ): ConverseRestrictions {
   return {
+    // Étape 377 : le modèle tourne sur une autre machine, mais les outils de Jaris (regarder l'écran, dessiner…) restent
+    // ceux de CE PC, avec son Ollama à lui.
+    ...(remote ? { runTool: runWithLocalOllama } : {}),
     think,
     allowedTools: tools,
     // Aucune consigne de plus : le modèle doit répondre exactement comme en usage normal.
@@ -110,8 +118,19 @@ interface RoundState {
   tools: ReadonlySet<string> | null
 }
 
+/**
+ * Étape 377 : la machine qui fait tourner les modèles d'une session, figée à son lancement (changer le réglage pendant
+ * une session ne la coupe pas en deux machines).
+ */
+interface RemoteMachine {
+  host: string
+  machine: DuelMachineOverride
+}
+
 interface Session {
   id: string
+  /** `null` = les modèles tournent sur ce PC. */
+  remote: RemoteMachine | null
   category: DuelCategory
   phase: DuelSessionView['phase']
   /** Les modèles de la session, dans l'ordre où ils ont été choisis. */
@@ -174,6 +193,7 @@ export function getDuelView(): DuelSessionView | null {
     id: session.id,
     category: session.category,
     phase: session.phase,
+    remote: session.remote !== null,
     modelCount: session.models.length,
     preparing: session.preparing,
     dropped: session.dropped,
@@ -224,19 +244,71 @@ export function duelRankings(): DuelRankingView[] {
   }))
 }
 
-async function candidatesFor(category: DuelCategory, profile: Profile | null): Promise<DuelCandidate[]> {
-  return getDuelCandidates(category, profile)
+async function candidatesFor(category: DuelCategory, profile: Profile | null, remote: RemoteMachine | null = null): Promise<DuelCandidate[]> {
+  return getDuelCandidates(category, profile, remote?.machine)
+}
+
+/** Ce qui doit parler à l'Ollama des modèles : celui de l'autre machine pendant une session à distance, sinon ce PC. */
+function onModels<T>(remote: RemoteMachine | null, fn: () => Promise<T>): Promise<T> {
+  return remote ? runWithOllamaHost(remote.host, fn) : fn()
+}
+
+/**
+ * Étape 377 : l'autre machine réglée et activée, avec la version de son Ollama — ou l'erreur qui dit pourquoi elle ne
+ * répond pas (`machine` est alors celle qu'a donnée Léo, sans version : rien ne peut commencer).
+ */
+async function remoteMachine(profile: Profile | null): Promise<{ remote: RemoteMachine; error: string | null } | null> {
+  const settings = parseDuelRemote(profile?.duelRemote)
+  if (!settings?.enabled) return null
+  let version: string | null = null
+  let error: string | null = null
+  try {
+    version = await runWithOllamaHost(settings.host, () => fetchOllamaVersion())
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err)
+  }
+  return { remote: { host: settings.host, machine: { vramGb: settings.vramGb, ramGb: settings.ramGb, ollamaVersion: version } }, error }
+}
+
+/**
+ * Étape 377 : enregistre la machine des modèles des duels. Les réglages viennent de l'écran : revérifiés ici (adresse
+ * web, mémoire plausible). Désactiver garde l'adresse déjà enregistrée, pour ne pas la retaper ; `null` l'oublie.
+ */
+export async function saveDuelRemote(value: unknown): Promise<DuelRemoteSettings | null> {
+  if (value === null) {
+    await patchProfile({ duelRemote: undefined })
+    return null
+  }
+  if (!value || typeof value !== 'object') throw new Error(t('duel.error.badRequest'))
+  const raw = value as Record<string, unknown>
+  const parsed = parseDuelRemote(raw)
+  if (parsed) {
+    await patchProfile({ duelRemote: parsed })
+    return parsed
+  }
+  if (raw.enabled === true) {
+    const host = typeof raw.host === 'string' ? normalizeRemoteOllamaHost(raw.host) : null
+    throw new Error(t(host ? 'duel.remote.badNumbers' : 'duel.remote.badAddress'))
+  }
+  const previous = parseDuelRemote((await getProfile())?.duelRemote)
+  const next = previous ? { ...previous, enabled: false } : undefined
+  await patchProfile({ duelRemote: next })
+  return next ?? null
 }
 
 /** Ce qu'une session proposerait, taille par taille, avant de la lancer : rien n'est téléchargé ici. */
 export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
   const profile = await getProfile()
+  const away = await remoteMachine(profile)
+  const remote = away?.remote ?? null
+  const reachable = !away?.error
   const [candidates, installed, freeDiskGb, machine, list] = await Promise.all([
-    candidatesFor(category, profile),
-    installedModelsSeen(),
-    detectFreeDiskGb().catch(() => null),
-    duelMachine(),
-    getDuelModelList(category, profile)
+    candidatesFor(category, profile, remote),
+    reachable ? onModels(remote, installedModelsSeen) : Promise.resolve([] as string[]),
+    // Le disque de l'autre machine n'est pas connu : son Ollama refuse lui-même ce qui ne tient pas.
+    remote ? Promise.resolve(null) : detectFreeDiskGb().catch(() => null),
+    duelMachine(remote?.machine),
+    getDuelModelList(category, profile, remote?.machine)
   ])
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
   const counts = [...new Set(DUEL_SESSION_SIZES.map((size) => Math.min(size, candidates.length)))].filter((n) => n >= DUEL_MIN_MODELS)
@@ -247,6 +319,7 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
     machine,
     models: list.map((option) => ({ ...option, installed: isInstalled(option.model, installed) })),
     downloadBudgetGb: freeDiskGb === null ? null : Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB),
+    remote: away ? { host: away.remote.host, version: away.remote.machine.ollamaVersion, error: away.error } : null,
     sizes: counts.map((count) => {
       const missing = selectDuelModels(candidates, count).filter((m) => !isInstalled(m, installed))
       const downloadGb = missing.reduce((sum, m) => sum + (sizeOf.get(m) ?? 0), 0)
@@ -267,7 +340,8 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
  */
 async function installedModelsSeen(): Promise<string[]> {
   const list = await listInstalledModels().catch(() => [] as string[])
-  if (list.length || !(await repairModelsViewIfNeeded())) return list
+  // Étape 377 : la réparation agit sur l'Ollama et le dossier de CE PC, jamais sur ceux d'une autre machine.
+  if (list.length || config.ollama.remote || !(await repairModelsViewIfNeeded())) return list
   return listInstalledModels().catch(() => [] as string[])
 }
 
@@ -287,7 +361,10 @@ function busy(): boolean {
 export async function startDuel(category: DuelCategory, pick: number | readonly string[]): Promise<DuelSessionView> {
   if (busy()) throw new Error(t('duel.error.alreadyRunning'))
   const profile = await getProfile()
-  const candidates = await candidatesFor(category, profile)
+  const away = await remoteMachine(profile)
+  if (away?.error) throw new Error(away.error)
+  const remote = away?.remote ?? null
+  const candidates = await candidatesFor(category, profile, remote)
   let chosen: string[]
   if (typeof pick === 'number') {
     chosen = selectDuelModels(candidates, pick)
@@ -298,13 +375,14 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     if (chosen.some((m) => !available.has(m))) throw new Error(t('duel.error.notAvailable'))
     if (chosen.length < DUEL_MIN_CHOSEN) throw new Error(t('duel.error.chooseMin', { min: DUEL_MIN_CHOSEN }))
   }
-  const installed = await installedModelsSeen()
+  const installed = await onModels(remote, installedModelsSeen)
   const missing = chosen.filter((m) => !isInstalled(m, installed))
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
   // L'ordre des modèles est mélangé : la position dans la session ne dit rien de qui ils sont.
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
   session = {
     id: randomUUID(),
+    remote,
     category,
     phase: 'preparing',
     models: shuffled,
@@ -319,7 +397,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
   }
   const current = session
   emitNow()
-  void prepare(current, missing, sizeOf)
+  void onModels(remote, () => prepare(current, missing, sizeOf))
   return getDuelView() as DuelSessionView
 }
 
@@ -445,12 +523,17 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   emitNow()
   try {
     // Ollama arrêté : `null`, et le niveau part tel quel (Ollama le ramène à un niveau du modèle).
-    const think = equivalentThink(DUEL_THINK_LEVEL, await getModelThinking(model))
+    const think = equivalentThink(DUEL_THINK_LEVEL, await onModels(current.remote, () => getModelThinking(model)))
+    // Les outils sont ceux de CE PC, même quand les modèles tournent ailleurs.
     if (current.category !== 'code' && !round.tools) round.tools = await duelToolsHere()
     // « Arrêter » pendant ces lectures : le modèle ne doit pas partir quand même (le signal est déjà donné).
     if (!controller.signal.aborted) {
-      if (current.category === 'code') await runCode(current, side, model, prompt, think, controller.signal)
-      else await runConversation(current, side, model, prompt, think, round.tools ?? new Set(), controller.signal)
+      const tools = round.tools ?? new Set<string>()
+      await onModels(current.remote, () =>
+        current.category === 'code'
+          ? runCode(current, side, model, prompt, think, controller.signal)
+          : runConversation(current, side, model, prompt, think, tools, controller.signal)
+      )
     }
     if (controller.signal.aborted) side.status = 'stopped'
     else side.status = 'done'
@@ -531,7 +614,7 @@ async function runConversation(
       const message = error instanceof Error ? error.message : String(error)
       side.trouble = { tool, message: withoutModelNames(message, current.models, current.round?.pair ?? ['', '']).slice(0, 400) }
       emitSoon()
-    })
+    }, current.remote !== null)
   )
   // Un outil de Jaris en panne : la réponse est souvent son message d'erreur (écrit par Jaris, pas par le modèle), qui
   // peut nommer un modèle — masqué comme les autres erreurs.
@@ -788,7 +871,8 @@ export async function endDuel(): Promise<DuelSummary> {
     downloaded: [...current.downloaded].map(([model, sizeGb]) => ({
       model,
       sizeGb,
-      inUse: [...used].some((u) => sameModel(u, model))
+      // Étape 377 : supprimer un modèle de l'autre machine ne retire rien à ce PC.
+      inUse: current.remote === null && [...used].some((u) => sameModel(u, model))
     }))
   }
 }
@@ -812,9 +896,9 @@ export async function deleteDuelModels(models: string[]): Promise<{ deleted: str
   const deleted: string[] = []
   const failed: { model: string; error: string }[] = []
   for (const model of models) {
-    if (!current.downloaded.has(model) || used.some((u) => sameModel(u, model))) continue
+    if (!current.downloaded.has(model) || (current.remote === null && used.some((u) => sameModel(u, model)))) continue
     try {
-      await deleteModel(model)
+      await onModels(current.remote, () => deleteModel(model))
       current.downloaded.delete(model)
       deleted.push(model)
     } catch (err) {

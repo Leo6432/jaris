@@ -4,7 +4,7 @@ import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
-import type { DuelAction, DuelCategory, DuelOutcome, DuelToolTrouble, DuelVoteSide } from './duel'
+import type { DuelAction, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelVoteSide } from './duel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -126,6 +126,11 @@ export interface Profile {
    * (`models`). Absent = la voix utilise `models`, comme avant.
    */
   voiceModels?: ModelTiers
+  /**
+   * Étape 377 : la machine qui fait tourner les modèles des duels (Ollama d'une autre machine, par exemple sur RunPod).
+   * Gardée même désactivée, pour ne pas retaper l'adresse. Le reste de Jaris utilise toujours l'Ollama de ce PC.
+   */
+  duelRemote?: DuelRemoteSettings
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
   /**
@@ -1035,6 +1040,11 @@ export interface DuelPlan {
   models: DuelModelOption[]
   /** Place utilisable pour des téléchargements (place libre moins la marge de sécurité), `null` si inconnue. */
   downloadBudgetGb: number | null
+  /**
+   * Étape 377 : les modèles tournent sur une autre machine (`machine` est alors la sienne). `version` = Ollama répond,
+   * `error` = il ne répond pas (rien ne peut commencer).
+   */
+  remote: { host: string; version: string | null; error: string | null } | null
 }
 
 /**
@@ -1089,6 +1099,8 @@ export interface DuelSessionView {
   id: string
   category: DuelCategory
   phase: 'preparing' | 'ready' | 'ended'
+  /** Étape 377 : les modèles de la session tournent sur une autre machine (téléchargés là-bas, pas sur ce PC). */
+  remote?: boolean
   modelCount: number
   /** Téléchargement des modèles de la session, sans leur nom. */
   /** `installed` (étape 365) : modèles choisis déjà sur le PC, que la session ne télécharge pas. */
@@ -1408,6 +1420,8 @@ export const IPC_CHANNELS = {
   duelNext: 'jaris:duel-next',
   /** renderer -> main, étape 362 : tout l'historique des duels dans un fichier choisi par Léo. */
   duelExportVotes: 'jaris:duel-export-votes',
+  /** renderer -> main, étape 377 : la machine qui fait tourner les modèles des duels (`null` = ce PC). */
+  duelRemoteSave: 'jaris:duel-remote-save',
   /** main -> écran : nouvel état de la session (ou `null` quand il n'y en a plus). */
   duelChanged: 'jaris:duel-changed',
   /**

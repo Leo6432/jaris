@@ -532,3 +532,52 @@ export function duelActionFromLog(line: string): DuelAction | null {
   }
   return { tool, detail }
 }
+
+/**
+ * Étape 377 (Léo : « tout se passe sur mon PC mais les modèles tournent sur leur site », par exemple une carte louée
+ * sur RunPod) : la machine qui fait tourner les modèles des duels. Rien d'autre que les modèles n'y part : Jaris, ses
+ * outils et les actions sur le PC restent sur ce PC. `vramGb`/`ramGb` sont donnés par Léo — Ollama ne dit pas la
+ * mémoire de la machine qui le fait tourner.
+ */
+export interface DuelRemoteSettings {
+  enabled: boolean
+  host: string
+  vramGb: number
+  ramGb: number
+}
+
+export const DUEL_REMOTE_MAX_VRAM_GB = 4096
+export const DUEL_REMOTE_MAX_RAM_GB = 8192
+
+/**
+ * L'adresse d'un Ollama d'une autre machine, ramenée à son origine (« https://abc-11434.proxy.runpod.net »), ou `null`
+ * si ce n'est pas une adresse web utilisable. Sans « http(s):// », une adresse IP est lue en http (Ollama sans
+ * chiffrement, sur un réseau) et un nom de domaine en https (un service en ligne comme RunPod). Contrairement à
+ * l'Ollama de ce PC (normalizeOllamaHost, config.ts), aucun port n'est ajouté : une adresse https passe par le port 443.
+ */
+export function normalizeRemoteOllamaHost(value: string): string | null {
+  const text = value.trim()
+  if (!text || text.length > 300) return null
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text)
+  const scheme = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?(\/|$)/.test(text) || /^localhost(:\d+)?(\/|$)/i.test(text) ? 'http' : 'https'
+  let url: URL
+  try {
+    url = new URL(hasScheme ? text : `${scheme}://${text}`)
+  } catch {
+    return null
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password || !url.hostname) return null
+  if (url.hostname === '0.0.0.0') return null
+  return `${url.protocol}//${url.host}`
+}
+
+/** Les réglages d'une autre machine, vérifiés, ou `null` s'ils ne sont pas utilisables (jamais crus tels quels). */
+export function parseDuelRemote(value: unknown): DuelRemoteSettings | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const host = typeof raw.host === 'string' ? normalizeRemoteOllamaHost(raw.host) : null
+  const vramGb = typeof raw.vramGb === 'number' && Number.isFinite(raw.vramGb) ? raw.vramGb : NaN
+  const ramGb = typeof raw.ramGb === 'number' && Number.isFinite(raw.ramGb) ? raw.ramGb : NaN
+  if (!host || !(vramGb >= 0 && vramGb <= DUEL_REMOTE_MAX_VRAM_GB) || !(ramGb >= 1 && ramGb <= DUEL_REMOTE_MAX_RAM_GB)) return null
+  return { enabled: raw.enabled === true, host, vramGb, ramGb }
+}

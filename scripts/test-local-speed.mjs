@@ -99,6 +99,29 @@ test('chaque réponse d’Ollama donne sa vitesse (modèle, tokens écrits, dur�
   }
 })
 
+test('étape 377 : une réponse d’un Ollama d’une autre machine (duel sur une carte louée) ne mesure rien pour CE PC', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/api/show')) return new Response('{}', { status: 200 })
+    const line = { message: { role: 'assistant', content: 'ok' }, done: true, eval_count: 120, eval_duration: 3e9 }
+    return new Response(JSON.stringify(line) + '\n', { status: 200 })
+  }
+  try {
+    const ollama = loadTsModule('electron/services/ollama.ts', {
+      '../config': { config: { ollama: { host: 'https://pod-11434.proxy.runpod.net', model: 'x', numCtx: 8192, remote: true } } },
+      '../../shared/effort': { parseModelThinking: () => null },
+      './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
+      './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
+    })
+    const seen = []
+    ollama.setSpeedRecorder((model, tokens, ms) => seen.push([model, tokens, ms]))
+    await ollama.chatWithOllama([{ role: 'user', content: 'salut' }], undefined, 'qwen3.5:4b', 'low', undefined, () => {})
+    assert.deepEqual(seen, [])
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
 // Choix des modèles, sur les VRAIS scores du dépôt et la machine de Léo (8 Go, 32 Go).
 const nodeRequire = createRequire(import.meta.url)
 const scanSource = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {

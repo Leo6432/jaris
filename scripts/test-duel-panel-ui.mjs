@@ -91,7 +91,12 @@ window.jaris = {
   duelClose: async () => { window.__calls.push('close') },
   duelAudio: async () => null,
   duelDeleteModels: async (models) => { window.__calls.push(['delete', models]); return { deleted: models, failed: [] } },
-  getProfile: async () => null,
+  getProfile: async () => window.__profile ?? null,
+  duelRemoteSave: async (settings) => {
+    window.__calls.push(['remoteSave', settings])
+    if (window.__remoteSaveError) throw new Error(window.__remoteSaveError)
+    return settings
+  },
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
   duelExportVotes: async () => { window.__calls.push('export'); return window.__exportResult || { saved: true, count: 3 } },
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
@@ -163,8 +168,8 @@ test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images)
     assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal'])
     assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Conversation')
     await page.waitForSelector('.duel-size')
-    assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode) .duel-size').allTextContents(), ['4', '5', '6'])
-    assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
+    assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode) .duel-size').allTextContents(), ['4', '5', '6'])
+    assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 2 \(9,8 Go\)/)
     await page.click('.duel-size:has-text("4")')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 1 \(5,2 Go\)/)
@@ -201,6 +206,58 @@ test('accueil : pas assez de place sur le disque ou pas assez de modèles — on
       assert.equal(await page.isDisabled('.duel-home__start'), true)
     },
     "window.__plan = { category: 'conversation', available: 1, freeDiskGb: 100, sizes: [], machine: { vramGb: null, ramGb: 16 } }"
+  )
+})
+
+test('étape 377 : les modèles sur une autre machine — adresse, carte et RAM enregistrées, connexion dite, rien ne part si elle ne répond pas', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-remote')
+    assert.equal(await page.locator('.duel-remote__mode .duel-size[aria-checked="true"]').textContent(), 'Sur ce PC', 'ce PC par défaut')
+    assert.equal(await page.locator('.duel-remote__fields').count(), 0, 'aucun champ tant que ce PC est choisi')
+    await page.click('.duel-remote__mode .duel-size:has-text("Sur une autre machine")')
+    assert.equal(await page.locator('.duel-remote__fields input').count(), 3)
+    assert.match(await page.textContent('.duel-remote'), /Jaris, ses outils et les actions restent sur ton PC/)
+    assert.match(await page.textContent('.duel-remote'), /passent par cette machine/)
+    const before = (await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'plan').length
+    await page.fill('.duel-remote__field--host input', 'pod123-11434.proxy.runpod.net')
+    const [vram, ram] = await page.locator('.duel-remote__field:not(.duel-remote__field--host) input').all()
+    await vram.fill('288')
+    await ram.fill('188,5')
+    await page.evaluate(() => {
+      window.__plan = { ...window.__plan, machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod123-11434.proxy.runpod.net', version: '0.40.10', error: null } }
+    })
+    await page.click('.duel-remote__actions .duel-btn')
+    await page.waitForSelector('.duel-remote__status')
+    const saved = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'remoteSave')
+    assert.deepEqual(saved, ['remoteSave', { enabled: true, host: 'pod123-11434.proxy.runpod.net', vramGb: 288, ramGb: 188.5 }], 'nombres envoyés comme nombres, virgule comprise')
+    assert.ok((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'plan').length > before, 'le plan est recalculé pour l’autre machine')
+    assert.equal(await page.textContent('.duel-remote__status'), 'Connecté : Ollama 0.40.10.')
+    assert.equal(await page.isDisabled('.duel-home__start'), false)
+    // Revenir à ce PC s'applique tout de suite, sans perdre l'adresse.
+    await page.click('.duel-remote__mode .duel-size:has-text("Sur ce PC")')
+    await page.waitForFunction(() => window.__calls.filter((c) => c[0] === 'remoteSave').length === 2)
+    assert.equal((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'remoteSave')[1][1].enabled, false)
+  })
+  // Une machine enregistrée qui ne répond pas : la raison s'affiche et rien ne peut commencer.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-remote [role="alert"]')
+      assert.equal(await page.inputValue('.duel-remote__field--host input'), 'https://pod123-11434.proxy.runpod.net', 'réglage relu au retour')
+      assert.match(await page.textContent('.duel-remote [role="alert"]'), /ne répond pas/)
+      assert.equal(await page.isDisabled('.duel-home__start'), true)
+    },
+    "window.__profile = { name: 'Léo', duelRemote: { enabled: true, host: 'https://pod123-11434.proxy.runpod.net', vramGb: 288, ramGb: 188 } }; window.__plan = { category: 'conversation', available: 6, freeDiskGb: null, sizes: [{ count: 5, toDownload: 0, downloadGb: 0, fitsDisk: true }], machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod123-11434.proxy.runpod.net', version: null, error: 'La machine des modèles ne répond pas.' } }"
+  )
+  // Une adresse refusée par le main : son message s'affiche.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-remote')
+      await page.click('.duel-remote__mode .duel-size:has-text("Sur une autre machine")')
+      await page.click('.duel-remote__actions .duel-btn')
+      await page.waitForSelector('.duel-remote [role="alert"]')
+      assert.match(await page.textContent('.duel-remote [role="alert"]'), /Adresse invalide/)
+    },
+    "window.__remoteSaveError = 'Adresse invalide : colle l’adresse complète.'"
   )
 })
 

@@ -209,6 +209,129 @@ interface ModelPickerProps {
  * ne peut pas, il est en gris mais il est quand même présent ». Boutons à cocher (role="checkbox") plutôt que des
  * <input> : la règle générale des champs de saisie leur imposerait un cadre carré.
  */
+/** Un nombre tapé (« 288 », « 7,5 ») ; vide ou illisible = NaN, refusé par le main avec un message clair. */
+function typedNumber(value: string): number {
+  const text = value.trim().replace(',', '.')
+  return text === '' ? Number.NaN : Number(text)
+}
+
+/**
+ * Étape 377 (Léo : « tout se passe sur mon PC mais les modèles tournent sur leur site ») : faire tourner les modèles des
+ * duels sur une autre machine (une carte louée sur RunPod…). Jaris, ses outils et les actions restent sur ce PC.
+ */
+function DuelRemoteBox({ remote, onChanged }: { remote: DuelPlan['remote'] | undefined; onChanged: () => void }): JSX.Element {
+  const [away, setAway] = useState(false)
+  const [host, setHost] = useState('')
+  const [vram, setVram] = useState('')
+  const [ram, setRam] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void window.jaris
+      .getProfile()
+      .then((profile) => {
+        const saved = profile?.duelRemote
+        if (!alive || !saved) return
+        setAway(saved.enabled)
+        setHost(saved.host)
+        setVram(String(saved.vramGb))
+        setRam(String(saved.ramGb))
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const save = async (enabled: boolean): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const saved = await window.jaris.duelRemoteSave({ enabled, host, vramGb: typedNumber(vram), ramGb: typedNumber(ram) })
+      if (saved) setHost(saved.host)
+      onChanged()
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const choose = (next: boolean): void => {
+    setAway(next)
+    setError(null)
+    // Revenir à ce PC s'applique tout de suite ; une autre machine attend « Enregistrer et tester ».
+    if (!next) void save(false)
+  }
+
+  return (
+    <section className="duel-home__section duel-remote" aria-labelledby="duel-remote-title">
+      <h2 id="duel-remote-title" className="duel-home__label">
+        {t('duel.remote.title')}
+      </h2>
+      <div className="duel-sizes duel-remote__mode" role="radiogroup" aria-labelledby="duel-remote-title">
+        {([false, true] as const).map((option) => (
+          <button
+            key={String(option)}
+            type="button"
+            role="radio"
+            aria-checked={away === option}
+            className={`duel-size${away === option ? ' duel-size--selected' : ''}`}
+            onClick={() => choose(option)}
+            disabled={saving}
+          >
+            {t(option ? 'duel.remote.away' : 'duel.remote.here')}
+          </button>
+        ))}
+      </div>
+      {away && (
+        <>
+          <p className="duel-home__note">{t('duel.remote.lead')}</p>
+          <div className="duel-remote__fields">
+            <label className="duel-remote__field duel-remote__field--host">
+              <span>{t('duel.remote.address')}</span>
+              <input
+                type="url"
+                value={host}
+                placeholder="https://abc123-11434.proxy.runpod.net"
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setHost(event.target.value)}
+              />
+            </label>
+            <label className="duel-remote__field">
+              <span>{t('duel.remote.vram')}</span>
+              <input type="text" inputMode="decimal" value={vram} placeholder="288" onChange={(event) => setVram(event.target.value)} />
+            </label>
+            <label className="duel-remote__field">
+              <span>{t('duel.remote.ram')}</span>
+              <input type="text" inputMode="decimal" value={ram} placeholder="188" onChange={(event) => setRam(event.target.value)} />
+            </label>
+          </div>
+          <div className="duel-remote__actions">
+            <button type="button" className="duel-btn" onClick={() => void save(true)} disabled={saving}>
+              {saving ? t('duel.remote.saving') : t('duel.remote.save')}
+            </button>
+            {!saving && !error && remote?.version && (
+              <span className="duel-remote__status" role="status">
+                {t('duel.remote.connected', { version: remote.version })}
+              </span>
+            )}
+          </div>
+          {(error ?? (!saving ? remote?.error : null)) && (
+            <p className="duel-home__note duel-home__note--warn" role="alert">
+              {error ?? remote?.error}
+            </p>
+          )}
+          <p className="duel-home__note">{t('duel.remote.privacy')}</p>
+        </>
+      )}
+    </section>
+  )
+}
+
 function ModelPicker({ plan, picked, onToggle }: ModelPickerProps): JSX.Element {
   const models = plan.models ?? []
   return (
@@ -645,6 +768,8 @@ export default function DuelPanel(): JSX.Element {
   const [ended, setEnded] = useState<{ id: string; summary: DuelSummary } | null>(null)
   const [category, setCategory] = useState<DuelCategory>('conversation')
   const [plan, setPlan] = useState<DuelPlan | null>(null)
+  // Étape 377 : relance le calcul du plan quand la machine des modèles change.
+  const [planVersion, setPlanVersion] = useState(0)
   const [size, setSize] = useState<number>(DUEL_DEFAULT_SIZE)
   /** Étape 363 : modèles au hasard, ou choisis à la main. */
   const [pickMode, setPickMode] = useState<'random' | 'manual'>('random')
@@ -696,7 +821,7 @@ export default function DuelPanel(): JSX.Element {
     return () => {
       alive = false
     }
-  }, [home, active, category])
+  }, [home, active, category, planVersion])
 
   useEffect(() => {
     if (!home || !active) return
@@ -888,7 +1013,8 @@ export default function DuelPanel(): JSX.Element {
     const pickedMissing = (plan?.models ?? []).filter((m) => pickedNow.includes(m.model) && !m.installed)
     const pickedDownloadGb = pickedMissing.reduce((sum, m) => sum + m.vramGb, 0)
     const pickedFitsDisk = plan?.downloadBudgetGb == null || pickedDownloadGb <= plan.downloadBudgetGb
-    const canStart = manual ? pickedNow.length >= DUEL_MIN_CHOSEN && pickedFitsDisk : Boolean(chosen && chosen.fitsDisk)
+    const remoteDown = Boolean(plan?.remote?.error)
+    const canStart = !remoteDown && (manual ? pickedNow.length >= DUEL_MIN_CHOSEN && pickedFitsDisk : Boolean(chosen && chosen.fitsDisk))
     content = (
       <div className="duel__scroll">
         <div className="duel-home">
@@ -917,6 +1043,8 @@ export default function DuelPanel(): JSX.Element {
               ))}
             </div>
           </section>
+
+          <DuelRemoteBox remote={plan?.remote} onChanged={() => setPlanVersion((n) => n + 1)} />
 
           <section className="duel-home__section" aria-labelledby="duel-size-title">
             <h2 id="duel-size-title" className="duel-home__label">
@@ -956,7 +1084,7 @@ export default function DuelPanel(): JSX.Element {
             ) : tooFew ? (
               <p className="duel-home__note duel-home__note--warn">
                 {t('duel.notEnough')}{' '}
-                {t('duel.notEnough.machine', {
+                {t(plan.remote ? 'duel.notEnough.remote' : 'duel.notEnough.machine', {
                   gpu:
                     plan.machine?.vramGb == null
                       ? t('duel.machine.noGpu')
@@ -1052,6 +1180,7 @@ export default function DuelPanel(): JSX.Element {
           )}
           {preparing?.percent != null && <p className="duel-preparing__percent">{formatPercent(preparing.percent / 100)}</p>}
           <p className="duel-home__note">{t('duel.preparing.hidden')}</p>
+          {view.remote && <p className="duel-home__note">{t('duel.preparing.remote')}</p>}
           {view.dropped > 0 && <p className="duel-home__note duel-home__note--warn">{t('duel.dropped', { count: view.dropped })}</p>}
           <button type="button" className="duel-btn" onClick={end} disabled={pending !== null}>
             {t('duel.stopSession')}

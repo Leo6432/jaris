@@ -327,6 +327,11 @@ export interface ConverseRestrictions {
    */
   onToolFailure?: (tool: string, error: unknown) => void
   /**
+   * Étape 377 : comment exécuter un outil de Jaris — en duel avec des modèles sur une autre machine, les outils restent
+   * ceux de CE PC (runWithLocalOllama, config.ts). Absent = tel quel.
+   */
+  runTool?: <T>(fn: () => Promise<T>) => Promise<T>
+  /**
    * Étape 365 (Duel, Léo : « ça se fait pas un modèle avec raisonnement low et un autre max ») : la réflexion imposée,
    * le MÊME niveau pour les deux modèles d'un duel, traduit dans les réglages de chacun (equivalentThink).
    */
@@ -648,7 +653,7 @@ async function conversation(
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
     if (!isToolAllowed(name)) throw new Error(restrictions?.refusalFor?.(name) ?? restrictions?.refusal ?? t('reply.unavailable'))
-    return runTool(name, args)
+    return restrictions?.runTool ? restrictions.runTool(() => runTool(name, args)) : runTool(name, args)
   }
   const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
 

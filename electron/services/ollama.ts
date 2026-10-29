@@ -70,7 +70,8 @@ export function setSpeedRecorder(recorder: SpeedRecorder | null): void {
 
 function reportMetrics(model: string, metrics: ChatMetrics, onMetrics?: (metrics: ChatMetrics) => void): void {
   try {
-    speedRecorder?.(model, metrics.outputTokens, metrics.outputMs)
+    // Étape 377 : une réponse d'une autre machine (duel sur une carte louée) ne dit rien de la vitesse de CE PC.
+    if (!config.ollama.remote) speedRecorder?.(model, metrics.outputTokens, metrics.outputMs)
   } catch {
     // une mesure perdue ne fait jamais échouer une réponse
   }
@@ -278,7 +279,7 @@ function describeChatFailure(err: unknown): unknown {
   const code = cause?.code ?? (err as { code?: string } | null)?.code
   if (code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT') return new OllamaTooSlowError()
   if (!code || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EADDRNOTAVAIL') {
-    return new Error(t('ollama.unreachable', { host: config.ollama.host }))
+    return new Error(t(config.ollama.remote ? 'duel.remote.unreachable' : 'ollama.unreachable', { host: config.ollama.host }))
   }
   return new Error(t('ollama.connectionLost', { detail: code }))
 }
@@ -426,9 +427,27 @@ export async function preloadModel(model: string, numCtx: number, timeoutMs = 12
  * qui dit ce qui se passe ; toute autre erreur passe telle quelle.
  */
 export function explainOllamaUnreachable(err: unknown): unknown {
-  return err instanceof TypeError && err.message === 'fetch failed'
-    ? new Error(t('ollama.unreachable', { host: config.ollama.host }))
-    : err
+  if (!(err instanceof TypeError && err.message === 'fetch failed')) return err
+  // Étape 377 : l'Ollama d'une autre machine (duel) — « redémarre ton PC » n'y changerait rien.
+  return new Error(t(config.ollama.remote ? 'duel.remote.unreachable' : 'ollama.unreachable', { host: config.ollama.host }))
+}
+
+/**
+ * Étape 377 : la version d'un Ollama (`GET /api/version`), pour savoir s'il répond et quels modèles il sait charger.
+ * Lève une erreur claire s'il ne répond pas, ou si quelque chose d'autre répond à sa place (mauvais port, page d'erreur).
+ */
+export async function fetchOllamaVersion(timeoutMs = 10_000): Promise<string> {
+  const response = await fetch(`${config.ollama.host}/api/version`, { signal: AbortSignal.timeout(timeoutMs) }).catch((err: unknown) => {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new Error(t('duel.remote.timeout', { host: config.ollama.host }))
+    }
+    if (err instanceof TypeError && err.message === 'fetch failed') throw new Error(t('duel.remote.unreachable', { host: config.ollama.host }))
+    throw err
+  })
+  if (!response.ok) throw new Error(t('duel.remote.http', { status: response.status }))
+  const data = (await response.json().catch(() => null)) as { version?: unknown } | null
+  if (!data || typeof data.version !== 'string' || !data.version.trim()) throw new Error(t('duel.remote.notOllama'))
+  return data.version.trim()
 }
 
 export async function listInstalledModels(): Promise<string[]> {
@@ -671,7 +690,8 @@ export async function pullModelIfMissing(
   let installed = await listInstalledModels()
   // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un
   // téléchargement « réussi » en 2 s, puis « model not found »). Retélécharger n'y changerait rien.
-  if (installed.length === 0 && modelsViewRepair && (await modelsViewRepair())) installed = await listInstalledModels()
+  // Étape 377 : jamais pour l'Ollama d'une autre machine — la réparation agit sur le dossier et l'Ollama de CE PC.
+  if (installed.length === 0 && !config.ollama.remote && modelsViewRepair && (await modelsViewRepair())) installed = await listInstalledModels()
   if (installed.includes(model) || installed.includes(withTag(model))) return false
 
   try {
@@ -714,8 +734,11 @@ async function pullWithOllama(
   signal?: AbortSignal
 ): Promise<void> {
 
-  const budgetGb = await getDownloadBudgetGb()
-  const freeDiskGb = await detectFreeDiskGb()
+  // Étape 377 : sur une autre machine, ni la mémoire ni le disque de CE PC ne comptent — son Ollama refuse lui-même un
+  // téléchargement qui ne tient pas sur SON disque.
+  const remote = config.ollama.remote
+  const budgetGb = remote ? Number.POSITIVE_INFINITY : await getDownloadBudgetGb()
+  const freeDiskGb = remote ? null : await detectFreeDiskGb()
 
   onStatus?.(t('ollama.pull.start', { model }))
   const controller = new AbortController()

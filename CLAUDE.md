@@ -10115,3 +10115,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   il peut gagner Faible/Moyen/Élevé comme les autres (étape 160). Régression : `test-hardwarescan-duel.mjs` (phi4-mini
   et un modèle de code sans score de conversation entrent en duel), `test-benchmark-candidates-sync.mjs` (chaque
   modèle de Jaris est dans `MODELS`), `test-hardwarescan-single-pool.mjs` (les 12 proposés au test).
+
+- **Étape 377 (v0.40.18), Léo (capture de RunPod, B300 à 9 $/h) : « on peut faire en sorte que tout se passe sur mon PC
+  mais les modèles tournent sur leur site ? », puis, à la question à choix : « Duels seulement ».** Accueil du Duel →
+  « Où tournent les modèles » : « Sur ce PC » ou « Sur une autre machine » (adresse d'Ollama, mémoire de la carte, RAM,
+  « Enregistrer et tester » qui dit « Connecté : Ollama x.y.z » ou pourquoi ça ne répond pas). Rangé dans
+  `profile.duelRemote` (gardé désactivé pour ne pas retaper l'adresse), revérifié par le main (`saveDuelRemote`,
+  `parseDuelRemote` / `normalizeRemoteOllamaHost`, shared/duel.ts : origine seule, https par défaut pour un nom, http
+  pour une IP, jamais d'identifiants dans l'adresse ni de port ajouté).
+  **Le mécanisme, choisi pour ne toucher à rien d'autre** : `config.ollama.host` lit une adresse propre au travail en
+  cours (`AsyncLocalStorage`, config.ts : `runWithOllamaHost` / `runWithLocalOllama`, `config.ollama.remote`). Tout ce
+  que le duel lance dans `onModels(...)` (duelSession.ts : liste, téléchargements, réflexion du modèle, réponse ou
+  application, suppression) parle à l'autre machine, `await` et minuteurs compris ; le Chat, la voix et tout ce qui
+  tourne en même temps restent sur ce PC. Les OUTILS de Jaris appelés par le modèle (regarder l'écran, dessiner…)
+  reviennent sur ce PC (`ConverseRestrictions.runTool`), tout comme la liste des modèles de vision qui décide des outils
+  proposés. Un seul paramètre à passer plutôt qu'une adresse à faire descendre dans ~25 appels à Ollama.
+  **Ce qui ne doit jamais s'appliquer à l'autre machine, chacun gardé** : la vitesse mesurée (étape 367 : une B300
+  fausserait Faible/Moyen sur ce PC), la réparation du dossier de modèles (étapes 289/313 : un pod neuf a une liste
+  vide, ce n'est pas une panne de CE PC), la mémoire et le disque de ce PC avant un téléchargement (son Ollama refuse
+  lui-même ce qui ne tient pas), les modèles « utilisés par Jaris » protégés de la suppression (supprimer là-bas ne
+  retire rien ici), et un téléchargement bloqué sur ce PC. Les modèles proposés suivent la carte, la RAM et la version
+  d'Ollama de L'AUTRE machine (`DuelMachineOverride`, hardwareScan.ts) ; le choix des modèles de Jaris en fin de
+  session reste calculé pour CE PC, avec les votes. Une machine qui ne répond pas : le plan le dit et rien ne démarre.
+  Message « injoignable » propre (`duel.remote.unreachable`) : « redémarre ton PC » n'y changerait rien.
+  **Côté RunPod (à dire à Léo, pas dans le code)** : Ollama doit écouter sur `0.0.0.0` (sinon il refuse les autres
+  adresses), le port 11434 exposé en HTTP, l'adresse est `https://<id du pod>-11434.proxy.runpod.net`, et le disque du
+  conteneur doit être agrandi (50 Go par défaut). Cette adresse n'a pas de mot de passe : arrêter le pod après.
+  **Leçon générale : pour envoyer UN travail ailleurs sans changer tout le reste, une valeur « propre au travail en
+  cours » (AsyncLocalStorage) vaut mieux qu'un réglage global (tout le reste partirait aussi) ou qu'un paramètre de plus
+  dans chaque fonction (un oubli suffit) — mais il faut lister ce qui, dans ce travail, doit rester local (ici les outils
+  et les mesures), et le ramener explicitement.** Régression : `node --test scripts/test-duel-remote.mjs` (vrai
+  config.ts : l'adresse suit les await et minuteurs sans déborder ; où part chaque appel d'un vrai duel ; machine
+  injoignable ; réglage désactivé ; enregistrement revérifié ; téléchargement sans les limites de ce PC),
+  `test-local-speed.mjs`, `test-hardwarescan-duel.mjs` et `test-duel-panel-ui.mjs`. Huit gardes vérifiées en les
+  retirant une à une. **Non vérifié en usage réel** : une vraie session sur un pod RunPod (proxy, durée du premier
+  chargement d'un modèle).

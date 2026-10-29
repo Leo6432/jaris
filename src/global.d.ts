@@ -1,6 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
 import type { LanguageSetting } from '../shared/i18n/languages'
 import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
 import type {
@@ -235,6 +235,7 @@ declare global {
       duelRankings: () => Promise<DuelRankingView[]>
       duelHistory: () => Promise<DuelHistoryEntry[]>
       duelExportVotes: () => Promise<DuelExportResult>
+      duelRemoteSave: (settings: DuelRemoteSettings | null) => Promise<DuelRemoteSettings | null>
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
       duelHistoryCode: (voteId: string, side: DuelSide) => Promise<string | null>
       duelSideCode: (side: DuelSide) => Promise<string | null>

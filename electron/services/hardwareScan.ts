@@ -2252,26 +2252,39 @@ export interface DuelCandidate {
  * Code) et qu'Ollama sait charger. Étape 376 : le test d'appel d'outils n'est plus un filtre, les votes jugent.
  */
 /** Ce que le Duel a détecté sur ce PC, affiché quand il n'y a pas assez de modèles (au lieu d'un message sans cause). */
-export async function duelMachine(): Promise<{ vramGb: number | null; ramGb: number }> {
+export async function duelMachine(machine?: DuelMachineOverride): Promise<{ vramGb: number | null; ramGb: number }> {
+  if (machine) return { vramGb: machine.vramGb, ramGb: Math.round(machine.ramGb) }
   const { vramGb } = await detectGpu()
   return { vramGb, ramGb: Math.round(detectRamGb()) }
+}
+
+/**
+ * Étape 377 : les modèles des duels tournent sur une AUTRE machine (Ollama d'une carte louée) — sa carte et sa RAM,
+ * données par Léo, et la version de SON Ollama (`null` = inconnue, prudence comme sur ce PC).
+ */
+export interface DuelMachineOverride {
+  vramGb: number | null
+  ramGb: number
+  ollamaVersion: string | null
 }
 
 /**
  * Étapes 355 et 363 : la même règle pour composer une session au hasard (getDuelCandidates) et pour la liste à cocher
  * (getDuelModelList) — un seul calcul, pour qu'un modèle coché soit toujours un modèle que le hasard aurait pu prendre.
  */
-async function assessDuelModels(category: DuelCategory, profile?: Profile | null) {
-  const { vramGb } = await detectGpu()
+async function assessDuelModels(category: DuelCategory, profile?: Profile | null, machine?: DuelMachineOverride) {
+  const vramGb = machine ? machine.vramGb : (await detectGpu()).vramGb
+  const ramGb = machine ? machine.ramGb : detectRamGb()
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
-  const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
+  const ramOffloadBudgetGb = budgetGb + Math.max(0, ramGb - RESOURCE_SAFETY_MARGIN_GB)
   // Sans carte graphique détectée, TOUS les modèles tournent sur le processeur, dans la RAM : la règle « Faible et
   // Moyen sur la carte » ne laissait alors que deux ou trois gros modèles, et le Duel disait « pas assez de modèles ».
   const cardless = vramGb === null
-  const cardlessBudgetGb = Math.max(ramOffloadBudgetGb, detectRamGb() - CARDLESS_RAM_RESERVE_GB)
+  const cardlessBudgetGb = Math.max(ramOffloadBudgetGb, ramGb - CARDLESS_RAM_RESERVE_GB)
   const scores = parseVerifiedToolScores()
-  const tooNew = modelsNeedingNewerOllama()
-  const blocked = new Set(Object.keys(profile?.blockedModels ?? {}))
+  const tooNew = machine ? modelsNeedingNewerOllama(machine.ollamaVersion) : modelsNeedingNewerOllama()
+  // Un téléchargement bloqué sur CE PC (Ollama trop ancien pour un import hf.co/) ne dit rien d'une autre machine.
+  const blocked = new Set(machine ? [] : Object.keys(profile?.blockedModels ?? {}))
   const toolScore = (model: string): string | null =>
     (category === 'code' ? scores.code.get(model) ?? scores.conversation.get(model) : scores.conversation.get(model)) ?? null
   const reasonFor = (c: ModelCandidate): DuelUnavailableReason | null => {
@@ -2288,8 +2301,8 @@ async function assessDuelModels(category: DuelCategory, profile?: Profile | null
   return { scores, toolScore, budgetGb, cardless, assessed: ALL_MODELS.map((c) => ({ c, reason: reasonFor(c) })) }
 }
 
-export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null): Promise<DuelCandidate[]> {
-  const { scores, toolScore, budgetGb, cardless, assessed } = await assessDuelModels(category, profile)
+export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null, machine?: DuelMachineOverride): Promise<DuelCandidate[]> {
+  const { scores, toolScore, budgetGb, cardless, assessed } = await assessDuelModels(category, profile, machine)
   const standings = duelStandings(category)
   const strengthOf = duelStrength(category)
   const used =
@@ -2320,8 +2333,8 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
  * Tous les modèles candidats, disponibles d'abord puis du plus léger au plus lourd, avec la raison de ceux qui ne
  * peuvent pas entrer dans un duel ici.
  */
-export async function getDuelModelList(category: DuelCategory, profile?: Profile | null): Promise<DuelModelOption[]> {
-  const { assessed } = await assessDuelModels(category, profile)
+export async function getDuelModelList(category: DuelCategory, profile?: Profile | null, machine?: DuelMachineOverride): Promise<DuelModelOption[]> {
+  const { assessed } = await assessDuelModels(category, profile, machine)
   return assessed
     .map(({ c, reason }) => ({ model: c.model, vramGb: c.vramGb, reason }))
     .sort((a, b) => Number(a.reason !== null) - Number(b.reason !== null) || a.vramGb - b.vramGb || a.model.localeCompare(b.model))

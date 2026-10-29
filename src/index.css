@@ -9213,6 +9213,55 @@ ul.reply-list--nested {
   border-color: transparent;
 }
 
+/* Étape 377 : la machine qui fait tourner les modèles des duels (adresse d'Ollama, carte, RAM). */
+.duel-remote__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 110px;
+  /* Un libellé sur deux lignes (« Mémoire de la carte graphique ») ne décale pas son champ : les champs s'alignent en bas. */
+  align-items: end;
+  gap: 10px;
+}
+
+.duel-remote__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--hud-text-dim);
+}
+
+.duel-remote__field input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-remote__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.duel-remote__status {
+  font-size: 13px;
+  color: var(--hud-ok);
+}
+
+@container (max-width: 560px) {
+  .duel-remote__fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .duel-remote__field--host {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Étape 363 : « Au hasard / Je choisis », puis la liste de TOUS les modèles de Jaris (grisés quand le PC ne peut pas). */
 .duel-pickmode {
   margin-bottom: 4px;

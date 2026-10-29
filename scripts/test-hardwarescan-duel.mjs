@@ -280,3 +280,26 @@ test('étape 363 : la liste à cocher montre TOUS les modèles de Jaris ; dispon
   assert.equal(reason('qwen2.5-coder:7b'), null, 'un modèle de code sans score de conversation entre en duel Conversation')
   m.setOllamaVersionSource(() => '0.40.10')
 })
+
+test('étape 377 : les modèles sur une autre machine (B300 louée) — SA carte, SA RAM, SON Ollama, jamais ceux de ce PC', async () => {
+  // Ce PC : 8 Go, 32 Go. L'autre machine : 288 Go de carte, 188 Go de RAM, Ollama récent.
+  const scan = setup(null)
+  const away = { vramGb: 288, ramGb: 188, ollamaVersion: '0.40.10' }
+  const here = await scan.getDuelModelList('conversation', null)
+  const there = await scan.getDuelModelList('conversation', null, away)
+  assert.ok(here.some((m) => m.reason?.kind === 'tooBig'), 'sur ce PC, des modèles sont trop gros')
+  assert.ok(!there.some((m) => m.reason?.kind === 'tooBig'), 'sur la B300, tout tient')
+  assert.deepEqual(JSON.parse(JSON.stringify(await scan.duelMachine(away))), { vramGb: 288, ramGb: 188 })
+  // Un modèle qui exige un Ollama récent dépend de la version de L'AUTRE machine (inconnue = prudence).
+  const old = await scan.getDuelModelList('conversation', null, { ...away, ollamaVersion: null })
+  assert.ok(old.some((m) => m.reason?.kind === 'ollama'))
+  // Un téléchargement bloqué sur CE PC ne bloque rien là-bas.
+  const blockedModel = there[0].model
+  const blocked = await scan.getDuelModelList('conversation', { name: 'Léo', blockedModels: { [blockedModel]: 'x' } }, away)
+  assert.equal(blocked.find((m) => m.model === blockedModel).reason, null)
+  // Une autre machine sans carte : c'est SA RAM qui compte (20 Go là-bas, 32 Go sur ce PC).
+  const cardless = await scan.getDuelModelList('conversation', null, { vramGb: null, ramGb: 20, ollamaVersion: '0.40.10' })
+  assert.ok(cardless.some((m) => m.reason?.kind === 'tooBig' && m.reason.budgetGb === 14))
+  const candidates = await scan.getDuelCandidates('conversation', null, away)
+  assert.equal(candidates.length, there.filter((m) => m.reason === null).length)
+})
