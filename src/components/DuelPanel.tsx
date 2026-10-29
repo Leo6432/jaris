@@ -1232,6 +1232,7 @@ export default function DuelPanel(): JSX.Element {
                 <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
                 <p>{round.prompt}</p>
               </div>
+              {round.together && <p className="duel-home__note duel-round__together">{t('duel.together')}</p>}
               <div className={`duel-round__sides${view.category === 'code' ? ' duel-round__sides--code' : ''}`}>
                 <SideCard
                   name="a"

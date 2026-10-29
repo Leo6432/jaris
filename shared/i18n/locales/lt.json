@@ -1496,6 +1496,7 @@
   "duel.suggest.voice.10": "Atidaryk YouTube",
   "duel.suggest.more": "Daugiau idėjų",
   "duel.yourPrompt": "Tavo užklausa",
+  "duel.together": "Abu modeliai rašo vienu metu: vaizdo plokštėje pakanka atminties abiem.",
   "duel.side.a": "Modelis A",
   "duel.side.b": "Modelis B",
   "duel.status.waiting": "Laukia",

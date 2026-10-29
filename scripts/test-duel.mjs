@@ -329,3 +329,18 @@ test('étape 366 (relecture) : un AUTRE modèle qui lit les images, installé, g
   const tools = duel.duelOfferedTools(names, { canDraw: false, installed: ['qwen3.5:4b'], visionModels: ['qwen3.8:27b', 'qwen3.5:4b'] })
   assert.ok(tools.has('look_at_screen') && tools.has('computer_use_task'))
 })
+
+
+test('étape 379 : deux modèles en même temps seulement en Code, et seulement s’ils tiennent ensemble sur la carte', () => {
+  // H100 (80 Go) : deux modèles de 22 et 18 Go tiennent, avec leur mémoire de travail.
+  assert.equal(duel.canRunDuelTogether('code', [22, 18], 80), true)
+  // RTX 5090 (32 Go) : non, l'un déborderait sur la RAM.
+  assert.equal(duel.canRunDuelTogether('code', [22, 18], 32), false)
+  assert.equal(duel.canRunDuelTogether('code', [5, 6], 32), true)
+  // Conversation et Vocal : jamais, ils agissent sur le PC.
+  assert.equal(duel.canRunDuelTogether('conversation', [2, 3], 288), false)
+  assert.equal(duel.canRunDuelTogether('voice', [2, 3], 288), false)
+  // Carte inconnue ou taille inconnue : prudence.
+  assert.equal(duel.canRunDuelTogether('code', [2, 3], null), false)
+  assert.equal(duel.canRunDuelTogether('code', [Number.NaN, 3], 288), false)
+})

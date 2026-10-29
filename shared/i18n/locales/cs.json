@@ -1496,6 +1496,7 @@
   "duel.suggest.voice.10": "Otevři YouTube",
   "duel.suggest.more": "Další nápady",
   "duel.yourPrompt": "Tvůj požadavek",
+  "duel.together": "Oba modely píšou současně: grafická karta má dost paměti pro oba.",
   "duel.side.a": "Model A",
   "duel.side.b": "Model B",
   "duel.status.waiting": "Čeká",

@@ -1517,6 +1517,7 @@
   "duel.suggest.voice.10": "Otwórz YouTube",
   "duel.suggest.more": "Więcej pomysłów",
   "duel.yourPrompt": "Twoja prośba",
+  "duel.together": "Oba modele piszą jednocześnie: karta graficzna ma dość pamięci dla obu.",
   "duel.side.a": "Model A",
   "duel.side.b": "Model B",
   "duel.status.waiting": "Czeka",

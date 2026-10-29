@@ -261,6 +261,18 @@ test('étape 377 : les modèles sur une autre machine — adresse, carte et RAM 
   )
 })
 
+test('étape 379 : en Code, A et B écrivent en même temps — la carte de B montre son travail, pas un bouton « Lancer B »', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-round__together')
+      assert.match(await page.textContent('.duel-round__together'), /en même temps/)
+      assert.equal(await page.locator('.duel-side--idle').count(), 0, 'pas de carte « en attente » pour B')
+      assert.equal(await page.locator('button:has-text("Au tour du modèle B")').count(), 0)
+    },
+    "var s = { status: 'running', text: '', activity: { kind: 'thinking' }, startedAt: Date.now(), durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }; window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: 'Un compteur', a: s, b: s, revealed: null, together: true } }"
+  )
+})
+
 test('préparation : l’avancement du téléchargement, sans nom de modèle', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.duel-home__start:not([disabled])')

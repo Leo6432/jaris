@@ -1488,6 +1488,7 @@ export const fr = {
   "duel.suggest.voice.10": "Ouvre YouTube",
   "duel.suggest.more": "Autres idées",
   "duel.yourPrompt": "Ta demande",
+  "duel.together": "Les deux modèles écrivent en même temps : la carte graphique a assez de mémoire pour les deux.",
   "duel.side.a": "Modèle A",
   "duel.side.b": "Modèle B",
   "duel.status.waiting": "En attente",

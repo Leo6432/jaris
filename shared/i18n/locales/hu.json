@@ -1475,6 +1475,7 @@
   "duel.suggest.voice.10": "Nyisd meg a YouTube-ot",
   "duel.suggest.more": "További ötletek",
   "duel.yourPrompt": "A kérésed",
+  "duel.together": "Mindkét modell egyszerre ír: a videokártyán mindkettőnek elég a memória.",
   "duel.side.a": "Modell A",
   "duel.side.b": "Modell B",
   "duel.status.waiting": "Vár",

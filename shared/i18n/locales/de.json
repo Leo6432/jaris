@@ -1475,6 +1475,7 @@
   "duel.suggest.voice.10": "Öffne YouTube",
   "duel.suggest.more": "Weitere Ideen",
   "duel.yourPrompt": "Deine Anfrage",
+  "duel.together": "Beide Modelle schreiben gleichzeitig: Die Grafikkarte hat genug Speicher für beide.",
   "duel.side.a": "Modell A",
   "duel.side.b": "Modell B",
   "duel.status.waiting": "Wartet",

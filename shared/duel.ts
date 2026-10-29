@@ -596,3 +596,21 @@ export function duelConfidence(duels: number): number {
   if (!Number.isFinite(duels) || duels <= 0) return 0
   return Math.min(1, duels / DUEL_RELIABLE_COUNT)
 }
+
+/**
+ * Étape 379 (Léo : « si Jaris détecte qu'il peut lancer les 2 duels en même temps, il doit le faire ») : quand les deux
+ * modèles d'un duel peuvent travailler EN MÊME TEMPS. Seulement en Code : là, chacun écrit une application dans
+ * l'aperçu, sans rien toucher sur le PC. En Conversation et en Vocal, les modèles agissent vraiment sur le PC (ouvrir le
+ * Bloc-notes, taper du texte) : deux à la fois se marcheraient dessus, et Léo doit pouvoir vérifier ce que A a fait
+ * avant que B commence. Il faut aussi que les DEUX tiennent ensemble sur la carte graphique, avec leur mémoire de
+ * travail (une génération de code peut demander une grande fenêtre de contexte : marge de 30 % + 2 Go par modèle),
+ * moins ce que Windows en occupe ; sinon l'un déborderait sur la RAM et le duel serait plus lent qu'à tour de rôle.
+ */
+export const DUEL_TOGETHER_GPU_RESERVE_GB = 1
+
+export function canRunDuelTogether(category: DuelCategory, sizesGb: readonly [number, number], vramGb: number | null): boolean {
+  if (category !== 'code' || vramGb === null || !Number.isFinite(vramGb)) return false
+  if (!sizesGb.every((size) => Number.isFinite(size) && size > 0)) return false
+  const needGb = sizesGb.reduce((sum, size) => sum + size * 1.3 + 2, 0)
+  return needGb <= vramGb - DUEL_TOGETHER_GPU_RESERVE_GB
+}

@@ -26,6 +26,7 @@ import {
   DUEL_MIN_CHOSEN,
   DUEL_MIN_MODELS,
   DUEL_SESSION_SIZES,
+  canRunDuelTogether,
   duelActionFromLog,
   duelOfferedTools,
   isJarisToolFailure,
@@ -111,6 +112,8 @@ interface RoundState {
   sides: Record<DuelSide, SideState>
   /** Étape 358 : noms révélés après le vote, comme sur Arena. */
   revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  /** Étape 379 : A et B travaillent en même temps (canRunDuelTogether). */
+  together: boolean
   /**
    * Étape 366 : les outils proposés pendant CE duel — ceux que ce PC peut faire tourner —, lus avant le tour de A et
    * gardés pour B : les deux modèles ont exactement les mêmes. `null` tant que A n'a pas commencé.
@@ -131,6 +134,12 @@ interface Session {
   id: string
   /** `null` = les modèles tournent sur ce PC. */
   remote: RemoteMachine | null
+  /**
+   * Étape 379 : la mémoire de la carte qui fait tourner les modèles (ce PC ou l'autre machine) et le poids de chaque
+   * modèle, pour savoir si A et B tiennent ensemble.
+   */
+  vramGb: number | null
+  sizes: Map<string, number>
   category: DuelCategory
   phase: DuelSessionView['phase']
   /** Les modèles de la session, dans l'ordre où ils ont été choisis. */
@@ -159,7 +168,11 @@ export function setDuelEnvironment(env: DuelEnvironment): void {
 }
 
 let session: Session | null = null
-let runController: AbortController | null = null
+/** Étape 379 : un arrêt par côté — en Code, A et B peuvent travailler en même temps. */
+const runControllers = new Map<DuelSide, AbortController>()
+function abortRuns(): void {
+  for (const controller of runControllers.values()) controller.abort()
+}
 let prepareController: AbortController | null = null
 let emitTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -199,7 +212,7 @@ export function getDuelView(): DuelSessionView | null {
     dropped: session.dropped,
     votes: session.history.length,
     round: round
-      ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed }
+      ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
       : null,
     error: session.error
   }
@@ -378,11 +391,14 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
   const installed = await onModels(remote, installedModelsSeen)
   const missing = chosen.filter((m) => !isInstalled(m, installed))
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
+  const machine = await duelMachine(remote?.machine).catch(() => null)
   // L'ordre des modèles est mélangé : la position dans la session ne dit rien de qui ils sont.
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
   session = {
     id: randomUUID(),
     remote,
+    vramGb: machine?.vramGb ?? null,
+    sizes: sizeOf,
     category,
     phase: 'preparing',
     models: shuffled,
@@ -450,7 +466,8 @@ function nextRound(current: Session): void {
     current.round = null
     return
   }
-  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null }
+  const together = canRunDuelTogether(current.category, [current.sizes.get(pair[0]) ?? NaN, current.sizes.get(pair[1]) ?? NaN], current.vramGb)
+  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null, together }
 }
 
 function sideFinished(side: SideState): boolean {
@@ -493,6 +510,8 @@ export function askDuel(prompt: string): DuelSessionView {
   if (!text) throw new Error(t('duel.error.emptyPrompt'))
   current.round.prompt = text
   void runSide(current, current.round, 'a')
+  // Étape 379 : en Code, avec assez de mémoire pour les deux, B n'attend pas A.
+  if (current.round.together) void runSide(current, current.round, 'b')
   return getDuelView() as DuelSessionView
 }
 
@@ -507,16 +526,16 @@ export function runDuelB(): DuelSessionView {
 }
 
 export function stopDuelRun(): void {
-  runController?.abort()
+  abortRuns()
 }
 
 async function runSide(current: Session, round: RoundState, sideName: DuelSide): Promise<void> {
   const side = round.sides[sideName]
   const model = round.pair[sideName === 'a' ? 0 : 1]
   const prompt = round.prompt as string
-  runController?.abort()
+  runControllers.get(sideName)?.abort()
   const controller = new AbortController()
-  runController = controller
+  runControllers.set(sideName, controller)
   side.status = 'running'
   side.startedAt = Date.now()
   side.activity = { kind: current.category === 'code' ? 'loading' : 'thinking' }
@@ -546,7 +565,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   } finally {
     side.activity = null
     side.durationMs = side.startedAt === null ? null : Date.now() - side.startedAt
-    if (runController === controller) runController = null
+    if (runControllers.get(sideName) === controller) runControllers.delete(sideName)
     if (session === current) emitNow()
   }
 }
@@ -745,6 +764,7 @@ export function retryDuel(): DuelSessionView {
   // Relus au nouveau tour de A : le modèle d'images a peut-être été installé entre-temps.
   round.tools = null
   void runSide(current, round, 'a')
+  if (round.together) void runSide(current, round, 'b')
   return getDuelView() as DuelSessionView
 }
 
@@ -813,7 +833,7 @@ export async function endDuel(): Promise<DuelSummary> {
   const current = session
   if (!current) throw new Error(t('duel.error.noSession'))
   prepareController?.abort()
-  runController?.abort()
+  abortRuns()
   current.phase = 'ended'
   current.preparing = null
   current.round = null
@@ -918,5 +938,5 @@ export function closeDuel(): void {
 /** Fermeture de Jaris ou « Déplacer » : tout ce qui tourne s'arrête, rien n'est voté à la place de Léo. */
 export function abortDuel(): void {
   prepareController?.abort()
-  runController?.abort()
+  abortRuns()
 }

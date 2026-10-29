@@ -1517,6 +1517,7 @@
   "duel.suggest.voice.10": "Відкрий YouTube",
   "duel.suggest.more": "Інші ідеї",
   "duel.yourPrompt": "Твій запит",
+  "duel.together": "Обидві моделі пишуть одночасно: відеокарта має достатньо пам'яті для обох.",
   "duel.side.a": "Модель A",
   "duel.side.b": "Модель B",
   "duel.status.waiting": "Очікування",

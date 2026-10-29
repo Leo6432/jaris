@@ -1475,6 +1475,7 @@
   "duel.suggest.voice.10": "Åbn YouTube",
   "duel.suggest.more": "Flere idéer",
   "duel.yourPrompt": "Din forespørgsel",
+  "duel.together": "Begge modeller skriver samtidig: grafikkortet har nok hukommelse til dem begge.",
   "duel.side.a": "Model A",
   "duel.side.b": "Model B",
   "duel.status.waiting": "Venter",

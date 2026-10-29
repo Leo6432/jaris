@@ -1093,6 +1093,8 @@ export interface DuelRoundView {
   b: DuelSideView
   /** Étape 358 : après le vote, les noms sont révélés (comme sur Arena) ; `null` avant le vote. */
   revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  /** Étape 379 : les deux modèles travaillent en même temps (duel Code, et assez de mémoire pour les deux). */
+  together?: boolean
 }
 
 export interface DuelSessionView {

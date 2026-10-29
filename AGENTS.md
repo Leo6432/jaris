@@ -10127,3 +10127,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   justement ce que le rouge rend visible. Régression : `scripts/test-options-reorganization-ui.mjs` (teinte mesurée
   sur le style calculé : rouge à 2 duels, vert à 25, entre les deux à 10 ; vérifié en figeant la couleur, le test
   échoue).
+
+- **Étape 379 (v0.40.20), Léo (liste des cartes RunPod à l'appui) : « si Jaris détecte qu'il peut lancer les 2 duels
+  en même temps, il doit le faire ».** `canRunDuelTogether` (shared/duel.ts) : A et B travaillent EN MÊME TEMPS
+  seulement en **Code** (chacun écrit une application dans l'aperçu, rien sur le PC) ET si les deux tiennent ensemble
+  sur la carte qui fait tourner les modèles (ce PC ou l'autre machine) : poids × 1,3 + 2 Go par modèle, moins 1 Go pour
+  Windows. **Jamais en Conversation ni en Vocal**, quelle que soit la carte : les modèles y agissent vraiment sur le PC
+  (deux qui tapent dans le Bloc-notes en même temps se marcheraient dessus), et Léo doit voir ce que A a fait avant B.
+  Concrètement : une H100 de 80 Go fait les duels Code des plus gros modèles en parallèle, une RTX 5090 de 32 Go
+  seulement ceux des petits, la carte de 8 Go de Léo aucun. Décidé une fois par duel (`round.together`, vue de l'écran
+  qui affiche « Les deux modèles écrivent en même temps » et ne propose plus « Au tour du modèle B »). Un arrêt par côté
+  (`runControllers`) : avant, lancer un côté arrêtait l'autre, et « Arrêter » arrête maintenant les deux. Les deux
+  modèles partagent la carte : chacun va un peu moins vite qu'en solo, à égalité, et le vote porte sur la qualité.
+  Régression : `test-duel.mjs` (règle : H100, 5090, Conversation, carte inconnue), `test-duel-session.mjs` (A et B
+  lancés ensemble, B pas relançable, « Arrêter » arrête les deux, pas de parallèle en Code sur 8 Go ni en Conversation
+  sur 288 Go ; vérifié en retirant le lancement de B puis en remettant un arrêt commun), `test-duel-panel-ui.mjs`.
+  **Non vérifié en usage réel** : deux modèles lancés en même temps sur un vrai Ollama distant.

@@ -42,7 +42,7 @@ async function waitFor(predicate, what) {
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0 }
   const votes = []
   const apps = new Map()
@@ -81,6 +81,9 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         })
         // Le temps qu'une mise à jour parte vers l'écran (au plus une toutes les 120 ms).
         await new Promise((resolve) => setTimeout(resolve, 200))
+        // Étape 379 : une génération qui attend qu'on la libère, pour voir A et B travailler en même temps.
+        if (generateGate) await generateGate.promise
+        if (options.signal?.aborted) throw Object.assign(new Error('arrêté'), { name: 'AbortError' })
         return { html: `<html><body>${options.model.length}</body></html>`, issues: [], dir: '' }
       }
     },
@@ -94,7 +97,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       }
     },
     './hardwareScan': {
-      duelMachine: async () => ({ vramGb: 8, ramGb: 32 }),
+      duelMachine: async () => ({ vramGb, ramGb: 32 }),
       duelPrior: (category) => () => (category === 'code' ? 20 : 10),
       getDuelCandidates: async () =>
         MODELS.map((model, index) => ({ model, vramGb: index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),
@@ -740,4 +743,40 @@ test('étape 366 : PC qui dessine mais sans modèle de vision — dessin propos�
   assert.equal(restrictions.allowedTools.has('look_at_screen'), false)
   assert.equal(restrictions.allowedTools.has('computer_use_task'), false)
   assert.equal(restrictions.allowedTools.has('open_app'), true)
+})
+
+
+test('étape 379 : en Code, avec assez de mémoire pour les deux, A et B écrivent EN MÊME TEMPS ; « Arrêter » arrête les deux', async () => {
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const env = setup({ installed: MODELS, vramGb: 80, generateGate: gate })
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
+  assert.equal(env.session.getDuelView().round.together, true)
+  const asked = env.session.askDuel('Un compteur')
+  assert.equal(asked.round.a.status, 'running')
+  assert.equal(asked.round.b.status, 'running', 'B n’attend pas A')
+  await waitFor(() => env.calls.generate.length === 2, 'les deux générations lancées')
+  assert.notEqual(env.calls.generate[0].options.model, env.calls.generate[1].options.model, 'chacun son modèle')
+  assert.throws(() => env.session.runDuelB(), /finir/i, 'pas de second lancement de B')
+  env.session.stopDuelRun()
+  release()
+  await waitFor(() => ['a', 'b'].every((s) => env.session.getDuelView().round[s].status === 'stopped'), 'les deux arrêtés')
+  assertAnonymous(env.emitted, 'duel en parallèle')
+})
+
+test('étape 379 : en Code sans assez de mémoire, ou en Conversation même avec beaucoup de mémoire, B attend A', async () => {
+  const small = setup({ installed: MODELS, vramGb: 8 })
+  await small.session.startDuel('code', 4)
+  await waitFor(() => small.session.getDuelView()?.phase === 'ready', 'session prête')
+  assert.equal(small.session.getDuelView().round.together, false)
+  const smallAsked = small.session.askDuel('Un compteur')
+  assert.equal(smallAsked.round.b.status, 'idle')
+  // En Conversation, les modèles agissent sur le PC : jamais deux à la fois, quelle que soit la carte.
+  const big = setup({ installed: MODELS, vramGb: 288 })
+  await readySession(big)
+  assert.equal(big.session.getDuelView().round.together, false)
+  assert.equal(big.session.askDuel('Ouvre le Bloc-notes').round.b.status, 'idle')
+  await waitFor(() => big.session.getDuelView().round.a.status === 'done', 'A a fini')
+  assert.equal(big.calls.converse.length, 1, 'B n’a pas commencé')
 })

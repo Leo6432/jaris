@@ -1475,6 +1475,7 @@
   "duel.suggest.voice.10": "Avaa YouTube",
   "duel.suggest.more": "Lisää ideoita",
   "duel.yourPrompt": "Pyyntösi",
+  "duel.together": "Molemmat mallit kirjoittavat samaan aikaan: näytönohjaimessa on tarpeeksi muistia molemmille.",
   "duel.side.a": "Malli A",
   "duel.side.b": "Malli B",
   "duel.status.waiting": "Odottaa",

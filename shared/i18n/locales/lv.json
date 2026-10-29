@@ -1496,6 +1496,7 @@
   "duel.suggest.voice.10": "Atver YouTube",
   "duel.suggest.more": "Vairāk ideju",
   "duel.yourPrompt": "Tavs pieprasījums",
+  "duel.together": "Abi modeļi raksta vienlaikus: grafiskajai kartei pietiek atmiņas abiem.",
   "duel.side.a": "Modelis A",
   "duel.side.b": "Modelis B",
   "duel.status.waiting": "Gaida",
