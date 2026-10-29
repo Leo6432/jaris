@@ -52,5 +52,23 @@
     "modelA": "qwen3.8:27b",
     "modelB": "gpt-oss:20b",
     "outcome": "a"
+  },
+  {
+    "id": "226a8c5d-cc07-4297-a61d-ea8005be9257",
+    "category": "code",
+    "at": 1793306440307,
+    "sessionId": "3ff0cb5e-5498-4100-9b0e-99b3ec30a183",
+    "modelA": "nemotron-3.5-lightning:30b",
+    "modelB": "hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "aca8946b-2651-44c4-8860-3d7460fbbe3b",
+    "category": "code",
+    "at": 1793307603300,
+    "sessionId": "3ff0cb5e-5498-4100-9b0e-99b3ec30a183",
+    "modelA": "qwen3.5:0.8b",
+    "modelB": "ornith-1.5:9b",
+    "outcome": "b"
   }
 ]

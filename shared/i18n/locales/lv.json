@@ -554,6 +554,7 @@
   "models.sort.duelVoice": "Dueļi Balss",
   "models.col.duel.title": "Tavu dueļu punkti šajā kategorijā: katrs modelis sāk no 0, un balsis to paceļ vai nolaiž. “—”: nekad nav bijis duelī.",
   "models.duel.count": "Dueļi: {count}",
+  "models.duel.reliability": "Jo vairāk dueļu, jo drošāks vērtējums: sarkans = ļoti maz dueļu, zaļš = uzticams vērtējums (dueļu skaits: no {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Ātrums",
   "models.search": "Meklēt modeli",

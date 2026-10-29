@@ -554,6 +554,7 @@
   "models.sort.duelVoice": "Dvikovos Balsas",
   "models.col.duel.title": "Tavo dvikovų taškai šioje kategorijoje: kiekvienas modelis pradeda nuo 0, o balsai jį pakelia arba nuleidžia. „—“: niekada nedalyvavo dvikovoje.",
   "models.duel.count": "Dvikovos: {count}",
+  "models.duel.reliability": "Kuo daugiau dvikovų, tuo patikimesnis įvertinimas: raudona = labai mažai dvikovų, žalia = patikimas įvertinimas (dvikovų: nuo {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Greitis",
   "models.search": "Ieškoti modelio",

@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Kaksintaistelut Ääni",
   "models.col.duel.title": "Kaksintaisteluidesi pisteet tässä luokassa: jokainen malli aloittaa nollasta, ja äänet nostavat tai laskevat sitä. ”—”: ei koskaan kaksintaistelussa.",
   "models.duel.count": "Kaksintaistelut: {count}",
+  "models.duel.reliability": "Mitä enemmän kaksintaisteluja, sitä varmempi pistemäärä: punainen = hyvin vähän kaksintaisteluja, vihreä = luotettava pistemäärä (kaksintaisteluja vähintään {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Nopeus",
   "models.search": "Etsi mallia",

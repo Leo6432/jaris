@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Duels Spraak",
   "models.col.duel.title": "Punten uit je duels in deze categorie: elk model begint op 0 en stemmen laten het stijgen of dalen. ‘—’: nog nooit in een duel.",
   "models.duel.count": "Duels: {count}",
+  "models.duel.reliability": "Hoe meer duels, hoe zekerder de score: rood = heel weinig duels, groen = betrouwbare score (vanaf {reliable} duels).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Snelheid",
   "models.search": "Een model zoeken",

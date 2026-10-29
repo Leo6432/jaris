@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Dueller Stemme",
   "models.col.duel.title": "Point fra dine dueller i denne kategori: hver model starter på 0, og stemmerne får den til at stige eller falde. »—«: aldrig i en duel.",
   "models.duel.count": "Dueller: {count}",
+  "models.duel.reliability": "Jo flere dueller, desto mere sikker er scoren: rød = meget få dueller, grøn = pålidelig score (fra {reliable} dueller).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Hastighed",
   "models.search": "Søg efter en model",

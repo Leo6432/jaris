@@ -120,8 +120,8 @@ const overrides = {
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
       { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
-      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5 },
-      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4 }
+      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5, duels: { voice: { points: -10, duels: 10 } } },
+      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4, duels: { voice: { points: 64, duels: 25 } } }
     ]
   })
 }
@@ -422,6 +422,25 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     assert.equal(rows[0][8], '—', `jamais en duel Vocal : ${rows[0][8]}`)
     assert.equal(rows[1][7], '—', `jamais en duel : ${rows[1][7]}`)
     assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(8) .options-menu__duel-count', (el) => getComputedStyle(el).display), 'block', 'nombre de duels sur sa propre ligne')
+    // Étape 378 (Léo : « en rouge quand il y a très peu de duels, plus c'est vert plus c'est bon ») : la teinte de la
+    // note suit le nombre de duels — rouge à 2, vert franc à partir de 20, entre les deux à 10. Mesurée, pas relue.
+    const hueOf = (selector) =>
+      page.$eval(selector, (el) => {
+        const [r, g, b] = getComputedStyle(el).color.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map((v) => v / 255)
+        const max = Math.max(r, g, b)
+        const min = Math.min(r, g, b)
+        if (max === min) return null
+        const d = max - min
+        const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+        return (h * 60 + 360) % 360
+      })
+    const few = await hueOf('.options-page--models tbody tr:nth-child(1) td:nth-child(7) .options-menu__duel-points')
+    const many = await hueOf('.options-page--models tbody tr:nth-child(3) td:nth-child(9) .options-menu__duel-points')
+    const half = await hueOf('.options-page--models tbody tr:nth-child(2) td:nth-child(9) .options-menu__duel-points')
+    assert.ok(few !== null && few < 25, `2 duels : rouge attendu, teinte ${few}`)
+    assert.ok(many !== null && many > 120 && many < 160, `25 duels : vert attendu, teinte ${many}`)
+    assert.ok(half !== null && half > few + 30 && half < many - 30, `10 duels : entre les deux, teinte ${half}`)
+    assert.match(await page.$eval('.options-page--models tbody tr:nth-child(1) td:nth-child(7)', (el) => el.title), /à partir de 20 duels/)
     // Vitesse : « — » sans mesure.
     assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)

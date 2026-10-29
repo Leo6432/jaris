@@ -10150,3 +10150,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-local-speed.mjs`, `test-hardwarescan-duel.mjs` et `test-duel-panel-ui.mjs`. Huit gardes vérifiées en les
   retirant une à une. **Non vérifié en usage réel** : une vraie session sur un pod RunPod (proxy, durée du premier
   chargement d'un modèle).
+
+- **Étape 378 (v0.40.19), Léo : « dans modèle, mets dans les notes duel en rouge quand il y a très peu de duels, plus
+  c'est vert plus c'est bon, et c'est toi qui gères combien de duels c'est bien ».** Dans « Tous les modèles », la note
+  de chaque colonne Duels passe du rouge (très peu de duels) au vert en passant par l'orange et le jaune
+  (`duelConfidence`, shared/duel.ts ; teinte de 4° à 142° en CSS selon `--duel-confidence`, luminosité selon le
+  thème), avec une infobulle qui explique (24 langues). **Le seuil est mesuré, pas choisi au hasard** :
+  `DUEL_RELIABLE_COUNT = 20`. Avec rankDuels (un modèle face à 4 adversaires, résultats équilibrés), la marge à 95 %
+  vaut ±438 points après 1 duel, ±245 après 5, ±171 après 10, ±120 après 20, ±99 après 30. À 20 duels, elle passe sous
+  l'écart a priori de deux modèles proches (SWITCH_PRIOR_ELO, 150 points). Affichage seulement : le choix des modèles
+  n'en dépend pas. Même version : 2 nouveaux votes de Léo livrés (export du 29/10, 8 votes dont 6 déjà livrés ;
+  `import-duel-votes.mjs`). Calculé avant/après sur 30 machines types : rien ne change sur sa machine (8 Go/32 Go),
+  mais avec 16 Go de RAM et une carte de 8 à 16 Go, le modèle Code passe à ornith-1.5:9b sur UNE victoire. Sans modèle
+  en service qui tient, c'est la meilleure note du moment qui gagne (règle « tout part de 0 », étape 358), et c'est
+  justement ce que le rouge rend visible. Régression : `scripts/test-options-reorganization-ui.mjs` (teinte mesurée
+  sur le style calculé : rouge à 2 duels, vert à 25, entre les deux à 10 ; vérifié en figeant la couleur, le test
+  échoue).

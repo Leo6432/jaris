@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
@@ -8,6 +8,7 @@ import { filterModels } from '../lib/filterModels'
 import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 import { FUTURE_MODELS } from '../../shared/futureModels'
+import { DUEL_RELIABLE_COUNT, duelConfidence } from '../../shared/duel'
 import { shownSpeed } from '../lib/shownSpeed'
 
 const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
@@ -149,9 +150,13 @@ function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
 function DuelCell({ cell }: { cell: { points: number; duels: number } | undefined }): JSX.Element {
   if (!cell) return <td className="options-menu__col-num">—</td>
   const rounded = Math.round(cell.points)
+  // Étape 378 : la note passe du rouge (très peu de duels, encore incertaine) au vert (assez de duels pour être sûre).
+  const confidence = duelConfidence(cell.duels)
   return (
-    <td className="options-menu__col-num">
-      {`${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`}
+    <td className="options-menu__col-num" title={t('models.duel.reliability', { reliable: DUEL_RELIABLE_COUNT })}>
+      <span className="options-menu__duel-points" style={{ '--duel-confidence': confidence } as CSSProperties}>
+        {`${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`}
+      </span>
       {/* Étape 371 (Léo : « mettre le score avec le nombre de votes ») : visible, plus seulement en infobulle. */}
       <span className="options-menu__duel-count">{t('models.duel.count', { count: cell.duels })}</span>
     </td>

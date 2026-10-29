@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Duellid Hääl",
   "models.col.duel.title": "Sinu duellide punktid selles kategoorias: iga mudel alustab nullist ja hääled tõstavad või langetavad seda. „—“: pole kunagi duellis olnud.",
   "models.duel.count": "Duellid: {count}",
+  "models.duel.reliability": "Mida rohkem duelle, seda kindlam hinne: punane = väga vähe duelle, roheline = usaldusväärne hinne (alates {reliable} duellist).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Kiirus",
   "models.search": "Otsi mudelit",

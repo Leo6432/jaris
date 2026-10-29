@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Duelle Sprache",
   "models.col.duel.title": "Punkte aus deinen Duellen in dieser Kategorie: Jedes Modell startet bei 0, die Stimmen bringen es nach oben oder unten. „—“: noch nie im Duell.",
   "models.duel.count": "Duelle: {count}",
+  "models.duel.reliability": "Je mehr Duelle, desto sicherer die Wertung: rot = sehr wenige Duelle, grün = sichere Wertung (ab {reliable} Duellen).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Geschwindigkeit",
   "models.search": "Ein Modell suchen",

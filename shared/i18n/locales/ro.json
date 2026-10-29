@@ -554,6 +554,7 @@
   "models.sort.duelVoice": "Dueluri Voce",
   "models.col.duel.title": "Punctele din duelurile tale în această categorie: fiecare model pornește de la 0, iar voturile îl urcă sau îl coboară. „—”: niciodată într-un duel.",
   "models.duel.count": "Dueluri: {count}",
+  "models.duel.reliability": "Cu cât sunt mai multe dueluri, cu atât nota e mai sigură: roșu = foarte puține dueluri, verde = notă sigură (dueluri: de la {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Viteză",
   "models.search": "Caută un model",

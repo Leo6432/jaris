@@ -554,6 +554,7 @@
   "models.sort.duelVoice": "Duely Hlas",
   "models.col.duel.title": "Body z tvojich duelov v tejto kategórii: každý model začína na 0 a hlasy ho posúvajú hore alebo dole. „—“: nikdy v dueli.",
   "models.duel.count": "Duely: {count}",
+  "models.duel.reliability": "Čím viac súbojov, tým istejšie hodnotenie: červená = veľmi málo súbojov, zelená = spoľahlivé hodnotenie (od {reliable} súbojov).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Rýchlosť",
   "models.search": "Hľadať model",

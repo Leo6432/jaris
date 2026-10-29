@@ -554,6 +554,7 @@
   "models.sort.duelVoice": "Dvoboji Glas",
   "models.col.duel.title": "Bodovi iz tvojih dvoboja u ovoj kategoriji: svaki model počinje od 0, a glasovi ga podižu ili spuštaju. „—”: nikad u dvoboju.",
   "models.duel.count": "Dvoboji: {count}",
+  "models.duel.reliability": "Što je više dvoboja, to je ocjena sigurnija: crveno = vrlo malo dvoboja, zeleno = pouzdana ocjena (broj dvoboja: od {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Brzina",
   "models.search": "Potraži model",

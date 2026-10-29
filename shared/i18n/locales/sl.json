@@ -564,6 +564,7 @@
   "models.sort.duelVoice": "Dvoboji Glas",
   "models.col.duel.title": "Točke iz tvojih dvobojev v tej kategoriji: vsak model začne pri 0, glasovi pa ga dvignejo ali spustijo. »—«: še nikoli v dvoboju.",
   "models.duel.count": "Dvoboji: {count}",
+  "models.duel.reliability": "Več ko je dvobojev, bolj zanesljiva je ocena: rdeča = zelo malo dvobojev, zelena = zanesljiva ocena (število dvobojev: od {reliable}).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Hitrost",
   "models.search": "Poišči model",

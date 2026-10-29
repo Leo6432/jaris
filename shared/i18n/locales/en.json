@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Duels Voice",
   "models.col.duel.title": "Points from your duels in this category: every model starts at 0, and votes move it up or down. “—”: never in a duel.",
   "models.duel.count": "Duels: {count}",
+  "models.duel.reliability": "The more duels, the surer the score: red = very few duels, green = reliable score (from {reliable} duels).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Speed",
   "models.search": "Search for a model",

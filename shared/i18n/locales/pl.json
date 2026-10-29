@@ -564,6 +564,7 @@
   "models.sort.duelVoice": "Pojedynki Głos",
   "models.col.duel.title": "Punkty z twoich pojedynków w tej kategorii: każdy model zaczyna od 0, a głosy podnoszą go lub obniżają. „—”: nigdy nie brał udziału w pojedynku.",
   "models.duel.count": "Pojedynki: {count}",
+  "models.duel.reliability": "Im więcej pojedynków, tym pewniejsza ocena: czerwony = bardzo mało pojedynków, zielony = pewna ocena (od {reliable} pojedynków).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Szybkość",
   "models.search": "Szukaj modelu",

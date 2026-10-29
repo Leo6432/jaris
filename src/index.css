@@ -1012,6 +1012,23 @@ body.body--splash {
 }
 
 /* Étape 371 : nombre de duels sous les points, discret, aligné à droite comme le chiffre. */
+/*
+ * Étape 378 : la note d'un modèle passe du rouge (très peu de duels, encore incertaine) au vert (assez de duels pour
+ * être sûre, DUEL_RELIABLE_COUNT, shared/duel.ts), en passant par l'orange et le jaune. Une teinte de 4° à 142° selon
+ * --duel-confidence (0 à 1) ; la luminosité suit le thème pour rester lisible sur fond clair comme sombre.
+ */
+.options-menu__duel-points {
+  --duel-lightness: 66%;
+  font-weight: 600;
+  color: hsl(calc(4deg + var(--duel-confidence, 0) * 138deg) 72% var(--duel-lightness));
+}
+
+@media (prefers-color-scheme: light) {
+  .options-menu__duel-points {
+    --duel-lightness: 33%;
+  }
+}
+
 .options-menu__duel-count {
   display: block;
   margin-top: 2px;

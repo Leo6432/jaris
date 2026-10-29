@@ -581,3 +581,18 @@ export function parseDuelRemote(value: unknown): DuelRemoteSettings | null {
   if (!host || !(vramGb >= 0 && vramGb <= DUEL_REMOTE_MAX_VRAM_GB) || !(ramGb >= 1 && ramGb <= DUEL_REMOTE_MAX_RAM_GB)) return null
   return { enabled: raw.enabled === true, host, vramGb, ramGb }
 }
+
+/**
+ * Étape 378 (Léo : « en rouge quand il y a très peu de duels, plus c'est vert plus c'est bon, c'est toi qui gères
+ * combien de duels c'est bien ») : à partir de combien de duels la note d'un modèle est sûre. Mesuré avec rankDuels
+ * (modèle face à 4 adversaires, résultats équilibrés) : marge à 95 % de ±438 points après 1 duel, ±245 après 5, ±171
+ * après 10, ±120 après 20, ±99 après 30. À 20 duels, la marge passe sous l'écart a priori de deux modèles proches
+ * (SWITCH_PRIOR_ELO, 150 points) : la note distingue enfin un modèle d'un autre.
+ */
+export const DUEL_RELIABLE_COUNT = 20
+
+/** De 0 (aucun duel, rouge) à 1 (DUEL_RELIABLE_COUNT duels ou plus, vert). */
+export function duelConfidence(duels: number): number {
+  if (!Number.isFinite(duels) || duels <= 0) return 0
+  return Math.min(1, duels / DUEL_RELIABLE_COUNT)
+}

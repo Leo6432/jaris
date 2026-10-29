@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Duelos Voz",
   "models.col.duel.title": "Puntos de tus duelos en esta categoría: cada modelo empieza en 0 y los votos lo suben o bajan. «—»: nunca ha estado en un duelo.",
   "models.duel.count": "Duelos: {count}",
+  "models.duel.reliability": "Cuantos más duelos, más fiable es la nota: rojo = muy pocos duelos, verde = nota fiable (a partir de {reliable} duelos).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Velocidad",
   "models.search": "Buscar un modelo",

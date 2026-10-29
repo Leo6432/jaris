@@ -544,6 +544,7 @@
   "models.sort.duelVoice": "Dueller Röst",
   "models.col.duel.title": "Poäng från dina dueller i den här kategorin: varje modell börjar på 0 och rösterna får den att stiga eller sjunka. ”—”: aldrig i en duell.",
   "models.duel.count": "Dueller: {count}",
+  "models.duel.reliability": "Ju fler dueller, desto säkrare poäng: rött = mycket få dueller, grönt = tillförlitlig poäng (från {reliable} dueller).",
   "models.chip.vram": "VRAM",
   "models.chip.speed": "Hastighet",
   "models.search": "Sök efter en modell",
