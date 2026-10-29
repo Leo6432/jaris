@@ -10034,3 +10034,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   encore vues d'abord. Les idées restent faisables par Jaris (pas d'extinction du PC). Régression :
   `scripts/test-duel-panel-ui.mjs` (4 idées traduites, « Autres idées » sans aucune répétée, l'idée choisie est bien
   envoyée) et `test-i18n-completeness.mjs`.
+
+- **Étape 373 (v0.40.15), Léo : « on a actualisé le design de Jaris mais pas le web Jaris sur téléphone ».** La page
+  du téléphone (`phone/app.css`) gardait l'ancien thème HUD (noir bleuté, cyan, lueurs, capitales espacées). Elle
+  reprend maintenant les valeurs des jetons du PC (étape 266) : gris neutres, aucune couleur d'accent, boutons
+  pleins blancs en sombre et noirs en clair, thème clair qui suit celui du téléphone (`prefers-color-scheme`),
+  bulle grise à droite pour la demande et réponse de Jaris en texte libre comme ChatGPT, champ de saisie arrondi
+  (28 px). Les couleurs de sens (point vert du PC allumé, rouge d'extinction, ambre) restent. `theme-color` en deux
+  balises (sombre/clair), cache du service worker monté (`jaris-page-v3`), texte de secours « Options → Jaris
+  partout ». La page est servie par le PC, donc le téléphone a le nouveau design dès la mise à jour de Jaris, sans
+  rien réinstaller. **Leçon : quand le design d'une application change, chercher aussi les autres pages qu'elle
+  sert (ici la page du téléphone, avec ses propres couleurs écrites en dur) — elles ne suivent pas toutes seules.**
+  Régression : `scripts/test-phone-page-ui.mjs` (vrai navigateur au format téléphone, 4 onglets en sombre et en
+  clair : aucune couleur vive hors couleurs de sens, fond qui suit le thème ; vérifié avec l'ancien CSS : échoue).

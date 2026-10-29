@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#01040a" />
+    <meta name="theme-color" content="#171717" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f9f9f9" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -21,7 +22,7 @@
       <img class="orb orb--big" src="/logo.png" alt="" aria-hidden="true" />
       <h1>Jaris</h1>
       <p class="pair__lead" data-i18n="pwa.pair.lead">Connecte ce téléphone à ton Jaris.</p>
-      <p class="pair__hint" data-i18n-strong="pwa.pair.hint" data-i18n-strong-value="pwa.pair.path">Sur ton PC : <strong>Options → Téléphone → Connecter un téléphone</strong>, puis tape le code affiché.</p>
+      <p class="pair__hint" data-i18n-strong="pwa.pair.hint" data-i18n-strong-value="pwa.pair.path">Sur ton PC : <strong>Options → Jaris partout → Connecter un téléphone</strong>, puis tape le code affiché.</p>
       <form id="pair-form" class="pair__form" autocomplete="off">
         <input id="pair-code" class="pair__code" inputmode="numeric" pattern="[0-9 ]*" maxlength="9" placeholder="12345678" aria-label="Code à 8 chiffres" data-i18n-aria-label="pwa.pair.codeLabel" />
         <button id="pair-submit" class="button" type="submit" data-i18n="pwa.pair.submit">Connecter</button>

@@ -548,3 +548,38 @@ test('PC éteint : la page s’ouvre quand même (copie sur le téléphone) et l
     assert.match(await page.textContent('.message--error'), /Ton PC ne répond pas/)
   })
 })
+
+test('design de Jaris (étape 373) : gris neutres, aucune couleur vive, et le thème du téléphone suivi', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    for (const scheme of ['dark', 'light']) {
+      await page.emulateMedia({ colorScheme: scheme })
+      for (const tab of ['chat', 'voice', 'image', 'video']) {
+        await page.click(`.tabbar__item[data-target="${tab}"]`)
+        await page.waitForSelector(`#tab-${tab}:not([hidden])`)
+        await shot(page, `phone-theme-${scheme}-${tab}`)
+        const found = await page.evaluate(() => {
+          const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 4).map(Number)
+          const vivid = []
+          for (const el of document.querySelectorAll('#app *:not(svg *):not(img)')) {
+            const box = el.getBoundingClientRect()
+            if (!box.width || !box.height) continue
+            const cs = getComputedStyle(el)
+            for (const prop of ['color', 'background-color', 'border-top-color']) {
+              const [r, g, b, a = 1] = rgb(cs[prop])
+              if (a < 0.05) continue
+              // Les couleurs de sens (point vert du PC allumé) sont permises ; aucune autre teinte vive.
+              if (el.classList.contains('pc-dot')) continue
+              if (Math.max(r, g, b) - Math.min(r, g, b) > 40) vivid.push(`${el.className || el.tagName} ${prop} ${cs[prop]}`)
+            }
+          }
+          const [br, bg, bb] = rgb(getComputedStyle(document.body).backgroundColor)
+          return { vivid, bodyLight: (br + bg + bb) / 3 }
+        })
+        assert.deepEqual(found.vivid, [], `${scheme}/${tab} : aucune couleur vive`)
+        if (scheme === 'dark') assert.ok(found.bodyLight < 60, `${scheme} : fond sombre (${found.bodyLight})`)
+        else assert.ok(found.bodyLight > 240, `${scheme} : fond clair (${found.bodyLight})`)
+      }
+    }
+  })
+})
