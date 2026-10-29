@@ -3,8 +3,11 @@
    --hud-* / --jv-* de src/index.css ; le thème suit celui du téléphone. Les couleurs de sens (rouge, vert, ambre)
    ne servent qu'à dire quelque chose (erreur, PC allumé, attente). */
 :root {
-  --bg: #212121;
+  --bg: #171717;
   --side: #171717;
+  --card: #262626;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --user: #333333;
   --panel: #2f2f2f;
   --raised: #2f2f2f;
   --text: #ececec;
@@ -16,9 +19,9 @@
   --line-strong: rgba(255, 255, 255, 0.16);
   --hover: rgba(255, 255, 255, 0.07);
   --hover-strong: rgba(255, 255, 255, 0.12);
-  --composer: #303030;
-  --composer-border: transparent;
-  --composer-shadow: none;
+  --composer: #2a2a2a;
+  --composer-border: rgba(255, 255, 255, 0.08);
+  --composer-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --scrim: rgba(0, 0, 0, 0.6);
   --danger: #ff8a8a;
   --danger-fill: #dc2626;
@@ -30,8 +33,11 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #ffffff;
-    --side: #f9f9f9;
+    --bg: #f7f7f7;
+    --side: #f7f7f7;
+    --card: #ffffff;
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05);
+    --user: #e8e8e8;
     --panel: #f4f4f4;
     --raised: #f4f4f4;
     --text: #0d0d0d;
@@ -44,8 +50,8 @@
     --hover: rgba(0, 0, 0, 0.05);
     --hover-strong: rgba(0, 0, 0, 0.09);
     --composer: #ffffff;
-    --composer-border: rgba(0, 0, 0, 0.1);
-    --composer-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    --composer-border: rgba(0, 0, 0, 0.06);
+    --composer-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.08);
     --scrim: rgba(0, 0, 0, 0.35);
     --danger: #b91c1c;
     --danger-fill: #b91c1c;
@@ -69,6 +75,21 @@ body {
   font: 16px/1.5 'Geist Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+}
+
+::selection {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+input,
+textarea {
+  caret-color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 [hidden] {
@@ -137,7 +158,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .orb,
-  .orb--busy {
+  .orb--busy,
+  .message,
+  .message__tile img {
     animation: none;
   }
 }
@@ -206,23 +229,41 @@ body {
   flex-direction: column;
 }
 
+/* En-tête façon Muse : Jaris au centre (l'orbe, son nom, une pastille qui dit ce qu'il fait), l'extinction du PC
+   à droite. Pas de trait : la page continue sous l'en-tête. */
 .topbar {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  border-bottom: 1px solid var(--line);
-  background: var(--side);
+  gap: 4px;
+  padding: calc(12px + env(safe-area-inset-top)) 64px 10px;
+  background: var(--bg);
+}
+
+.topbar .orb {
+  width: 44px;
+  height: 44px;
+  padding: 6px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
 }
 
 .topbar__title {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .topbar__name {
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .topbar__status {
@@ -285,17 +326,18 @@ body {
   overflow-y: auto;
   list-style: none;
   margin: 0;
-  padding: 16px 14px;
+  padding: 8px 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   -webkit-overflow-scrolling: touch;
 }
 
 .message {
-  max-width: 85%;
-  padding: 9px 14px;
-  border-radius: 20px;
+  max-width: 86%;
+  padding: 11px 16px;
+  border-radius: 22px;
+  animation: message-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -343,8 +385,9 @@ body {
 .message__body blockquote,
 #voice-reply blockquote {
   margin: 0 0 8px;
-  padding: 2px 0 2px 12px;
-  border-left: 3px solid var(--line-strong);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--hover);
   color: var(--soft);
 }
 
@@ -357,29 +400,69 @@ body {
   background: var(--hover-strong);
 }
 
-/* Comme ChatGPT : la demande dans une bulle grise à droite, la réponse de Jaris en texte libre. */
+/* Façon Muse : la demande dans une bulle grise à droite, la réponse de Jaris dans une carte douce à gauche. */
 .message--user {
   align-self: flex-end;
-  background: var(--panel);
+  background: var(--user);
 }
 
 .message--assistant {
-  align-self: stretch;
-  max-width: 100%;
-  padding-left: 2px;
-  padding-right: 2px;
+  align-self: flex-start;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
 }
 
+/* Pendant que Jaris travaille : une carte d'action (l'orbe qui tourne, son nom, l'étape en cours). */
 .message--pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px 12px 12px;
+}
+
+.message__tile {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--hover);
+}
+
+.message__tile img {
+  width: 26px;
+  height: 26px;
+  animation: spin 2.4s linear infinite;
+}
+
+.message__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.message__title {
+  font-weight: 600;
+  font-style: normal;
+  color: var(--text);
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.message--pending .message__body {
   color: var(--soft);
-  font-style: italic;
+  font-size: 14px;
 }
 
 .message--error {
-  align-self: stretch;
-  padding: 9px 14px;
-  border-radius: 16px;
   background: var(--danger-soft);
+  box-shadow: none;
   color: var(--danger);
 }
 
@@ -401,9 +484,9 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  margin: 0 10px calc(10px + env(safe-area-inset-bottom));
-  padding: 6px 6px 6px 4px;
-  border-radius: 28px;
+  margin: 0 12px 10px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 30px;
   border: 1px solid var(--composer-border);
   background: var(--composer);
   box-shadow: var(--composer-shadow);
@@ -444,6 +527,23 @@ body {
   background: var(--accent);
   color: var(--accent-ink);
   cursor: pointer;
+}
+
+.composer__voice {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.composer__voice:active {
+  background: var(--hover);
 }
 
 .composer__send:disabled {
@@ -566,9 +666,10 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px 16px;
-  border-radius: 20px;
-  background: var(--panel);
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
   text-align: left;
 }
 
@@ -652,8 +753,9 @@ body {
 .notice {
   margin: 0;
   padding: 12px 14px;
-  border-radius: 16px;
-  background: var(--panel);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
   color: var(--soft);
 }
 
@@ -662,8 +764,9 @@ body {
   align-items: center;
   gap: 10px;
   padding: 8px 6px 8px 14px;
-  border-radius: 16px;
-  background: var(--panel);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
 }
 
 .progress__spinner {
@@ -703,9 +806,10 @@ body {
   display: flex;
   flex-direction: column;
   padding: 0;
-  border-radius: 16px;
+  border-radius: 18px;
   border: none;
-  background: var(--panel);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -848,7 +952,7 @@ body {
 /* Modèle et réflexion (étape 216) : un bouton au-dessus du champ, et un panneau qui monte du bas. */
 .chat__tools {
   display: flex;
-  padding: 4px 12px 6px;
+  padding: 4px 14px 6px;
 }
 
 .model-chip {
@@ -948,7 +1052,7 @@ body {
   padding: 8px 14px;
   border: none;
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--card);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -1004,15 +1108,22 @@ body {
 }
 
 /* État du PC et extinction (étape 218). */
-.topbar__title {
-  flex: 1;
+.topbar .power {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
 }
 
 .topbar__line {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
+  max-width: 100%;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
 }
 
 .pc-dot {

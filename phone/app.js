@@ -468,7 +468,24 @@
     body.className = 'message__body'
     if (role === 'assistant' && !options.pending && !options.error) renderMarkdown(body, text)
     else renderText(body, text)
-    item.appendChild(body)
+    if (options.pending) {
+      // Carte d'action façon Muse : l'orbe qui tourne, le nom de Jaris, et l'étape en cours (mise à jour en direct).
+      var tile = document.createElement('span')
+      tile.className = 'message__tile'
+      var orb = document.createElement('img')
+      orb.src = '/logo.png'
+      orb.alt = ''
+      tile.appendChild(orb)
+      var textBox = document.createElement('div')
+      textBox.className = 'message__text'
+      var title = document.createElement('span')
+      title.className = 'message__title'
+      title.textContent = 'Jaris'
+      textBox.appendChild(title)
+      textBox.appendChild(body)
+      item.appendChild(tile)
+      item.appendChild(textBox)
+    } else item.appendChild(body)
     if (options.image && /^data:image\//.test(options.image)) {
       var img = document.createElement('img')
       img.src = options.image
@@ -1358,6 +1375,9 @@
   $('pair-form').addEventListener('submit', function (e) {
     e.preventDefault()
     pair($('pair-code').value)
+  })
+  $('to-voice').addEventListener('click', function () {
+    selectTab('voice')
   })
   $('composer').addEventListener('submit', function (e) {
     e.preventDefault()

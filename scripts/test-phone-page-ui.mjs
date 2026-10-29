@@ -583,3 +583,43 @@ test('design de Jaris (étape 373) : gris neutres, aucune couleur vive, et le th
     }
   })
 })
+
+test('façon Muse (étape 374) : carte d’action pendant le travail, réponse en carte, bouton Vocal dans la barre', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.fill('#input', scheme === 'light' ? 'comment faire du pain' : 'dessine un chat')
+      await page.click('#send')
+      // Pendant le travail : une carte avec l'orbe qui tourne, « Jaris » et l'étape en cours.
+      await page.waitForFunction(() => /Recherche sur le web/.test(document.querySelector('.message--pending')?.textContent || ''))
+      const card = await page.evaluate(() => {
+        const item = document.querySelector('.message--pending')
+        return {
+          tile: Boolean(item.querySelector('.message__tile img')),
+          title: item.querySelector('.message__title')?.textContent,
+          status: item.querySelector('.message__body')?.textContent
+        }
+      })
+      assert.deepEqual(card, { tile: true, title: 'Jaris', status: 'Recherche sur le web…' })
+      await page.waitForTimeout(400)
+      await shot(page, `phone-muse-${scheme}-working`)
+      await page.waitForFunction(() => !document.querySelector('.message--pending'))
+      await page.waitForTimeout(400)
+      await shot(page, `phone-muse-${scheme}-reply`)
+      // La réponse est une carte (fond et ombre), distincte de la page ; la demande, une bulle grise à droite.
+      const look = await page.evaluate(() => {
+        const reply = getComputedStyle(document.querySelector('.message--assistant:last-child'))
+        const page = getComputedStyle(document.body).backgroundColor
+        const user = document.querySelector('.message--user').getBoundingClientRect()
+        return { replyBg: reply.backgroundColor, page, shadow: reply.boxShadow, userRight: window.innerWidth - user.right }
+      })
+      assert.notEqual(look.replyBg, look.page, `${scheme} : la réponse se détache de la page`)
+      assert.notEqual(look.shadow, 'none', `${scheme} : la réponse a une ombre douce`)
+      assert.ok(look.userRight < 30, `${scheme} : la demande est collée à droite`)
+    }
+    // Le bouton de la barre passe au Vocal.
+    await page.click('#to-voice')
+    await page.waitForSelector('#tab-voice:not([hidden])')
+  })
+})
