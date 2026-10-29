@@ -10063,3 +10063,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'étape 369 : `node scripts/import-duel-votes.mjs` n'ajoute que les 3 nouveaux (dédoublonnage par identifiant,
   total 6, toujours sans demande ni réponses). Sur un PC qui a déjà ces votes, Jaris les compte aussi une seule fois
   (`getRankingVotes`). Choix des modèles calculé avant/après de 0 à 24 Go de carte : identique partout.
+
+- **Étape 376 (v0.40.17), Léo : « pourquoi les appels d'outils servent à dire si on peut duel ou pas, le code n'a rien
+  à voir, il peut être fort en appel d'outils et dire de la merde : je veux tout le monde en duel et tout le monde au
+  test d'appel d'outils ».** Le score d'appel d'outils ne filtre plus le Duel (retirés : `DUEL_MIN_TOOL_RATE`, raisons
+  `untested`/`tools`, 2 phrases dans les 24 langues, « réussissent le test » dans `duel.notEnough`) : seuls le
+  matériel, la version d'Ollama et un téléchargement bloqué écartent un modèle ; les votes jugent. Et TOUS les modèles
+  passent le test d'appel d'outils : les 12 modèles de vision et de code (qwen3-vl, GLM-4.6V, gemma4:31b, qwen2.5-coder,
+  qwen3-coder, devstral, north-mini, qwen3.6:35b-a3b), exclus depuis l'étape 230, sont dans `MODELS` du script et
+  proposés par « Tester les modèles » (`CONVERSATION_ROLE_MODELS` = tous les modèles). Le choix des modèles garde le
+  test d'appel d'outils : un modèle sans score n'est choisi pour aucun rôle tant qu'il n'est pas testé ; une fois noté,
+  il peut gagner Faible/Moyen/Élevé comme les autres (étape 160). Régression : `test-hardwarescan-duel.mjs` (phi4-mini
+  et un modèle de code sans score de conversation entrent en duel), `test-benchmark-candidates-sync.mjs` (chaque
+  modèle de Jaris est dans `MODELS`), `test-hardwarescan-single-pool.mjs` (les 12 proposés au test).

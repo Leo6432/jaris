@@ -336,7 +336,7 @@ test('étape 314 : une longue réponse donne un signe de vie régulier, puis le 
   }
 })
 
-test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur épreuve (conversation ou code)', async () => {
+test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leurs épreuves (appel d’outils pour tous, code en plus)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({
     // MiniCPM5 et devstral-2:123b n'ont PAS de score non plus : sans le filtre, ils seraient testés eux aussi.
@@ -360,7 +360,10 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
     assert.deepEqual([...tested].sort(), ['nemotron-3.5-lightning:30b', 'qwen2.5-coder:14b'])
     const lightning = fake.requests.filter((r) => r.model === 'nemotron-3.5-lightning:30b')
     assert.equal(lightning.length, CONVERSATION_TOTAL, 'Lightning passe chaque question d’appel d’outils, 3 fois')
-    assert.ok(fake.requests.filter((r) => r.model === 'qwen2.5-coder:14b').every((r) => !r.tools), 'le modèle de code passe le test de code')
+    // Étape 376 : le modèle de code passe aussi le test d'appel d'outils, comme tous les modèles, puis son test de code.
+    const coder = fake.requests.filter((r) => r.model === 'qwen2.5-coder:14b')
+    assert.ok(coder.some((r) => r.tools), 'le modèle de code passe le test d’appel d’outils')
+    assert.ok(coder.some((r) => !r.tools), 'le modèle de code passe le test de code')
     const results = readFileSync(resultsPath, 'utf8')
     assert.match(results, new RegExp(`\\| nemotron-3\\.5-lightning:30b \\|[^\\n]*\\| ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} \\|`))
     assert.match(results, /## Code[\s\S]*\| qwen2\.5-coder:14b \|/)

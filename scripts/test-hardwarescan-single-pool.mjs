@@ -204,7 +204,22 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
 // Étape 333 : modèles ajoutés sans score, en attente du test de Léo. Retirer un modèle de cette liste quand ses
 // scores sont recopiés dans verified-tool-scores.md (Muse Glimmer et Ornith 1.5 : tous notés à l'étape 335).
-const AWAITING = []
+// Étape 376 : tous les modèles passent le test d'appel d'outils — les modèles de vision et de code, jamais testés en
+// conversation, attendent le test de Léo (du plus léger au plus lourd).
+const AWAITING = [
+  'qwen3-vl:2b',
+  'qwen3-vl:4b',
+  'qwen2.5-coder:7b',
+  'qwen3-vl:8b',
+  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
+  'qwen2.5-coder:14b',
+  'devstral-small-2:24b',
+  'qwen3-coder:30b',
+  'north-mini-code-1.0',
+  'qwen2.5-coder:32b',
+  'gemma4:31b',
+  'qwen3.6:35b-a3b'
+]
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -330,7 +345,10 @@ test('modèles à tester après une campagne : seulement les sautés, les délai
   assert.deepEqual([...done.code].sort(), ['qwen3-coder:30b'])
   const toTest = scan.getUnscoredModels(done)
   for (const model of ['granite4.2:30b', 'ministral-3:8b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'qwen3.6:27b']) assert.ok(toTest.includes(model), `${model} reste à faire`)
-  for (const model of ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b', 'gemma4:31b', 'qwen3-coder:30b', 'qwen3.5:27b']) assert.ok(!toTest.includes(model), `${model} est fini`)
+  for (const model of ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b', 'qwen3.5:27b']) assert.ok(!toTest.includes(model), `${model} est fini`)
+  // gemma4:31b (vision) et qwen3-coder:30b (code) ont fini LEUR épreuve (done.vision, done.code) ; étape 376 : il leur
+  // reste le test d'appel d'outils, que tous les modèles passent.
+  for (const model of ['gemma4:31b', 'qwen3-coder:30b']) assert.ok(toTest.includes(model), `${model} : appel d'outils à faire`)
 })
 
 test('les versions de test connues de Jaris sont celles des scripts', async () => {

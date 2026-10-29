@@ -1009,8 +1009,6 @@ export interface RepoCommitResult {
 /** Pourquoi un modèle de Jaris ne peut pas entrer dans un duel sur ce PC (étape 363 : affiché en gris, jamais caché). */
 export type DuelUnavailableReason =
   | { kind: 'tooBig'; needGb: number; budgetGb: number }
-  | { kind: 'untested' }
-  | { kind: 'tools'; score: string }
   | { kind: 'ollama'; version: string }
   | { kind: 'blocked' }
 
@@ -1026,7 +1024,7 @@ export interface DuelModelOption {
 
 export interface DuelPlan {
   category: DuelCategory
-  /** Modèles qui tiennent sur ce PC et réussissent le test d'appel d'outils. */
+  /** Modèles qui tiennent sur ce PC (étape 376 : sans condition de score d'appel d'outils). */
   available: number
   /** Chaque taille de session possible : combien de modèles à télécharger, leur poids, et si le disque a la place. */
   sizes: { count: number; toDownload: number; downloadGb: number; fitsDisk: boolean }[]

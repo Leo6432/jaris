@@ -39,7 +39,7 @@ window.__plan = window.__plan || {
     { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false },
     { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true },
     { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 } },
-    { model: 'phi4-mini', vramGb: 2.5, reason: { kind: 'tools', score: '7/78' } }
+    { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9, reason: { kind: 'ollama', version: '0.40.10' } }
   ]
 }
 window.__rankings = window.__rankings || [
@@ -562,9 +562,10 @@ test('étape 363 : « Je choisis » montre tous les modèles, grise ceux que le 
     const big = rows.find((r) => r.text.includes('Devstral') || r.text.includes('devstral'))
     assert.equal(big.disabled, true)
     assert.match(big.text, /Trop gros pour ce PC/)
-    const weak = rows.find((r) => /phi/i.test(r.text))
-    assert.equal(weak.disabled, true)
-    assert.match(weak.text, /7\/78/)
+    // Étape 376 : un score d'appel d'outils ne grise plus rien ; une version d'Ollama trop ancienne, oui.
+    const tooNew = rows.find((r) => /bolt/i.test(r.text))
+    assert.equal(tooNew.disabled, true)
+    assert.match(tooNew.text, /0\.40\.10/)
     // Grisé pour de vrai (style calculé), et un clic dessus ne coche rien.
     const greyed = await page.$eval('.duel-pick--unavailable', (el) => getComputedStyle(el).color)
     const normal = await page.$eval('.duel-pick:not(.duel-pick--unavailable)', (el) => getComputedStyle(el).color)

@@ -191,10 +191,6 @@ function unavailableText(option: DuelModelOption): string {
   switch (reason.kind) {
     case 'tooBig':
       return t('duel.pick.reason.tooBig', { need: gb(reason.needGb), budget: gb(reason.budgetGb) })
-    case 'untested':
-      return t('duel.pick.reason.untested')
-    case 'tools':
-      return t('duel.pick.reason.tools', { score: reason.score })
     case 'ollama':
       return t('duel.pick.reason.ollama', { version: reason.version })
     case 'blocked':

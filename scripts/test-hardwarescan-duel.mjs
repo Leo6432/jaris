@@ -186,7 +186,7 @@ test('le calcul affiché dit d’où vient la note : les duels (points et nombre
   assert.ok(Math.abs(note.base.value * note.toolsShare * (note.demandsShare ?? 1) - note.total) < 1e-9)
 })
 
-test('candidats d’une session : ceux qui tiennent sur CE PC, Ollama capable, test d’outils réussi, et les deux groupes', async () => {
+test('candidats d’une session : ceux qui tiennent sur CE PC, Ollama capable, quel que soit le test d’outils, et les deux groupes', async () => {
   const m = setup([])
   const profile = { models: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE }, codeModel: LARGE, blockedModels: { 'gemma4:e4b': 'bloqué' } }
   const candidates = await m.getDuelCandidates('conversation', profile)
@@ -199,13 +199,10 @@ test('candidats d’une session : ceux qui tiennent sur CE PC, Ollama capable, t
   assert.equal(byModel.get(LARGE).inUse, true)
   assert.equal(byModel.get(K2_7B).inUse, true)
   assert.equal(byModel.has('gemma4:e4b'), false, 'un modèle bloqué au téléchargement n’est jamais proposé')
-  // Le test d'appel d'outils reste le filtre de base : jamais un modèle sous 75 % aux 78 questions.
-  const scores = REAL_SCORES.split('\n')
-  for (const c of candidates) {
-    const row = scores.find((line) => line.startsWith(`| ${c.model} |`) && /\/78/.test(line))
-    const ok = Number(row.match(/(\d+)\/78/)[1])
-    assert.ok(ok / 78 >= 0.75, `${c.model} : ${ok}/78`)
-  }
+  // Étape 376 : le test d'appel d'outils ne filtre plus les duels — un score faible (phi4-mini, 7/78) ou aucun score
+  // de conversation (un modèle de code) n'empêche pas d'entrer en duel.
+  assert.ok(byModel.has('phi4-mini'), 'phi4-mini (7/78) entre en duel')
+  assert.ok(byModel.has('qwen2.5-coder:7b'), 'un modèle de code sans score de conversation entre en duel')
   // Une version d'Ollama trop ancienne écarte les modèles qu'elle ne sait pas charger (K2 Horizon, étape 312).
   m.setOllamaVersionSource(() => '0.40.3')
   assert.equal((await m.getDuelCandidates('conversation', profile)).some((c) => c.model.includes('K2-Horizon')), false)
@@ -276,10 +273,10 @@ test('étape 363 : la liste à cocher montre TOUS les modèles de Jaris ; dispon
   assert.match(k2.reason.version, /^0\.40\.\d+$/)
   const big = list.find((o) => o.reason?.kind === 'tooBig')
   assert.ok(big && big.reason.needGb > big.reason.budgetGb, 'un modèle trop gros dit combien il lui faut')
-  // Un score d'outils sous 75 % est grisé avec ce score ; un modèle jamais testé l'est aussi.
-  const weak = list.find((o) => o.reason?.kind === 'tools')
-  assert.ok(weak && /\/78$/.test(weak.reason.score))
-  const [correct] = weak.reason.score.split('/').map(Number)
-  assert.ok(correct / 78 < 0.75)
+  // Étape 376 : ni un score d'appel d'outils faible ni l'absence de test n'empêchent un duel.
+  const reasons = new Set(list.map((o) => o.reason?.kind).filter(Boolean))
+  assert.ok(!reasons.has('tools') && !reasons.has('untested'), [...reasons].join())
+  assert.equal(reason('phi4-mini'), null, 'phi4-mini (7/78) entre en duel')
+  assert.equal(reason('qwen2.5-coder:7b'), null, 'un modèle de code sans score de conversation entre en duel Conversation')
   m.setOllamaVersionSource(() => '0.40.10')
 })

@@ -1749,7 +1749,12 @@ export function noteBreakdown(
   }
 }
 
-const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
+/**
+ * Étape 376, Léo : « tout le monde appelle outil normal ». Chaque modèle de Jaris passe le test d'appel d'outils
+ * (78 questions et demandes complètes), les modèles de vision et de code compris : ils peuvent entrer en duel
+ * Conversation, et chaque rôle cherche déjà dans tous les modèles (étape 160).
+ */
+const CONVERSATION_ROLE_MODELS = new Set(ALL_MODELS.map((c) => c.model))
 const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
 const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
 
@@ -2217,9 +2222,6 @@ export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> =
   }
 }
 
-/** Étape 355 : sous ce taux au test d'appel d'outils, un modèle n'est jamais proposé en duel (Jaris ne le choisirait pas). */
-export const DUEL_MIN_TOOL_RATE = 0.75
-
 /** Sans carte graphique : taille jusqu'à laquelle un modèle compte parmi les « petits » d'une session de duel. */
 const CARDLESS_SMALL_MODEL_GB = 6
 
@@ -2247,8 +2249,7 @@ export interface DuelCandidate {
 /**
  * Étape 355, Léo : « une session télécharge 4-6 modèles, c'est modèle qui tient ». Les modèles qui TIENNENT sur ce PC
  * comme Jaris les ferait tourner (sur la carte, ou en débordant sur la RAM pour ceux qui le peuvent, comme Élevé et
- * Code), qu'Ollama sait charger, et qui réussissent le test d'appel d'outils : les votes ne mesurent pas les actions,
- * ce test reste le filtre de base.
+ * Code) et qu'Ollama sait charger. Étape 376 : le test d'appel d'outils n'est plus un filtre, les votes jugent.
  */
 /** Ce que le Duel a détecté sur ce PC, affiché quand il n'y a pas assez de modèles (au lieu d'un message sans cause). */
 export async function duelMachine(): Promise<{ vramGb: number | null; ramGb: number }> {
@@ -2276,9 +2277,10 @@ async function assessDuelModels(category: DuelCategory, profile?: Profile | null
   const reasonFor = (c: ModelCandidate): DuelUnavailableReason | null => {
     if (tooNew.has(c.model)) return { kind: 'ollama', version: MIN_OLLAMA_VERSION[c.model] ?? '' }
     if (blocked.has(c.model)) return { kind: 'blocked' }
-    const tools = toolScore(c.model)
-    if (tools === null) return { kind: 'untested' }
-    if (parseToolScore(tools) < DUEL_MIN_TOOL_RATE) return { kind: 'tools', score: tools }
+    // Étape 376, Léo : « je veux tout le monde en duel ». Le test d'appel d'outils ne décide plus qui peut entrer en
+    // duel (un modèle peut appeler les bons outils et mal répondre, et le Code n'en appelle aucun) : seuls le
+    // matériel, la version d'Ollama et un téléchargement bloqué écartent un modèle. Le choix des modèles garde le
+    // test d'appel d'outils, que tous les modèles passent (getUnscoredModels).
     const limit = cardless ? cardlessBudgetGb : LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb
     if (c.vramGb > limit) return { kind: 'tooBig', needGb: c.vramGb, budgetGb: Math.max(0, Math.round(limit * 10) / 10) }
     return null

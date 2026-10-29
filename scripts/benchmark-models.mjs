@@ -440,15 +440,22 @@ const MODELS = [
   // vérifié (6/6, verified-tool-scores.md) — ces deux tailles restent à tester pour de vrai, un score pour
   // une taille ne valant pas pour une autre.
   'ministral-3:8b',
-  'ministral-3:14b'
-  // gemma4:31b retiré de cette liste (étape 230) : il n'est candidat qu'en Vision dans Jaris, et son score de
-  // conversation ne sert à aucun rôle. Le bouton de test lui faisait passer les 78 questions de conversation en
-  // plus de la vision (un modèle dense de 20 Go, une à deux heures sur une carte de 8 Go) pour rien.
-  // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
-  // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
-  // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
-  // y est toujours `undefined`), donc les tester sur TEST_CASES (appel d'outils) mesurait une capacité que
-  // le mode Code n'utilise jamais. Ils ont leur propre test, plus bas (CODE_CANDIDATES/CODE_TEST_CASES).
+  'ministral-3:14b',
+  // Étape 376, Léo : « tout le monde appelle outil normal ». Les modèles de vision et de code passent aussi le test
+  // d'appel d'outils : ils entrent en duel Conversation comme les autres, et chaque rôle cherche dans tous les
+  // modèles (étape 160). Avant (étape 230), ils en étaient exclus parce que leur score ne servait à aucun rôle.
+  'gemma4:31b',
+  'qwen3-vl:8b',
+  'qwen3-vl:4b',
+  'qwen3-vl:2b',
+  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
+  'qwen3.6:35b-a3b',
+  'qwen3-coder:30b',
+  'north-mini-code-1.0',
+  'qwen2.5-coder:32b',
+  'devstral-small-2:24b',
+  'qwen2.5-coder:14b',
+  'qwen2.5-coder:7b'
 ]
 
 // Candidats du palier Vision (VISION_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
@@ -615,7 +622,14 @@ const MEDIUM_TIER_MODELS = new Set([
   'qwen3.5:2b',
   'granite4.2:3b',
   'granite4.1:3b',
-  'qwen3.5:0.8b'
+  'qwen3.5:0.8b',
+  // Étape 376 : modèles de vision et de code de moins de 10 Go, testés aussi en conversation.
+  'qwen3-vl:8b',
+  'qwen3-vl:4b',
+  'qwen3-vl:2b',
+  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
+  'qwen2.5-coder:14b',
+  'qwen2.5-coder:7b'
 ])
 const LARGE_TIER_MODELS = new Set([
   'qwen3.5:35b',
@@ -640,7 +654,14 @@ const LARGE_TIER_MODELS = new Set([
   'ornith-1.5:9b',
   'qwen3.5:4b',
   'qwen3.5:2b',
-  'qwen3.5:0.8b'
+  'qwen3.5:0.8b',
+  // Étape 376 : modèles de vision et de code plus lourds, testés aussi en conversation.
+  'gemma4:31b',
+  'qwen3.6:35b-a3b',
+  'qwen3-coder:30b',
+  'north-mini-code-1.0',
+  'qwen2.5-coder:32b',
+  'devstral-small-2:24b'
 ])
 
 /**

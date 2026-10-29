@@ -123,7 +123,13 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
 // ne les choisit tant qu'ils n'ont pas de score (jamais un modèle non testé à la place d'un modèle mesuré).
 test('Ollama 0.40.10 : Spark-X2.6 et Bolt E4B proposés au test, jamais choisis sans score', async () => {
   const offered = [...setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
-  assert.deepEqual(offered.sort(), [BOLT, SPARK].sort())
+  // Étape 376 : avec eux, les modèles de vision et de code, jamais passés au test d'appel d'outils.
+  const visionAndCode = [
+    'qwen3-vl:2b', 'qwen3-vl:4b', 'qwen3-vl:8b', 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', 'gemma4:31b',
+    'qwen2.5-coder:7b', 'qwen2.5-coder:14b', 'qwen2.5-coder:32b', 'qwen3-coder:30b', 'north-mini-code-1.0',
+    'devstral-small-2:24b', 'qwen3.6:35b-a3b'
+  ]
+  assert.deepEqual(offered.sort(), [BOLT, SPARK, ...visionAndCode].sort())
   for (const vramMib of [0, 4096, 6144, 8192, 12288, 24576]) {
     const roles = picked(await setup({ scores: REAL_SCORES, vramMib, ollamaVersion: '0.40.10' }).pickBestModelsFromBenchmark())
     assert.ok(!roles.includes(SPARK) && !roles.includes(BOLT), `${vramMib} Mio : ${roles.join(', ')}`)
