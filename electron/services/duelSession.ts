@@ -20,6 +20,17 @@ import { TOOLS } from './tools'
 import { synthesizeSpeech } from './tts'
 import { addDuelVote, getDuelVotes, getRankingVotes, readDuelApp, saveDuelApp } from './duelStore'
 import {
+  SERIES_FORMAT,
+  SERIES_VERSION,
+  clearSeries,
+  loadSeries,
+  readSeriesApp,
+  saveSeries,
+  saveSeriesApp,
+  type SeriesSideSnapshot,
+  type SeriesSnapshot
+} from './duelSeriesStore'
+import {
   DUEL_CATEGORIES,
   DUEL_FORBIDDEN_TOOLS,
   DUEL_HISTORY_TEXT_MAX,
@@ -28,7 +39,10 @@ import {
   DUEL_BATCH_MAX,
   DUEL_BATCH_MIN,
   DUEL_SESSION_SIZES,
+  DUEL_CODE_IDEAS,
   batchSlotsToStart,
+  isDuelSeriesCount,
+  planDuelSeries,
   canRunDuelTogether,
   duelActionFromLog,
   duelOfferedTools,
@@ -57,7 +71,7 @@ import type {
   DuelSummary,
   Profile
 } from '../../shared/ipc'
-import { t } from '../../shared/i18n'
+import { formatDecimal, t, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
 
 /**
@@ -106,6 +120,8 @@ interface SideState extends DuelSideView {
   audioData: Buffer | null
   /** Duel Code : l'application écrite, gardée avec le vote pour l'historique. */
   html: string | null
+  /** Étape 382 : nouveaux essais après une panne de la machine (Ollama arrêté, modèle introuvable) pendant une série. */
+  retries: number
 }
 
 interface RoundState {
@@ -164,8 +180,31 @@ interface Session {
    * duel de la file que Léo a ouvert, ou `null` quand il regarde la liste.
    */
   batch: RoundState[] | null
+  /** Étape 382 : une série de duels Code qui tourne sans Léo (`null` = pas de série). */
+  series: SeriesState | null
   history: DuelSummary['rounds']
   error: string | null
+}
+
+/**
+ * Étape 382 : ce qu'il faut à une série pour tourner seule — les modèles sur le disque (« présents »), le téléchargement
+ * en cours, et pourquoi elle attend.
+ */
+interface SeriesState {
+  createdAt: number
+  perModel: number
+  /** Les modèles qui peuvent tourner tout de suite (installés, ou téléchargés par la série). */
+  present: Set<string>
+  /** Modèles à ne pas supprimer (Jaris s'en sert, ou la suppression a échoué une fois). */
+  undeletable: Set<string>
+  download: { percent: number | null } | null
+  waiting: 'ollama' | 'disk' | null
+  /** Modèles supprimés par la série après leur dernier duel. */
+  deleted: number
+  controller: AbortController
+  wake: (() => void) | null
+  /** Le gardien tourne (un seul à la fois). */
+  running: boolean
 }
 
 export interface DuelEnvironment {
@@ -173,6 +212,8 @@ export interface DuelEnvironment {
   onReminderFire: (message: string) => void
   /** Prévient l'écran d'un nouvel état de la session (`null` = plus de session). */
   emit: (view: DuelSessionView | null) => void
+  /** Étape 382 : garder le PC éveillé pendant qu'une série tourne (powerSaveBlocker, main.ts). */
+  keepAwake?: (on: boolean) => void
 }
 
 let environment: DuelEnvironment = { onReminderFire: () => {}, emit: () => {} }
@@ -206,12 +247,13 @@ function emptySide(): SideState {
     error: null,
     trouble: null,
     audioData: null,
-    html: null
+    html: null,
+    retries: 0
   }
 }
 
 function sideView(side: SideState): DuelSideView {
-  const { audioData: _audio, html: _html, ...view } = side
+  const { audioData: _audio, html: _html, retries: _retries, ...view } = side
   return view
 }
 
@@ -239,6 +281,15 @@ export function getDuelView(): DuelSessionView | null {
           b: r.sides.b.status,
           revealed: r.revealed
         }))
+      : null,
+    series: session.series
+      ? {
+          perModel: session.series.perModel,
+          download: session.series.download,
+          waiting: session.series.waiting,
+          deleted: session.series.deleted,
+          active: session.series.running
+        }
       : null,
     error: session.error
   }
@@ -397,8 +448,13 @@ function busy(): boolean {
  * venue de l'écran n'est jamais crue telle quelle : chaque nom doit être un modèle DISPONIBLE pour un duel sur ce PC,
  * et il en faut au moins DUEL_MIN_CHOSEN.
  */
-export async function startDuel(category: DuelCategory, pick: number | readonly string[]): Promise<DuelSessionView> {
+export async function startDuel(category: DuelCategory, pick: number | readonly string[], seriesPerModel?: number): Promise<DuelSessionView> {
   if (busy()) throw new Error(t('duel.error.alreadyRunning'))
+  // Étape 382 : une série de duels (Code seulement, comme la file de l'étape 381 : les modèles n'agissent pas sur le PC).
+  if (seriesPerModel !== undefined) {
+    if (category !== 'code') throw new Error(t('duel.error.batchCodeOnly'))
+    if (!isDuelSeriesCount(seriesPerModel)) throw new Error(t('duel.error.badRequest'))
+  }
   const profile = await getProfile()
   const away = await remoteMachine(profile)
   if (away?.error) throw new Error(away.error)
@@ -429,17 +485,40 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
     phase: 'preparing',
     models: shuffled,
     downloaded: new Map(),
-    preparing: missing.length ? { done: 0, total: missing.length, percent: null, installed: chosen.length - missing.length } : null,
+    // Une série ne télécharge rien d'avance : chaque modèle arrive juste avant ses duels (seriesKeeper).
+    preparing:
+      missing.length && seriesPerModel === undefined
+        ? { done: 0, total: missing.length, percent: null, installed: chosen.length - missing.length }
+        : null,
     dropped: 0,
     dropReason: null,
     played: new Map(),
     last: null,
     round: null,
     batch: null,
+    series: null,
     history: [],
     error: null
   }
   const current = session
+  if (seriesPerModel !== undefined) {
+    current.phase = 'ready'
+    current.batch = planDuelSeries(shuffled, seriesPerModel).map((pair, index) => ({
+      number: index + 1,
+      pair,
+      prompt: '',
+      sides: { a: emptySide(), b: emptySide() },
+      revealed: null,
+      tools: null,
+      together: false
+    }))
+    assignSeriesPrompts(current.batch)
+    current.series = newSeriesState(Date.now(), seriesPerModel)
+    emitNow()
+    persistSeries(current)
+    startSeriesKeeper(current)
+    return getDuelView() as DuelSessionView
+  }
   emitNow()
   void onModels(remote, () => prepare(current, missing, sizeOf))
   return getDuelView() as DuelSessionView
@@ -609,6 +688,8 @@ export function startDuelBatch(prompts: readonly unknown[]): DuelSessionView {
 function pumpBatch(current: Session): void {
   const batch = current.batch
   if (!batch) return
+  // Étape 382 : Ollama ne répond plus — rien ne part tant que le gardien de la série ne l'a pas revu.
+  if (current.series?.waiting === 'ollama') return
   const running: { model: string; sizeGb: number }[] = []
   const waiting: { key: string; model: string; sizeGb: number }[] = []
   const where = new Map<string, { round: RoundState; side: DuelSide }>()
@@ -619,6 +700,8 @@ function pumpBatch(current: Session): void {
       const status = round.sides[side].status
       if (status === 'running') running.push({ model, sizeGb })
       else if (status === 'idle') {
+        // Étape 382 : dans une série, un côté attend que son modèle soit sur le disque.
+        if (current.series && !current.series.present.has(model)) continue
         const key = `${round.number}:${side}`
         waiting.push({ key, model, sizeGb })
         where.set(key, { round, side })
@@ -660,6 +743,12 @@ function batchRoundComplete(round: RoundState): boolean {
 function finishBatchIfDone(current: Session): void {
   if (!current.batch || !current.batch.every((r) => r.revealed)) return
   current.batch = null
+  // Étape 382 : la série est finie et tout est voté — plus rien à reprendre au prochain lancement.
+  if (current.series) {
+    current.series.controller.abort()
+    current.series = null
+    void clearSeries().catch((err) => console.error('[jaris] Série de duels : fichier non effacé —', err))
+  }
   if (current.round === null || current.round.revealed) nextRound(current)
 }
 
@@ -673,6 +762,10 @@ function dropBatchRounds(current: Session, rounds: readonly RoundState[]): void 
   if (current.round && rounds.includes(current.round)) current.round = null
   finishBatchIfDone(current)
   pumpBatch(current)
+  if (current.series) {
+    persistSeries(current)
+    wakeSeries(current)
+  }
 }
 
 export function stopDuelRun(): void {
@@ -681,6 +774,8 @@ export function stopDuelRun(): void {
     // Étape 381 : dans un duel ouvert de la file, « Arrêter » abandonne CE duel ; depuis la liste, tout ce qui n'est
     // pas encore prêt pour le vote. Un duel à moitié fait ne se vote pas : il quitte la file.
     const target = current.round && current.batch.includes(current.round) ? [current.round] : current.batch
+    // Étape 382 : « Tout arrêter » arrête aussi la série (téléchargement en cours compris) ; ce qui est prêt se vote.
+    if (current.series && target === current.batch) current.series.controller.abort()
     dropBatchRounds(
       current,
       target.filter((r) => !r.revealed && !batchRoundComplete(r))
@@ -689,6 +784,362 @@ export function stopDuelRun(): void {
     return
   }
   abortRuns()
+}
+
+// --- Étape 382 : la série de duels Code ------------------------------------------------------------------------------
+//
+// Léo : « je veux que tu testes tous les modèles au moins 10 fois, ça va désinstaller des modèles et en réinstaller, il
+// choisit au hasard dans une liste d'applications à coder, et après j'ai juste à voter ». Les duels sont planifiés d'un
+// coup (planDuelSeries), puis un « gardien » télécharge chaque modèle, lui fait écrire TOUS ses côtés de duel d'affilée
+// (les deux côtés d'un duel Code sont indépendants : l'adversaire n'a pas besoin d'être là), puis le supprime —
+// seulement ceux que la série a téléchargés, jamais un modèle dont Jaris se sert. Un modèle n'est téléchargé qu'une fois. Tout est gardé sur le disque
+// à chaque étape (duelSeriesStore.ts) : un redémarrage de Windows pendant la nuit reprend là où ça s'était arrêté.
+
+/** Un côté refait au plus 3 fois après une panne de la machine ; au-delà, l'erreur reste (le vote dira le reste). */
+const SERIES_MAX_RETRIES = 3
+/**
+ * Ollama qui ne répond plus : nouvel essai toutes les minutes, sans fin (le crédit d'une machine louée peut finir).
+ * Sans évènement, le gardien regarde quand même où on en est toutes les 30 s. Réglables par les tests seulement.
+ */
+const seriesDelays = { ollamaRetryMs: 60_000, idleCheckMs: 30_000 }
+export function setDuelSeriesDelays(delays: Partial<typeof seriesDelays>): void {
+  Object.assign(seriesDelays, delays)
+}
+
+/** Les côtés qui peuvent partir tout de suite : au-delà, inutile de télécharger le modèle suivant (le disque se remplirait). */
+const SERIES_PREFETCH_READY = 2
+/** « model 'x' not found » : le modèle a disparu du disque (ou Ollama regarde le mauvais dossier, étapes 289/313). */
+export const SERIES_MODEL_NOT_FOUND = /model ['"]?[^'"\s]*['"]? not found/i
+
+function newSeriesState(createdAt: number, perModel: number): SeriesState {
+  return {
+    createdAt,
+    perModel,
+    present: new Set(),
+    undeletable: new Set(),
+    download: null,
+    waiting: null,
+    deleted: 0,
+    controller: new AbortController(),
+    wake: null,
+    running: false
+  }
+}
+
+/** Les demandes de la série : des applications tirées au hasard dans la liste d'idées, toutes vues avant qu'une revienne. */
+function assignSeriesPrompts(rounds: RoundState[], random: () => number = Math.random): void {
+  let deck: number[] = []
+  for (const round of rounds) {
+    if (!deck.length) {
+      deck = Array.from({ length: DUEL_CODE_IDEAS }, (_, i) => i + 1)
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1))
+        ;[deck[i], deck[j]] = [deck[j], deck[i]]
+      }
+    }
+    round.prompt = t(`duel.suggest.code.${deck.pop() as number}` as MessageKey)
+  }
+}
+
+function wakeSeries(current: Session): void {
+  const wake = current.series?.wake
+  if (!wake) return
+  if (current.series) current.series.wake = null
+  wake()
+}
+
+/** Attend un évènement (un côté qui finit, un arrêt) ou, au plus tard, `ms`. */
+function waitSeries(series: SeriesState, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      series.controller.signal.removeEventListener('abort', done)
+      if (series.wake === done) series.wake = null
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    series.wake = done
+    series.controller.signal.addEventListener('abort', done, { once: true })
+  })
+}
+
+const modelOf = (round: RoundState, side: DuelSide): string => round.pair[side === 'a' ? 0 : 1]
+const SIDES: readonly DuelSide[] = ['a', 'b']
+
+/** Les côtés qui restent à faire, dans l'ordre de la série. */
+function openSides(current: Session): { round: RoundState; side: DuelSide; model: string; running: boolean }[] {
+  const out: { round: RoundState; side: DuelSide; model: string; running: boolean }[] = []
+  for (const round of current.batch ?? []) {
+    if (round.revealed) continue
+    for (const side of SIDES) {
+      const status = round.sides[side].status
+      if (status === 'idle' || status === 'running') out.push({ round, side, model: modelOf(round, side), running: status === 'running' })
+    }
+  }
+  return out
+}
+
+function ollamaResponds(current: Session): Promise<boolean> {
+  return onModels(current.remote, () => fetchOllamaVersion(10_000)).then(
+    () => true,
+    () => false
+  )
+}
+
+/**
+ * Pendant une série, une erreur qui vient de la MACHINE (Ollama arrêté ou injoignable, modèle effacé du disque) n'est
+ * pas une faute du modèle : le côté est refait plus tard, au plus SERIES_MAX_RETRIES fois. Le reste (réponse vide,
+ * mémoire pleine, code illisible) est une vraie erreur du modèle, gardée telle quelle.
+ */
+async function seriesMachineFault(current: Session, side: SideState, model: string, message: string): Promise<boolean> {
+  const series = current.series
+  if (!series || side.retries >= SERIES_MAX_RETRIES) return false
+  if (SERIES_MODEL_NOT_FOUND.test(message)) {
+    series.present.delete(model)
+    return true
+  }
+  if (await ollamaResponds(current)) return false
+  series.waiting = 'ollama'
+  return true
+}
+
+/** Supprime les modèles téléchargés par la série qui n'ont plus aucun duel à faire. */
+async function releaseFinishedModels(current: Session): Promise<void> {
+  const series = current.series
+  if (!series) return
+  const open = new Set(openSides(current).map((s) => s.model))
+  const done = [...current.downloaded.keys()].filter((m) => !open.has(m) && !series.undeletable.has(m))
+  if (!done.length) return
+  // Étape 377 : sur une autre machine, ce PC ne se sert d'aucun de ces modèles.
+  const used = current.remote ? [] : jarisModels(await getProfile().catch(() => null))
+  for (const model of done) {
+    if (used.some((u) => sameModel(u, model))) {
+      series.undeletable.add(model)
+      continue
+    }
+    try {
+      await deleteModel(model)
+      current.downloaded.delete(model)
+      series.present.delete(model)
+      series.deleted += 1
+    } catch (err) {
+      // Gardé, et proposé à la suppression à la fin ; jamais retenté en boucle.
+      console.error('[jaris] Série de duels : modèle non supprimé —', err)
+      series.undeletable.add(model)
+    }
+  }
+  persistSeries(current)
+  emitNow()
+}
+
+/** Un modèle qui ne peut pas être téléchargé : ses duels quittent la série (son nom n'est jamais affiché). */
+function dropSeriesModel(current: Session, model: string, reason: string): void {
+  current.dropped += 1
+  current.dropReason = reason
+  dropBatchRounds(
+    current,
+    (current.batch ?? []).filter((r) => r.pair.includes(model) && !r.revealed && !batchRoundComplete(r))
+  )
+}
+
+function startSeriesKeeper(current: Session): void {
+  const series = current.series
+  if (!series || series.running) return
+  series.running = true
+  environment.keepAwake?.(true)
+  void onModels(current.remote, () => seriesKeeper(current, series))
+    .catch((err) => console.error('[jaris] Série de duels arrêtée —', err))
+    .finally(() => {
+      series.running = false
+      series.download = null
+      environment.keepAwake?.(false)
+      if (session === current) emitNow()
+    })
+}
+
+async function seriesKeeper(current: Session, series: SeriesState): Promise<void> {
+  const signal = series.controller.signal
+  const alive = (): boolean => session === current && current.series === series && !signal.aborted && Boolean(current.batch)
+  const installed = await installedModelsSeen()
+  for (const model of current.models) if (isInstalled(model, installed)) series.present.add(model)
+  pumpBatch(current)
+  emitNow()
+  while (alive()) {
+    if (series.waiting === 'ollama') {
+      if (!(await ollamaResponds(current))) {
+        emitNow()
+        await waitSeries(series, seriesDelays.ollamaRetryMs)
+        continue
+      }
+      series.waiting = null
+      pumpBatch(current)
+      emitNow()
+    }
+    await releaseFinishedModels(current)
+    if (!alive()) break
+    const sides = openSides(current)
+    // Plus rien à faire : la série a fini de tourner, il ne reste qu'à voter.
+    if (!sides.length) break
+    const ready = sides.filter((s) => !s.running && series.present.has(s.model)).length
+    const running = sides.filter((s) => s.running).length
+    const next = sides.find((s) => !s.running && !series.present.has(s.model))
+    if (!next || ready >= SERIES_PREFETCH_READY) {
+      await waitSeries(series, seriesDelays.idleCheckMs)
+      continue
+    }
+    // Le disque de ce PC : un modèle qui ne tient pas attend que d'autres finissent (et soient supprimés).
+    if (!current.remote) {
+      const free = await detectFreeDiskGb().catch(() => null)
+      const size = current.sizes.get(next.model) ?? 0
+      if (free !== null && size > free - DISK_SAFETY_MARGIN_GB) {
+        if (running > 0 || ready > 0) {
+          series.waiting = 'disk'
+          emitNow()
+          await waitSeries(series, seriesDelays.idleCheckMs)
+          continue
+        }
+        // Rien ne libérera de place : ses duels quittent la série plutôt que de bloquer toute la nuit.
+        series.waiting = null
+        dropSeriesModel(current, next.model, t('duel.series.noDisk', { need: formatGb(size), free: formatGb(Math.max(0, free - DISK_SAFETY_MARGIN_GB)) }))
+        emitNow()
+        continue
+      }
+    }
+    series.waiting = null
+    series.download = { percent: 0 }
+    emitNow()
+    try {
+      const pulled = await pullModelIfMissing(
+        next.model,
+        undefined,
+        (progress) => {
+          if (!progress || session !== current) return
+          series.download = { percent: progress.percent }
+          emitSoon()
+        },
+        signal
+      )
+      if (pulled) current.downloaded.set(next.model, current.sizes.get(next.model) ?? 0)
+      series.present.add(next.model)
+    } catch (err) {
+      if (!alive()) break
+      if (!(await ollamaResponds(current))) series.waiting = 'ollama'
+      else {
+        const message = err instanceof Error ? err.message : String(err)
+        dropSeriesModel(current, next.model, withoutModelNames(message, current.models, ['', '']).slice(0, 400))
+      }
+    } finally {
+      series.download = null
+    }
+    if (!alive()) break
+    pumpBatch(current)
+    persistSeries(current)
+    emitNow()
+  }
+}
+
+const formatGb = (value: number): string => t('unit.gb', { value: formatDecimal(Math.round(value * 10) / 10) })
+
+/** Ce qui est gardé sur le disque : les duels pas encore votés, et ce qu'il faut pour reprendre la série. */
+function seriesSnapshot(current: Session, series: SeriesState): SeriesSnapshot {
+  const side = (s: SideState): SeriesSideSnapshot =>
+    s.status === 'done' || s.status === 'error'
+      ? { status: s.status, text: s.text, error: s.error, durationMs: s.durationMs, app: Boolean(s.html) }
+      : { status: 'idle', text: '', error: null, durationMs: null, app: false }
+  return {
+    format: SERIES_FORMAT,
+    version: SERIES_VERSION,
+    id: current.id,
+    createdAt: series.createdAt,
+    perModel: series.perModel,
+    remote: current.remote ? { host: current.remote.host, vramGb: current.remote.machine.vramGb, ramGb: current.remote.machine.ramGb } : null,
+    vramGb: current.vramGb,
+    sizes: Object.fromEntries(current.sizes),
+    models: current.models,
+    downloaded: Object.fromEntries(current.downloaded),
+    dropped: current.dropped,
+    dropReason: current.dropReason,
+    deleted: series.deleted,
+    rounds: (current.batch ?? [])
+      .filter((r) => !r.revealed)
+      .map((r) => ({ number: r.number, pair: r.pair, prompt: r.prompt ?? '', a: side(r.sides.a), b: side(r.sides.b) }))
+  }
+}
+
+function persistSeries(current: Session): void {
+  const series = current.series
+  if (!series) return
+  void saveSeries(seriesSnapshot(current, series)).catch((err) => console.error('[jaris] Série de duels non gardée —', err))
+}
+
+/**
+ * Au lancement de Jaris (main.ts) : une série gardée sur le disque reprend — les duels finis attendent le vote, les
+ * autres repartent, et les modèles manquants sont retéléchargés. `false` = rien à reprendre.
+ */
+export async function restoreDuelSeries(): Promise<boolean> {
+  if (session) return false
+  const snapshot = await loadSeries().catch((err) => {
+    console.error('[jaris] Série de duels illisible :', err)
+    return null
+  })
+  if (!snapshot) return false
+  if (!snapshot.rounds.length) {
+    await clearSeries().catch(() => {})
+    return false
+  }
+  const restoreSide = async (number: number, name: DuelSide, saved: SeriesSideSnapshot): Promise<SideState> => {
+    if (saved.status === 'idle') return emptySide()
+    const html = saved.app ? await readSeriesApp(number, name) : null
+    // L'application n'a pas été gardée : le côté est refait plutôt que voté sans rien à regarder.
+    if (saved.app && html === null) return emptySide()
+    return {
+      ...emptySide(),
+      status: saved.status,
+      text: saved.text,
+      error: saved.error,
+      durationMs: saved.durationMs,
+      html,
+      previewUrl: html ? createGeneratedAppPreview(html) : null
+    }
+  }
+  const rounds: RoundState[] = []
+  for (const r of snapshot.rounds) {
+    rounds.push({
+      number: r.number,
+      pair: r.pair,
+      prompt: r.prompt,
+      sides: { a: await restoreSide(r.number, 'a', r.a), b: await restoreSide(r.number, 'b', r.b) },
+      revealed: null,
+      tools: null,
+      together: false
+    })
+  }
+  if (session) return false
+  const series = newSeriesState(snapshot.createdAt, snapshot.perModel)
+  series.deleted = snapshot.deleted
+  session = {
+    id: snapshot.id,
+    remote: snapshot.remote ? { host: snapshot.remote.host, machine: { vramGb: snapshot.remote.vramGb, ramGb: snapshot.remote.ramGb, ollamaVersion: null } } : null,
+    vramGb: snapshot.vramGb,
+    sizes: new Map(Object.entries(snapshot.sizes)),
+    category: 'code',
+    phase: 'ready',
+    models: snapshot.models,
+    downloaded: new Map(Object.entries(snapshot.downloaded)),
+    preparing: null,
+    dropped: snapshot.dropped,
+    dropReason: snapshot.dropReason,
+    played: new Map(),
+    last: null,
+    round: null,
+    batch: rounds,
+    series,
+    history: [],
+    error: null
+  }
+  emitNow()
+  startSeriesKeeper(session)
+  return true
 }
 
 async function runSide(current: Session, round: RoundState, sideName: DuelSide): Promise<void> {
@@ -701,6 +1152,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   runControllers.set(runKey, controller)
   side.status = 'running'
   side.startedAt = Date.now()
+  let retry = false
   side.activity = { kind: current.category === 'code' ? 'loading' : 'thinking' }
   emitNow()
   try {
@@ -722,16 +1174,31 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   } catch (err) {
     if (controller.signal.aborted) side.status = 'stopped'
     else {
-      side.status = 'error'
-      side.error = withoutModelNames(err instanceof Error ? err.message : String(err), current.models, round.pair)
+      const message = err instanceof Error ? err.message : String(err)
+      if (await seriesMachineFault(current, side, model, message)) {
+        // Étape 382 : la machine, pas le modèle (Ollama arrêté, modèle effacé du disque) — le côté sera refait.
+        retry = true
+      } else {
+        side.status = 'error'
+        side.error = withoutModelNames(message, current.models, round.pair)
+      }
     }
   } finally {
     side.activity = null
     side.durationMs = side.startedAt === null ? null : Date.now() - side.startedAt
+    if (retry) Object.assign(side, { ...emptySide(), retries: side.retries + 1 })
     if (runControllers.get(runKey) === controller) runControllers.delete(runKey)
     if (session === current) {
+      // Étape 382 : l'application écrite est gardée sur le disque avant tout, pour survivre à un redémarrage.
+      if (current.series && side.status === 'done' && side.html) {
+        await saveSeriesApp(round.number, sideName, side.html).catch((err) => console.error('[jaris] Série : application non gardée —', err))
+      }
       // Étape 381 : un côté de la file a fini — de la place pour le suivant.
       if (current.batch && current.phase === 'ready') pumpBatch(current)
+      if (current.series) {
+        persistSeries(current)
+        wakeSeries(current)
+      }
       emitNow()
     }
   }
@@ -906,6 +1373,8 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   current.played.set(key, (current.played.get(key) ?? 0) + 1)
   current.last = round.pair
   round.revealed = { a: modelA, b: modelB, outcome }
+  // Étape 382 : un duel voté quitte la série gardée sur le disque (il est maintenant dans les votes).
+  if (current.series) persistSeries(current)
   emitNow()
   return getDuelView() as DuelSessionView
 }
@@ -940,6 +1409,7 @@ export function retryDuel(): DuelSessionView {
   if (current.batch?.includes(round)) {
     // Étape 381 : le duel reprend sa place dans la file.
     pumpBatch(current)
+    if (current.series) wakeSeries(current)
     emitNow()
     return getDuelView() as DuelSessionView
   }
@@ -1020,6 +1490,12 @@ export async function endDuel(): Promise<DuelSummary> {
   if (!current) throw new Error(t('duel.error.noSession'))
   prepareController?.abort()
   abortRuns()
+  // Étape 382 : « Terminer » arrête la série pour de bon — les duels non votés sont abandonnés.
+  if (current.series) {
+    current.series.controller.abort()
+    current.series = null
+    await clearSeries().catch((err) => console.error('[jaris] Série de duels : fichier non effacé —', err))
+  }
   current.phase = 'ended'
   current.preparing = null
   current.round = null
@@ -1091,15 +1567,7 @@ export async function endDuel(): Promise<DuelSummary> {
 export async function deleteDuelModels(models: string[]): Promise<{ deleted: string[]; failed: { model: string; error: string }[] }> {
   const current = session
   if (!current || current.phase !== 'ended') throw new Error(t('duel.error.noSession'))
-  const profile = await getProfile()
-  const used = [
-    ...Object.values(profile?.models ?? {}),
-    ...Object.values(profile?.voiceModels ?? {}),
-    profile?.visionModel,
-    profile?.codeModel,
-    profile?.pilotModel,
-    ...Object.values(profile?.modelChoices ?? {})
-  ].filter((m): m is string => Boolean(m))
+  const used = jarisModels(await getProfile())
   const deleted: string[] = []
   const failed: { model: string; error: string }[] = []
   for (const model of models) {
@@ -1125,5 +1593,25 @@ export function closeDuel(): void {
 /** Fermeture de Jaris ou « Déplacer » : tout ce qui tourne s'arrête, rien n'est voté à la place de Léo. */
 export function abortDuel(): void {
   prepareController?.abort()
+  // Étape 382 : la série s'arrête, mais reste gardée sur le disque — elle reprend au prochain lancement.
+  if (session?.series) {
+    const current = session
+    current.series?.controller.abort()
+    abortRuns()
+    persistSeries(current)
+    return
+  }
   abortRuns()
+}
+
+/** Les modèles dont Jaris se sert (profil) : jamais supprimés par un duel. */
+function jarisModels(profile: Profile | null): string[] {
+  return [
+    ...Object.values(profile?.models ?? {}),
+    ...Object.values(profile?.voiceModels ?? {}),
+    profile?.visionModel,
+    profile?.codeModel,
+    profile?.pilotModel,
+    ...Object.values(profile?.modelChoices ?? {})
+  ].filter((m): m is string => Boolean(m))
 }

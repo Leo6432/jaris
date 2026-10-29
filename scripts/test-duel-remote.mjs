@@ -120,6 +120,16 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 100 },
     './tools': { TOOLS: ['open_app', 'look_at_screen', 'generate_image', 'shutdown_pc'].map((name) => ({ function: { name } })) },
     './tts': { synthesizeSpeech: async () => Buffer.from('RIFF') },
+    // Étape 382 : la série gardée sur le disque (pas exercée ici).
+    './duelSeriesStore': {
+      SERIES_FORMAT: 'jaris-duel-series',
+      SERIES_VERSION: 1,
+      saveSeries: async () => {},
+      loadSeries: async () => null,
+      clearSeries: async () => {},
+      saveSeriesApp: async () => {},
+      readSeriesApp: async () => null
+    },
     './duelStore': {
       addDuelVote: async (vote) => votes.push(vote),
       getDuelVotes: () => votes,

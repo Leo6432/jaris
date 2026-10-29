@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadTsModule } from './load-ts-module.mjs'
+import { i18nModules, loadTsModule } from './load-ts-module.mjs'
 
 /**
  * Étape 355 — une session de Duel de bout en bout, avec de faux Ollama/converse/profil : préparation (téléchargements
@@ -42,8 +42,45 @@ async function waitFor(predicate, what) {
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null } = {}) {
-  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0 }
+/**
+ * Étape 382 : un faux disque pour la série gardée (duelSeriesStore.ts), qui survit d'un « lancement de Jaris » (setup)
+ * à l'autre quand on le passe au suivant. La vraie lecture (parseSeriesSnapshot) relit ce qui a été écrit, comme le
+ * vrai fichier : un snapshot qui ne se relit pas ne reprendrait jamais.
+ */
+const seriesStoreModule = loadTsModule('electron/services/duelSeriesStore.ts', {
+  'fs/promises': {},
+  path: { join: (...parts) => parts.join('/') },
+  './atomicFile': { UNREADABLE_DATA_DIR: 'x', readJsonDataFile: async () => ({ status: 'missing' }), writeFileAtomic: async () => {} },
+  './dataLocation': { getDataRoot: () => '/donnees' },
+  '../../shared/duel': duelModule
+})
+function newSeriesStore() {
+  const store = { json: null, apps: new Map(), saves: 0, cleared: 0 }
+  store.module = {
+    SERIES_FORMAT: seriesStoreModule.SERIES_FORMAT,
+    SERIES_VERSION: seriesStoreModule.SERIES_VERSION,
+    saveSeries: async (snapshot) => {
+      store.saves++
+      store.json = JSON.stringify(snapshot)
+    },
+    loadSeries: async () => (store.json === null ? null : seriesStoreModule.parseSeriesSnapshot(JSON.parse(store.json))),
+    clearSeries: async () => {
+      store.cleared++
+      store.json = null
+      store.apps.clear()
+    },
+    saveSeriesApp: async (number, side, html) => {
+      store.apps.set(`${number}-${side}`, html)
+    },
+    readSeriesApp: async (number, side) => store.apps.get(`${number}-${side}`) ?? null
+  }
+  Object.defineProperty(store, 'snapshot', { get: () => (store.json === null ? null : JSON.parse(store.json)) })
+  return store
+}
+
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null } = {}) {
+  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [] }
+  let ollamaDown = false
   const votes = []
   const apps = new Map()
   const emitted = []
@@ -66,28 +103,53 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     './codeGenerator': {
       generateApp: async (prompt, _onStatus, _current, _image, options) => {
         calls.generate.push({ prompt, options })
-        // Étape 365 : un vrai avancement de génération (CodeGenProgress), réflexion comprise.
-        options.onProgress?.({
-          label: 'Génération',
-          stepIndex: 1,
-          stepCount: 2,
-          charsWritten: 0,
-          thinking: true,
-          idleMs: 0,
-          elapsedMs: 1000,
-          phase: 'thinking',
-          thinkingChars: 12400,
-          thinkingText: `Je suis ${options.model} et je réfléchis`
-        })
-        // Le temps qu'une mise à jour parte vers l'écran (au plus une toutes les 120 ms).
-        await new Promise((resolve) => setTimeout(resolve, 200))
-        // Étape 379 : une génération qui attend qu'on la libère, pour voir A et B travailler en même temps.
-        if (generateGate) await generateGate.promise
-        if (options.signal?.aborted) throw Object.assign(new Error('arrêté'), { name: 'AbortError' })
-        return { html: `<html><body>${options.model.length}</body></html>`, issues: [], dir: '' }
+        // Modèles différents qui écrivent en même temps (un même modèle n'est chargé qu'une fois par Ollama).
+        calls.active.set(options.model, (calls.active.get(options.model) ?? 0) + 1)
+        calls.mostModels = Math.max(calls.mostModels, calls.active.size)
+        const done = () => {
+          const left = (calls.active.get(options.model) ?? 1) - 1
+          if (left > 0) calls.active.set(options.model, left)
+          else calls.active.delete(options.model)
+        }
+        try {
+          return await generateBody(prompt, options)
+        } finally {
+          done()
+        }
       }
     },
-    './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` },
+    './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` }
+  }
+  async function generateBody(prompt, options) {
+    // Étape 382 : un modèle qui n'est pas sur le disque ne peut pas écrire (comme le vrai Ollama).
+    if (!installedNow.includes(options.model)) {
+      calls.notInstalled = (calls.notInstalled ?? 0) + 1
+      throw new Error(`model '${options.model}' not found`)
+    }
+    // Étape 365 : un vrai avancement de génération (CodeGenProgress), réflexion comprise.
+    options.onProgress?.({
+      label: 'Génération',
+      stepIndex: 1,
+      stepCount: 2,
+      charsWritten: 0,
+      thinking: true,
+      idleMs: 0,
+      elapsedMs: 1000,
+      phase: 'thinking',
+      thinkingChars: 12400,
+      thinkingText: `Je suis ${options.model} et je réfléchis`
+    })
+    // Le temps qu'une mise à jour parte vers l'écran (au plus une toutes les 120 ms).
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    // Étape 379 : une génération qui attend qu'on la libère, pour voir A et B travailler en même temps.
+    if (generateGate) await generateGate.promise
+    if (options.signal?.aborted) throw Object.assign(new Error('arrêté'), { name: 'AbortError' })
+    // Étape 382 : Ollama arrêté en pleine série, ou une génération propre au test.
+    if (ollamaDown) throw new Error('Ollama ne répond pas')
+    if (generateImpl) return generateImpl(prompt, options)
+    return { html: `<html><body>${options.model.length}</body></html>`, issues: [], dir: '' }
+  }
+  Object.assign(modules, {
     // Étape 366 : ce que le PC peut faire tourner (dessin, modèle de vision par défaut).
     '../config': { config: { ollama: { visionModel: 'vision-model:8b' } } },
     './imageGenerator': {
@@ -100,7 +162,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       duelMachine: async () => ({ vramGb, ramGb: 32 }),
       duelPrior: (category) => () => (category === 'code' ? 20 : 10),
       getDuelCandidates: async () =>
-        MODELS.map((model, index) => ({ model, vramGb: index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),
+        MODELS.map((model, index) => ({ model, vramGb: sizes?.[model] ?? index + 2, note: 10 - index, duels: 0, inUse: profile?.models && Object.values(profile.models).includes(model) })),
       imageReadingModels: () => ['vision-model:8b'],
       getDuelModelList: async () => [
         ...MODELS.map((model, index) => ({ model, vramGb: index + 2, reason: null })),
@@ -122,16 +184,22 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         return true
       },
       getModelThinking: async (model) => THINKING[model] ?? null,
+      fetchOllamaVersion: async () => {
+        if (ollamaDown) throw new Error('Ollama ne répond pas')
+        return '0.40.10'
+      },
       pullModelIfMissing: async (model, _onStatus, onProgress, signal) => {
         calls.pulls.push(model)
         // Comme le vrai : la vue est réparée, et un modèle déjà sur le disque n'est pas retéléchargé (`false`).
         blind = false
         if (installedNow.includes(model)) return false
         if (pullGates.has(model)) await pullGates.get(model).promise
+        if (ollamaDown) throw new Error('fetch failed')
         if (signal?.aborted) throw new Error('arrêté')
         onProgress?.({ percent: 50 })
         if (failPull.includes(model)) throw new Error(`pull model manifest: ${model} introuvable`)
         installedNow.push(model)
+        calls.pulled.push(model)
         return true
       }
     },
@@ -144,7 +212,11 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         return profile
       }
     },
-    './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 100 },
+    './systemResources': {
+      DISK_SAFETY_MARGIN_GB: 5,
+      // Étape 382 : le disque se remplit à chaque modèle présent et se libère à chaque suppression.
+      detectFreeDiskGb: async () => (sizes ? freeDiskGb - installedNow.reduce((sum, m) => sum + (sizes[m] ?? 0), 0) : freeDiskGb)
+    },
     './tools': {
       TOOLS: ['open_app', 'type_text', 'set_reminder', 'shutdown_pc', 'search_web', 'generate_image', 'look_at_screen', 'computer_use_task'].map((name) => ({
         function: { name }
@@ -168,11 +240,16 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       },
       readDuelApp: async (id, side) => apps.get(`${id}-${side}`) ?? null
     },
+    './duelSeriesStore': seriesStore.module,
     '../../shared/duel': duelModule,
     '../../shared/effort': effortModule
-  }
+  })
   const session = loadTsModule('electron/services/duelSession.ts', modules)
-  session.setDuelEnvironment({ onReminderFire: () => {}, emit: (view) => emitted.push(JSON.parse(JSON.stringify(view))) })
+  session.setDuelEnvironment({
+    onReminderFire: () => {},
+    emit: (view) => emitted.push(JSON.parse(JSON.stringify(view))),
+    keepAwake: (on) => calls.awake.push(on)
+  })
   return {
     session,
     calls,
@@ -185,6 +262,10 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     get installed() {
       return installedNow
     },
+    setOllamaDown(down) {
+      ollamaDown = down
+    },
+    seriesStore,
     gatePull(model) {
       let release
       const promise = new Promise((resolve) => (release = resolve))
@@ -836,12 +917,10 @@ test('étape 381 : sur une petite carte, un seul modèle à la fois — la file 
   await readyCode(env)
   const started = env.session.startDuelBatch(['Un compteur', 'Une horloge'])
   assert.equal(running(started), 1, 'un seul à la fois')
-  let most = 0
-  await waitFor(() => {
-    most = Math.max(most, running(env.session.getDuelView()))
-    return env.session.getDuelView().batch.every((r) => r.a === 'done' && r.b === 'done')
-  }, 'tout fini')
-  assert.equal(most, 1, 'jamais deux à la fois sur 8 Go')
+  await waitFor(() => env.session.getDuelView().batch.every((r) => r.a === 'done' && r.b === 'done'), 'tout fini')
+  // Jamais deux modèles DIFFÉRENTS à la fois sur 8 Go. Deux côtés du même modèle peuvent tourner ensemble (Ollama ne le
+  // charge qu'une fois) : compter les côtés en cours rendait ce test aléatoire, selon les paires tirées.
+  assert.equal(env.calls.mostModels, 1, 'jamais deux modèles à la fois sur 8 Go')
   // B ne se lance pas à la main dans une file : c'est Jaris qui le fait.
   env.session.openBatchRound(env.session.getDuelView().batch[0].number)
   assert.throws(() => env.session.runDuelB())
@@ -886,4 +965,232 @@ test('étape 381 : refusé en Conversation, sous 2 ou au-delà de 12 demandes, o
   assert.throws(() => env.session.startDuelBatch(Array.from({ length: 13 }, (_, i) => `D${i}`)), /entre 2 et 12/)
   env.session.startDuelBatch(['Un', 'Deux'])
   assert.throws(() => env.session.startDuelBatch(['Trois', 'Quatre']))
+})
+
+// --- Étape 382 : la série de duels Code ---------------------------------------------------------------------------
+
+/** Les modèles réellement utilisés par chaque génération, dans l'ordre. */
+const generatedModels = (env) => env.calls.generate.map((g) => g.options.model)
+const seriesDone = (env) => {
+  const view = env.session.getDuelView()
+  return Boolean(view?.batch?.length) && view.batch.every((r) => ['done', 'error'].includes(r.a) && ['done', 'error'].includes(r.b)) && !view.series?.active
+}
+const CODE_IDEAS = new Set(Array.from({ length: duelModule.DUEL_CODE_IDEAS }, (_, i) => i18nModules()['../../shared/i18n'].t(`duel.suggest.code.${i + 1}`)))
+
+test('étape 382 : la série — chaque modèle au moins N duels, chaque modèle téléchargé une fois puis supprimé après son dernier duel', async () => {
+  // Aucun modèle dont Jaris se sert parmi ceux de la série : tous peuvent être supprimés.
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' } })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const started = await env.session.startDuel('code', 4, 3)
+  assert.equal(started.phase, 'ready')
+  assert.ok(started.batch.length >= 6, 'au moins 4 × 3 / 2 duels')
+  for (const item of started.batch) assert.ok(CODE_IDEAS.has(item.prompt), `une idée de la liste : ${item.prompt}`)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  const view = env.session.getDuelView()
+  assert.equal(view.batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+  // Jamais une génération lancée avant que son modèle soit sur le disque.
+  assert.equal(env.calls.notInstalled ?? 0, 0)
+  // Au moins 3 duels par modèle.
+  const counts = new Map()
+  for (const model of generatedModels(env)) counts.set(model, (counts.get(model) ?? 0) + 1)
+  for (const model of MODELS) assert.ok((counts.get(model) ?? 0) >= 3, `${model} : ${counts.get(model)} duels`)
+  // Chaque modèle téléchargé UNE fois, supprimé ensuite, et plus jamais utilisé après sa suppression.
+  assert.deepEqual([...env.calls.pulls].sort(), [...MODELS].sort())
+  assert.deepEqual([...env.calls.deleted].sort(), [...MODELS].sort())
+  assert.equal(view.series.deleted, 4)
+  // Le PC reste éveillé pendant la série, plus après.
+  assert.deepEqual(env.calls.awake, [true, false])
+  // Anonymat : aucun nom de modèle n'est parti vers l'écran.
+  const sent = JSON.stringify(env.emitted)
+  for (const model of MODELS) assert.ok(!sent.includes(model), `nom envoyé à l'écran : ${model}`)
+  // Gardée sur le disque à chaque étape.
+  assert.ok(env.seriesStore.snapshot.rounds.length === view.batch.length)
+  assert.ok(env.seriesStore.apps.size >= view.batch.length * 2 - 1)
+})
+
+test('étape 382 : un modèle supprimé n’est plus jamais utilisé après, ni retéléchargé', async () => {
+  const order = []
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' } })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const deleteModel = env.calls.deleted
+  const pushed = deleteModel.push.bind(deleteModel)
+  deleteModel.push = (model) => {
+    order.push(['delete', model])
+    return pushed(model)
+  }
+  const gen = env.calls.generate
+  const pushGen = gen.push.bind(gen)
+  gen.push = (entry) => {
+    order.push(['use', entry.options.model])
+    return pushGen(entry)
+  }
+  await env.session.startDuel('code', 4, 4)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  for (const model of MODELS) {
+    const deletedAt = order.findIndex(([kind, m]) => kind === 'delete' && m === model)
+    assert.ok(deletedAt >= 0, `${model} supprimé`)
+    assert.ok(!order.slice(deletedAt).some(([kind, m]) => kind === 'use' && m === model), `${model} utilisé après sa suppression`)
+  }
+  assert.equal(env.calls.pulls.length, 4)
+})
+
+test('étape 382 : un modèle dont Jaris se sert, ou déjà sur le PC, n’est jamais supprimé', async () => {
+  const env = setup({ category: 'code', vramGb: 8, installed: ['charlie-model:4b'] })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await env.session.startDuel('code', 4, 2)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  // alpha et bravo servent à Jaris (profil), charlie était déjà là : seul delta part.
+  assert.deepEqual(env.calls.deleted, ['delta-model:7b'])
+  assert.ok(!env.calls.pulls.includes('charlie-model:4b') || env.installed.includes('charlie-model:4b'))
+})
+
+test('étape 382 : disque limité — jamais plus de modèles téléchargés qu’il n’en tient, et aucun duel abandonné', async () => {
+  const sizes = Object.fromEntries(MODELS.map((m) => [m, 10]))
+  // 5 Go de marge : 25 Go utilisables, soit 2 modèles de 10 Go à la fois.
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, sizes, freeDiskGb: 30 })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  let most = 0
+  const pulls = env.calls.pulls
+  const push = pulls.push.bind(pulls)
+  pulls.push = (model) => {
+    most = Math.max(most, env.installed.length + 1)
+    return push(model)
+  }
+  await env.session.startDuel('code', 4, 3)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  assert.ok(most <= 2, `${most} modèles sur le disque en même temps`)
+  assert.equal(env.session.getDuelView().dropped, 0)
+  assert.equal(env.session.getDuelView().batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+})
+
+test('étape 382 : Ollama arrêté en pleine série — rien n’est compté comme une erreur du modèle, tout reprend quand il revient', async () => {
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' } })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20, ollamaRetryMs: 30 })
+  await env.session.startDuel('code', 4, 2)
+  await waitFor(() => env.calls.generate.length >= 1, 'une génération a commencé')
+  env.setOllamaDown(true)
+  await waitFor(() => env.session.getDuelView().series?.waiting === 'ollama', 'la série attend Ollama')
+  env.setOllamaDown(false)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  const view = env.session.getDuelView()
+  assert.equal(view.batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+  assert.equal(view.series.waiting, null)
+})
+
+test('étape 382 : « model not found » — le modèle est retéléchargé et le côté refait, pas compté comme une erreur', async () => {
+  let failed = false
+  const env = setup({
+    category: 'code',
+    vramGb: 8,
+    profile: { name: 'Léo' },
+    generateImpl: (_prompt, options) => {
+      if (!failed && options.model === 'alpha-model:3b') {
+        failed = true
+        throw new Error("model 'alpha-model:3b' not found")
+      }
+      return { html: `<html><body>${options.model.length}</body></html>`, issues: [], dir: '' }
+    }
+  })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await env.session.startDuel('code', 4, 2)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  assert.ok(failed)
+  assert.equal(env.session.getDuelView().batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+})
+
+test('étape 382 : Jaris fermé en pleine série, puis rouvert — les duels finis attendent le vote, les autres reprennent', async () => {
+  const store = newSeriesStore()
+  const first = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' }, seriesStore: store })
+  first.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const started = await first.session.startDuel('code', 4, 3)
+  const total = started.batch.length
+  await waitFor(() => first.session.getDuelView().batch.filter((r) => r.a === 'done' && r.b === 'done').length >= 2, 'deux duels finis')
+  // Un vote avant de fermer : il ne doit plus être dans la série gardée.
+  const ready = first.session.getDuelView().batch.find((r) => r.a === 'done' && r.b === 'done')
+  first.session.openBatchRound(ready.number)
+  await first.session.voteDuel('a')
+  // Gardé tout de suite après le vote, sans attendre la fermeture : une coupure de courant juste après ne le refait pas.
+  await waitFor(() => !store.snapshot.rounds.some((r) => r.number === ready.number), 'vote retiré de la série gardée')
+  first.session.abortDuel()
+  await waitFor(() => !first.session.getDuelView().series?.active, 'série arrêtée')
+  const saved = store.snapshot
+  assert.ok(saved, 'la série est gardée sur le disque')
+  assert.equal(saved.rounds.length, total - 1, 'le duel voté n’y est plus')
+  assert.ok(!saved.rounds.some((r) => r.number === ready.number))
+
+  // Nouveau lancement de Jaris, même disque.
+  const second = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' }, seriesStore: store, installed: [...first.installed] })
+  second.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  assert.equal(await second.session.restoreDuelSeries(), true)
+  const restored = second.session.getDuelView()
+  assert.equal(restored.category, 'code')
+  assert.equal(restored.batch.length, total - 1)
+  const finishedBefore = saved.rounds.filter((r) => r.a.status === 'done' && r.b.status === 'done').map((r) => r.number)
+  for (const number of finishedBefore) {
+    const item = restored.batch.find((r) => r.number === number)
+    assert.equal(item.a, 'done')
+    assert.equal(item.b, 'done')
+  }
+  await waitFor(() => seriesDone(second), 'la série reprise a fini')
+  // Seuls les côtés pas encore faits sont refaits (un côté fini garde son application).
+  const idleSides = saved.rounds.reduce((sum, r) => sum + (r.a.status === 'idle') + (r.b.status === 'idle'), 0)
+  assert.ok(idleSides > 0, 'des côtés restaient à faire')
+  assert.equal(second.calls.generate.length, idleSides)
+  // Un duel fini avant la fermeture se rouvre avec son application.
+  second.session.openBatchRound(finishedBefore[0])
+  assert.ok(second.session.getDuelView().round.a.previewUrl)
+  assert.ok(second.session.duelSideCode('a'))
+})
+
+test('étape 382 : tout voté — la série gardée est effacée ; « Terminer » l’efface aussi', async () => {
+  const env = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' } })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await env.session.startDuel('code', 4, 1)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  for (const item of env.session.getDuelView().batch) {
+    env.session.openBatchRound(item.number)
+    await env.session.voteDuel('tie')
+    env.session.nextDuel()
+  }
+  assert.equal(env.session.getDuelView().batch, null)
+  assert.equal(env.seriesStore.json, null)
+  assert.ok(env.seriesStore.cleared >= 1)
+
+  const other = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' } })
+  other.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await other.session.startDuel('code', 4, 2)
+  assert.ok(other.seriesStore.json)
+  await other.session.endDuel()
+  assert.equal(other.seriesStore.json, null)
+})
+
+test('étape 382 : « Tout arrêter » arrête la série (téléchargement compris) et garde ce qui est prêt', async () => {
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' } })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const gates = new Map(MODELS.map((m) => [m, env.gatePull(m)]))
+  await env.session.startDuel('code', 4, 3)
+  // Les trois premiers modèles arrivent ; le quatrième reste en cours de téléchargement.
+  for (let k = 1; k <= 3; k++) {
+    await waitFor(() => env.calls.pulls.length >= k, `téléchargement ${k}`)
+    gates.get(env.calls.pulls[k - 1])()
+  }
+  await waitFor(() => env.calls.pulls.length === 4, 'quatrième téléchargement en cours')
+  const last = env.calls.pulls[3]
+  await waitFor(() => env.session.getDuelView().batch.some((r) => r.a === 'done' && r.b === 'done'), 'un duel prêt pour le vote')
+  env.session.stopDuelRun()
+  gates.get(last)()
+  await waitFor(() => !env.session.getDuelView().series?.active, 'série arrêtée')
+  // Le téléchargement en cours est annulé : rien n'arrive sur le disque après « Tout arrêter ».
+  assert.ok(!env.calls.pulled.includes(last), 'le téléchargement aurait dû être annulé')
+  const view = env.session.getDuelView()
+  assert.ok(view.batch.length > 0, 'les duels prêts restent à voter')
+  assert.ok(view.batch.every((r) => r.a === 'done' && r.b === 'done'))
+})
+
+test('étape 382 : refusé hors Code, ou avec un nombre de duels par modèle impossible', async () => {
+  const env = setup()
+  await assert.rejects(env.session.startDuel('conversation', 4, 5))
+  await assert.rejects(env.session.startDuel('code', 4, 0))
+  await assert.rejects(env.session.startDuel('code', 4, 51))
+  await assert.rejects(env.session.startDuel('code', 4, 2.5))
 })

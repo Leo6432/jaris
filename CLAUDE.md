@@ -10215,3 +10215,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   de plus livrés (10 au total). Régression : `test-duel.mjs` (règle de la file), `test-duel-session.mjs` (4 au plus
   sur 80 Go, un seul sur 8 Go, vote duel par duel puis fin de file, arrêts, refus), `test-duel-panel-ui.mjs`
   (éditeur, liste, ouverture, retour, B sans bouton). Chaque garde vérifiée en la retirant.
+
+- **Étape 382 (v0.40.23), Léo : « je veux que tu testes tous les modèles au moins 10 fois, ça va désinstaller des
+  modèles et en réinstaller, il choisit au hasard dans une liste d'applications à coder, et après le lendemain j'ai
+  juste à voter, et je vais pouvoir personnaliser le 10 ».** Accueil du Duel, catégorie Code : « Comment jouer » → « Un
+  duel à la fois » ou « Série (je vote plus tard) », avec « Duels par modèle » (1 à 50, 10 par défaut) et le total
+  annoncé. « Je choisis » gagne « Tout cocher / Tout décocher ». La série se lance seule et se vote dans « Tes duels »
+  (étape 381), pendant qu'elle tourne ou le lendemain. Une proposition précédente (un programme posé sur le pod pour que
+  le PC puisse être éteint) a été refusée par Léo : la série tourne dans Jaris, PC allumé (ou modèles sur un pod).
+  - **Planning (`planDuelSeries`, shared/duel.ts)** : chaque modèle fait AU MOINS N duels (le dernier finit contre les
+    modèles qui viennent de finir, un ou deux de plus pour eux), contre l'adversaire qu'il a le moins affronté. Les
+    demandes sont tirées au hasard parmi 40 idées d'applications (`DUEL_CODE_IDEAS`, 30 nouvelles traduites dans les 24
+    langues), toutes vues avant qu'une revienne.
+  - **Le « gardien » (duelSession.ts)** télécharge le modèle suivant juste avant ses duels (au plus un d'avance, sur le
+    disque de ce PC seulement s'il tient), fait écrire TOUS ses côtés de duel pendant qu'il est là, puis le supprime —
+    seulement un modèle téléchargé par la série, jamais un modèle du profil ni un modèle déjà sur le PC.
+    **Découverte en écrivant le test, qui a simplifié la conception** : les deux côtés d'un duel Code sont
+    indépendants (chacun écrit seul son application), donc un modèle n'a jamais besoin d'être sur le disque en même
+    temps que son adversaire. Ma première version groupait les adversaires par fenêtre de 4 « voisins » pour limiter le
+    disque ; inutile : chaque modèle est téléchargé une fois quel que soit l'ordre, et chacun peut affronter tous les
+    autres (12 modèles × 10 duels : 10 adversaires différents chacun au lieu de 3 à 6). **Leçon : avant de contraindre
+    un planning pour une ressource, vérifier ce qui a réellement besoin d'être là EN MÊME TEMPS.**
+  - **Panne de la machine ≠ faute du modèle** : une génération qui échoue alors qu'Ollama ne répond plus, ou sur
+    « model 'x' not found », remet le côté en attente (au plus 3 fois) au lieu de le compter en erreur ; la série
+    attend Ollama (nouvel essai chaque minute, sans fin : le crédit d'un pod peut finir) et le dit à l'écran. Toute
+    autre erreur reste celle du modèle.
+  - **Gardée sur le disque à chaque étape** (`duelSeriesStore.ts` : `duel-series.json` + `duel-series/<n>-a.html`,
+    dans OWNED_ENTRIES) et reprise au lancement de Jaris (`restoreDuelSeries`, main.ts) : un redémarrage de Windows la
+    nuit ne perd rien — les côtés finis gardent leur application, seuls les autres sont refaits. Un duel voté en sort
+    tout de suite ; « Terminer » ou tout voté l'efface ; fermer Jaris la garde. Le PC est gardé éveillé pendant qu'elle
+    tourne (`powerSaveBlocker`, comme le test des modèles). « Tout arrêter » arrête aussi le téléchargement en cours.
+  - **Test ancien rendu fiable au passage** : « sur une petite carte, un seul modèle à la fois » (étape 381) échouait
+    une fois sur trois, AUSSI sur le code d'avant : il comptait les côtés en cours, or deux côtés du MÊME modèle peuvent
+    tourner ensemble (Ollama ne le charge qu'une fois, règle voulue de l'étape 381). Il compte maintenant les modèles
+    différents. **Leçon : un test qui échoue au hasard sur le code d'origine aussi accuse le test, pas la modification
+    — le vérifier avec `git stash` avant de chercher dans son propre changement.**
+  Régression : `test-duel.mjs` (planning : au moins N, adversaires variés, A/B au hasard), `test-duel-session.mjs`
+  (téléchargé une fois, jamais utilisé après sa suppression, modèles de Jaris jamais supprimés, disque limité, Ollama
+  arrêté puis revenu, modèle introuvable, Jaris fermé puis rouvert, effacement, « Tout arrêter » qui annule le
+  téléchargement, refus) et `test-duel-panel-ui.mjs`. Les 10 garde-fous du moteur vérifiés en les retirant un par un. **Non
+  vérifié en usage réel** : une vraie nuit sur la machine de Léo ou sur un pod.

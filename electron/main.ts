@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
+import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerSaveBlocker, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getMissingStorageRoot } from './services/storageRoot'
@@ -95,10 +95,11 @@ import {
   skipDuel,
   nextDuel,
   startDuel,
+  restoreDuelSeries,
   stopDuelRun,
   voteDuel
 } from './services/duelSession'
-import { isDuelCategory, isDuelOutcome, rankDuels, switchProbability, type DuelCategory } from '../shared/duel'
+import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProbability, type DuelCategory } from '../shared/duel'
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -1725,11 +1726,23 @@ app.whenReady().then(async () => {
   })
 
   // Étape 355 — le Duel. Ce qui vient de l'écran est revérifié ici (catégorie, issue du vote, taille de session).
+  // Étape 382 : une série de duels tourne toute une nuit — le PC ne doit pas se mettre en veille (l'écran, lui, peut
+  // s'éteindre). Même blocage que le test des modèles (benchmarkRunner.ts).
+  let seriesAwake: number | null = null
   setDuelEnvironment({
     onReminderFire: fireReminder,
-    emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view)
+    emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view),
+    keepAwake: (on) => {
+      if (on && seriesAwake === null) seriesAwake = powerSaveBlocker.start('prevent-app-suspension')
+      else if (!on && seriesAwake !== null) {
+        if (powerSaveBlocker.isStarted(seriesAwake)) powerSaveBlocker.stop(seriesAwake)
+        seriesAwake = null
+      }
+    }
   })
   void loadDuelVotes()
+  // Étape 382 : une série de duels interrompue (Windows redémarré, Jaris fermé) reprend là où elle s'était arrêtée.
+  void restoreDuelSeries().catch((err) => console.error('[jaris] Série de duels non reprise :', err))
   void loadSharedDuelVotes(join(resourcesRoot(), 'scripts', 'shared-duel-votes.json'))
   void loadModelSpeeds()
   const duelCategory = (value: unknown): DuelCategory => {
@@ -1737,16 +1750,19 @@ app.whenReady().then(async () => {
     return value
   }
   ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
-  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown) => {
+    // Étape 382 : une série de duels Code — le nombre de duels par modèle (revérifié par startDuel).
+    if (series !== undefined && series !== null && !isDuelSeriesCount(series)) throw new Error(t('duel.error.badRequest'))
+    const perModel = typeof series === 'number' ? series : undefined
     // Un nombre (modèles au hasard) ou, étape 363, la liste des modèles choisis à la main — revérifiée par startDuel.
     if (Array.isArray(pick)) {
       if (pick.length > 200 || !pick.every((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)) {
         throw new Error(t('duel.error.badRequest'))
       }
-      return startDuel(duelCategory(category), pick as string[])
+      return startDuel(duelCategory(category), pick as string[], perModel)
     }
     if (typeof pick !== 'number' || !Number.isInteger(pick) || pick < 2 || pick > 6) throw new Error(t('duel.error.badRequest'))
-    return startDuel(duelCategory(category), pick)
+    return startDuel(duelCategory(category), pick, perModel)
   })
   ipcMain.handle(IPC_CHANNELS.duelAsk, (_event, prompt: unknown) => {
     if (typeof prompt !== 'string' || prompt.length > 20_000) throw new Error(t('duel.error.badRequest'))

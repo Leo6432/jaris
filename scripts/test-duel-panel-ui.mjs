@@ -59,8 +59,8 @@ window.jaris = {
   duelState: async () => window.__view,
   duelPlan: async (category) => { window.__calls.push(['plan', category]); return { ...window.__plan, category } },
   duelRankings: async () => window.__rankings,
-  duelStart: async (category, count) => {
-    window.__calls.push(['start', category, count])
+  duelStart: async (category, count, series) => {
+    window.__calls.push(series === undefined ? ['start', category, count] : ['start', category, count, series])
     window.__category = category
     return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
   },
@@ -801,5 +801,93 @@ test('étape 381 : dans une file, B attend son tour sans bouton « Au tour du mo
       assert.match(await page.textContent('.duel-side--idle'), /En attente/)
     },
     "var s = { status: 'done', text: 'Fini', activity: null, startedAt: null, durationMs: 3000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }; var i = Object.assign({}, s, { status: 'idle', text: '' }); window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, batch: [{ number: 1, prompt: 'Un compteur', a: 'done', b: 'idle', revealed: null }], round: { number: 1, prompt: 'Un compteur', a: s, b: i, revealed: null, together: false } }"
+  )
+})
+
+test('étape 382 : en Code, « Série » — nombre de duels par modèle réglable, total annoncé, PC à laisser allumé', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-category')
+    // Pas de série hors Code : en Conversation, les modèles agissent sur le PC.
+    assert.equal(await page.locator('.duel-series__mode').count(), 0)
+    await page.click('.duel-category:has-text("Code")')
+    await page.waitForSelector('.duel-series__mode')
+    assert.equal(await page.locator('.duel-series__mode [aria-checked="true"]').textContent(), 'Un duel à la fois', 'désactivée par défaut')
+    assert.equal(await page.locator('.duel-home__start').textContent(), 'Lancer la session')
+    await page.click('.duel-series__mode button:has-text("Série")')
+    assert.equal(await page.locator('.duel-series__value').textContent(), '10', '10 duels par modèle par défaut')
+    // 5 modèles × 10 duels / 2 = 25 duels.
+    assert.match(await page.textContent('.duel-home'), /Duels au total : environ 25/)
+    assert.match(await page.textContent('.duel-home'), /Laisse le PC allumé/)
+    await page.click('button[aria-label="Plus de duels"]')
+    await page.click('button[aria-label="Plus de duels"]')
+    assert.equal(await page.locator('.duel-series__value').textContent(), '12')
+    assert.match(await page.textContent('.duel-home'), /environ 30/)
+    await page.click('button[aria-label="Moins de duels"]')
+    assert.equal(await page.locator('.duel-home__start').textContent(), 'Lancer la série')
+    // Les boutons du réglage sont de vrais boutons habillés.
+    const step = await page.locator('.duel-series__step').first().evaluate((el) => ({ w: el.getBoundingClientRect().width, cursor: getComputedStyle(el).cursor }))
+    assert.ok(step.w >= 32 && step.cursor === 'pointer')
+    await page.click('.duel-home__start')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'start'), ['start', 'code', 5, 11])
+  })
+})
+
+test('étape 382 : « Tout cocher » prend tous les modèles disponibles, jamais ceux que le PC ne peut pas faire tourner', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.duel-pickmode button:has-text("Je choisis")')
+    await page.waitForSelector('.duel-pick')
+    await page.click('button:has-text("Tout cocher")')
+    await settle(page)
+    assert.equal(await page.locator('.duel-pick[aria-checked="true"]').count(), 5)
+    assert.equal(await page.locator('.duel-pick--unavailable[aria-checked="true"]').count(), 0)
+    assert.equal(await page.locator('button:has-text("Tout cocher")').isDisabled(), true)
+    await page.click('button:has-text("Tout décocher")')
+    await settle(page)
+    assert.equal(await page.locator('.duel-pick[aria-checked="true"]').count(), 0)
+  })
+})
+
+const SERIES_VIEW = (series) =>
+  `window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 12, preparing: null, dropped: 1, dropReason: 'disque plein', votes: 0, error: null, round: null, batch: [{ number: 1, prompt: 'Un jeu de Tetris', a: 'done', b: 'done', revealed: null }, { number: 2, prompt: 'Un jeu du pendu', a: 'done', b: 'idle', revealed: null }, { number: 3, prompt: 'Un jeu de Sudoku', a: 'idle', b: 'idle', revealed: null }], series: ${JSON.stringify(series)} }`
+
+test('étape 382 : la liste des duels dit où en est la série (téléchargement, modèles supprimés, PC allumé)', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-series-status')
+      const text = await page.textContent('.duel-series-status')
+      assert.match(text, /La série tourne/)
+      assert.match(text, /Téléchargement du modèle suivant : 45 %/)
+      assert.match(text, /Modèles supprimés après leurs duels : 2/)
+      assert.match(text, /Dernière erreur : disque plein/)
+      assert.match(text, /Laisse le PC allumé/)
+      // Les duels finis se votent pendant que la série continue.
+      assert.deepEqual(await page.$$eval('.duel-batch__status', (els) => els.map((e) => e.textContent)), ['À voter', 'En attente', 'En attente'])
+      // Pas de nom de modèle avant le vote.
+      const all = await page.innerText('body')
+      for (const name of NAMES) assert.ok(!all.includes(name), `nom affiché : ${name}`)
+      const fill = await page.locator('.duel-series-status .duel-progress__fill').evaluate((el) => el.style.width)
+      assert.equal(fill, '45%')
+    },
+    SERIES_VIEW({ perModel: 10, download: { percent: 45 }, waiting: null, deleted: 2, active: true })
+  )
+})
+
+test('étape 382 : Ollama arrêté — la série le dit ; finie — il ne reste qu’à voter', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-series-status')
+      assert.match(await page.textContent('.duel-series-status'), /Ollama ne répond plus : nouvel essai toutes les minutes/)
+    },
+    SERIES_VIEW({ perModel: 10, download: null, waiting: 'ollama', deleted: 0, active: true })
+  )
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-series-status')
+      const text = await page.textContent('.duel-series-status')
+      assert.match(text, /La série ne tourne plus : il ne reste qu'à voter/)
+      assert.ok(!/Laisse le PC allumé/.test(text), 'plus besoin de garder le PC allumé')
+      assert.equal(await page.locator('.duel-series-status .duel-progress').count(), 0)
+    },
+    SERIES_VIEW({ perModel: 10, download: null, waiting: null, deleted: 3, active: false })
   )
 })

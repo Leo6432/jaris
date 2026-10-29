@@ -1126,6 +1126,17 @@ export interface DuelSessionView {
    * `null` quand Léo regarde la liste. Les noms n'y apparaissent qu'une fois le duel voté (`revealed`).
    */
   batch?: DuelBatchItemView[] | null
+  /**
+   * Étape 382 : une série de duels Code qui tourne seule (`null` = pas de série). `download` = le modèle suivant en
+   * cours de téléchargement (sans son nom) ; `waiting` = pourquoi elle attend ; `active` = elle tourne encore.
+   */
+  series?: {
+    perModel: number
+    download: { percent: number | null } | null
+    waiting: 'ollama' | 'disk' | null
+    deleted: number
+    active: boolean
+  } | null
   error: string | null
 }
 

@@ -272,7 +272,8 @@ const api = {
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   // Étape 355 — le Duel.
   duelPlan: (category: DuelCategory): Promise<DuelPlan> => invoke(IPC_CHANNELS.duelPlan, category),
-  duelStart: (category: DuelCategory, pick: number | string[]): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelStart, category, pick),
+  duelStart: (category: DuelCategory, pick: number | string[], series?: number): Promise<DuelSessionView> =>
+    invoke(IPC_CHANNELS.duelStart, category, pick, series ?? null),
   duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
   duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
   duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),

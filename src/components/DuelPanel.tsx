@@ -10,7 +10,23 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
-import { DUEL_BATCH_MAX, DUEL_BATCH_MIN, DUEL_CATEGORIES, DUEL_DEFAULT_SIZE, DUEL_MIN_CHOSEN, type DuelAction, type DuelCategory, type DuelOutcome, type DuelSide, type DuelVoteSide } from '../../shared/duel'
+import {
+  DUEL_BATCH_MAX,
+  DUEL_BATCH_MIN,
+  DUEL_CATEGORIES,
+  DUEL_CODE_IDEAS,
+  DUEL_DEFAULT_SIZE,
+  DUEL_MIN_CHOSEN,
+  DUEL_SERIES_DEFAULT,
+  DUEL_SERIES_MAX,
+  DUEL_SERIES_MIN,
+  planDuelSeries,
+  type DuelAction,
+  type DuelCategory,
+  type DuelOutcome,
+  type DuelSide,
+  type DuelVoteSide
+} from '../../shared/duel'
 import type { DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
@@ -44,7 +60,8 @@ const IDEAS_PER_CATEGORY = 10
 const IDEAS_SHOWN = 4
 const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
   conversation: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.conversation.${i + 1}` as MessageKey),
-  code: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.code.${i + 1}` as MessageKey),
+  // Étape 382 : 40 idées d'applications (la série y tire ses demandes, comme l'écran).
+  code: Array.from({ length: DUEL_CODE_IDEAS }, (_, i) => `duel.suggest.code.${i + 1}` as MessageKey),
   voice: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.voice.${i + 1}` as MessageKey)
 }
 
@@ -97,7 +114,7 @@ function DuelBatchEditor({
   const fill = (): void =>
     setRows((current) => {
       const used = new Set(current.map((r) => r.trim()))
-      const ideas = pickIdeas(category, [], IDEAS_PER_CATEGORY)
+      const ideas = pickIdeas(category, [], SUGGESTIONS[category].length)
         .map((key) => t(key))
         .filter((idea) => !used.has(idea))
       const next = current.map((r) => (r.trim() ? r : ideas.shift() ?? r))
@@ -168,7 +185,63 @@ const BATCH_STATUS_LABEL: Record<ReturnType<typeof batchStatus>, MessageKey> = {
   voted: 'duel.batch.status.voted'
 }
 
-function DuelBatchList({ batch, onOpen, disabled }: { batch: DuelBatchItemView[]; onOpen: (number: number) => void; disabled: boolean }): JSX.Element {
+/**
+ * Étape 382 : où en est une série de duels qui tourne seule — elle tourne encore, télécharge le modèle suivant, attend
+ * Ollama ou de la place, ou a fini (il ne reste qu'à voter).
+ */
+function SeriesStatus({ view }: { view: DuelSessionView }): JSX.Element | null {
+  const series = view.series
+  if (!series) return null
+  const lines: { text: string; warn?: boolean }[] = []
+  if (series.waiting === 'ollama') lines.push({ text: t('duel.series.waitOllama'), warn: true })
+  else if (series.waiting === 'disk') lines.push({ text: t('duel.series.waitDisk'), warn: true })
+  if (series.download) {
+    lines.push({
+      text:
+        series.download.percent == null
+          ? t('duel.series.downloadStart')
+          : t('duel.series.download', { percent: formatDecimal(Math.round(series.download.percent)) })
+    })
+  }
+  if (series.deleted > 0) lines.push({ text: t('duel.series.deleted', { count: series.deleted }) })
+  if (view.dropped > 0) {
+    lines.push({
+      text: `${t('duel.dropped', { count: view.dropped })}${view.dropReason ? ` ${t('duel.dropReason', { reason: view.dropReason })}` : ''}`,
+      warn: true
+    })
+  }
+  return (
+    <div className={`duel-series-status${series.active ? ' duel-series-status--active' : ''}`} role="status">
+      <p className="duel-series-status__head">
+        {series.active && <span className="duel-side__pulse" aria-hidden="true" />}
+        {t(series.active ? 'duel.series.running' : 'duel.series.finished')}
+      </p>
+      {series.download && (
+        <div className="duel-progress" aria-hidden="true">
+          <span className="duel-progress__fill" style={{ width: `${Math.max(2, Math.min(100, series.download.percent ?? 0))}%` }} />
+        </div>
+      )}
+      {lines.map((line, index) => (
+        <p key={index} className={`duel-home__note${line.warn ? ' duel-home__note--warn' : ''}`}>
+          {line.text}
+        </p>
+      ))}
+      {series.active && <p className="duel-home__note">{t('duel.series.awake')}</p>}
+    </div>
+  )
+}
+
+function DuelBatchList({
+  batch,
+  onOpen,
+  disabled,
+  view
+}: {
+  batch: DuelBatchItemView[]
+  onOpen: (number: number) => void
+  disabled: boolean
+  view: DuelSessionView
+}): JSX.Element {
   const done = batch.filter((item) => ['ready', 'voted'].includes(batchStatus(item))).length
   return (
     <div className="duel-batch">
@@ -176,6 +249,7 @@ function DuelBatchList({ batch, onOpen, disabled }: { batch: DuelBatchItemView[]
       <p className="duel-home__note" role="status">
         {t('duel.batch.progress', { done, total: batch.length })}
       </p>
+      <SeriesStatus view={view} />
       <p className="duel-home__note">{t('duel.batch.hint')}</p>
       <ol className="duel-batch__list">
         {batch.map((item) => {
@@ -327,6 +401,7 @@ interface ModelPickerProps {
   plan: DuelPlan
   picked: string[]
   onToggle: (model: string) => void
+  onSetAll: (models: string[]) => void
 }
 
 /**
@@ -457,40 +532,52 @@ function DuelRemoteBox({ remote, onChanged }: { remote: DuelPlan['remote'] | und
   )
 }
 
-function ModelPicker({ plan, picked, onToggle }: ModelPickerProps): JSX.Element {
+function ModelPicker({ plan, picked, onToggle, onSetAll }: ModelPickerProps): JSX.Element {
   const models = plan.models ?? []
+  const selectable = models.filter((m) => m.reason === null).map((m) => m.model)
   return (
-    <ul className="duel-picks" aria-labelledby="duel-size-title">
-      {models.map((option) => {
-        const available = option.reason === null
-        const checked = available && picked.includes(option.model)
-        return (
-          <li key={option.model}>
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={checked}
-              disabled={!available}
-              className={`duel-pick${checked ? ' duel-pick--checked' : ''}${available ? '' : ' duel-pick--unavailable'}`}
-              title={option.model}
-              onClick={() => onToggle(option.model)}
-            >
-              <span className="duel-pick__box" aria-hidden="true">
-                {checked && (
-                  <svg viewBox="0 0 16 16" width="12" height="12">
-                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="duel-pick__name">{formatModelName(option.model)}</span>
-              <span className="duel-pick__meta">
-                {available ? (option.installed ? t('duel.pick.installed') : gb(option.vramGb)) : unavailableText(option)}
-              </span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      {/* Étape 382 (Léo : « tester tous les modèles ») : tout cocher d'un clic. */}
+      <div className="duel-picks__tools">
+        <button type="button" className="duel-btn" onClick={() => onSetAll(selectable)} disabled={picked.length === selectable.length}>
+          {t('duel.pick.all')}
+        </button>
+        <button type="button" className="duel-btn" onClick={() => onSetAll([])} disabled={picked.length === 0}>
+          {t('duel.pick.none')}
+        </button>
+      </div>
+      <ul className="duel-picks" aria-labelledby="duel-size-title">
+        {models.map((option) => {
+          const available = option.reason === null
+          const checked = available && picked.includes(option.model)
+          return (
+            <li key={option.model}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                disabled={!available}
+                className={`duel-pick${checked ? ' duel-pick--checked' : ''}${available ? '' : ' duel-pick--unavailable'}`}
+                title={option.model}
+                onClick={() => onToggle(option.model)}
+              >
+                <span className="duel-pick__box" aria-hidden="true">
+                  {checked && (
+                    <svg viewBox="0 0 16 16" width="12" height="12">
+                      <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <span className="duel-pick__name">{formatModelName(option.model)}</span>
+                <span className="duel-pick__meta">
+                  {available ? (option.installed ? t('duel.pick.installed') : gb(option.vramGb)) : unavailableText(option)}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </>
   )
 }
 
@@ -899,6 +986,9 @@ export default function DuelPanel(): JSX.Element {
   /** Étape 363 : modèles au hasard, ou choisis à la main. */
   const [pickMode, setPickMode] = useState<'random' | 'manual'>('random')
   const [picked, setPicked] = useState<string[]>([])
+  /** Étape 382 : une série de duels Code (Jaris enchaîne tout seul), et le nombre de duels par modèle. */
+  const [seriesMode, setSeriesMode] = useState(false)
+  const [perModel, setPerModel] = useState<number>(DUEL_SERIES_DEFAULT)
   const [rankings, setRankings] = useState<DuelRankingView[] | null>(null)
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -1062,7 +1152,8 @@ export default function DuelPanel(): JSX.Element {
     void run('start', async () => {
       setEnded(null)
       setDeleted(null)
-      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size))
+      const series = category === 'code' && seriesMode ? perModel : undefined
+      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series))
     })
   }
 
@@ -1157,7 +1248,19 @@ export default function DuelPanel(): JSX.Element {
     const pickedDownloadGb = pickedMissing.reduce((sum, m) => sum + m.vramGb, 0)
     const pickedFitsDisk = plan?.downloadBudgetGb == null || pickedDownloadGb <= plan.downloadBudgetGb
     const remoteDown = Boolean(plan?.remote?.error)
-    const canStart = !remoteDown && (manual ? pickedNow.length >= DUEL_MIN_CHOSEN && pickedFitsDisk : Boolean(chosen && chosen.fitsDisk))
+    // Étape 382 : une série ne télécharge qu'un modèle à la fois (supprimé après ses duels) : il suffit que le plus gros
+    // tienne sur le disque.
+    const series = category === 'code' && seriesMode
+    const seriesCount = manual ? pickedNow.length : size
+    const seriesMissing = manual ? pickedMissing : (plan?.models ?? []).filter((m) => m.reason === null && !m.installed)
+    const seriesFitsDisk =
+      plan?.downloadBudgetGb == null || seriesMissing.every((m) => m.vramGb <= (plan.downloadBudgetGb as number))
+    const seriesTotal = planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
+    const canStart =
+      !remoteDown &&
+      (manual
+        ? pickedNow.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk : pickedFitsDisk)
+        : Boolean(chosen && (series ? seriesFitsDisk : chosen.fitsDisk)))
     content = (
       <div className="duel__scroll">
         <div className="duel-home">
@@ -1211,7 +1314,7 @@ export default function DuelPanel(): JSX.Element {
               <p className="duel-home__note">{t('duel.size.searching')}</p>
             ) : manual ? (
               <>
-                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} />
+                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} onSetAll={setPicked} />
                 <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
                   {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
                 </p>
@@ -1264,6 +1367,66 @@ export default function DuelPanel(): JSX.Element {
             )}
           </section>
 
+          {category === 'code' && (
+            <section className="duel-home__section" aria-labelledby="duel-series-title">
+              <h2 id="duel-series-title" className="duel-home__label">
+                {t('duel.series.title')}
+              </h2>
+              <div className="duel-sizes duel-series__mode" role="radiogroup" aria-labelledby="duel-series-title">
+                {([false, true] as const).map((option) => (
+                  <button
+                    key={String(option)}
+                    type="button"
+                    role="radio"
+                    aria-checked={seriesMode === option}
+                    className={`duel-size${seriesMode === option ? ' duel-size--selected' : ''}`}
+                    onClick={() => setSeriesMode(option)}
+                  >
+                    {t(option ? 'duel.series.on' : 'duel.series.off')}
+                  </button>
+                ))}
+              </div>
+              {seriesMode && (
+                <>
+                  <p className="duel-home__note">{t('duel.series.lead')}</p>
+                  <div className="duel-series__count">
+                    <span className="duel-series__count-label" id="duel-series-count">
+                      {t('duel.series.perModel')}
+                    </span>
+                    <div className="duel-series__stepper" role="group" aria-labelledby="duel-series-count">
+                      <button
+                        type="button"
+                        className="duel-btn duel-series__step"
+                        aria-label={t('duel.series.less')}
+                        onClick={() => setPerModel((n) => Math.max(DUEL_SERIES_MIN, n - 1))}
+                        disabled={perModel <= DUEL_SERIES_MIN}
+                      >
+                        −
+                      </button>
+                      <output className="duel-series__value" aria-live="polite">
+                        {perModel}
+                      </output>
+                      <button
+                        type="button"
+                        className="duel-btn duel-series__step"
+                        aria-label={t('duel.series.more')}
+                        onClick={() => setPerModel((n) => Math.min(DUEL_SERIES_MAX, n + 1))}
+                        disabled={perModel >= DUEL_SERIES_MAX}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
+                  {!seriesFitsDisk && plan && (
+                    <p className="duel-home__note duel-home__note--warn">{t('duel.size.noDisk', { free: gb(plan.freeDiskGb ?? 0) })}</p>
+                  )}
+                  <p className="duel-home__note">{t('duel.series.awake')}</p>
+                </>
+              )}
+            </section>
+          )}
+
           <ul className="duel-home__facts">
             <li>{t('duel.realActions')}</li>
             <li>{t('duel.anonymous')}</li>
@@ -1275,7 +1438,7 @@ export default function DuelPanel(): JSX.Element {
             onClick={start}
             disabled={pending !== null || !canStart}
           >
-            {pending === 'start' ? t('duel.starting') : t('duel.start')}
+            {pending === 'start' ? t('duel.starting') : t(series ? 'duel.series.start' : 'duel.start')}
           </button>
 
           <section className="duel-home__section duel-ranking" aria-labelledby="duel-ranking-title">
@@ -1352,7 +1515,7 @@ export default function DuelPanel(): JSX.Element {
           </button>
         </div>
         <div className="duel__scroll">
-          <DuelBatchList batch={view.batch} onOpen={openBatch} disabled={pending !== null} />
+          <DuelBatchList batch={view.batch} onOpen={openBatch} disabled={pending !== null} view={view} />
         </div>
         {error && <p className="duel__error">{error}</p>}
       </>

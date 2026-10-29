@@ -362,3 +362,40 @@ test('étape 381 : file de duels Code — combien de générations à la fois', 
   // Dans l'ordre de la file : un gros modèle qui ne tient pas bloque ceux qui suivent (il ne patiente jamais sans fin).
   assert.deepEqual(duel.batchSlotsToStart([], [slot('a', 'p', 3), slot('b', 'g', 30), slot('c', 'q', 3)], 32), ['a'])
 })
+
+test('étape 382 : planning d’une série — chaque modèle au moins N duels, contre des adversaires variés, A/B au hasard', () => {
+  let seed = 7
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  for (const [count, perModel] of [[4, 10], [5, 10], [12, 10], [30, 10], [7, 3], [9, 20], [2, 5], [3, 1]]) {
+    const models = Array.from({ length: count }, (_, i) => `modele-${i}:7b`)
+    const plan = duel.planDuelSeries(models, perModel, random)
+    const counts = new Map()
+    const opponents = new Map(models.map((m) => [m, new Set()]))
+    let aFirst = 0
+    for (const [a, b] of plan) {
+      assert.notEqual(a, b)
+      counts.set(a, (counts.get(a) ?? 0) + 1)
+      counts.set(b, (counts.get(b) ?? 0) + 1)
+      opponents.get(a).add(b)
+      opponents.get(b).add(a)
+      if (a < b) aFirst++
+    }
+    for (const model of models) {
+      const n = counts.get(model) ?? 0
+      assert.ok(n >= perModel, `${count} modèles × ${perModel} : ${model} n’a que ${n} duels`)
+      assert.ok(n <= perModel + 2, `${model} : ${n} duels, beaucoup plus que demandé`)
+      // Autant d'adversaires différents que possible (pas toujours les mêmes voisins).
+      assert.ok(opponents.get(model).size >= Math.min(perModel, count - 1), `${model} : ${opponents.get(model).size} adversaires`)
+    }
+    // Le total reste proche du minimum (N × modèles / 2).
+    assert.ok(plan.length <= Math.ceil((count * perModel) / 2) + 2)
+    if (plan.length >= 20) assert.ok(aFirst > plan.length * 0.2 && aFirst < plan.length * 0.8, 'A/B au hasard')
+  }
+  assert.deepEqual(duel.planDuelSeries(['seul:7b'], 10), [])
+  assert.deepEqual(duel.planDuelSeries(['a:7b', 'b:7b'], 0), [])
+})
+
+test('étape 382 : nombre de duels par modèle accepté de 1 à 50, entier seulement', () => {
+  for (const ok of [1, 10, 50]) assert.equal(duel.isDuelSeriesCount(ok), true)
+  for (const bad of [0, 51, 2.5, '10', null, Number.NaN]) assert.equal(duel.isDuelSeriesCount(bad), false)
+})

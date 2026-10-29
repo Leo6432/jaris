@@ -10372,3 +10372,74 @@ ul.reply-list--nested {
 .duel-batch__item--voted .duel-batch__prompt {
   color: var(--hud-text-dim);
 }
+
+/*
+ * Étape 382 : la série de duels Code — « Un duel à la fois / Série », le nombre de duels par modèle, « Tout cocher »,
+ * et l'état de la série au-dessus de la liste des duels.
+ */
+.duel-picks__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.duel-series__count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.duel-series__count-label {
+  font-size: 14px;
+  color: var(--hud-text);
+}
+
+.duel-series__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+}
+
+.duel-series__step {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.duel-series__value {
+  min-width: 3ch;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-series-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: var(--jv-bubble);
+}
+
+.duel-series-status__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}

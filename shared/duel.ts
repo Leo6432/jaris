@@ -659,3 +659,70 @@ export function batchSlotsToStart(
   }
   return start
 }
+
+/**
+ * Étape 382 (Léo : « je veux que tu testes tous les modèles au moins 10 fois, ça va désinstaller des modèles et en
+ * réinstaller, il choisit au hasard dans une liste d'applications à coder, et après j'ai juste à voter ») : une SÉRIE de
+ * duels Code qui tourne sans Léo. Chaque modèle passe dans `perModel` duels (réglable), contre des adversaires aussi
+ * variés que possible.
+ *
+ * Les deux côtés d'un duel Code sont indépendants (chacun écrit son application seul) : un modèle n'a donc jamais besoin
+ * d'être sur le disque EN MÊME TEMPS que son adversaire. Le gardien de la série (duelSession.ts) fait tous les côtés
+ * d'un modèle pendant qu'il est là, puis le supprime : chaque modèle n'est téléchargé qu'une fois, quel que soit l'ordre
+ * des duels. Rien n'oblige donc à grouper les adversaires par voisinage : chacun peut affronter tous les autres.
+ */
+export const DUEL_SERIES_MIN = 1
+export const DUEL_SERIES_MAX = 50
+export const DUEL_SERIES_DEFAULT = 10
+/**
+ * Les idées d'applications (traductions `duel.suggest.code.1` à `.N`) : l'écran en montre 4 à chaque duel, la série y
+ * tire ses demandes au hasard. Étape 382 : 40 au lieu de 10, pour qu'une longue série ne répète pas sans arrêt les mêmes.
+ */
+export const DUEL_CODE_IDEAS = 40
+
+export function isDuelSeriesCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= DUEL_SERIES_MIN && value <= DUEL_SERIES_MAX
+}
+
+/**
+ * Les paires de la série, dans l'ordre où elles tournent. Le modèle à qui il reste le plus de duels joue d'abord, contre
+ * le voisin qu'il a le moins affronté (puis celui à qui il en reste le plus) : les comptes restent équilibrés et chacun
+ * change d'adversaire. A/B au hasard. Le dernier modèle peut garder un ou deux duels sans adversaire : la série s'arrête
+ * là plutôt que de faire retélécharger un modèle déjà fini.
+ */
+export function planDuelSeries(models: readonly string[], perModel: number, random: () => number = Math.random): Array<[string, string]> {
+  const unique = [...new Set(models)]
+  if (unique.length < DUEL_MIN_MODELS || !(perModel > 0)) return []
+  const need = new Map(unique.map((m) => [m, Math.floor(perModel)]))
+  const left = (m: string): number => need.get(m) ?? 0
+  const played = new Map<string, number>()
+  const out: Array<[string, string]> = []
+  /** Les modèles qui ont fini, dans l'ordre. */
+  const finished: string[] = []
+  const pickMax = (pool: readonly string[], score: (m: string) => number): string => {
+    const best = Math.max(...pool.map(score))
+    const top = pool.filter((m) => score(m) === best)
+    return top[Math.min(top.length - 1, Math.floor(random() * top.length))]
+  }
+  /** `extra` : l'adversaire fait un duel de plus que prévu (son compte ne bouge pas). */
+  const play = (a: string, b: string, extra: boolean): void => {
+    for (const m of extra ? [a] : [a, b]) {
+      need.set(m, left(m) - 1)
+      if (left(m) === 0) finished.push(m)
+    }
+    played.set(pairKey(a, b), (played.get(pairKey(a, b)) ?? 0) + 1)
+    out.push(random() < 0.5 ? [a, b] : [b, a])
+  }
+  for (;;) {
+    const active = unique.filter((m) => left(m) > 0)
+    if (!active.length) break
+    const a = active[0]
+    // Le dernier modèle n'a plus d'adversaire : il finit contre les modèles qui viennent de finir, qui font donc un duel
+    // de plus — « au moins N » pour chacun.
+    const pool = active.length > 1 ? active.slice(1) : finished.slice(-3)
+    if (!pool.length) break
+    const b = pickMax(pool, (m) => -(played.get(pairKey(a, m)) ?? 0) * 1000 + Math.max(0, left(m)))
+    play(a, b, active.length === 1)
+  }
+  return out
+}
