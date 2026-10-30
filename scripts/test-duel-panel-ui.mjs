@@ -818,6 +818,10 @@ test('étape 382 : en Code, « Série » — nombre de duels par modèle réglab
     // 5 modèles × 10 duels / 2 = 25 duels.
     assert.match(await page.textContent('.duel-home'), /Duels au total : environ 25/)
     assert.match(await page.textContent('.duel-home'), /Laisse le PC allumé/)
+    // Étape 383 : la série ne garde que deux modèles à la fois — la place à prévoir est celle des deux plus gros
+    // (8 + 6 Go), pas le total de tous les téléchargements, qui ne s'affiche plus.
+    assert.match(await page.textContent('.duel-series__disk'), /au plus 14 Go sur le disque à la fois/)
+    assert.doesNotMatch(await page.textContent('.duel-home'), /Modèles à télécharger/)
     await page.click('button[aria-label="Plus de duels"]')
     await page.click('button[aria-label="Plus de duels"]')
     assert.equal(await page.locator('.duel-series__value').textContent(), '12')

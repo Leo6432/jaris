@@ -10255,3 +10255,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   arrêté puis revenu, modèle introuvable, Jaris fermé puis rouvert, effacement, « Tout arrêter » qui annule le
   téléchargement, refus) et `test-duel-panel-ui.mjs`. Les 10 garde-fous du moteur vérifiés en les retirant un par un. **Non
   vérifié en usage réel** : une vraie nuit sur la machine de Léo ou sur un pod.
+
+- **Étape 383 (v0.40.24), Léo : « ça met 260 Go mais je n'ai pas assez sur le pod, il doit désinstaller, installer, il
+  doit gérer, et fais pas 40 idées mais une centaine ».** Les 260 Go étaient la somme de TOUS les modèles à télécharger,
+  affichée aussi en mode Série alors que la série n'en garde qu'un ou deux à la fois (téléchargé juste avant ses duels,
+  supprimé après). En Série, l'écran dit maintenant la vraie place à prévoir (`duel.series.disk` : les deux plus gros
+  modèles manquants, et le total pour comparaison), et ne montre plus « Modèles à télécharger : … (260 Go) ».
+  **Le vrai trou était côté pod** : Jaris ne connaît pas la place libre d'une machine distante (aucune API d'Ollama
+  pour ça), donc un téléchargement qui remplissait le disque du pod faisait RETIRER le modèle de la série. Le gardien
+  reconnaît maintenant un disque plein (`SERIES_DISK_FULL` : « no space left on device », message Windows, ENOSPC,
+  quota), et si d'autres modèles ont encore des duels, il attend qu'un modèle fini soit supprimé (`diskFullAt` =
+  nombre de suppressions à ce moment-là) avant de réessayer ; si rien ne peut libérer de place, les duels de ce modèle
+  partent avec une raison claire (`duel.series.diskFull`), au lieu d'attendre sans fin. Vaut aussi sur ce PC. Idées
+  d'applications : 40 → 100 (`DUEL_CODE_IDEAS`, 60 nouvelles traduites dans les 24 langues, toutes faisables en une
+  page sans ressource externe — pas de QR code, par exemple). Régression : `test-duel-session.mjs` (faux « pod » de
+  25 Go : la série finit sans abandon après des refus du disque ; pod de 5 Go : duels retirés avec la raison, sans
+  blocage ; vérifié en retirant l'attente puis la reconnaissance du disque plein) et `test-duel-panel-ui.mjs`.
+  **Non vérifié en usage réel** : le vrai message d'Ollama sur le disque plein d'un pod RunPod.

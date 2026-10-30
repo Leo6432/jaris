@@ -205,6 +205,11 @@ interface SeriesState {
   wake: (() => void) | null
   /** Le gardien tourne (un seul à la fois). */
   running: boolean
+  /**
+   * Un téléchargement a rempli le disque (souvent celui d'une machine louée, dont Jaris ne connaît pas la place libre) :
+   * le nombre de modèles supprimés à ce moment-là. On ne réessaie qu'après une nouvelle suppression.
+   */
+  diskFullAt: number | null
 }
 
 export interface DuelEnvironment {
@@ -810,6 +815,8 @@ export function setDuelSeriesDelays(delays: Partial<typeof seriesDelays>): void 
 const SERIES_PREFETCH_READY = 2
 /** « model 'x' not found » : le modèle a disparu du disque (ou Ollama regarde le mauvais dossier, étapes 289/313). */
 export const SERIES_MODEL_NOT_FOUND = /model ['"]?[^'"\s]*['"]? not found/i
+/** Le disque de la machine qui télécharge est plein (Linux, Windows, ou quota d'un conteneur loué). */
+export const SERIES_DISK_FULL = /no space left on device|not enough space on the disk|ENOSPC|disk quota exceeded/i
 
 function newSeriesState(createdAt: number, perModel: number): SeriesState {
   return {
@@ -822,7 +829,8 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
     deleted: 0,
     controller: new AbortController(),
     wake: null,
-    running: false
+    running: false,
+    diskFullAt: null
   }
 }
 
@@ -987,6 +995,13 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
       await waitSeries(series, seriesDelays.idleCheckMs)
       continue
     }
+    // Le disque était plein au dernier téléchargement : on attend qu'un modèle fini soit supprimé avant de réessayer.
+    if (series.diskFullAt !== null && series.deleted === series.diskFullAt && (running > 0 || ready > 0)) {
+      series.waiting = 'disk'
+      emitNow()
+      await waitSeries(series, seriesDelays.idleCheckMs)
+      continue
+    }
     // Le disque de ce PC : un modèle qui ne tient pas attend que d'autres finissent (et soient supprimés).
     if (!current.remote) {
       const free = await detectFreeDiskGb().catch(() => null)
@@ -1021,11 +1036,23 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
       )
       if (pulled) current.downloaded.set(next.model, current.sizes.get(next.model) ?? 0)
       series.present.add(next.model)
+      series.diskFullAt = null
     } catch (err) {
       if (!alive()) break
+      const message = err instanceof Error ? err.message : String(err)
       if (!(await ollamaResponds(current))) series.waiting = 'ollama'
-      else {
-        const message = err instanceof Error ? err.message : String(err)
+      else if (SERIES_DISK_FULL.test(message)) {
+        // Disque plein (celui d'une machine louée, souvent) : tant que d'autres modèles ont des duels à faire, ils
+        // finiront et seront supprimés, et la place reviendra. Sinon, rien ne la libérera : ses duels partent.
+        const others = openSides(current).filter((s) => s.model !== next.model && (s.running || series.present.has(s.model)))
+        if (others.length) {
+          series.diskFullAt = series.deleted
+          series.waiting = 'disk'
+        } else {
+          series.diskFullAt = null
+          dropSeriesModel(current, next.model, t('duel.series.diskFull'))
+        }
+      } else {
         dropSeriesModel(current, next.model, withoutModelNames(message, current.models, ['', '']).slice(0, 400))
       }
     } finally {

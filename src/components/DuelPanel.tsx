@@ -1255,6 +1255,10 @@ export default function DuelPanel(): JSX.Element {
     const seriesMissing = manual ? pickedMissing : (plan?.models ?? []).filter((m) => m.reason === null && !m.installed)
     const seriesFitsDisk =
       plan?.downloadBudgetGb == null || seriesMissing.every((m) => m.vramGb <= (plan.downloadBudgetGb as number))
+    // Au plus deux modèles sur le disque à la fois (celui qui joue, et le suivant téléchargé d'avance).
+    const seriesSizes = seriesMissing.map((m) => m.vramGb).sort((x, y) => y - x)
+    const seriesPeakGb = (seriesSizes[0] ?? 0) + (seriesSizes[1] ?? 0)
+    const seriesAllGb = seriesSizes.reduce((sum, value) => sum + value, 0)
     const seriesTotal = planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
     const canStart =
       !remoteDown &&
@@ -1318,7 +1322,7 @@ export default function DuelPanel(): JSX.Element {
                 <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
                   {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
                 </p>
-                {pickedNow.length > 0 && (
+                {pickedNow.length > 0 && !series && (
                   <p className={`duel-home__note${pickedFitsDisk ? '' : ' duel-home__note--warn'}`}>
                     {pickedMissing.length === 0
                       ? t('duel.size.installed')
@@ -1355,7 +1359,7 @@ export default function DuelPanel(): JSX.Element {
                     </button>
                   ))}
                 </div>
-                {chosen && (
+                {chosen && !series && (
                   <p className={`duel-home__note${chosen.fitsDisk ? '' : ' duel-home__note--warn'}`}>
                     {chosen.toDownload === 0
                       ? t('duel.size.installed')
@@ -1418,6 +1422,13 @@ export default function DuelPanel(): JSX.Element {
                     </div>
                   </div>
                   {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
+                  {plan && (
+                    <p className="duel-home__note duel-series__disk">
+                      {seriesSizes.length === 0
+                        ? t('duel.size.installed')
+                        : t('duel.series.disk', { size: gb(seriesPeakGb), total: gb(seriesAllGb) })}
+                    </p>
+                  )}
                   {!seriesFitsDisk && plan && (
                     <p className="duel-home__note duel-home__note--warn">{t('duel.size.noDisk', { free: gb(plan.freeDiskGb ?? 0) })}</p>
                   )}

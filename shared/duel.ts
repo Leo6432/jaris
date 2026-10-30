@@ -676,9 +676,9 @@ export const DUEL_SERIES_MAX = 50
 export const DUEL_SERIES_DEFAULT = 10
 /**
  * Les idées d'applications (traductions `duel.suggest.code.1` à `.N`) : l'écran en montre 4 à chaque duel, la série y
- * tire ses demandes au hasard. Étape 382 : 40 au lieu de 10, pour qu'une longue série ne répète pas sans arrêt les mêmes.
+ * tire ses demandes au hasard. Étape 382 : 40 au lieu de 10, étape 383 : 100, pour qu'une longue série ne répète pas sans arrêt les mêmes.
  */
-export const DUEL_CODE_IDEAS = 40
+export const DUEL_CODE_IDEAS = 100
 
 export function isDuelSeriesCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= DUEL_SERIES_MIN && value <= DUEL_SERIES_MAX

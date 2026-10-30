@@ -78,7 +78,7 @@ function newSeriesStore() {
   return store
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [] }
   let ollamaDown = false
   const votes = []
@@ -198,6 +198,10 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         if (signal?.aborted) throw new Error('arrêté')
         onProgress?.({ percent: 50 })
         if (failPull.includes(model)) throw new Error(`pull model manifest: ${model} introuvable`)
+        // Étape 383 : le disque d'une machine louée, dont Jaris ne connaît pas la place libre, se remplit.
+        if (podDiskGb !== null && installedNow.reduce((sum, m) => sum + (sizes?.[m] ?? 0), 0) + (sizes?.[model] ?? 0) > podDiskGb) {
+          throw new Error(`write /root/.ollama/models/blobs/sha256-${model}-partial: no space left on device`)
+        }
         installedNow.push(model)
         calls.pulled.push(model)
         return true
@@ -215,7 +219,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     './systemResources': {
       DISK_SAFETY_MARGIN_GB: 5,
       // Étape 382 : le disque se remplit à chaque modèle présent et se libère à chaque suppression.
-      detectFreeDiskGb: async () => (sizes ? freeDiskGb - installedNow.reduce((sum, m) => sum + (sizes[m] ?? 0), 0) : freeDiskGb)
+      detectFreeDiskGb: async () => (podDiskGb !== null ? null : sizes ? freeDiskGb - installedNow.reduce((sum, m) => sum + (sizes[m] ?? 0), 0) : freeDiskGb)
     },
     './tools': {
       TOOLS: ['open_app', 'type_text', 'set_reminder', 'shutdown_pc', 'search_web', 'generate_image', 'look_at_screen', 'computer_use_task'].map((name) => ({
@@ -1061,6 +1065,32 @@ test('étape 382 : disque limité — jamais plus de modèles téléchargés qu�
   assert.ok(most <= 2, `${most} modèles sur le disque en même temps`)
   assert.equal(env.session.getDuelView().dropped, 0)
   assert.equal(env.session.getDuelView().batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+})
+
+test('étape 383 : disque plein sur une machine dont Jaris ne connaît pas la place — la série attend une suppression, puis reprend', async () => {
+  const sizes = Object.fromEntries(MODELS.map((m) => [m, 10]))
+  // 25 Go sur le « pod » : deux modèles de 10 Go à la fois, pas trois. Jaris ne connaît pas cette place (null).
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, sizes, podDiskGb: 25 })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await env.session.startDuel('code', 4, 3)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  const view = env.session.getDuelView()
+  assert.equal(view.dropped, 0, 'aucun modèle abandonné : le disque s’est libéré')
+  assert.equal(view.batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+  assert.deepEqual([...env.calls.pulled].sort(), [...MODELS].sort(), 'chaque modèle téléchargé une fois au bout du compte')
+  assert.ok(env.calls.pulls.length > MODELS.length, 'au moins un téléchargement refusé par le disque, puis refait')
+})
+
+test('étape 383 : disque plein et rien à supprimer — les duels du modèle partent, avec une raison claire', async () => {
+  const sizes = Object.fromEntries(MODELS.map((m) => [m, 10]))
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, sizes, podDiskGb: 5 })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  await env.session.startDuel('code', 4, 2)
+  await waitFor(() => !env.session.getDuelView()?.series?.active, 'la série s’arrête au lieu d’attendre sans fin')
+  const view = env.session.getDuelView()
+  assert.ok(view.dropped > 0)
+  assert.equal(view.dropReason, i18nModules()['../../shared/i18n'].t('duel.series.diskFull'))
+  assert.equal(env.calls.pulled.length, 0)
 })
 
 test('étape 382 : Ollama arrêté en pleine série — rien n’est compté comme une erreur du modèle, tout reprend quand il revient', async () => {
