@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Levytila ei riitä mallille (tarvitaan {need}, vapaana {free}): sen kaksintaistelut poistettiin sarjasta.",
   "duel.series.disk": "Jokainen malli ladataan juuri ennen kaksintaisteluitaan ja poistetaan sitten: levyllä on kerrallaan enintään {size} (eikä {total}, jos kaikki säilytettäisiin).",
   "duel.series.diskFull": "Levytilaa ei enää ole mallille eikä muuta poistettavaa mallia ole: sen kaksintaistelut poistettiin sarjasta.",
+  "duel.series.progress": "Tehty: {done} · jäljellä: {todo}",
+  "duel.series.allDone": "Näillä malleilla on jo kullakin {count} kaksintaistelua: lisää kaksintaisteluja mallia kohden tai valitse muut mallit.",
   "duel.pick.all": "Valitse kaikki",
   "duel.pick.none": "Poista valinnat",
   "duel.error.batchCount": "Pyyntöjä tarvitaan {min}–{max}.",

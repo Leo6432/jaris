@@ -21,6 +21,7 @@ import {
   DUEL_SERIES_MAX,
   DUEL_SERIES_MIN,
   planDuelSeries,
+  baseModelTag,
   type DuelAction,
   type DuelCategory,
   type DuelOutcome,
@@ -402,6 +403,8 @@ interface ModelPickerProps {
   picked: string[]
   onToggle: (model: string) => void
   onSetAll: (models: string[]) => void
+  /** Étape 384 : en série, ce que chaque modèle a déjà fait et ce qu'il lui reste (`null` hors série). */
+  seriesPerModel: number | null
 }
 
 /**
@@ -532,7 +535,7 @@ function DuelRemoteBox({ remote, onChanged }: { remote: DuelPlan['remote'] | und
   )
 }
 
-function ModelPicker({ plan, picked, onToggle, onSetAll }: ModelPickerProps): JSX.Element {
+function ModelPicker({ plan, picked, onToggle, onSetAll, seriesPerModel }: ModelPickerProps): JSX.Element {
   const models = plan.models ?? []
   const selectable = models.filter((m) => m.reason === null).map((m) => m.model)
   return (
@@ -569,6 +572,14 @@ function ModelPicker({ plan, picked, onToggle, onSetAll }: ModelPickerProps): JS
                   )}
                 </span>
                 <span className="duel-pick__name">{formatModelName(option.model)}</span>
+                {available && seriesPerModel !== null && (
+                  <span className="duel-pick__duels">
+                    {t('duel.series.progress', {
+                      done: option.duels ?? 0,
+                      todo: Math.max(0, seriesPerModel - (option.duels ?? 0))
+                    })}
+                  </span>
+                )}
                 <span className="duel-pick__meta">
                   {available ? (option.installed ? t('duel.pick.installed') : gb(option.vramGb)) : unavailableText(option)}
                 </span>
@@ -1259,11 +1270,16 @@ export default function DuelPanel(): JSX.Element {
     const seriesSizes = seriesMissing.map((m) => m.vramGb).sort((x, y) => y - x)
     const seriesPeakGb = (seriesSizes[0] ?? 0) + (seriesSizes[1] ?? 0)
     const seriesAllGb = seriesSizes.reduce((sum, value) => sum + value, 0)
-    const seriesTotal = planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
+    // Étape 384 : en « Je choisis », les duels déjà votés de chaque modèle sont déduits (« au moins N » au total).
+    const doneByModel = new Map((plan?.models ?? []).map((m) => [baseModelTag(m.model), m.duels ?? 0]))
+    const seriesTotal = manual
+      ? planDuelSeries(pickedNow, perModel, () => 0, doneByModel).length
+      : planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
+    const seriesAllDone = series && manual && pickedNow.length >= DUEL_MIN_CHOSEN && seriesTotal === 0
     const canStart =
       !remoteDown &&
       (manual
-        ? pickedNow.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk : pickedFitsDisk)
+        ? pickedNow.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk && !seriesAllDone : pickedFitsDisk)
         : Boolean(chosen && (series ? seriesFitsDisk : chosen.fitsDisk)))
     content = (
       <div className="duel__scroll">
@@ -1318,7 +1334,7 @@ export default function DuelPanel(): JSX.Element {
               <p className="duel-home__note">{t('duel.size.searching')}</p>
             ) : manual ? (
               <>
-                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} onSetAll={setPicked} />
+                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} onSetAll={setPicked} seriesPerModel={series ? perModel : null} />
                 <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
                   {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
                 </p>
@@ -1422,6 +1438,9 @@ export default function DuelPanel(): JSX.Element {
                     </div>
                   </div>
                   {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
+                  {seriesAllDone && (
+                    <p className="duel-home__note duel-home__note--warn">{t('duel.series.allDone', { count: perModel })}</p>
+                  )}
                   {plan && (
                     <p className="duel-home__note duel-series__disk">
                       {seriesSizes.length === 0

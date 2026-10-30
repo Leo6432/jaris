@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Niet genoeg schijfruimte voor een model ({need} nodig, {free} vrij): zijn duels zijn uit de serie gehaald.",
   "duel.series.disk": "Elk model wordt vlak voor zijn duels gedownload en daarna verwijderd: maximaal {size} tegelijk op de schijf (in plaats van {total} om ze allemaal te bewaren).",
   "duel.series.diskFull": "Geen schijfruimte meer voor een model en geen ander model om te verwijderen: de duels ervan zijn uit de serie gehaald.",
+  "duel.series.progress": "Gedaan: {done} · te doen: {todo}",
+  "duel.series.allDone": "Deze modellen hebben al elk {count} duels: verhoog het aantal duels per model of kies andere modellen.",
   "duel.pick.all": "Alles selecteren",
   "duel.pick.none": "Alles deselecteren",
   "duel.error.batchCount": "Er zijn tussen {min} en {max} vragen nodig.",

@@ -1619,6 +1619,8 @@ export const fr = {
   "duel.series.noDisk": "Pas assez de place sur le disque pour un modèle ({need} nécessaires, {free} libres) : ses duels ont été retirés de la série.",
   "duel.series.disk": "Chaque modèle est téléchargé juste avant ses duels, puis supprimé : au plus {size} sur le disque à la fois (au lieu de {total} pour tout garder).",
   "duel.series.diskFull": "Plus de place sur le disque pour un modèle, et aucun autre à supprimer : ses duels ont été retirés de la série.",
+  "duel.series.progress": "Faits : {done} · à faire : {todo}",
+  "duel.series.allDone": "Ces modèles ont déjà {count} duels chacun : augmente le nombre de duels par modèle, ou choisis d'autres modèles.",
   "duel.pick.all": "Tout cocher",
   "duel.pick.none": "Tout décocher",
   "duel.error.batchCount": "Il faut entre {min} et {max} demandes.",

@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Ikke nok diskplads til en model ({need} kræves, {free} ledigt): dens dueller er fjernet fra serien.",
   "duel.series.disk": "Hver model hentes lige før sine dueller og slettes derefter: højst {size} på disken ad gangen (i stedet for {total} for at beholde dem alle).",
   "duel.series.diskFull": "Ikke mere diskplads til en model og ingen anden at slette: dens dueller er fjernet fra serien.",
+  "duel.series.progress": "Færdige: {done} · tilbage: {todo}",
+  "duel.series.allDone": "Disse modeller har allerede {count} dueller hver: øg antallet af dueller pr. model, eller vælg andre modeller.",
   "duel.pick.all": "Vælg alle",
   "duel.pick.none": "Fravælg alle",
   "duel.error.batchCount": "Der skal være mellem {min} og {max} forespørgsler.",

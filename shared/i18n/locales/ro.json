@@ -1627,6 +1627,8 @@
   "duel.series.noDisk": "Nu este destul spațiu pe disc pentru un model (sunt necesari {need}, liberi {free}): duelurile lui au fost scoase din serie.",
   "duel.series.disk": "Fiecare model este descărcat chiar înaintea duelurilor sale, apoi șters: cel mult {size} pe disc odată (în loc de {total} pentru a le păstra pe toate).",
   "duel.series.diskFull": "Nu mai este loc pe disc pentru un model și niciun alt model de șters: duelurile lui au fost scoase din serie.",
+  "duel.series.progress": "Făcute: {done} · de făcut: {todo}",
+  "duel.series.allDone": "Aceste modele au deja câte {count} dueluri fiecare: mărește numărul de dueluri pe model sau alege alte modele.",
   "duel.pick.all": "Selectează tot",
   "duel.pick.none": "Deselectează tot",
   "duel.error.batchCount": "Sunt necesare între {min} și {max} cereri.",

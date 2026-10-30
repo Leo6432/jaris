@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Nincs elég hely a lemezen egy modellhez ({need} kell, {free} szabad): a párbajait kivettük a sorozatból.",
   "duel.series.disk": "Minden modell közvetlenül a párbajai előtt töltődik le, majd törlődik: egyszerre legfeljebb {size} van a lemezen (a {total} helyett, ha mindet megtartanánk).",
   "duel.series.diskFull": "Nincs több hely a lemezen egy modellhez, és nincs másik törölhető modell: a párbajait eltávolítottuk a sorozatból.",
+  "duel.series.progress": "Kész: {done} · hátra: {todo}",
+  "duel.series.allDone": "Ezeknek a modelleknek már egyenként {count} párbajuk van: növeld a modellenkénti párbajok számát, vagy válassz más modelleket.",
   "duel.pick.all": "Az összes kijelölése",
   "duel.pick.none": "Kijelölés törlése",
   "duel.error.batchCount": "{min}–{max} kérés kell.",

@@ -78,10 +78,10 @@ function newSeriesStore() {
   return store
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [] } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [] }
   let ollamaDown = false
-  const votes = []
+  const votes = [...priorVotes]
   const apps = new Map()
   const emitted = []
   let profile = initialProfile ?? {
@@ -1091,6 +1091,27 @@ test('étape 383 : disque plein et rien à supprimer — les duels du modèle pa
   assert.ok(view.dropped > 0)
   assert.equal(view.dropReason, i18nModules()['../../shared/i18n'].t('duel.series.diskFull'))
   assert.equal(env.calls.pulled.length, 0)
+})
+
+test('étape 384 : la série déduit les duels déjà votés ; tout est déjà fait → refusée avec une explication', async () => {
+  const [first, ...others] = MODELS
+  const vote = (a, b) => ({ id: `v-${a}-${b}-${Math.random()}`, category: 'code', at: 0, sessionId: 's', modelA: a, modelB: b, outcome: 'a' })
+  // Le premier modèle a déjà 3 duels Code (dont un compté sous « :latest »), un vote Conversation ne compte pas.
+  const priorVotes = [vote(first, 'zz:1b'), vote('zz:1b', first), vote(`${first.split(':')[0]}:latest`, 'zz:1b'), { ...vote(others[0], 'zz:1b'), category: 'conversation' }]
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, priorVotes })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const started = await env.session.startDuel('code', [...MODELS], 3)
+  assert.ok(started.batch.length > 0)
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  const counts = new Map()
+  for (const model of generatedModels(env)) counts.set(model, (counts.get(model) ?? 0) + 1)
+  for (const m of others) assert.ok((counts.get(m) ?? 0) >= 3, `${m} : ${counts.get(m)}`)
+  assert.ok((counts.get(first) ?? 0) < 3, `${first} avait déjà ses 3 duels : ${counts.get(first)} de plus`)
+
+  const full = MODELS.flatMap((a) => MODELS.filter((b) => b !== a).map((b) => vote(a, b)))
+  const done = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, priorVotes: full })
+  await assert.rejects(() => done.session.startDuel('code', [...MODELS], 3), /déjà 3 duels/)
+  assert.equal(done.session.getDuelView(), null, 'aucune session laissée derrière')
 })
 
 test('étape 382 : Ollama arrêté en pleine série — rien n’est compté comme une erreur du modèle, tout reprend quand il revient', async () => {

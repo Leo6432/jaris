@@ -851,6 +851,39 @@ test('étape 382 : « Tout cocher » prend tous les modèles disponibles, jamais
   })
 })
 
+test('étape 384 : en série, chaque modèle dit ses duels déjà faits et ce qu’il lui reste ; tout fait → départ bloqué et expliqué', options, async () => {
+  const plan = (duels) =>
+    `window.__plan = { category: 'code', available: 4, freeDiskGb: 120, downloadBudgetGb: 115, sizes: [{ count: 4, toDownload: 0, downloadGb: 0, fitsDisk: true }], machine: { vramGb: 8, ramGb: 32 }, models: [` +
+    `{ model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true, duels: ${duels[0]} },` +
+    `{ model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true, duels: ${duels[1]} },` +
+    `{ model: 'ministral-3:8b', vramGb: 6, reason: null, installed: true, duels: ${duels[2]} },` +
+    `{ model: 'gemma4:12b', vramGb: 8, reason: null, installed: true, duels: ${duels[3]} }] }`
+  const open = async (page) => {
+    await page.click('.duel-category:has-text("Code")')
+    await page.click('.duel-pickmode button:has-text("Je choisis")')
+    await page.click('.duel-series__mode button:has-text("Série")')
+    await page.click('button:has-text("Tout cocher")')
+    await settle(page)
+  }
+  await withPage(async (page) => {
+    await open(page)
+    const lines = await page.locator('.duel-pick__duels').allTextContents()
+    assert.deepEqual(lines, ['Faits : 6 · à faire : 4', 'Faits : 10 · à faire : 0', 'Faits : 0 · à faire : 10', 'Faits : 12 · à faire : 0'])
+    // Moins de duels qu'en repartant de zéro (4 × 10 / 2 = 20).
+    const total = Number((await page.textContent('.duel-home')).match(/environ (\d+)/)[1])
+    assert.ok(total < 20 && total >= 10, `${total} duels`)
+    assert.equal(await page.locator('.duel-home__start').isDisabled(), false)
+    // Sur une ligne, dans la carte du modèle, sans déborder.
+    const fits = await page.locator('.duel-pick').first().evaluate((el) => el.scrollWidth <= el.clientWidth)
+    assert.ok(fits)
+  }, plan([6, 10, 0, 12]))
+  await withPage(async (page) => {
+    await open(page)
+    assert.match(await page.textContent('.duel-home'), /déjà 10 duels chacun/)
+    assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
+  }, plan([10, 11, 12, 10]))
+})
+
 const SERIES_VIEW = (series) =>
   `window.__category = 'code'; window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 12, preparing: null, dropped: 1, dropReason: 'disque plein', votes: 0, error: null, round: null, batch: [{ number: 1, prompt: 'Un jeu de Tetris', a: 'done', b: 'done', revealed: null }, { number: 2, prompt: 'Un jeu du pendu', a: 'done', b: 'idle', revealed: null }, { number: 3, prompt: 'Un jeu de Sudoku', a: 'idle', b: 'idle', revealed: null }], series: ${JSON.stringify(series)} }`
 

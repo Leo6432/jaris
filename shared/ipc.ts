@@ -1025,6 +1025,8 @@ export interface DuelModelOption {
   reason: DuelUnavailableReason | null
   /** Déjà téléchargé (rempli par planDuel). */
   installed?: boolean
+  /** Étape 384 : duels déjà votés dans cette catégorie (rempli par planDuel). */
+  duels?: number
 }
 
 export interface DuelPlan {

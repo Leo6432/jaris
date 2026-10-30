@@ -690,15 +690,39 @@ export function isDuelSeriesCount(value: unknown): value is number {
  * change d'adversaire. A/B au hasard. Le dernier modèle peut garder un ou deux duels sans adversaire : la série s'arrête
  * là plutôt que de faire retélécharger un modèle déjà fini.
  */
-export function planDuelSeries(models: readonly string[], perModel: number, random: () => number = Math.random): Array<[string, string]> {
+/** Un tag sans « :latest » (Ollama liste un modèle sans tag sous « :latest »). */
+export function baseModelTag(model: string): string {
+  return model.endsWith(':latest') ? model.slice(0, -':latest'.length) : model
+}
+
+/** Étape 384 : combien de duels déjà votés chaque modèle a dans une catégorie (égalités et « les deux nuls » compris). */
+export function countDuelsByModel(
+  votes: readonly { category: string; modelA: string; modelB: string }[],
+  category: string
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const vote of votes) {
+    if (vote.category !== category) continue
+    for (const model of [vote.modelA, vote.modelB]) counts.set(baseModelTag(model), (counts.get(baseModelTag(model)) ?? 0) + 1)
+  }
+  return counts
+}
+
+export function planDuelSeries(
+  models: readonly string[],
+  perModel: number,
+  random: () => number = Math.random,
+  done: ReadonlyMap<string, number> = new Map()
+): Array<[string, string]> {
   const unique = [...new Set(models)]
   if (unique.length < DUEL_MIN_MODELS || !(perModel > 0)) return []
-  const need = new Map(unique.map((m) => [m, Math.floor(perModel)]))
+  // Étape 384 : les duels déjà votés comptent — « au moins N » est un total, pas N de plus.
+  const need = new Map(unique.map((m) => [m, Math.max(0, Math.floor(perModel) - (done.get(baseModelTag(m)) ?? 0))]))
   const left = (m: string): number => need.get(m) ?? 0
   const played = new Map<string, number>()
   const out: Array<[string, string]> = []
-  /** Les modèles qui ont fini, dans l'ordre. */
-  const finished: string[] = []
+  /** Les modèles qui ont fini, dans l'ordre (ceux qui avaient déjà assez de duels d'abord : adversaires possibles). */
+  const finished: string[] = unique.filter((m) => left(m) === 0)
   const pickMax = (pool: readonly string[], score: (m: string) => number): string => {
     const best = Math.max(...pool.map(score))
     const top = pool.filter((m) => score(m) === best)
@@ -719,7 +743,7 @@ export function planDuelSeries(models: readonly string[], perModel: number, rand
     const a = active[0]
     // Le dernier modèle n'a plus d'adversaire : il finit contre les modèles qui viennent de finir, qui font donc un duel
     // de plus — « au moins N » pour chacun.
-    const pool = active.length > 1 ? active.slice(1) : finished.slice(-3)
+    const pool = active.length > 1 ? active.slice(1) : finished
     if (!pool.length) break
     const b = pickMax(pool, (m) => -(played.get(pairKey(a, m)) ?? 0) * 1000 + Math.max(0, left(m)))
     play(a, b, active.length === 1)

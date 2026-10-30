@@ -395,6 +395,40 @@ test('étape 382 : planning d’une série — chaque modèle au moins N duels, 
   assert.deepEqual(duel.planDuelSeries(['a:7b', 'b:7b'], 0), [])
 })
 
+test('étape 384 : la série compte les duels déjà votés — « au moins N » au total, pas N de plus', () => {
+  const models = ['a:7b', 'b:7b', 'c:7b', 'd:7b', 'e:7b']
+  const done = duel.countDuelsByModel(
+    [
+      ...Array.from({ length: 8 }, () => ({ category: 'code', modelA: 'a:7b', modelB: 'z:1b' })),
+      ...Array.from({ length: 10 }, () => ({ category: 'code', modelA: 'b:latest', modelB: 'z:1b' })),
+      // Une autre catégorie ne compte pas.
+      ...Array.from({ length: 10 }, () => ({ category: 'conversation', modelA: 'c:7b', modelB: 'z:1b' }))
+    ],
+    'code'
+  )
+  assert.equal(done.get('a:7b'), 8)
+  assert.equal(done.get('b'), 10, '« :latest » compte comme le tag sans version')
+  assert.equal(done.get('c:7b'), undefined)
+  let seed = 7
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const plan = duel.planDuelSeries(models, 10, random, done)
+  const counts = new Map()
+  for (const [x, y] of plan) for (const m of [x, y]) counts.set(m, (counts.get(m) ?? 0) + 1)
+  for (const m of ['c:7b', 'd:7b', 'e:7b']) assert.ok(counts.get(m) >= 10, `${m} : ${counts.get(m)}`)
+  // a n'avait plus que 2 duels à faire : il ne joue pas 10 duels de plus (seulement comme adversaire si besoin).
+  assert.ok((counts.get('a:7b') ?? 0) >= 2 && (counts.get('a:7b') ?? 0) < 10, `a : ${counts.get('a:7b')}`)
+  assert.ok(plan.length < Math.ceil((5 * 10) / 2), 'moins de duels que si tout repartait de zéro')
+  // Tout le monde a déjà ses N duels : rien à faire.
+  const all = new Map(models.map((m) => [m, 10]))
+  assert.deepEqual(duel.planDuelSeries(models, 10, random, all), [])
+  // Un seul modèle a encore des duels : il joue contre ceux qui en ont déjà assez.
+  const one = new Map(models.slice(1).map((m) => [m, 10]))
+  const solo = duel.planDuelSeries(models, 10, random, one)
+  assert.equal(solo.length, 10)
+  assert.ok(solo.every((pair) => pair.includes('a:7b')))
+  assert.ok(new Set(solo.flat().filter((m) => m !== 'a:7b')).size === 4, 'contre tous les autres, pas toujours le même')
+})
+
 test('étape 382 : nombre de duels par modèle accepté de 1 à 50, entier seulement', () => {
   for (const ok of [1, 10, 50]) assert.equal(duel.isDuelSeriesCount(ok), true)
   for (const bad of [0, 51, 2.5, '10', null, Number.NaN]) assert.equal(duel.isDuelSeriesCount(bad), false)

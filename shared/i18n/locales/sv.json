@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Inte tillräckligt med diskutrymme för en modell ({need} behövs, {free} ledigt): dess dueller togs bort ur serien.",
   "duel.series.disk": "Varje modell laddas ner precis före sina dueller och raderas sedan: högst {size} på disken åt gången (i stället för {total} för att behålla alla).",
   "duel.series.diskFull": "Inget diskutrymme kvar för en modell och ingen annan att radera: dess dueller har tagits bort från serien.",
+  "duel.series.progress": "Klara: {done} · kvar: {todo}",
+  "duel.series.allDone": "De här modellerna har redan {count} dueller var: öka antalet dueller per modell eller välj andra modeller.",
   "duel.pick.all": "Markera alla",
   "duel.pick.none": "Avmarkera alla",
   "duel.error.batchCount": "Det behövs mellan {min} och {max} förfrågningar.",

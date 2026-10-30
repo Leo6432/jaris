@@ -1627,6 +1627,8 @@
   "duel.series.noDisk": "Diskā nepietiek vietas modelim (vajag {need}, brīvs {free}): tā dueļi izņemti no sērijas.",
   "duel.series.disk": "Katru modeli lejupielādē tieši pirms tā dueļiem un pēc tam izdzēš: diskā vienlaikus ne vairāk kā {size} (nevis {total}, lai paturētu visus).",
   "duel.series.diskFull": "Diskā vairs nav vietas modelim un nav cita modeļa, ko izdzēst: tā dueļi ir izņemti no sērijas.",
+  "duel.series.progress": "Izdarīti: {done} · jāizdara: {todo}",
+  "duel.series.allDone": "Šiem modeļiem jau ir pa {count} dueļiem: palielini dueļu skaitu katram modelim vai izvēlies citus modeļus.",
   "duel.pick.all": "Atlasīt visus",
   "duel.pick.none": "Noņemt atlasi",
   "duel.error.batchCount": "Vajag no {min} līdz {max} pieprasījumiem.",

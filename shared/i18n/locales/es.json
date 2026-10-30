@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "No hay espacio suficiente en el disco para un modelo (se necesitan {need}, hay {free} libres): sus duelos se han quitado de la serie.",
   "duel.series.disk": "Cada modelo se descarga justo antes de sus duelos y después se borra: como mucho {size} en el disco a la vez (en lugar de {total} para guardarlos todos).",
   "duel.series.diskFull": "No queda espacio en el disco para un modelo y no hay otro que borrar: sus duelos se han quitado de la serie.",
+  "duel.series.progress": "Hechos: {done} · por hacer: {todo}",
+  "duel.series.allDone": "Estos modelos ya tienen {count} duelos cada uno: aumenta los duelos por modelo o elige otros modelos.",
   "duel.pick.all": "Marcar todos",
   "duel.pick.none": "Desmarcar todos",
   "duel.error.batchCount": "Hacen falta entre {min} y {max} peticiones.",

@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Not enough disk space for a model ({need} needed, {free} free): its duels were removed from the series.",
   "duel.series.disk": "Each model is downloaded just before its duels, then deleted: at most {size} on disk at a time (instead of {total} to keep them all).",
   "duel.series.diskFull": "No more disk space for a model, and no other model to delete: its duels were removed from the series.",
+  "duel.series.progress": "Done: {done} · to do: {todo}",
+  "duel.series.allDone": "These models already have {count} duels each: raise the number of duels per model, or choose other models.",
   "duel.pick.all": "Select all",
   "duel.pick.none": "Clear all",
   "duel.error.batchCount": "You need between {min} and {max} requests.",

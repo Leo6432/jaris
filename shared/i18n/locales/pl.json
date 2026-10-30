@@ -1648,6 +1648,8 @@
   "duel.series.noDisk": "Za mało miejsca na dysku na model (potrzeba {need}, wolne {free}): jego pojedynki usunięto z serii.",
   "duel.series.disk": "Każdy model jest pobierany tuż przed swoimi pojedynkami, a potem usuwany: najwyżej {size} na dysku naraz (zamiast {total}, by zachować wszystkie).",
   "duel.series.diskFull": "Brak miejsca na dysku na model i żadnego innego do usunięcia: jego pojedynki usunięto z serii.",
+  "duel.series.progress": "Zrobione: {done} · do zrobienia: {todo}",
+  "duel.series.allDone": "Te modele mają już po {count} pojedynków: zwiększ liczbę pojedynków na model albo wybierz inne modele.",
   "duel.pick.all": "Zaznacz wszystkie",
   "duel.pick.none": "Odznacz wszystkie",
   "duel.error.batchCount": "Potrzeba od {min} do {max} próśb.",

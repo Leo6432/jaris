@@ -1627,6 +1627,8 @@
   "duel.series.noDisk": "Diske nepakanka vietos modeliui (reikia {need}, laisva {free}): jo dvikovos pašalintos iš serijos.",
   "duel.series.disk": "Kiekvienas modelis atsisiunčiamas prieš pat jo dvikovas ir po to ištrinamas: diske vienu metu ne daugiau kaip {size} (o ne {total}, jei laikytumėte visus).",
   "duel.series.diskFull": "Diske nebeliko vietos modeliui ir nėra kito modelio, kurį būtų galima ištrinti: jo dvikovos pašalintos iš serijos.",
+  "duel.series.progress": "Atlikta: {done} · liko: {todo}",
+  "duel.series.allDone": "Šie modeliai jau turi po {count} dvikovų: padidinkite dvikovų skaičių vienam modeliui arba pasirinkite kitus modelius.",
   "duel.pick.all": "Pažymėti visus",
   "duel.pick.none": "Atžymėti visus",
   "duel.error.batchCount": "Reikia nuo {min} iki {max} prašymų.",

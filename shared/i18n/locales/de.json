@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Nicht genug Speicherplatz für ein Modell ({need} nötig, {free} frei): Seine Duelle wurden aus der Serie entfernt.",
   "duel.series.disk": "Jedes Modell wird kurz vor seinen Duellen heruntergeladen und danach gelöscht: höchstens {size} gleichzeitig auf dem Datenträger (statt {total}, um alle zu behalten).",
   "duel.series.diskFull": "Kein Speicherplatz mehr für ein Modell und kein anderes zum Löschen: Seine Duelle wurden aus der Serie entfernt.",
+  "duel.series.progress": "Erledigt: {done} · offen: {todo}",
+  "duel.series.allDone": "Diese Modelle haben schon je {count} Duelle: Erhöhe die Duelle pro Modell oder wähle andere Modelle.",
   "duel.pick.all": "Alle auswählen",
   "duel.pick.none": "Alle abwählen",
   "duel.error.batchCount": "Es braucht zwischen {min} und {max} Anfragen.",

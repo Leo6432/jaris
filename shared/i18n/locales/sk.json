@@ -1627,6 +1627,8 @@
   "duel.series.noDisk": "Na disku nie je dosť miesta pre model (treba {need}, voľných {free}): jeho súboje boli zo série odstránené.",
   "duel.series.disk": "Každý model sa stiahne tesne pred svojimi duelmi a potom sa zmaže: na disku je naraz najviac {size} (namiesto {total}, keby sa ponechali všetky).",
   "duel.series.diskFull": "Na disku už nie je miesto pre model a žiadny iný nemožno zmazať: jeho duely boli zo série odstránené.",
+  "duel.series.progress": "Hotové: {done} · zostáva: {todo}",
+  "duel.series.allDone": "Tieto modely už majú každý {count} duelov: zvýš počet duelov na model alebo vyber iné modely.",
   "duel.pick.all": "Vybrať všetko",
   "duel.pick.none": "Zrušiť výber",
   "duel.error.batchCount": "Treba {min} až {max} požiadaviek.",

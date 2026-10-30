@@ -9361,6 +9361,14 @@ ul.reply-list--nested {
   color: var(--hud-text-dim);
 }
 
+.duel-pick__duels {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--hud-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .duel-pick:disabled .duel-pick__meta {
   color: var(--hud-text-faint);
 }

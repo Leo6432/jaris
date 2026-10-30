@@ -1606,6 +1606,8 @@
   "duel.series.noDisk": "Mudeli jaoks pole kettal piisavalt ruumi (vaja {need}, vaba {free}): tema duellid eemaldati seeriast.",
   "duel.series.disk": "Iga mudel laaditakse alla vahetult enne tema duelle ja kustutatakse siis: kettal korraga kõige rohkem {size} (mitte {total}, et kõik alles hoida).",
   "duel.series.diskFull": "Mudeli jaoks pole kettal enam ruumi ja kustutada pole ühtki teist mudelit: tema duellid eemaldati seeriast.",
+  "duel.series.progress": "Tehtud: {done} · teha: {todo}",
+  "duel.series.allDone": "Neil mudelitel on juba igaühel {count} duelli: suurenda duellide arvu mudeli kohta või vali teised mudelid.",
   "duel.pick.all": "Vali kõik",
   "duel.pick.none": "Tühista valikud",
   "duel.error.batchCount": "Vaja on {min} kuni {max} päringut.",

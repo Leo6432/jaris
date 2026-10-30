@@ -10233,3 +10233,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   25 Go : la série finit sans abandon après des refus du disque ; pod de 5 Go : duels retirés avec la raison, sans
   blocage ; vérifié en retirant l'attente puis la reconnaissance du disque plein) et `test-duel-panel-ui.mjs`.
   **Non vérifié en usage réel** : le vrai message d'Ollama sur le disque plein d'un pod RunPod.
+
+- **Étape 384 (v0.40.25), Léo : « il regarde bien le benchmark et dit alors ce modèle il reste 4 duels, celui-ci 2,
+  etc. ».** « Duels par modèle » d'une série devient un TOTAL : les duels Code déjà votés (votes de ce PC et votes livrés
+  avec Jaris, `getRankingVotes`, comptés par `countDuelsByModel`, « :latest » = sans tag) sont déduits avant de planifier
+  (`planDuelSeries(…, done)`). Un modèle qui a déjà ses N duels ne sert plus que d'adversaire, si un autre en a besoin.
+  Dans « Je choisis », en mode Série, chaque modèle affiche « Faits : 6 · à faire : 4 », et le total est recalculé avec ces
+  chiffres. Si tous les modèles choisis ont déjà leurs N duels, le départ est bloqué avec une explication
+  (`duel.series.allDone`), à l'écran comme côté main. En « Au hasard », le total affiché reste une estimation (les modèles ne
+  sont tirés qu'au lancement). Au passage, le dernier modèle qui a encore des duels affronte tous les modèles qui ont fini,
+  pas seulement les 3 derniers : il faut ça quand plusieurs modèles avaient déjà tout fait avant la série. Régression :
+  `test-duel.mjs`, `test-duel-session.mjs` (vérifié en ne comptant plus les votes) et `test-duel-panel-ui.mjs`.

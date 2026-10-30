@@ -43,6 +43,8 @@ import {
   batchSlotsToStart,
   isDuelSeriesCount,
   planDuelSeries,
+  baseModelTag,
+  countDuelsByModel,
   canRunDuelTogether,
   duelActionFromLog,
   duelOfferedTools,
@@ -406,13 +408,18 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
     getDuelModelList(category, profile, remote?.machine)
   ])
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
+  const done = countDuelsByModel(getRankingVotes(), category)
   const counts = [...new Set(DUEL_SESSION_SIZES.map((size) => Math.min(size, candidates.length)))].filter((n) => n >= DUEL_MIN_MODELS)
   return {
     category,
     available: candidates.length,
     freeDiskGb,
     machine,
-    models: list.map((option) => ({ ...option, installed: isInstalled(option.model, installed) })),
+    models: list.map((option) => ({
+      ...option,
+      installed: isInstalled(option.model, installed),
+      duels: done.get(baseModelTag(option.model)) ?? 0
+    })),
     downloadBudgetGb: freeDiskGb === null ? null : Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB),
     remote: away ? { host: away.remote.host, version: away.remote.machine.ollamaVersion, error: away.error } : null,
     sizes: counts.map((count) => {
@@ -481,6 +488,10 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
   const machine = await duelMachine(remote?.machine).catch(() => null)
   // L'ordre des modèles est mélangé : la position dans la session ne dit rien de qui ils sont.
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
+  // Étape 384 : les duels déjà votés comptent (votes de ce PC et votes livrés avec Jaris).
+  const seriesPlan =
+    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getRankingVotes(), 'code'))
+  if (seriesPlan && !seriesPlan.length) throw new Error(t('duel.series.allDone', { count: seriesPerModel as number }))
   session = {
     id: randomUUID(),
     remote,
@@ -508,7 +519,7 @@ export async function startDuel(category: DuelCategory, pick: number | readonly 
   const current = session
   if (seriesPerModel !== undefined) {
     current.phase = 'ready'
-    current.batch = planDuelSeries(shuffled, seriesPerModel).map((pair, index) => ({
+    current.batch = (seriesPlan ?? []).map((pair, index) => ({
       number: index + 1,
       pair,
       prompt: '',

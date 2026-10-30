@@ -1648,6 +1648,8 @@
   "duel.series.noDisk": "Na disku ni dovolj prostora za model (potrebno {need}, prosto {free}): njegovi dvoboji so bili odstranjeni iz serije.",
   "duel.series.disk": "Vsak model se prenese tik pred svojimi dvoboji in se nato izbriše: na disku je hkrati največ {size} (namesto {total}, če bi obdržali vse).",
   "duel.series.diskFull": "Na disku ni več prostora za model in ni drugega modela za izbris: njegovi dvoboji so bili odstranjeni iz serije.",
+  "duel.series.progress": "Opravljeno: {done} · še: {todo}",
+  "duel.series.allDone": "Ti modeli imajo že vsak po {count} dvobojev: povečaj število dvobojev na model ali izberi druge modele.",
   "duel.pick.all": "Izberi vse",
   "duel.pick.none": "Počisti izbiro",
   "duel.error.batchCount": "Potrebnih je od {min} do {max} zahtev.",
