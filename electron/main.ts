@@ -50,7 +50,8 @@ import {
   usesEmbeddedOllama
 } from './services/dependencyServices'
 import { engineModelsDir } from './services/ollamaEngine'
-import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
+import { Agent as UndiciAgent } from 'undici'
+import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
 import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services/speedStore'
 import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
@@ -264,6 +265,10 @@ setDuelProbability((category, challenger, incumbent) => {
 // Étape 367 : chaque réponse d'Ollama mesure la vitesse du modèle sur ce PC ; Faible et Moyen la préfèrent à la vitesse
 // publiée par Artificial Analysis.
 setSpeedRecorder((model, tokens, ms) => void recordModelSpeed(model, tokens, ms))
+// Étape 389 : aucune limite d'attente du premier fragment (voir setChatDispatcher). Une heure, pas l'infini : un Ollama
+// distant disparu sans fermer la connexion ne bloque pas une demande pour toujours. Le reste du flux garde la limite
+// d'undici (5 minutes sans le moindre fragment), toujours atteinte par une vraie panne, jamais par un modèle qui écrit.
+setChatDispatcher(new UndiciAgent({ headersTimeout: 60 * 60_000 }))
 let speedRatio: { measured: Record<string, number>; ratio: number | null } | null = null
 setLocalSpeedResolver((model, published) => {
   const measured = getMeasuredSpeeds()

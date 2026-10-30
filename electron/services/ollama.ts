@@ -64,6 +64,18 @@ export interface ChatMetrics {
  */
 export type SpeedRecorder = (model: string, outputTokens: number | undefined, outputMs: number | undefined) => void
 let speedRecorder: SpeedRecorder | null = null
+
+/**
+ * Étape 389 : Ollama n'envoie les en-têtes d'une réponse qu'avec son PREMIER fragment. Une demande qui attend son tour
+ * (modèle en cours de chargement, toutes les places parallèles prises — 6 modèles sur une seule carte pendant une série
+ * de duels) ne reçoit donc rien pendant de longues minutes, et le fetch de Node l'abandonnait au bout de 5 minutes
+ * (headersTimeout d'undici) : tout le travail repartait de zéro. Constaté chez Léo : « 500 | 5m0s » dans le journal
+ * d'Ollama. main.ts branche ici un dispatcher sans cette limite (une annulation reste possible par le signal).
+ */
+let chatDispatcher: object | undefined
+export function setChatDispatcher(dispatcher: object | undefined): void {
+  chatDispatcher = dispatcher
+}
 export function setSpeedRecorder(recorder: SpeedRecorder | null): void {
   speedRecorder = recorder
 }
@@ -169,8 +181,9 @@ async function requestChat(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx, ...(numThread ? { num_thread: numThread } : {}) } } : {}), stream: true }),
-      signal
-    })
+      signal,
+      ...(chatDispatcher ? { dispatcher: chatDispatcher } : {})
+    } as RequestInit)
   } catch (err) {
     throw describeChatFailure(err)
   }

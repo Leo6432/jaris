@@ -11,7 +11,7 @@ const calls = []
 let respond = async () => new Response('{}', { status: 200 })
 const realFetch = globalThis.fetch
 globalThis.fetch = async (url, init = {}) => {
-  calls.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null })
+  calls.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null, dispatcher: init.dispatcher })
   return respond(String(url), init)
 }
 test.after(() => {
@@ -103,4 +103,26 @@ test('une annulation demandée repart telle quelle', async () => {
     return new Response('{}')
   }
   await assert.rejects(ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'm', 'low', controller.signal), { name: 'AbortError' })
+})
+
+test('étape 389 : le dispatcher sans limite d’attente des en-têtes part avec chaque demande au modèle', async () => {
+  const dispatcher = { nom: 'agent-sans-limite' }
+  ollama.setChatDispatcher(dispatcher)
+  try {
+    calls.length = 0
+    respond = async (url) => noShow(url) || new Response(ndjson([{ message: { role: 'assistant', content: 'ok' }, done: true }]), { status: 200 })
+    await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'qwen3.5:4b', 'low')
+    assert.equal(chats()[0].dispatcher, dispatcher, 'sinon Node abandonne au bout de 5 minutes une demande qui attend son tour')
+  } finally {
+    ollama.setChatDispatcher(undefined)
+  }
+})
+
+test('étape 389 : main.ts branche un Agent d’undici dont l’attente des en-têtes dépasse 5 minutes', async () => {
+  const { readFileSync } = await import('node:fs')
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.match(main, /import \{ Agent as UndiciAgent \} from 'undici'/)
+  const set = main.match(/setChatDispatcher\(new UndiciAgent\(\{ headersTimeout: ([\d_ *]+) \}\)\)/)
+  assert.ok(set, 'dispatcher branché au démarrage')
+  assert.ok(Function(`return ${set[1].replace(/_/g, '')}`)() > 5 * 60_000)
 })

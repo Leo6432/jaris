@@ -10320,3 +10320,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sans série), `test-duel-session.mjs` (« Terminer » refusé sans confirmation) et `test-duel-panel-ui.mjs` (vrai
   navigateur : confirmation, « Voter d'abord », reprise, erreur affichée). Chaque garde vérifiée en la retirant.
   **Non vérifié en usage réel** : un vrai changement de pod en pleine série.
+
+- **Étape 389 (v0.40.30), série de duels sur Vast.ai (H200 NVL) : « 2 duels en 30 min, sur RunPod on était à 210 après
+  3 h ».** La carte tournait pourtant à 100 %, avec 6 modèles chargés. Le journal d'Ollama a donné la cause en une
+  ligne : plusieurs `POST /api/chat` terminés en **500 après exactement 5m0s**. Ollama n'envoie les en-têtes d'une
+  réponse qu'avec son PREMIER fragment. Une demande qui attend son tour (modèle en chargement, places parallèles
+  toutes prises, 6 modèles sur une carte) ne reçoit donc rien pendant des minutes. Or le fetch de Node (undici) coupe
+  une demande sans en-têtes au bout de 5 minutes (`headersTimeout` = 300 s). Le travail repartait de zéro, ou le côté
+  du duel finissait en erreur. L'étape 346 avait rendu la connexion « jamais muette » une fois la réponse commencée,
+  mais pas pendant l'attente AVANT le premier fragment. Corrigé : main.ts branche un `Agent` d'undici avec
+  `headersTimeout` d'une heure (`setChatDispatcher`, ollama.ts), passé à chaque demande de `requestChat`. Une heure,
+  pas l'infini : un Ollama distant disparu sans fermer la connexion ne bloque pas une demande pour toujours.
+  `bodyTimeout` reste à 5 minutes, puisque Ollama envoie un fragment par mot une fois la réponse commencée.
+  `undici` est figé à 7.29.0, la version embarquée dans Electron 43 (vérifié avec ELECTRON_RUN_AS_NODE). Le fetch
+  d'Electron honore bien ce dispatcher, vérifié dans le vrai Electron : une limite de 1 s coupe, une limite de 10 s
+  laisse passer une réponse qui arrive au bout de 3 s. Pour la même raison que dotenv, la dépendance est
+  externalisée et embarquée par electron-builder. **Leçon : une connexion en flux n'est « vivante » qu'une fois la
+  réponse commencée ; tout délai d'attente des en-têtes doit compter l'attente dans la file du serveur, qui grandit
+  avec le nombre de demandes en parallèle.** Régression : `scripts/test-ollama-chat-stream.mjs` (dispatcher transmis,
+  vérifié en le retirant ; délai branché dans main.ts supérieur à 5 minutes). **Non vérifié en usage réel** : le
+  débit d'une série sur un pod avec ce correctif.
