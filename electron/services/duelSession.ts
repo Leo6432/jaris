@@ -40,6 +40,7 @@ import {
   DUEL_BATCH_MIN,
   DUEL_SESSION_SIZES,
   DUEL_CODE_IDEAS,
+  DUEL_CODE_NUM_CTX,
   batchSlotsToStart,
   seriesRoomForModel,
   isDuelSeriesCount,
@@ -1352,6 +1353,7 @@ async function runCode(_current: Session, side: SideState, model: string, prompt
     model,
     think,
     persist: false,
+    minNumCtx: DUEL_CODE_NUM_CTX,
     signal,
     onProgress: (progress) => {
       side.activity = codeActivity(progress)

@@ -683,13 +683,25 @@ function duelModelNeedGb(size: number): number {
  * dans une série, autant de modèles en même temps que la carte peut en tenir (au plus DUEL_SERIES_MAX_MODELS), et
  * jusqu'à DUEL_SERIES_SLOTS_PER_MODEL duels par modèle. Ollama doit être réglé pareil (OLLAMA_MAX_LOADED_MODELS et
  * OLLAMA_NUM_PARALLEL) ; sinon il fait simplement attendre ce qu'il ne peut pas prendre. Chaque duel de plus sur un
- * même modèle ajoute sa mémoire de travail (1 Go compté). Sur une petite carte rien ne change : un seul modèle tient.
+ * même modèle ajoute sa mémoire de conversation (DUEL_SERIES_SLOT_GB, étape 386 : mesuré sur le pod de Léo, K2 Horizon
+ * 3.7B prenait 12 Go à 4 × 16 384 tokens, soit ~4 Go par duel de plus avec la fenêtre fixe de DUEL_CODE_NUM_CTX). Sur
+ * une petite carte rien ne change : un seul modèle tient.
  */
 export const DUEL_SERIES_MAX_MODELS = 12
 export const DUEL_SERIES_SLOTS_PER_MODEL = 4
+export const DUEL_SERIES_SLOT_GB = 4
 export function seriesModelNeedGb(size: number, slots: number): number {
-  return duelModelNeedGb(size) + Math.max(0, slots - 1)
+  return duelModelNeedGb(size) + Math.max(0, slots - 1) * DUEL_SERIES_SLOT_GB
 }
+
+/**
+ * Étape 386 (capture du pod de Léo : modèles « Stopping… », contexte 16 384 puis 24 576 puis 32 768) : en duel Code,
+ * TOUTES les étapes d'un modèle (écriture, relecture, réparation) demandent la même fenêtre. Ollama recharge un modèle
+ * dès que la fenêtre change, et attend pour ça que ses autres demandes en cours finissent : avec 4 duels à la fois sur
+ * le même modèle, chaque relecture bloquait les trois autres. 32 768 couvre l'écriture et la relecture d'une application
+ * jusqu'à ~25 000 caractères ; au-delà, l'étape demande plus (rare).
+ */
+export const DUEL_CODE_NUM_CTX = 32768
 
 /**
  * Étape 385 : le gardien de la série peut-il télécharger un modèle de plus pour le faire tourner EN MÊME TEMPS que

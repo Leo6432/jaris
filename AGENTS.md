@@ -10260,3 +10260,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   loué.** Le test « Jaris fermé en pleine série » passe sur une carte de 8 Go : sur 80 Go, tout finissait avant la
   fermeture. Régression : `test-duel.mjs` et `test-duel-session.mjs` (6 modèles ensemble à 4 duels chacun sur 140 Go, au
   plus 12 modèles, rien de nouveau sur 8 Go ; vérifié en retirant le téléchargement d'avance puis la limite par modèle).
+- **Étape 386 (v0.40.27), capture du pod de Léo après la v0.40.26 : un seul modèle chargé, « Stopping… ».** Les
+  captures montraient la même chose plus tôt : un modèle à 16 384 tokens, puis 24 576, puis 32 768. Ollama recharge
+  un modèle dès qu'une demande arrive avec une autre fenêtre de contexte, et il attend d'abord que TOUTES les autres
+  demandes en cours sur ce modèle soient finies (`needsReload`, server/sched.go, déjà lu à l'étape 294). Or le mode
+  Code calcule une fenêtre par étape : 16 384 pour écrire, plus pour relire un gros fichier. Avec 4 duels à la fois sur
+  le même modèle (étape 385), chaque relecture bloquait les trois autres puis rechargeait le modèle. En duel Code,
+  toutes les étapes demandent maintenant au moins `DUEL_CODE_NUM_CTX` = 32 768 (`minNumCtx`, codeGenerator.ts, jamais
+  au-delà de la limite du modèle). Une application de plus de ~25 000 caractères demande plus, ce qui est rare. Le Chat
+  et le mode Code ordinaire ne changent pas. La mémoire comptée par duel de plus dans une série passe de 1 à 4 Go
+  (`DUEL_SERIES_SLOT_GB`). Mesuré sur le pod de Léo : K2 Horizon 3.7B prenait 12 Go à 4 × 16 384 tokens. Le gardien
+  télécharge les modèles un par un : la carte se remplit au fil des téléchargements, pas d'un coup. **Leçon :
+  paralléliser plusieurs demandes sur un même modèle n'aide que si elles ont les mêmes réglages de chargement ; sinon,
+  chaque écart fait attendre toutes les autres.** Régression : `scripts/test-codegen-context.mjs` (même fenêtre à
+  chaque étape, jamais au-delà de la limite du modèle ; vérifié en retirant la fenêtre fixe).

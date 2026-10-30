@@ -126,6 +126,8 @@ export interface GenerateAppOptions {
   persist?: boolean
   /** Étape 365 (Duel) : la réflexion imposée, la même pour les deux modèles (equivalentThink). */
   think?: ThinkLevel | ThinkValue
+  /** Étape 386 (Duel) : même fenêtre de contexte pour toutes les étapes (voir ModelStepRunnerOptions.minNumCtx). */
+  minNumCtx?: number
 }
 
 /** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
@@ -146,6 +148,12 @@ export interface ModelStepRunnerOptions {
   /** Réflexion demandée à Ollama (étape 191 : effort choisi par Léo, sinon « high » comme avant). */
   think?: ThinkLevel | ThinkValue
   modelMaxContext: number | null
+  /**
+   * Étape 386 (Duel) : fenêtre de contexte MINIMALE pour toutes les étapes. Ollama recharge un modèle dès qu'une demande
+   * arrive avec une autre fenêtre — et attend pour ça que toutes ses autres demandes en cours finissent. Dans une série
+   * qui fait écrire 4 duels à la fois au même modèle, chaque relecture plus grande que l'écriture bloquait les autres.
+   */
+  minNumCtx?: number
   steps: GenerationSteps
   onStatus: (message: string) => void
   onProgress?: (progress: CodeGenProgress) => void
@@ -175,7 +183,7 @@ function contextTooSmallError(numCtx: number): Error {
  * Un appel au modèle de code avec avancement et arrêt (extrait à l'étape 189 pour le Montage, retiré à l'étape
  * 200 ; reste utilisé par le mode Code).
  */
-export function createModelStepRunner({ model, think = 'high', modelMaxContext, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
+export function createModelStepRunner({ model, think = 'high', modelMaxContext, minNumCtx, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
   /**
    * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
    *
@@ -287,7 +295,9 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         }
       )
     try {
-      const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
+      const computed = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
+      const floor = minNumCtx ? Math.min(minNumCtx, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX) : 0
+      const numCtx = Math.max(computed, floor)
       let message: OllamaMessage
       try {
         message = await call(numCtx)
@@ -891,7 +901,7 @@ export async function generateApp(
   const modelMaxContext = await readModelMaxContext(model)
 
   const think = options.think ?? (options.model ? 'high' : await resolveCodeThink(profile, model))
-  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
+  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, minNumCtx: options.minNumCtx, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string => withImageDescription(base, imageDescription)
 

@@ -252,3 +252,16 @@ test('limite du modèle inconnue (/api/show indisponible) : plafond général, e
   assert.match(result.html, /<!DOCTYPE html>/)
   assert.ok(app.numCtxs.every((n) => n >= 16384 && n <= 65536))
 })
+
+test('duel (étape 386) : une fenêtre minimale fixe sert à TOUTES les étapes, pour qu’Ollama ne recharge pas le modèle', async () => {
+  const app = setupCodegen(() => VALID_HTML)
+  await app.exports.generateApp('une todo list', () => {}, undefined, undefined, { model: 'test-model', persist: false, minNumCtx: 32768 })
+  assert.ok(app.numCtxs.length >= 2, 'écriture puis relecture')
+  assert.deepEqual([...new Set(app.numCtxs)], [32768])
+})
+
+test('duel (étape 386) : la fenêtre fixe ne dépasse jamais la limite du modèle', async () => {
+  const app = setupCodegen(() => VALID_HTML, { modelMax: 20000 })
+  await app.exports.generateApp('une todo list', () => {}, undefined, undefined, { model: 'test-model', persist: false, minNumCtx: 32768 })
+  assert.ok(app.numCtxs.every((n) => n <= 20000), String(app.numCtxs))
+})
