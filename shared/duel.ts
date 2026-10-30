@@ -704,6 +704,18 @@ export function seriesModelNeedGb(size: number, slots: number): number {
 export const DUEL_CODE_NUM_CTX = 32768
 
 /**
+ * Étape 387 (pod de Léo : processeur à 100 %, carte à 25 %, 5 modèles chargés) : sur une autre machine, un modèle qui
+ * tient ENTIER sur la carte ne demande que DUEL_REMOTE_THREADS fils de calcul. Sans ça, chaque modèle en lançait un par
+ * cœur VISIBLE (192 sur la machine de RunPod) pour une part bien plus petite, et ils se gênaient tous. Un modèle qui
+ * déborde sur la RAM garde le réglage d'Ollama : là, le processeur calcule vraiment. Taille inconnue : rien de changé.
+ */
+export const DUEL_REMOTE_THREADS = 4
+export function remoteThreadsFor(sizeGb: number, vramGb: number | null): number | undefined {
+  if (vramGb === null || !Number.isFinite(vramGb)) return undefined
+  return duelModelNeedGb(sizeGb) <= vramGb ? DUEL_REMOTE_THREADS : undefined
+}
+
+/**
  * Étape 385 : le gardien de la série peut-il télécharger un modèle de plus pour le faire tourner EN MÊME TEMPS que
  * ceux déjà là ? Oui si tous tiennent ensemble sur la carte, chacun avec tous ses duels à la fois. Carte inconnue : non.
  */

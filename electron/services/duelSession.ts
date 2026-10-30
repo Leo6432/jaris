@@ -41,6 +41,7 @@ import {
   DUEL_SESSION_SIZES,
   DUEL_CODE_IDEAS,
   DUEL_CODE_NUM_CTX,
+  remoteThreadsFor,
   batchSlotsToStart,
   seriesRoomForModel,
   isDuelSeriesCount,
@@ -348,8 +349,11 @@ async function candidatesFor(category: DuelCategory, profile: Profile | null, re
 }
 
 /** Ce qui doit parler à l'Ollama des modèles : celui de l'autre machine pendant une session à distance, sinon ce PC. */
-function onModels<T>(remote: RemoteMachine | null, fn: () => Promise<T>): Promise<T> {
-  return remote ? runWithOllamaHost(remote.host, fn) : fn()
+function onModels<T>(remote: RemoteMachine | null, fn: () => Promise<T>, sizes?: ReadonlyMap<string, number>): Promise<T> {
+  if (!remote) return fn()
+  // Étape 387 : quand les modèles écrivent, peu de fils de calcul pour ceux qui tiennent entiers sur la carte.
+  const threadsFor = sizes ? (model: string) => remoteThreadsFor(sizes.get(model) ?? Number.NaN, remote.machine.vramGb) : undefined
+  return runWithOllamaHost(remote.host, fn, threadsFor)
 }
 
 /**
@@ -1213,10 +1217,13 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
     // « Arrêter » pendant ces lectures : le modèle ne doit pas partir quand même (le signal est déjà donné).
     if (!controller.signal.aborted) {
       const tools = round.tools ?? new Set<string>()
-      await onModels(current.remote, () =>
-        current.category === 'code'
-          ? runCode(current, side, model, prompt, think, controller.signal)
-          : runConversation(current, side, model, prompt, think, tools, controller.signal)
+      await onModels(
+        current.remote,
+        () =>
+          current.category === 'code'
+            ? runCode(current, side, model, prompt, think, controller.signal)
+            : runConversation(current, side, model, prompt, think, tools, controller.signal),
+        current.sizes
       )
     }
     if (controller.signal.aborted) side.status = 'stopped'

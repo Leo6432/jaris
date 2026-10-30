@@ -20,8 +20,9 @@ test.after(() => {
   globalThis.fetch = realFetch
 })
 
+const fakeConfig = { ollama: { host: 'http://ollama.test', model: 'modele-defaut', numCtx: 8192 } }
 const ollama = loadTsModule('electron/services/ollama.ts', {
-  '../config': { config: { ollama: { host: 'http://ollama.test', model: 'modele-defaut', numCtx: 8192 } } },
+  '../config': { config: fakeConfig },
   '../../shared/effort': { parseModelThinking: () => null },
   './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
   './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
@@ -157,4 +158,29 @@ test('étape 346 : la correction (voix) et la mémoire passent bien par le modè
   // Étape 355 : les modèles de la VOIX (choisis par les duels « Vocal »), sinon ceux du Chat — toujours le Rapide en repli.
   assert.match(voice, /const voiceModels = profile\?\.voiceModels \?\? profile\?\.models\s+const model = await preferLoadedModel\(Object\.values\(voiceModels \?\? \{\}\), voiceModels\?\.flash/)
   assert.match(memory, /const model = await preferLoadedModel\(Object\.values\(profile\?\.models \?\? \{\}\), profile\?\.models\?\.medium/)
+})
+
+// Étape 387 (pod de Léo : processeur à 100 %, carte à 25 %) : pendant un duel sur une autre machine, un modèle qui
+// tient sur la carte reçoit peu de fils de calcul — à CHAQUE demande (sinon Ollama le recharge, comme pour num_ctx).
+test('fils de calcul : envoyés quand le travail en cours en demande pour ce modèle, sinon rien', async () => {
+  respond = async (url) => {
+    if (url.endsWith('/api/show')) return new Response('{}', { status: 200 })
+    return new Response(JSON.stringify({ message: { role: 'assistant', content: 'ok' }, done: true }), { status: 200 })
+  }
+  try {
+    fakeConfig.ollama.threadsFor = (model) => (model === 'petit:4b' ? 4 : undefined)
+    calls.length = 0
+    await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'petit:4b', 'low', undefined, 32768)
+    await ollama.chatWithOllama([{ role: 'user', content: 'y' }], undefined, 'petit:4b', 'low', undefined, 32768)
+    const chats = calls.filter((call) => call.url.endsWith('/api/chat'))
+    assert.deepEqual(chats.map((call) => call.body.options.num_thread), [4, 4])
+    calls.length = 0
+    await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'gros:70b', 'low', undefined, 32768)
+    assert.equal('num_thread' in calls.at(-1).body.options, false, 'modèle qui déborde : réglage d’Ollama inchangé')
+  } finally {
+    delete fakeConfig.ollama.threadsFor
+  }
+  calls.length = 0
+  await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'petit:4b', 'low', undefined, 32768)
+  assert.equal('num_thread' in calls.at(-1).body.options, false, 'hors duel distant : rien')
 })

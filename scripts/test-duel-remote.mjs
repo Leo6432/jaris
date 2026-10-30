@@ -52,7 +52,7 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
     '../config': configModule,
     './assistant': {
       converse: async (_prompt, _name, _onReminder, _onLog, _history, _signal, _live, _channel, onToken, _a, _b, restrictions) => {
-        calls.converse.push({ host: config.ollama.host, remote: config.ollama.remote })
+        calls.converse.push({ host: config.ollama.host, remote: config.ollama.remote, threads: MODELS.map((m) => config.ollama.threadsFor(m)) })
         // Un outil de Jaris pendant le duel : il doit tourner sur CE PC, avec son Ollama à lui.
         await restrictions.runTool?.(async () => {
           await new Promise((resolve) => setTimeout(resolve, 5))
@@ -172,6 +172,18 @@ test('l’adresse propre à un travail suit les await et les minuteurs, et ne d�
   assert.equal(config.ollama.host, LOCAL)
 })
 
+test('fils de calcul sur une autre machine : seulement pour un modèle qui tient entier sur la carte', () => {
+  assert.equal(duelModule.remoteThreadsFor(5, 141), duelModule.DUEL_REMOTE_THREADS)
+  assert.equal(duelModule.remoteThreadsFor(120, 141), undefined, 'déborde sur la RAM : le processeur calcule vraiment')
+  assert.equal(duelModule.remoteThreadsFor(Number.NaN, 141), undefined, 'taille inconnue : rien de changé')
+  assert.equal(duelModule.remoteThreadsFor(5, null), undefined, 'carte inconnue : rien de changé')
+  // Sur ce PC (aucun travail à distance) et dans les outils de Jaris pendant un duel : jamais.
+  assert.equal(config.ollama.threadsFor('alpha-model:3b'), undefined)
+  return configModule.runWithOllamaHost(POD, () => configModule.runWithLocalOllama(async () => {
+    assert.equal(config.ollama.threadsFor('alpha-model:3b'), undefined)
+  }), () => 4)
+})
+
 test('l’adresse d’une autre machine : origine seule, https par défaut pour un nom, http pour une IP, refus du reste', () => {
   const n = duelModule.normalizeRemoteOllamaHost
   assert.equal(n(' https://pod123-11434.proxy.runpod.net/ '), POD)
@@ -212,6 +224,8 @@ test('session sur une autre machine : modèles, téléchargements et suppression
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A a fini')
   assert.deepEqual(env.calls.thinking, [POD], 'la réflexion lue sur l’Ollama qui fait tourner le modèle')
   assert.equal(env.calls.converse[0].host, POD, 'le modèle répond depuis l’autre machine')
+  // Étape 387 : sur la carte de 288 Go, chaque modèle tient entier → 4 fils de calcul chacun.
+  assert.deepEqual(env.calls.converse[0].threads, [4, 4, 4, 4], 'peu de fils de calcul pour les modèles qui tiennent sur la carte')
   assert.deepEqual(env.calls.tool, [{ host: LOCAL, remote: false }], 'les outils de Jaris restent sur ce PC')
   assert.equal(env.calls.converse[1].host, POD, 'après l’outil, le modèle reprend sur l’autre machine')
   assert.deepEqual(env.calls.list, [LOCAL], 'les modèles de vision cherchés sur CE PC (ce sont ses outils)')

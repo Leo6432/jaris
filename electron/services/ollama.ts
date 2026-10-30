@@ -161,12 +161,14 @@ async function requestChat(
   const options = body.options as { num_ctx?: number } | undefined
   // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
   const numCtx = await fitToModelContext(model, options?.num_ctx ?? config.ollama.numCtx)
+  // Étape 387 : toujours la même valeur pour un même modèle (Ollama le recharge sinon, comme pour num_ctx).
+  const numThread = config.ollama.threadsFor?.(model)
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx } } : {}), stream: true }),
+      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx, ...(numThread ? { num_thread: numThread } : {}) } } : {}), stream: true }),
       signal
     })
   } catch (err) {

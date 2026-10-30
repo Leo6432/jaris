@@ -10313,3 +10313,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   paralléliser plusieurs demandes sur un même modèle n'aide que si elles ont les mêmes réglages de chargement ; sinon,
   chaque écart fait attendre toutes les autres.** Régression : `scripts/test-codegen-context.mjs` (même fenêtre à
   chaque étape, jamais au-delà de la limite du modèle ; vérifié en retirant la fenêtre fixe).
+
+- **Étape 387 (v0.40.28), pod H200 de Léo après la v0.40.27 : 5 modèles chargés à 32 768, carte pleine à 95 %, mais
+  calcul de la carte à ~28 % et processeur du pod à 100 %.** `top` : seuls les 5 `llama-server` travaillaient, ~23 cœurs
+  au total ; `nproc` = 192 (les cœurs de la machine de RunPod, pas la part du pod). Ollama demande par défaut un fil de
+  calcul par cœur VISIBLE : chaque modèle lançait des dizaines de fils qui se battaient pour la part du pod, alors qu'ils
+  n'ont presque rien à faire quand tout tient sur la carte. Pendant un duel sur une AUTRE machine, un modèle qui tient
+  entier sur la carte (`duelModelNeedGb(taille) ≤ VRAM`) demande maintenant `num_thread` = 4 (`DUEL_REMOTE_THREADS`,
+  `remoteThreadsFor`, shared/duel.ts) ; un modèle qui déborde sur la RAM garde le réglage d'Ollama (là, le processeur
+  calcule vraiment), et rien ne change sur ce PC ni dans les outils de Jaris. Passé par la même adresse « propre au
+  travail en cours » que l'étape 377 (`runWithOllamaHost(host, fn, threadsFor)`, config.ts) et ajouté par `requestChat`
+  (ollama.ts) à CHAQUE demande au même modèle : `NumThread` fait partie des réglages qui font recharger un modèle
+  (`api.Runner`, server/sched.go `needsReload`, vérifié dans le code d'Ollama), comme `num_ctx` à l'étape 386.
+  **Gain non mesuré ici** (pas de pod) : à vérifier sur le pod avec `nvidia-smi dmon -s u` et le CPU de RunPod.
+  **Leçon : dans un conteneur, le nombre de cœurs visibles (`nproc`) n'est pas la part réellement accordée — un programme
+  qui se règle sur `nproc` peut saturer un pod avec ses propres fils.** Régression : `test-duel-remote.mjs` et
+  `test-model-preload.mjs` (vérifiés en retirant le réglage du duel puis de la demande).

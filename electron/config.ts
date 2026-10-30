@@ -46,10 +46,19 @@ export function setOllamaHost(host: string): void {
  * `runWithOllamaHost` (et tout ce qui en découle, `await` compris) parle à cette adresse ; `runWithLocalOllama` revient à
  * l'Ollama de ce PC à l'intérieur (les outils de Jaris pendant un duel : regarder l'écran, dessiner…).
  */
-const hostScope = new AsyncLocalStorage<string | null>()
+interface OllamaScope {
+  host: string
+  /**
+   * Étape 387 : nombre de fils de calcul (num_thread) à demander pour ce modèle, ou rien. Sur le pod de Léo, chaque
+   * modèle croyait avoir les 192 cœurs de la machine de RunPod et lançait autant de fils, qui se battaient pour la
+   * part du pod (processeur à 100 %, carte à 25 %), alors qu'ils n'ont presque rien à faire quand tout tient sur la carte.
+   */
+  threadsFor?: (model: string) => number | undefined
+}
+const hostScope = new AsyncLocalStorage<OllamaScope | null>()
 
-export function runWithOllamaHost<T>(host: string, fn: () => Promise<T>): Promise<T> {
-  return hostScope.run(host, fn)
+export function runWithOllamaHost<T>(host: string, fn: () => Promise<T>, threadsFor?: (model: string) => number | undefined): Promise<T> {
+  return hostScope.run({ host, threadsFor }, fn)
 }
 
 export function runWithLocalOllama<T>(fn: () => Promise<T>): Promise<T> {
@@ -74,11 +83,15 @@ export const config = {
   ollama: {
     /** Lu à chaque appel : passe de l'Ollama de Windows à celui de Jaris sans redémarrer (étape 336). */
     get host(): string {
-      return hostScope.getStore() ?? activeOllamaHost
+      return hostScope.getStore()?.host ?? activeOllamaHost
     },
     /** Étape 377 : vrai pendant un travail envoyé à un Ollama d'une autre machine (rien de ce PC ne s'y applique). */
     get remote(): boolean {
       return Boolean(hostScope.getStore())
+    },
+    /** Étape 387 : fils de calcul demandés pour ce modèle pendant un travail sur une autre machine (sinon rien). */
+    threadsFor(model: string): number | undefined {
+      return hostScope.getStore()?.threadsFor?.(model)
     },
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
     /**
