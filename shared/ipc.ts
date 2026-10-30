@@ -1434,6 +1434,7 @@ export const IPC_CHANNELS = {
   duelStop: 'jaris:duel-stop',
   duelVote: 'jaris:duel-vote',
   duelEnd: 'jaris:duel-end',
+  duelSeriesMove: 'jaris:duel-series-move',
   duelState: 'jaris:duel-state',
   duelAudio: 'jaris:duel-audio',
   duelDeleteModels: 'jaris:duel-delete-models',

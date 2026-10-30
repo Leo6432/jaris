@@ -87,6 +87,7 @@ import {
   openBatchRound,
   closeBatchRound,
   endDuel,
+  moveDuelSeries,
   getDuelView,
   planDuel,
   retryDuel,
@@ -1780,7 +1781,8 @@ app.whenReady().then(async () => {
     if (!isDuelOutcome(outcome)) throw new Error(t('duel.error.badRequest'))
     return voteDuel(outcome)
   })
-  ipcMain.handle(IPC_CHANNELS.duelEnd, () => endDuel())
+  ipcMain.handle(IPC_CHANNELS.duelEnd, (_event, force: unknown) => endDuel(force === true))
+  ipcMain.handle(IPC_CHANNELS.duelSeriesMove, () => moveDuelSeries())
   ipcMain.handle(IPC_CHANNELS.duelClose, () => closeDuel())
   ipcMain.handle(IPC_CHANNELS.duelState, () => getDuelView())
   ipcMain.handle(IPC_CHANNELS.duelAudio, (_event, side: unknown) => (side === 'a' || side === 'b' ? duelAudio(side) : null))

@@ -227,7 +227,8 @@ declare global {
       duelRunB: () => Promise<DuelSessionView>
       duelStop: () => Promise<void>
       duelVote: (outcome: DuelOutcome) => Promise<DuelSessionView>
-      duelEnd: () => Promise<DuelSummary>
+      duelEnd: (force?: boolean) => Promise<DuelSummary>
+      duelSeriesMove: () => Promise<DuelSessionView>
       duelClose: () => Promise<void>
       duelState: () => Promise<DuelSessionView | null>
       duelAudio: (side: DuelSide) => Promise<Uint8Array | null>

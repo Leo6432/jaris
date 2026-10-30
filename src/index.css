@@ -10451,3 +10451,46 @@ ul.reply-list--nested {
   font-weight: 600;
   color: var(--hud-text);
 }
+
+/* Étape 388 : reprendre une série sur une nouvelle machine, et confirmer avant d'effacer des duels pas votés. */
+.duel-move,
+.duel-end-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: var(--jv-bubble);
+}
+
+.duel-move--down,
+.duel-end-confirm {
+  border-color: var(--hud-danger);
+}
+
+.duel-move__title,
+.duel-end-confirm__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.duel-move__open {
+  align-self: flex-start;
+}
+
+.duel-end-confirm {
+  margin: 12px 24px 0;
+}
+
+.duel-end-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.duel-end-confirm__danger {
+  color: var(--hud-danger);
+}

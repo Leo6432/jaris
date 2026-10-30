@@ -210,6 +210,8 @@ interface SeriesState {
   wake: (() => void) | null
   /** Le gardien tourne (un seul à la fois). */
   running: boolean
+  /** Étape 388 : le gardien doit repartir dès qu'il s'est arrêté (la série vient de changer de machine). */
+  restart: boolean
   /**
    * Un téléchargement a rempli le disque (souvent celui d'une machine louée, dont Jaris ne connaît pas la place libre) :
    * le nombre de modèles supprimés à ce moment-là. On ne réessaie qu'après une nouvelle suppression.
@@ -237,6 +239,11 @@ let session: Session | null = null
  * côté (« 3:a »), plusieurs duels d'une file tournant en même temps.
  */
 const runControllers = new Map<string, AbortController>()
+/**
+ * Étape 388 : les côtés arrêtés parce que la série change de machine. Ils ne sont ni « arrêtés » ni en erreur : ils
+ * repartent de zéro sur la nouvelle machine.
+ */
+const movingRuns = new Set<string>()
 function abortRuns(): void {
   for (const controller of runControllers.values()) controller.abort()
 }
@@ -847,6 +854,7 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
     controller: new AbortController(),
     wake: null,
     running: false,
+    restart: false,
     diskFullAt: null
   }
 }
@@ -978,6 +986,10 @@ function startSeriesKeeper(current: Session): void {
       series.running = false
       series.download = null
       environment.keepAwake?.(false)
+      if (series.restart && session === current && current.series === series) {
+        series.restart = false
+        startSeriesKeeper(current)
+      }
       if (session === current) emitNow()
     })
 }
@@ -1243,7 +1255,8 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   } finally {
     side.activity = null
     side.durationMs = side.startedAt === null ? null : Date.now() - side.startedAt
-    if (retry) Object.assign(side, { ...emptySide(), retries: side.retries + 1 })
+    if (movingRuns.delete(runKey)) Object.assign(side, emptySide())
+    else if (retry) Object.assign(side, { ...emptySide(), retries: side.retries + 1 })
     if (runControllers.get(runKey) === controller) runControllers.delete(runKey)
     if (session === current) {
       // Étape 382 : l'application écrite est gardée sur le disque avant tout, pour survivre à un redémarrage.
@@ -1537,15 +1550,76 @@ export async function duelHistoryCode(voteId: string, side: DuelSide): Promise<s
   return readDuelApp(voteId, side)
 }
 
+/** Étape 388 : les duels d'une file (ou d'une série) que Léo n'a pas encore votés, finis ou pas. */
+function duelsNotVoted(current: Session): number {
+  return current.batch?.filter((r) => !r.revealed).length ?? 0
+}
+
+/**
+ * Étape 388 (Léo : « si j'ai plus de crédit, un système pour que je reprenne ») : la machine louée s'est arrêtée (crédit
+ * épuisé, machine rendue) ; la série reprend sur celle réglée maintenant dans « Sur une autre machine ». Les duels finis
+ * restent (ils sont sur ce PC) ; ceux en cours repartent de zéro, et les modèles sont retéléchargés sur la nouvelle
+ * machine au fil de la série. Rien n'est effacé sur l'ancienne : elle ne répond plus.
+ */
+export async function moveDuelSeries(): Promise<DuelSessionView> {
+  const current = session
+  const series = current?.series
+  if (!current || !series || !current.batch || current.phase !== 'ready') throw new Error(t('duel.error.noSeries'))
+  const away = await remoteMachine(await getProfile())
+  if (!away) throw new Error(t('duel.move.noRemote'))
+  if (away.error) throw new Error(t('duel.remote.unreachable', { host: away.remote.host }))
+  if (session !== current || current.series !== series) throw new Error(t('duel.error.noSeries'))
+  current.remote = away.remote
+  current.vramGb = away.remote.machine.vramGb
+  // Les modèles de l'ancienne machine n'existent pas sur la nouvelle : rien à y supprimer, tout à retélécharger.
+  current.downloaded = new Map()
+  series.present = new Set()
+  series.undeletable = new Set()
+  series.waiting = null
+  series.download = null
+  series.diskFullAt = null
+  for (const round of current.batch) {
+    for (const side of SIDES) {
+      const state = round.sides[side]
+      const key = `${round.number}:${side}`
+      const controller = runControllers.get(key)
+      if (state.status === 'running' && controller) {
+        movingRuns.add(key)
+        controller.abort()
+      } else if (state.status === 'idle') {
+        // Un échec de l'ancienne machine n'était pas la faute du modèle : il a de nouveau tous ses essais.
+        state.retries = 0
+      }
+    }
+  }
+  // Le gardien parle à l'ancienne adresse : il s'arrête, et repart sur la nouvelle dès qu'il a fini.
+  const old = series.controller
+  series.controller = new AbortController()
+  if (series.running) {
+    series.restart = true
+    old.abort()
+  } else {
+    old.abort()
+    startSeriesKeeper(current)
+  }
+  persistSeries(current)
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
 const ROLES = ['flash', 'medium', 'large'] as const
 
 /**
  * Fin de session : les noms sont révélés, le classement est recalculé, et le choix de Jaris suit les votes — tout de
  * suite pour un modèle déjà installé (ceux de la session le sont), sinon au prochain « Retester la configuration ».
  */
-export async function endDuel(): Promise<DuelSummary> {
+export async function endDuel(force = false): Promise<DuelSummary> {
   const current = session
   if (!current) throw new Error(t('duel.error.noSession'))
+  // Étape 388 (Léo, après avoir perdu une série de 2 h sur ce bouton) : terminer une file qui a encore des duels pas
+  // votés les efface. Jamais sans un « Terminer quand même » explicite de l'écran.
+  const unvoted = duelsNotVoted(current)
+  if (unvoted > 0 && !force) throw new Error(t('duel.endConfirm.needed', { count: unvoted }))
   prepareController?.abort()
   abortRuns()
   // Étape 382 : « Terminer » arrête la série pour de bon — les duels non votés sont abandonnés.

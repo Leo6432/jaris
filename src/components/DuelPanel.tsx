@@ -232,14 +232,137 @@ function SeriesStatus({ view }: { view: DuelSessionView }): JSX.Element | null {
   )
 }
 
+/**
+ * Étape 388 (Léo : « si j'ai plus de crédit, un système pour que je reprenne ») : la machine louée ne répond plus
+ * (crédit épuisé, machine rendue). Les duels finis restent sur ce PC ; la série reprend sur une nouvelle machine dès
+ * que son adresse est donnée ici.
+ */
+function SeriesMoveBox({ view, onMoved }: { view: DuelSessionView; onMoved: (next: DuelSessionView) => void }): JSX.Element | null {
+  const down = view.series?.waiting === 'ollama'
+  const [open, setOpen] = useState(false)
+  const [host, setHost] = useState('')
+  const [vram, setVram] = useState('')
+  const [ram, setRam] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const shown = down || open
+
+  useEffect(() => {
+    if (!shown) return
+    let alive = true
+    void window.jaris
+      .getProfile()
+      .then((profile) => {
+        const saved = profile?.duelRemote
+        if (!alive || !saved) return
+        setHost((current) => current || saved.host)
+        setVram((current) => current || String(saved.vramGb))
+        setRam((current) => current || String(saved.ramGb))
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [shown])
+
+  if (!view.remote || !view.series) return null
+
+  const move = async (): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      await window.jaris.duelRemoteSave({ enabled: true, host, vramGb: typedNumber(vram), ramGb: typedNumber(ram) })
+      onMoved(await window.jaris.duelSeriesMove())
+      setOpen(false)
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!shown) {
+    return (
+      <button type="button" className="duel-btn duel-move__open" onClick={() => setOpen(true)}>
+        {t('duel.move.open')}
+      </button>
+    )
+  }
+  return (
+    <section className={`duel-move${down ? ' duel-move--down' : ''}`} aria-labelledby="duel-move-title">
+      <h2 id="duel-move-title" className="duel-move__title">
+        {t(down ? 'duel.move.downTitle' : 'duel.move.title')}
+      </h2>
+      {down && <p className="duel-home__note">{t('duel.move.downLead')}</p>}
+      <p className="duel-home__note">{t('duel.move.lead')}</p>
+      <div className="duel-remote__fields">
+        <label className="duel-remote__field duel-remote__field--host">
+          <span>{t('duel.remote.address')}</span>
+          <input type="url" value={host} spellCheck={false} autoComplete="off" onChange={(event) => setHost(event.target.value)} />
+        </label>
+        <label className="duel-remote__field">
+          <span>{t('duel.remote.vram')}</span>
+          <input type="text" inputMode="decimal" value={vram} onChange={(event) => setVram(event.target.value)} />
+        </label>
+        <label className="duel-remote__field">
+          <span>{t('duel.remote.ram')}</span>
+          <input type="text" inputMode="decimal" value={ram} onChange={(event) => setRam(event.target.value)} />
+        </label>
+      </div>
+      <div className="duel-remote__actions">
+        <button type="button" className="duel-btn duel-btn--primary" onClick={() => void move()} disabled={saving}>
+          {saving ? t('duel.remote.saving') : t('duel.move.go')}
+        </button>
+        {!down && (
+          <button type="button" className="duel-btn" onClick={() => setOpen(false)} disabled={saving}>
+            {t('duel.move.cancel')}
+          </button>
+        )}
+      </div>
+      {error && (
+        <p className="duel-home__note duel-home__note--warn" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/**
+ * Étape 388 (Léo a perdu une série de 2 h en cliquant « Terminer la session ») : terminer une file qui a encore des
+ * duels pas votés les efface ; on le dit, et le bouton par défaut ramène au vote.
+ */
+function EndConfirm({ count, busy, onCancel, onConfirm }: { count: number; busy: boolean; onCancel: () => void; onConfirm: () => void }): JSX.Element {
+  return (
+    <div className="duel-end-confirm" role="alertdialog" aria-labelledby="duel-end-confirm-title" aria-describedby="duel-end-confirm-text">
+      <h2 id="duel-end-confirm-title" className="duel-end-confirm__title">
+        {t('duel.endConfirm.title')}
+      </h2>
+      <p id="duel-end-confirm-text" className="duel-home__note">
+        {t('duel.endConfirm.text', { count })}
+      </p>
+      <div className="duel-end-confirm__actions">
+        <button type="button" className="duel-btn duel-btn--primary" onClick={onCancel} disabled={busy} autoFocus>
+          {t('duel.endConfirm.cancel')}
+        </button>
+        <button type="button" className="duel-btn duel-end-confirm__danger" onClick={onConfirm} disabled={busy}>
+          {t('duel.endConfirm.confirm', { count })}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function DuelBatchList({
   batch,
   onOpen,
+  onMoved,
   disabled,
   view
 }: {
   batch: DuelBatchItemView[]
   onOpen: (number: number) => void
+  onMoved: (next: DuelSessionView) => void
   disabled: boolean
   view: DuelSessionView
 }): JSX.Element {
@@ -251,6 +374,7 @@ function DuelBatchList({
         {t('duel.batch.progress', { done, total: batch.length })}
       </p>
       <SeriesStatus view={view} />
+      <SeriesMoveBox view={view} onMoved={onMoved} />
       <p className="duel-home__note">{t('duel.batch.hint')}</p>
       <ol className="duel-batch__list">
         {batch.map((item) => {
@@ -1009,6 +1133,8 @@ export default function DuelPanel(): JSX.Element {
   // Étape 381 : l'éditeur « plusieurs demandes d'un coup » (Code seulement).
   const [batchEditing, setBatchEditing] = useState(false)
   const [deleted, setDeleted] = useState<{ deleted: string[]; failed: { model: string; error: string }[] } | null>(null)
+  /** Étape 388 : « Terminer la session » attend une confirmation (nombre de duels pas votés qui seraient effacés). */
+  const [confirmEnd, setConfirmEnd] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   // L'état de la session vit dans le main : relu à l'ouverture (un rechargement de l'écran ne perd rien), puis suivi.
@@ -1222,12 +1348,18 @@ export default function DuelPanel(): JSX.Element {
 
   const openHistory = (): void => setHistoryOpen(true)
 
-  const end = (): void => {
+  const end = (force = false): void => {
     const id = view?.id
     if (!id) return
+    const unvoted = view?.batch?.filter((item) => !item.revealed).length ?? 0
+    if (unvoted > 0 && !force) {
+      setConfirmEnd(unvoted)
+      return
+    }
+    setConfirmEnd(null)
     stopAudio()
     void run('end', async () => {
-      const summary = await window.jaris.duelEnd()
+      const summary = await window.jaris.duelEnd(force)
       setEnded({ id, summary })
     })
   }
@@ -1246,6 +1378,11 @@ export default function DuelPanel(): JSX.Element {
   }
 
   // --- Écrans ---------------------------------------------------------------------------------------------------
+  const endConfirm =
+    confirmEnd !== null ? (
+      <EndConfirm count={confirmEnd} busy={pending !== null} onCancel={() => setConfirmEnd(null)} onConfirm={() => end(true)} />
+    ) : null
+
   let content: JSX.Element
 
   if (historyOpen) {
@@ -1523,7 +1660,7 @@ export default function DuelPanel(): JSX.Element {
               {view.dropReason && ` ${t('duel.dropReason', { reason: view.dropReason })}`}
             </p>
           )}
-          <button type="button" className="duel-btn" onClick={end} disabled={pending !== null}>
+          <button type="button" className="duel-btn" onClick={() => end()} disabled={pending !== null}>
             {t('duel.stopSession')}
           </button>
         </div>
@@ -1540,12 +1677,13 @@ export default function DuelPanel(): JSX.Element {
           <button type="button" className="duel-btn duel__bar-end" onClick={stop} disabled={pending !== null}>
             {t('duel.batch.stop')}
           </button>
-          <button type="button" className="duel-btn duel__bar-end" onClick={end} disabled={pending !== null}>
+          <button type="button" className="duel-btn duel__bar-end" onClick={() => end()} disabled={pending !== null}>
             {t('duel.end')}
           </button>
         </div>
+        {endConfirm}
         <div className="duel__scroll">
-          <DuelBatchList batch={view.batch} onOpen={openBatch} disabled={pending !== null} view={view} />
+          <DuelBatchList batch={view.batch} onOpen={openBatch} onMoved={setView} disabled={pending !== null} view={view} />
         </div>
         {error && <p className="duel__error">{error}</p>}
       </>
@@ -1556,7 +1694,7 @@ export default function DuelPanel(): JSX.Element {
       <div className="duel__scroll duel__center">
         <div className="duel-preparing">
           <p className="duel-home__note">{t('duel.preparing.ready')}</p>
-          <button type="button" className="duel-btn" onClick={end} disabled={pending !== null}>
+          <button type="button" className="duel-btn" onClick={() => end()} disabled={pending !== null}>
             {t('duel.end')}
           </button>
         </div>
@@ -1583,10 +1721,11 @@ export default function DuelPanel(): JSX.Element {
               {t('duel.batch.back')}
             </button>
           )}
-          <button type="button" className="duel-btn duel__bar-end" onClick={end} disabled={pending !== null}>
+          <button type="button" className="duel-btn duel__bar-end" onClick={() => end()} disabled={pending !== null}>
             {t('duel.end')}
           </button>
         </div>
+        {endConfirm}
 
         {round.prompt === null && batchEditing && view.category === 'code' ? (
           <div className="duel__scroll">

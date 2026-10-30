@@ -84,9 +84,14 @@ window.jaris = {
     window.__calls.push('next')
     return ready({ number: 2, prompt: null, a: side(), b: side(), revealed: null })
   },
-  duelEnd: async () => {
-    window.__calls.push('end')
+  duelEnd: async (force) => {
+    window.__calls.push(force ? ['end', 'force'] : 'end')
     return window.__summary
+  },
+  duelSeriesMove: async () => {
+    window.__calls.push('seriesMove')
+    if (window.__moveError) throw new Error(window.__moveError)
+    return (window.__view = { ...window.__view, series: { ...window.__view.series, waiting: null } })
   },
   duelClose: async () => { window.__calls.push('close') },
   duelAudio: async () => null,
@@ -926,5 +931,82 @@ test('étape 382 : Ollama arrêté — la série le dit ; finie — il ne reste 
       assert.equal(await page.locator('.duel-series-status .duel-progress').count(), 0)
     },
     SERIES_VIEW({ perModel: 10, download: null, waiting: null, deleted: 3, active: false })
+  )
+})
+
+test('étape 388 : « Terminer la session » avec des duels pas votés demande confirmation ; « Voter d’abord » ne touche à rien', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-batch')
+      await page.getByRole('button', { name: 'Terminer la session' }).click()
+      await page.waitForSelector('.duel-end-confirm')
+      assert.match(await page.textContent('.duel-end-confirm'), /Duels pas encore votés : 3\. Si tu termines la session, ils seront effacés pour de bon/)
+      assert.ok(!(await page.evaluate(() => window.__calls)).some((c) => c === 'end' || (Array.isArray(c) && c[0] === 'end')), 'rien n’est effacé sans confirmation')
+      // Le bouton par défaut ramène au vote.
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Voter d’abord'.replace('’', "'"))
+      await page.getByRole('button', { name: "Voter d'abord" }).click()
+      await settle(page)
+      assert.equal(await page.locator('.duel-end-confirm').count(), 0)
+      assert.ok(await page.locator('.duel-batch__item').first().isVisible(), 'la liste des duels est toujours là')
+      // Confirmé explicitement : seulement alors la session se termine.
+      await page.getByRole('button', { name: 'Terminer la session' }).click()
+      await page.getByRole('button', { name: 'Effacer et terminer' }).click()
+      await settle(page)
+      assert.deepEqual((await page.evaluate(() => window.__calls)).filter((c) => Array.isArray(c) && c[0] === 'end'), [['end', 'force']])
+    },
+    SERIES_VIEW({ perModel: 10, download: null, waiting: null, deleted: 0, active: true })
+  )
+})
+
+test('étape 388 : machine des modèles arrêtée (crédit épuisé) — rien n’est perdu, nouvelle adresse et reprise de la série', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-move')
+      const text = await page.textContent('.duel-move')
+      assert.match(text, /La machine des modèles ne répond plus/)
+      assert.match(text, /Rien n'est perdu : les duels finis restent ici, et tu peux les voter/)
+      // L'ancienne adresse est déjà remplie : Léo n'a qu'à la remplacer.
+      await page.waitForFunction(() => document.querySelector('.duel-move input[type=url]')?.value === 'https://old-11434.proxy.runpod.net')
+      await page.fill('.duel-move input[type=url]', '203.0.113.7:41234')
+      const inputs = page.locator('.duel-move input[inputmode=decimal]')
+      await inputs.nth(0).fill('140')
+      await inputs.nth(1).fill('129')
+      await page.getByRole('button', { name: 'Reprendre sur cette machine' }).click()
+      await page.waitForFunction(() => window.__calls.includes('seriesMove'))
+      const calls = await page.evaluate(() => window.__calls)
+      const saved = calls.find((c) => Array.isArray(c) && c[0] === 'remoteSave')
+      assert.deepEqual(saved[1], { enabled: true, host: '203.0.113.7:41234', vramGb: 140, ramGb: 129 })
+      assert.ok(calls.indexOf(saved) < calls.indexOf('seriesMove'), 'l’adresse est enregistrée avant la reprise')
+      // La série tourne de nouveau : le cadre d'alerte disparaît, un simple bouton reste.
+      await page.waitForSelector('.duel-move__open')
+      assert.equal(await page.locator('.duel-move').count(), 0)
+      // Les duels ne sont jamais terminés par cette action.
+      assert.ok(!calls.some((c) => c === 'end' || (Array.isArray(c) && c[0] === 'end')))
+    },
+    `window.__profile = { name: 'Léo', duelRemote: { enabled: true, host: 'https://old-11434.proxy.runpod.net', vramGb: 141, ramGb: 200 } }; ${SERIES_VIEW({ perModel: 10, download: null, waiting: 'ollama', deleted: 0, active: true }).replace("phase: 'ready'", "phase: 'ready', remote: true")}`
+  )
+})
+
+test('étape 388 : la nouvelle machine ne répond pas — l’erreur s’affiche, la série reste à voter', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-move')
+      await page.waitForFunction(() => document.querySelector('.duel-move input[type=url]')?.value !== '')
+      await page.getByRole('button', { name: 'Reprendre sur cette machine' }).click()
+      await page.waitForSelector('.duel-move [role=alert]')
+      assert.match(await page.textContent('.duel-move [role=alert]'), /ne répond pas/)
+      assert.ok(await page.locator('.duel-batch__item').first().isVisible())
+    },
+    `window.__moveError = 'La machine des modèles (http://x) ne répond pas.'; window.__profile = { name: 'Léo', duelRemote: { enabled: true, host: 'http://x', vramGb: 140, ramGb: 129 } }; ${SERIES_VIEW({ perModel: 10, download: null, waiting: 'ollama', deleted: 0, active: true }).replace("phase: 'ready'", "phase: 'ready', remote: true")}`
+  )
+})
+
+test('étape 388 : série sur CE PC — pas de changement de machine proposé', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-series-status')
+      assert.equal(await page.locator('.duel-move, .duel-move__open').count(), 0)
+    },
+    SERIES_VIEW({ perModel: 10, download: null, waiting: 'ollama', deleted: 0, active: true })
   )
 })

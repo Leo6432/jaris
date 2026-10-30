@@ -1236,7 +1236,11 @@ test('étape 382 : tout voté — la série gardée est effacée ; « Terminer �
   other.session.setDuelSeriesDelays({ idleCheckMs: 20 })
   await other.session.startDuel('code', 4, 2)
   assert.ok(other.seriesStore.json)
-  await other.session.endDuel()
+  // Étape 388 : des duels pas votés — « Terminer » est refusé sans confirmation, et rien n'est effacé.
+  await assert.rejects(other.session.endDuel(), /pas encore votés/)
+  assert.ok(other.seriesStore.json, 'la série gardée n’est pas effacée sans confirmation')
+  assert.ok(other.session.getDuelView().batch?.length, 'les duels sont toujours là')
+  await other.session.endDuel(true)
   assert.equal(other.seriesStore.json, null)
 })
 

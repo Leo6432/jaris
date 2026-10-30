@@ -10328,4 +10328,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Gain non mesuré ici** (pas de pod) : à vérifier sur le pod avec `nvidia-smi dmon -s u` et le CPU de RunPod.
   **Leçon : dans un conteneur, le nombre de cœurs visibles (`nproc`) n'est pas la part réellement accordée — un programme
   qui se règle sur `nproc` peut saturer un pod avec ses propres fils.** Régression : `test-duel-remote.mjs` et
-  `test-model-preload.mjs` (vérifiés en retirant le réglage du duel puis de la demande).
+  `test-model-preload.mjs` (vérifiés en retirant le réglage du duel puis de la demande).  Mesuré ensuite sur le pod de Léo (H200) : calcul de la carte de ~28 % à 100 %, processeur du pod de 100 % à 38 %.
+
+- **Étape 388 (v0.40.29), Léo a perdu une série de 2 h (environ 20 € de pod) en cliquant « Terminer la session » :
+  « ajoute un système pour pas faire la même bêtise, et si j'ai plus de crédit un système pour que je reprenne ».**
+  Le bouton, à côté de « Tout arrêter » dans la liste « Tes duels », arrêtait la série et effaçait sans rien demander
+  les applications pas encore votées (`clearSeries`, suppression directe, pas de Corbeille : irrécupérable). Deux
+  protections :
+  1. **Confirmation** : avec des duels pas votés, « Terminer la session » ouvre un cadre dans la page (« Duels pas encore
+     votés : N. Si tu termines la session, ils seront effacés pour de bon ») ; le bouton par défaut est « Voter d'abord »,
+     et seul « Effacer et terminer » termine. Le main refuse aussi `endDuel()` sans `force` quand il reste des duels pas
+     votés (`duelsNotVoted`) : aucun autre chemin ne peut effacer en silence. **Piège évité en relisant** : passer de
+     `onClick={end}` à `end(force = false)` aurait transmis l'évènement du clic comme `force` (toujours vrai) — tous les
+     boutons appellent `() => end()`.
+  2. **Reprendre sur une nouvelle machine** (`moveDuelSeries`, canal `duelSeriesMove`) : quand la machine louée ne répond
+     plus (crédit épuisé), la liste affiche « La machine des modèles ne répond plus — rien n'est perdu », avec l'adresse,
+     la carte et la RAM (préremplies) et « Reprendre sur cette machine » ; un petit bouton « Changer de machine » reste
+     disponible le reste du temps. La série garde ses duels finis (ils sont sur ce PC), prend la nouvelle adresse, oublie
+     les modèles de l'ancienne machine (rien à y supprimer, tout à retélécharger), remet à zéro les côtés qui tournaient
+     (`movingRuns` : ni « arrêtés » ni en erreur) et les essais des côtés en attente (une panne de machine n'est pas la
+     faute du modèle), puis relance le gardien sur la nouvelle machine. **Le gardien était lié à l'ancienne adresse**
+     (AsyncLocalStorage, fixée à son lancement) : il est arrêté puis relancé (`series.restart`, relancé dans son
+     `finally` s'il tournait encore) — sans ça, la série continuait de parler à l'ancienne machine. La nouvelle adresse est
+     gardée avec la série : après un redémarrage de Jaris, elle reprend au bon endroit. Une nouvelle machine qui ne répond
+     pas est refusée avec la raison, rien ne change.
+  **Leçon générale : un bouton qui détruit des heures de travail payé ne doit jamais agir en un clic, surtout à côté d'un
+  bouton qui, lui, garde le travail (« Tout arrêter ») — et une ressource louée finit toujours par s'arrêter : tout travail
+  long qui en dépend doit pouvoir changer de machine sans tout perdre.** Régression : `test-duel-series-move.mjs`
+  (vrai config.ts, deux machines simulées : crédit épuisé puis reprise, nouvelle machine injoignable, machine figée,
+  sans série), `test-duel-session.mjs` (« Terminer » refusé sans confirmation) et `test-duel-panel-ui.mjs` (vrai
+  navigateur : confirmation, « Voter d'abord », reprise, erreur affichée). Chaque garde vérifiée en la retirant.
+  **Non vérifié en usage réel** : un vrai changement de pod en pleine série.
