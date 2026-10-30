@@ -640,24 +640,67 @@ export interface DuelBatchSlot {
 export function batchSlotsToStart(
   running: readonly { model: string; sizeGb: number }[],
   waiting: readonly DuelBatchSlot[],
-  vramGb: number | null
+  vramGb: number | null,
+  mode: 'batch' | 'series' = 'batch'
 ): string[] {
+  const series = mode === 'series'
   const budget = vramGb === null || !Number.isFinite(vramGb) ? null : vramGb - DUEL_TOGETHER_GPU_RESERVE_GB
-  const need = (size: number): number => (Number.isFinite(size) && size > 0 ? size * 1.3 + 2 : Number.POSITIVE_INFINITY)
-  const loaded = new Map<string, number>()
-  for (const r of running) loaded.set(r.model, need(r.sizeGb))
+  // Étape 385 : dans une série, un modèle chargé peut écrire plusieurs duels à la fois (chacun a sa mémoire de travail).
+  const need = (size: number, slots: number): number => (series ? seriesModelNeedGb(size, slots) : duelModelNeedGb(size))
+  const maxTogether = series ? DUEL_SERIES_MAX_MODELS * DUEL_SERIES_SLOTS_PER_MODEL : DUEL_BATCH_MAX_TOGETHER
+  const slots = new Map<string, { size: number; count: number }>()
+  for (const r of running) {
+    const entry = slots.get(r.model)
+    slots.set(r.model, { size: r.sizeGb, count: (entry?.count ?? 0) + 1 })
+  }
+  const used = (): number => [...slots.values()].reduce((sum, e) => sum + need(e.size, e.count), 0)
   let count = running.length
   const start: string[] = []
   for (const slot of waiting) {
-    if (count >= DUEL_BATCH_MAX_TOGETHER) break
-    const extra = loaded.has(slot.model) ? 0 : need(slot.sizeGb)
-    const used = [...loaded.values()].reduce((sum, v) => sum + v, 0)
-    if (count > 0 && (budget === null || used + extra > budget)) break
+    if (count >= maxTogether) break
+    const entry = slots.get(slot.model)
+    // Un modèle qui écrit déjà autant de duels qu'Ollama en traite à la fois : on passe aux suivants de la file.
+    if (series && entry && entry.count >= DUEL_SERIES_SLOTS_PER_MODEL) continue
+    if (series && !entry && slots.size >= DUEL_SERIES_MAX_MODELS) break
+    const added = entry ? (series ? need(entry.size, entry.count + 1) - need(entry.size, entry.count) : 0) : need(slot.sizeGb, 1)
+    // Taille inconnue : Infinity - Infinity donnerait NaN, qui passerait toutes les comparaisons.
+    const extra = Number.isNaN(added) ? Number.POSITIVE_INFINITY : added
+    if (count > 0 && (budget === null || used() + extra > budget)) break
     start.push(slot.key)
-    if (!loaded.has(slot.model)) loaded.set(slot.model, need(slot.sizeGb))
+    slots.set(slot.model, { size: entry?.size ?? slot.sizeGb, count: (entry?.count ?? 0) + 1 })
     count++
   }
   return start
+}
+
+/** La mémoire d'un modèle qui écrit un duel : marge de 30 % + 2 Go (taille inconnue = ne tient jamais). */
+function duelModelNeedGb(size: number): number {
+  return Number.isFinite(size) && size > 0 ? size * 1.3 + 2 : Number.POSITIVE_INFINITY
+}
+
+/**
+ * Étape 385 (Léo, série sur un H200 de 140 Go qui n'en utilisait que 8 : « je veux qu'il tourne le max de modèles ») :
+ * dans une série, autant de modèles en même temps que la carte peut en tenir (au plus DUEL_SERIES_MAX_MODELS), et
+ * jusqu'à DUEL_SERIES_SLOTS_PER_MODEL duels par modèle. Ollama doit être réglé pareil (OLLAMA_MAX_LOADED_MODELS et
+ * OLLAMA_NUM_PARALLEL) ; sinon il fait simplement attendre ce qu'il ne peut pas prendre. Chaque duel de plus sur un
+ * même modèle ajoute sa mémoire de travail (1 Go compté). Sur une petite carte rien ne change : un seul modèle tient.
+ */
+export const DUEL_SERIES_MAX_MODELS = 12
+export const DUEL_SERIES_SLOTS_PER_MODEL = 4
+export function seriesModelNeedGb(size: number, slots: number): number {
+  return duelModelNeedGb(size) + Math.max(0, slots - 1)
+}
+
+/**
+ * Étape 385 : le gardien de la série peut-il télécharger un modèle de plus pour le faire tourner EN MÊME TEMPS que
+ * ceux déjà là ? Oui si tous tiennent ensemble sur la carte, chacun avec tous ses duels à la fois. Carte inconnue : non.
+ */
+export function seriesRoomForModel(activeSizesGb: readonly number[], nextSizeGb: number, vramGb: number | null): boolean {
+  if (vramGb === null || !Number.isFinite(vramGb)) return false
+  if (activeSizesGb.length >= DUEL_SERIES_MAX_MODELS) return false
+  const full = (size: number): number => seriesModelNeedGb(size, DUEL_SERIES_SLOTS_PER_MODEL)
+  const total = activeSizesGb.reduce((sum, size) => sum + full(size), 0) + full(nextSizeGb)
+  return total <= vramGb - DUEL_TOGETHER_GPU_RESERVE_GB
 }
 
 /**

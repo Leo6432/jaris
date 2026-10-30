@@ -363,6 +363,40 @@ test('étape 381 : file de duels Code — combien de générations à la fois', 
   assert.deepEqual(duel.batchSlotsToStart([], [slot('a', 'p', 3), slot('b', 'g', 30), slot('c', 'q', 3)], 32), ['a'])
 })
 
+test('étape 385 : série — autant de modèles que la carte en tient, jusqu’à 4 duels par modèle', () => {
+  const slot = (key, model, sizeGb) => ({ key, model, sizeGb })
+  // 6 modèles de 5 Go, 4 côtés chacun, sur un H200 : tous ensemble, 4 par modèle (24 générations à la fois).
+  const waiting = []
+  for (let m = 0; m < 6; m++) for (let k = 0; k < 6; k++) waiting.push(slot(`m${m}-${k}`, `m${m}`, 5))
+  const started = duel.batchSlotsToStart([], waiting, 140, 'series')
+  const perModel = new Map()
+  for (const key of started) perModel.set(key.split('-')[0], (perModel.get(key.split('-')[0]) ?? 0) + 1)
+  assert.equal(perModel.size, 6, 'les 6 modèles tournent')
+  for (const count of perModel.values()) assert.equal(count, duel.DUEL_SERIES_SLOTS_PER_MODEL)
+  // Un modèle déjà à 4 duels n'en reçoit pas un 5e ; les autres de la file passent quand même.
+  const busy = Array.from({ length: 4 }, () => ({ model: 'm0', sizeGb: 5 }))
+  assert.deepEqual(duel.batchSlotsToStart(busy, [slot('x', 'm0', 5), slot('y', 'm1', 5)], 140, 'series'), ['y'])
+  // Au plus DUEL_SERIES_MAX_MODELS modèles, même sur une carte immense.
+  const many = Array.from({ length: 20 }, (_, i) => slot(`k${i}`, `n${i}`, 1))
+  assert.equal(duel.batchSlotsToStart([], many, 10_000, 'series').length, duel.DUEL_SERIES_MAX_MODELS)
+  // Petite carte : rien ne change (un seul modèle tient).
+  assert.equal(new Set(duel.batchSlotsToStart([], waiting, 8, 'series').map((k) => k.split('-')[0])).size, 1)
+  // Taille inconnue d'un modèle déjà chargé : jamais un duel de plus « gratuit ».
+  assert.deepEqual(duel.batchSlotsToStart([{ model: 'z', sizeGb: Number.NaN }], [slot('a', 'z', Number.NaN)], 140, 'series'), [])
+  // Hors série, le comportement de l'étape 381 ne bouge pas.
+  assert.deepEqual(duel.batchSlotsToStart([], waiting, 140), ['m0-0', 'm0-1', 'm0-2', 'm0-3'])
+})
+
+test('étape 385 : télécharger un modèle de plus seulement s’il tient avec ceux déjà là', () => {
+  // 5 Go à 4 duels = 5 × 1,3 + 2 + 3 = 11,5 Go.
+  assert.equal(duel.seriesRoomForModel([5, 5], 5, 140), true)
+  assert.equal(duel.seriesRoomForModel([5, 5], 5, 30), false)
+  assert.equal(duel.seriesRoomForModel([], 6, 8), false, 'carte de 8 Go : jamais un second modèle')
+  assert.equal(duel.seriesRoomForModel([5], 5, null), false, 'carte inconnue')
+  assert.equal(duel.seriesRoomForModel([5], Number.NaN, 140), false, 'taille inconnue')
+  assert.equal(duel.seriesRoomForModel(Array(duel.DUEL_SERIES_MAX_MODELS).fill(1), 1, 10_000), false)
+})
+
 test('étape 382 : planning d’une série — chaque modèle au moins N duels, contre des adversaires variés, A/B au hasard', () => {
   let seed = 7
   const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)

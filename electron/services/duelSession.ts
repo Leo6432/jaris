@@ -41,6 +41,7 @@ import {
   DUEL_SESSION_SIZES,
   DUEL_CODE_IDEAS,
   batchSlotsToStart,
+  seriesRoomForModel,
   isDuelSeriesCount,
   planDuelSeries,
   baseModelTag,
@@ -724,7 +725,7 @@ function pumpBatch(current: Session): void {
       }
     }
   }
-  for (const key of batchSlotsToStart(running, waiting, current.vramGb)) {
+  for (const key of batchSlotsToStart(running, waiting, current.vramGb, current.series ? 'series' : 'batch')) {
     const slot = where.get(key)
     if (slot) void runSide(current, slot.round, slot.side)
   }
@@ -1002,7 +1003,17 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
     const ready = sides.filter((s) => !s.running && series.present.has(s.model)).length
     const running = sides.filter((s) => s.running).length
     const next = sides.find((s) => !s.running && !series.present.has(s.model))
-    if (!next || ready >= SERIES_PREFETCH_READY) {
+    // Étape 385 : sur une grosse carte, d'autres modèles tournent EN MÊME TEMPS — on télécharge le suivant tant qu'il
+    // tient sur la carte avec ceux déjà là (chacun avec tous ses duels à la fois).
+    const active = [...new Set(sides.filter((s) => series.present.has(s.model)).map((s) => s.model))]
+    const room =
+      next !== undefined &&
+      seriesRoomForModel(
+        active.map((m) => current.sizes.get(m) ?? Number.NaN),
+        current.sizes.get(next.model) ?? Number.NaN,
+        current.vramGb
+      )
+    if (!next || (ready >= SERIES_PREFETCH_READY && !room)) {
       await waitSeries(series, seriesDelays.idleCheckMs)
       continue
     }

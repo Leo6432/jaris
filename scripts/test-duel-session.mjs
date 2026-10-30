@@ -1012,6 +1012,31 @@ test('étape 382 : la série — chaque modèle au moins N duels, chaque modèle
   assert.ok(env.seriesStore.apps.size >= view.batch.length * 2 - 1)
 })
 
+test('étape 385 : série sur une grosse carte — plusieurs modèles en même temps, 4 duels au plus par modèle, chacun téléchargé une fois', async () => {
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const env = setup({ category: 'code', vramGb: 140, profile: { name: 'Léo' }, generateGate: gate })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  let mostPerModel = 0
+  const gen = env.calls.generate
+  const pushGen = gen.push.bind(gen)
+  gen.push = (entry) => {
+    const n = pushGen(entry)
+    mostPerModel = Math.max(mostPerModel, (env.calls.active.get(entry.options.model) ?? 0) + 1)
+    return n
+  }
+  await env.session.startDuel('code', 4, 10)
+  // Les générations attendent : le gardien a le temps de télécharger les autres modèles, qui démarrent à leur tour.
+  await waitFor(() => env.calls.active.size === MODELS.length, 'les 4 modèles tournent ensemble')
+  release()
+  await waitFor(() => seriesDone(env), 'la série a fini de tourner')
+  assert.ok(mostPerModel <= 4, `${mostPerModel} duels à la fois pour un même modèle`)
+  assert.equal(env.session.getDuelView().batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+  assert.equal(env.calls.notInstalled ?? 0, 0)
+  assert.deepEqual([...env.calls.pulls].sort(), [...MODELS].sort())
+  assert.deepEqual([...env.calls.deleted].sort(), [...MODELS].sort())
+})
+
 test('étape 382 : un modèle supprimé n’est plus jamais utilisé après, ni retéléchargé', async () => {
   const order = []
   const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' } })
@@ -1151,7 +1176,7 @@ test('étape 382 : « model not found » — le modèle est retéléchargé et l
 
 test('étape 382 : Jaris fermé en pleine série, puis rouvert — les duels finis attendent le vote, les autres reprennent', async () => {
   const store = newSeriesStore()
-  const first = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' }, seriesStore: store })
+  const first = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, seriesStore: store })
   first.session.setDuelSeriesDelays({ idleCheckMs: 20 })
   const started = await first.session.startDuel('code', 4, 3)
   const total = started.batch.length
@@ -1170,7 +1195,7 @@ test('étape 382 : Jaris fermé en pleine série, puis rouvert — les duels fin
   assert.ok(!saved.rounds.some((r) => r.number === ready.number))
 
   // Nouveau lancement de Jaris, même disque.
-  const second = setup({ category: 'code', vramGb: 80, profile: { name: 'Léo' }, seriesStore: store, installed: [...first.installed] })
+  const second = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, seriesStore: store, installed: [...first.installed] })
   second.session.setDuelSeriesDelays({ idleCheckMs: 20 })
   assert.equal(await second.session.restoreDuelSeries(), true)
   const restored = second.session.getDuelView()

@@ -10244,3 +10244,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sont tirés qu'au lancement). Au passage, le dernier modèle qui a encore des duels affronte tous les modèles qui ont fini,
   pas seulement les 3 derniers : il faut ça quand plusieurs modèles avaient déjà tout fait avant la série. Régression :
   `test-duel.mjs`, `test-duel-session.mjs` (vérifié en ne comptant plus les votes) et `test-duel-panel-ui.mjs`.
+
+- **Étape 385 (v0.40.26), Léo, série sur un pod H200 (140 Go) : `nvidia-smi` montrait 8 Go utilisés, « je veux qu'il
+  tourne le max de modèles ».** La série ne faisait tourner qu'un modèle à la fois, avec 4 duels au plus : elle avait été
+  pensée pour une carte de 8 Go. Elle fait maintenant tourner autant de modèles que la carte en tient
+  (`DUEL_SERIES_MAX_MODELS` = 12), chacun avec jusqu'à 4 duels en même temps (`DUEL_SERIES_SLOTS_PER_MODEL`), via
+  `batchSlotsToStart(…, 'series')` (shared/duel.ts). Mémoire comptée par modèle : poids × 1,3 + 2 Go, + 1 Go par duel de
+  plus sur ce modèle. Le gardien télécharge un modèle de plus tant qu'il tient sur la carte avec ceux déjà là, chacun à
+  4 duels (`seriesRoomForModel`) ; l'ancienne règle « 2 côtés prêts d'avance » reste le minimum. Un modèle déjà à 4 duels
+  laisse passer les suivants de la file. Hors série et sur une petite carte, rien ne change (un seul modèle tient). Côté
+  pod, Ollama doit suivre : `OLLAMA_MAX_LOADED_MODELS=12 OLLAMA_NUM_PARALLEL=4` (sinon il fait attendre ce qu'il ne peut
+  pas prendre). Plus de modèles en même temps = plus de place sur le disque du pod : un disque plein fait attendre la
+  série (étape 383), sans rien perdre. **Leçon : un réglage pensé pour la machine de départ (8 Go) devient un plafond
+  invisible sur une machine bien plus grosse — vérifier l'usage réel (`nvidia-smi`) au premier essai sur du matériel
+  loué.** Le test « Jaris fermé en pleine série » passe sur une carte de 8 Go : sur 80 Go, tout finissait avant la
+  fermeture. Régression : `test-duel.mjs` et `test-duel-session.mjs` (6 modèles ensemble à 4 duels chacun sur 140 Go, au
+  plus 12 modèles, rien de nouveau sur 8 Go ; vérifié en retirant le téléchargement d'avance puis la limite par modèle).
