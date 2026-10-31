@@ -24,8 +24,8 @@
     return document.getElementById(id)
   }
 
-  // Orbe de Jaris : le même dessin que sur le PC (src/components/JarisOrb.tsx) — deux anneaux au bord irrégulier, deux
-  // anneaux fins et un petit noyau en maillage, dont la couleur et la vitesse suivent ce que fait Jaris. Avant, la page
+  // Orbe de Jaris : le même dessin que sur le PC (src/components/JarisOrb.tsx) et que le logo — la courbe ondulée à deux
+  // tours, deux cercles et un petit noyau en maillage, dont la couleur et la vitesse suivent ce que fait Jaris. Avant, la page
   // faisait tourner une image du logo, ce qui ne ressemblait pas au PC. Toutes les orbes partagent une seule boucle
   // d'animation ; une orbe cachée (onglet fermé) n'est pas dessinée.
   var ORB_STYLES = {
@@ -35,7 +35,15 @@
     happy: { color: '#4dffa6', spinSpeed: 0.3, coreSpin: 0.4, pulse: 0.06 }
   }
   var ORB_MINIMAL = 48
-  var ORB_SEGMENTS = 140
+  var ORB_SEGMENTS = 280
+  // Forme exacte du logo : copie de LOGO_LOOP (shared/logoOrb.ts), vérifiée identique par scripts/test-logo-orb.mjs.
+  var ORB_LOGO = {
+    base: 0.7204,
+    terms: [[1, 0.0467, -2.7774], [2, 0.0114, 2.35], [3, 0.0173, 0.8974], [5, 0.0358, 1.8313], [6, 0.0215, 3.0089], [7, 0.0366, -3.0107], [8, 0.0187, -0.6346], [9, 0.0143, -2.8129], [10, 0.0116, -1.0467], [11, 0.0108, -2.4242], [12, 0.0076, 2.8719], [13, 0.0136, 2.6271], [14, 0.0061, -2.3486], [15, 0.0212, 0.1378], [19, 0.0135, -1.9902], [21, 0.0107, -0.7244], [23, 0.0055, -0.7461]],
+    circles: [0.515, 0.395],
+    core: 0.152,
+    stroke: 0.034
+  }
   var ORB_CORE = (function () {
     var points = []
     var golden = Math.PI * (3 - Math.sqrt(5))
@@ -76,21 +84,18 @@
   var orbLast = 0
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  function orbHarmonics(count) {
-    var list = []
-    for (var i = 0; i < count; i++) list.push({ freq: 3 + Math.floor(Math.random() * 6), amp: 0.02 + Math.random() * 0.045, phase: Math.random() * Math.PI * 2 })
-    return list
-  }
-
-  function orbRing(ctx, base, max, harmonics, rotation, color, alpha) {
+  function orbLoopPath(ctx, scale, breathe, max, rotation, color, alpha) {
     ctx.beginPath()
     for (var i = 0; i <= ORB_SEGMENTS; i++) {
-      var angle = (i / ORB_SEGMENTS) * Math.PI * 2
-      var r = base
-      for (var h = 0; h < harmonics.length; h++) r += base * harmonics[h].amp * Math.sin(angle * harmonics[h].freq + harmonics[h].phase + rotation)
-      r = Math.min(r, max)
-      var x = Math.cos(angle + rotation) * r
-      var y = Math.sin(angle + rotation) * r
+      var theta = (i / ORB_SEGMENTS) * Math.PI * 4
+      var offset = 0
+      for (var t = 0; t < ORB_LOGO.terms.length; t++) {
+        var term = ORB_LOGO.terms[t]
+        offset += term[1] * Math.sin((term[0] * theta) / 2 + term[2])
+      }
+      var r = Math.min(scale * (ORB_LOGO.base * breathe + offset), max)
+      var x = Math.cos(theta + rotation) * r
+      var y = Math.sin(theta + rotation) * r
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
@@ -106,7 +111,6 @@
     ctx.arc(0, 0, radius, 0, Math.PI * 2)
     ctx.strokeStyle = color
     ctx.globalAlpha = alpha
-    ctx.lineWidth = 1
     ctx.stroke()
     ctx.globalAlpha = 1
   }
@@ -156,27 +160,18 @@
     ctx.translate(center, center)
     ctx.globalCompositeOperation = 'lighter'
     ctx.shadowColor = color
-    if (size < ORB_MINIMAL) {
-      // Petite orbe : un seul anneau irrégulier, qui respire et tourne plus fort (comme le widget replié du PC).
-      ctx.shadowBlur = 5
-      ctx.lineWidth = 1.4
-      orbRing(ctx, center * 0.62 * (1 + Math.sin(time * 0.0015) * style.pulse * 4), center * 0.92, orb.outer, orb.angle * 2.5, color, 0.9)
-      // Le cercle et le noyau du milieu, agrandis et plus marqués : à la taille du grand rendu, ils feraient
-      // 2 pixels et disparaîtraient (Léo : « pourquoi il n'y a pas de cercle au milieu »).
-      orbCircle(ctx, center * 0.36, color, 0.55)
-      orbCore(ctx, center * 0.2, orb.coreAngle * 1.5, color, 0.9)
-    } else {
-      var breathe = 1 + Math.sin(time * 0.0015) * style.pulse
-      ctx.shadowBlur = 8
-      ctx.lineWidth = 1.6
-      orbRing(ctx, center * 0.68 * breathe, center * 0.9, orb.outer, orb.angle, color, 0.85)
-      orbRing(ctx, center * 0.6 * breathe, center * 0.9, orb.inner, -orb.angle * 0.55, color, 0.45)
-      ctx.shadowBlur = 5
-      orbCircle(ctx, center * 0.46, color, 0.3)
-      orbCircle(ctx, center * 0.35, color, 0.2)
-      ctx.shadowBlur = 7
-      orbCore(ctx, center * 0.14, orb.coreAngle, color)
-    }
+    // Même dessin que le logo à toutes les tailles ; en petit, trait d'au moins 1 px et mouvement plus ample.
+    var minimal = size < ORB_MINIMAL
+    var breathe = 1 + Math.sin(time * 0.0015) * style.pulse * (minimal ? 2 : 1)
+    var stroke = Math.max(minimal ? 1 : 1.4, center * ORB_LOGO.stroke)
+    ctx.shadowBlur = Math.max(4, center * 0.07)
+    ctx.lineWidth = stroke
+    orbLoopPath(ctx, center, breathe, center * 0.93 - stroke / 2, orb.angle * (minimal ? 2.5 : 1), color, 0.92)
+    ctx.shadowBlur = Math.max(3, center * 0.05)
+    ORB_LOGO.circles.forEach(function (radius) {
+      orbCircle(ctx, center * radius, color, 0.82)
+    })
+    orbCore(ctx, center * ORB_LOGO.core, orb.coreAngle * (minimal ? 1.5 : 1), color, Math.max(minimal ? 0.8 : 0.6, center * 0.008))
     ctx.restore()
   }
 
@@ -194,7 +189,7 @@
 
   /** Transforme un <canvas> en orbe de Jaris. Avec « réduire les animations », elle est dessinée une fois, immobile. */
   function makeOrb(canvas, emotion) {
-    var orb = { canvas: canvas, emotion: emotion || 'idle', angle: 0, coreAngle: 0, outer: orbHarmonics(4), inner: orbHarmonics(3) }
+    var orb = { canvas: canvas, emotion: emotion || 'idle', angle: 0, coreAngle: 0 }
     canvas.jarisOrb = orb
     canvas.setAttribute('data-emotion', orb.emotion)
     orbs.push(orb)

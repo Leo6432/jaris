@@ -10420,3 +10420,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-phone-page-ui.mjs` (centre de la petite orbe dessiné ; échoue sans le cercle et le noyau)
   et `scripts/test-window-chrome-ui.mjs` (orbe animée dans la barre d'icônes, orange pendant une réponse du Chat puis
   au repos ; échoue quand le Chat ne signale plus rien).
+
+- **Étape 393 (v0.40.34), Léo (capture des petites orbes) : « c'est un peu au hasard les cercles, fais en sorte que ce
+  soit pareil que le logo ».** Chaque orbe tirait AU HASARD le bord de ses anneaux au montage (`randomHarmonics`) :
+  aucune ne ressemblait au logo, et deux orbes à l'écran ne se ressemblaient même pas. La forme est maintenant MESURÉE
+  sur le logo lui-même (`assets/jaris-logo.png`) et fixée dans `shared/logoOrb.ts` : rayon relevé tous les 0,25°,
+  décomposé en série de Fourier (17 termes). **Découverte en le mesurant** : les deux « anneaux » ondulés du logo sont
+  UNE seule courbe qui fait deux tours (en la suivant, on ne revient au départ qu'après 4π) — un premier essai qui les
+  traitait comme deux anneaux séparés ne suivait pas le trait. Cercles (0,515 et 0,395) et noyau (0,152) aux mêmes
+  proportions, trait épais comme le logo. Même dessin à toutes les tailles (seuls un trait d'au moins 1 px et un
+  mouvement plus ample changent en petit), sur le PC (`JarisOrb.tsx`) et sur le téléphone (`phone/app.js`, copie
+  vérifiée identique ; cache `jaris-page-v7`). La couleur selon l'activité (étape 392) est inchangée. **Leçon : pour
+  reproduire un dessin existant, le mesurer et superposer le résultat au dessin d'origine — l'œil voit « deux anneaux »
+  là où il n'y a qu'une courbe.** Régression : `node --test scripts/test-logo-orb.mjs` (plus de 95 % des points de la
+  courbe sur le trait du VRAI logo, cercles et noyau à leur place, plus aucun tirage au hasard, copie du téléphone
+  identique ; vérifié avec une forme décalée : 663/1440 points seulement, le test échoue).

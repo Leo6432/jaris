@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
+import { LOGO_LOOP, logoLoopOffset } from '../../shared/logoOrb'
 
 interface JarisOrbProps {
   emotion: JarisEmotion
@@ -79,45 +80,23 @@ const CORE_EDGES = buildMeshEdges(CORE_POINTS, 3)
 const CORE_TILT = 0.5
 
 /**
- * Sous ce seuil (widget "notch" replié, étape 68 : 24px), le rendu détaillé ci-dessous (2 anneaux déchiquetés
- * + noyau filaire, pensé pour 160-320px) devient un petit amas confus plutôt qu'un vrai logo — signalé par
- * Léo en usage réel ("on a un logo de jaris mais en tout petit, règle ça"). Un premier remplacement par un
- * simple point plein rejeté aussi par Léo ("fait pas la forme ronde, fait la forme de jarvis comme sur
- * l'accueil") : la vraie signature visuelle de Jaris n'est pas "un cercle", c'est un anneau au bord IRRÉGULIER
- * (voir drawJaggedRing plus haut — la déchiqueté vient des harmoniques, pas un cercle lisse comme
- * drawGlassRing). En dessous de ce seuil, `draw()` réutilise donc drawJaggedRing tel quel, juste UN SEUL
- * anneau (pas deux + le noyau maillé) pour rester lisible à cette taille.
+ * Sous ce seuil (widget replié, barre d'icônes, barre de titre : 20 à 32 px), même dessin que le logo, mais avec un trait
+ * d'au moins 1 px et un mouvement plus ample pour rester lisible et vivant (voir draw()).
  */
 const MINIMAL_SIZE_THRESHOLD = 48
 
-interface RingHarmonic {
-  freq: number
-  amp: number
-  phase: number
-}
-
-/** Quelques harmoniques fixes (tirées une fois au montage) donnent au contour son aspect "déchiré" irrégulier, sans jamais changer de forme de base. */
-function randomHarmonics(count: number): RingHarmonic[] {
-  return Array.from({ length: count }, () => ({
-    freq: 3 + Math.floor(Math.random() * 6),
-    amp: 0.02 + Math.random() * 0.045,
-    phase: Math.random() * Math.PI * 2
-  }))
-}
-
-const RING_SEGMENTS = 140
+const LOOP_SEGMENTS = 280
 
 /**
- * Anneau au contour irrégulier façon hologramme : rayon perturbé par des harmoniques fixes, plus un
- * tremblement proportionnel au niveau audio (vibre quand Jaris parle). `maxRadius` borne le résultat
- * (jamais au-delà du bord du canvas) : la respiration + les harmoniques + le tremblement peuvent sinon
- * se cumuler et faire dépasser le rayon de base de 30% et plus, ce qui coupait le contour à l'écran.
+ * La courbe ondulée du logo (shared/logoOrb.ts) : une seule courbe qui fait deux tours, d'où les deux « anneaux » qui se
+ * croisent. `scale` = rayon pour 1 (le demi-côté du canvas), `breathe` gonfle la courbe, un tremblement suit le niveau
+ * audio (elle vibre quand Jaris parle). `maxRadius` borne le résultat pour que la lueur ne soit jamais coupée par le bord.
  */
-function drawJaggedRing(
+function drawLogoLoop(
   ctx: CanvasRenderingContext2D,
-  baseRadius: number,
+  scale: number,
+  breathe: number,
   maxRadius: number,
-  harmonics: RingHarmonic[],
   rotation: number,
   color: string,
   alpha: number,
@@ -125,16 +104,13 @@ function drawJaggedRing(
   time: number
 ): void {
   ctx.beginPath()
-  for (let i = 0; i <= RING_SEGMENTS; i++) {
-    const angle = (i / RING_SEGMENTS) * Math.PI * 2
-    let r = baseRadius
-    for (const h of harmonics) {
-      r += baseRadius * h.amp * Math.sin(angle * h.freq + h.phase + rotation)
-    }
-    r += baseRadius * jitter * 0.06 * Math.sin(angle * 19 + time * 0.006)
+  for (let i = 0; i <= LOOP_SEGMENTS; i++) {
+    const theta = (i / LOOP_SEGMENTS) * Math.PI * 4
+    let r = scale * (LOGO_LOOP.base * breathe + logoLoopOffset(theta))
+    r += scale * jitter * 0.04 * Math.sin(theta * 19 + time * 0.006)
     r = Math.min(r, maxRadius)
-    const x = Math.cos(angle + rotation) * r
-    const y = Math.sin(angle + rotation) * r
+    const x = Math.cos(theta + rotation) * r
+    const y = Math.sin(theta + rotation) * r
     if (i === 0) ctx.moveTo(x, y)
     else ctx.lineTo(x, y)
   }
@@ -150,7 +126,6 @@ function drawGlassRing(ctx: CanvasRenderingContext2D, radius: number, color: str
   ctx.arc(0, 0, radius, 0, Math.PI * 2)
   ctx.strokeStyle = color
   ctx.globalAlpha = alpha
-  ctx.lineWidth = 1
   ctx.stroke()
   ctx.globalAlpha = 1
 }
@@ -246,7 +221,6 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
   const audioBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const angleRef = useRef(0)
   const coreAngleRef = useRef(0)
-  const harmonicsRef = useRef({ outer: randomHarmonics(4), inner: randomHarmonics(3) })
 
   useEffect(() => {
     emotionRef.current = emotion
@@ -292,72 +266,34 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
       angleRef.current += style.spinSpeed * dt
       coreAngleRef.current += style.coreSpin * dt
 
-      const breathe = 1 + Math.sin(time * 0.0015) * style.pulse + level * 0.08
-
       ctx.clearRect(0, 0, size, size)
       ctx.save()
       ctx.translate(center, center)
       ctx.globalCompositeOperation = 'lighter'
 
-      if (size < MINIMAL_SIZE_THRESHOLD) {
-        // Un seul anneau déchiqueté (pas deux + le noyau maillé, voir le grand rendu ci-dessous) : garde la
-        // vraie signature visuelle de Jaris (bord irrégulier via les harmoniques, pas un cercle lisse) à une
-        // taille où le détail complet deviendrait juste du bruit.
-        //
-        // Respiration/rotation AMPLIFIÉES rien que pour ce rendu minimal (jamais touché à EMOTION_STYLES
-        // lui-même, partagé avec le grand orbe) : Léo en usage réel, "le cercle au milieu ne bouge pas" — le
-        // réglage 'idle' d'origine (pulse 0.02, spinSpeed 0.05) est réglé pour un anneau de 160-320px, où même
-        // un mouvement relatif discret reste visible ; sur un anneau de 32px ce même mouvement devient
-        // quasi imperceptible en valeur absolue. Multiplié ici seulement, pas dans la table partagée.
-        const minimalBreathe = 1 + Math.sin(time * 0.0015) * style.pulse * 4 + level * 0.08
-        const minimalRotation = angleRef.current * 2.5
-        ctx.shadowColor = color
-        ctx.shadowBlur = 5 + level * 6
-        ctx.lineWidth = 1.4
-        drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, color, 0.9, level, time)
-        // Étape 392 (Léo : « pourquoi il n'y a pas de cercle au milieu, il n'y a qu'un seul cercle ») : le cercle
-        // et le noyau du centre reviennent, agrandis et plus marqués qu'en grand (à l'échelle du grand rendu, ils
-        // feraient 2 pixels et disparaîtraient). Même dessin sur la page du téléphone (phone/app.js).
-        drawGlassRing(ctx, center * 0.36, color, 0.55)
-        drawCore(ctx, center * 0.2 * (1 + level * 0.2), coreAngleRef.current * 1.5, color, 0.9)
-      } else {
-        // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
-        // de s'estomper avant d'être coupé net par les bords du canvas.
-        const maxRingRadius = center * 0.9
+      // Étape 393 (Léo : « fais en sorte que ce soit pareil que le logo ») : même dessin que le logo à toutes les tailles
+      // — la courbe ondulée à deux tours, les deux cercles lisses et le noyau maillé, aux proportions mesurées sur le
+      // logo (shared/logoOrb.ts). Seuls l'épaisseur minimale du trait et l'ampleur du mouvement changent en petit.
+      const minimal = size < MINIMAL_SIZE_THRESHOLD
+      // En petit, respiration et rotation amplifiées : le réglage de EMOTION_STYLES est pensé pour 160-320 px, où un
+      // mouvement discret reste visible ; sur 30 px, le même mouvement devient imperceptible (Léo : « ça ne bouge pas »).
+      const breathe = minimal
+        ? 1 + Math.sin(time * 0.0015) * style.pulse * 2 + level * 0.06
+        : 1 + Math.sin(time * 0.0015) * style.pulse + level * 0.06
+      const rotation = angleRef.current * (minimal ? 2.5 : 1)
+      const stroke = Math.max(minimal ? 1 : 1.4, center * LOGO_LOOP.stroke)
 
-        ctx.shadowColor = color
-        ctx.shadowBlur = 8 + level * 10
-        ctx.lineWidth = 1.6
-        drawJaggedRing(
-          ctx,
-          center * 0.68 * breathe,
-          maxRingRadius,
-          harmonicsRef.current.outer,
-          angleRef.current,
-          color,
-          0.85,
-          level,
-          time
-        )
-        drawJaggedRing(
-          ctx,
-          center * 0.6 * breathe,
-          maxRingRadius,
-          harmonicsRef.current.inner,
-          -angleRef.current * 0.55,
-          color,
-          0.45,
-          level,
-          time
-        )
+      ctx.shadowColor = color
+      ctx.shadowBlur = Math.max(4, center * 0.07) + level * 8
+      ctx.lineWidth = stroke
+      // Marge sous le bord réel du canvas pour que la lueur ait la place de s'estomper avant le bord.
+      drawLogoLoop(ctx, center, breathe, center * 0.93 - stroke / 2, rotation, color, 0.92, level, time)
 
-        ctx.shadowBlur = 5
-        drawGlassRing(ctx, center * 0.46, color, 0.3)
-        drawGlassRing(ctx, center * 0.35, color, 0.2)
+      ctx.shadowBlur = Math.max(3, center * 0.05)
+      for (const radius of LOGO_LOOP.circles) drawGlassRing(ctx, center * radius, color, 0.82)
 
-        ctx.shadowBlur = 7 + level * 8
-        drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, color)
-      }
+      ctx.shadowBlur = Math.max(3, center * 0.05) + level * 6
+      drawCore(ctx, center * LOGO_LOOP.core * (1 + level * 0.2), coreAngleRef.current * (minimal ? 1.5 : 1), color, Math.max(minimal ? 0.8 : 0.6, center * 0.008))
 
       ctx.restore()
       frameId = requestAnimationFrame(draw)
