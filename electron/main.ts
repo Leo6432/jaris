@@ -147,7 +147,8 @@ import {
 import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
-import { createAppIcon, createTrayIcon } from './services/trayIcon'
+import { appIconFor, createAppIcon, createTrayIcon, trayIconFor } from './services/trayIcon'
+import { isOrbEmotion, type OrbEmotion } from '../shared/emotionColors'
 import { languageState, loadLanguageSetting, saveLanguageSetting } from './services/language'
 import { t } from '../shared/i18n'
 import type { LanguageSetting } from '../shared/i18n/languages'
@@ -1874,6 +1875,20 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
     setLaunchAtStartup(app, process.platform, enabled)
   )
+  // Étape 394 : l'icône de la barre des tâches et celle près de l'horloge prennent la couleur de ce que fait Jaris.
+  // Seule la grande fenêtre l'envoie (elle seule connaît Chat, Code, Image, Vidéo et Duel, en plus de la voix).
+  let iconEmotion: OrbEmotion = 'idle'
+  ipcMain.on(IPC_CHANNELS.setShownEmotion, (event, emotion: unknown) => {
+    if (!fullWindow || fullWindow.isDestroyed() || event.sender !== fullWindow.webContents) return
+    if (!isOrbEmotion(emotion) || emotion === iconEmotion) return
+    iconEmotion = emotion
+    try {
+      fullWindow.setIcon(appIconFor(emotion))
+      tray?.setImage(trayIconFor(emotion))
+    } catch (err) {
+      console.error('[icon] changement de couleur impossible :', err)
+    }
+  })
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
     applyListeningForActiveMode()

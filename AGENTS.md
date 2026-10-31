@@ -10399,3 +10399,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Premier envoi refusé par la CI Windows : le test cherchait la fin du littéral de phone/app.js par `'\n  }\n'`,
   absent d'un fichier en CRLF. Normalisé (`replace(/\r\n/g, '\n')`), vérifié sur une copie CRLF (échoue avant, passe
   après). Troisième fois ce piège : tout test qui découpe un fichier source normalise d'abord ses fins de ligne.
+
+- **Étape 394 (v0.40.35), Léo : « remets comme d'habitude, je ne veux pas que tu changes la couleur et l'épaisseur »,
+  puis aussitôt « non en fait ça va, mais tu peux enlever ça [l'orbe en haut de la barre d'icônes], et c'est pas possible
+  que le logo en bas de Jaris change aussi de couleur ? ».** L'orbe de l'étape 393 reste telle quelle. L'orbe en haut de
+  la barre d'icônes est retirée (celle de la barre de titre reste). L'icône de la barre des tâches (`fullWindow.setIcon`)
+  et celle près de l'horloge (`tray.setImage`) prennent maintenant la couleur de l'orbe : la grande fenêtre envoie
+  l'émotion affichée (`setShownEmotion`, même `shownEmotion` que l'orbe : voix d'abord, sinon Chat/Code/Image/Vidéo/Duel),
+  le main n'accepte que la grande fenêtre et une émotion connue. Au repos, les icônes d'origine (.ico réduit proprement,
+  étape 224) ; sinon le logo recoloré (`tintPixels`, shared/emotionColors.ts : même transparence et même intensité,
+  seule la teinte change), une représentation par échelle d'affichage, gardée en cache. Une seule table de couleurs
+  pour l'orbe et les icônes (`EMOTION_COLORS`). Vérifié dans le vrai Electron (toBitmap en B-V-R-A sous Linux : logo
+  orange correct). **Non vérifié sous Windows** : si Jaris est épinglé à la barre des tâches, Windows peut garder l'icône
+  du raccourci au lieu de celle de la fenêtre. Régression : `node --test scripts/test-taskbar-icon-color.mjs
+  scripts/test-window-chrome-ui.mjs`.

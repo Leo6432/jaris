@@ -156,6 +156,14 @@ export default function App(): JSX.Element {
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
 
+  // Étape 394 : l'icône de la barre des tâches et celle près de l'horloge prennent la même couleur que l'orbe (seule la
+  // grande fenêtre est écoutée par le main : le widget ne connaît pas Chat, Code, Image, Vidéo ni Duel).
+  const activity = useJarisStore((state) => state.activity)
+  const iconEmotion = shownEmotion(emotion, activity)
+  useEffect(() => {
+    window.jaris.setShownEmotion?.(iconEmotion)
+  }, [iconEmotion])
+
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
@@ -631,7 +639,6 @@ export default function App(): JSX.Element {
               barre ») : deux colonnes. La barre d'icônes (modes en haut, outils en bas) ne change jamais ; la
               colonne de liste à côté se replie à la demande et garde la même place sur tous les écrans. */}
           <nav className="app-rail" aria-label={t('app.rail.label')}>
-            <LiveOrb className="app-rail__logo" size={30} />
             <div className="app-rail__group">
               {MODES.map(({ id, label, title, icon }) => (
                 <RailButton

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
 import { LOGO_LOOP, logoLoopOffset } from '../../shared/logoOrb'
+import { EMOTION_COLORS } from '../../shared/emotionColors'
 
 interface JarisOrbProps {
   emotion: JarisEmotion
@@ -25,11 +26,11 @@ interface EmotionStyle {
 }
 
 const EMOTION_STYLES: Record<JarisEmotion, EmotionStyle> = {
-  idle: { color: '#33e6c8', spinSpeed: 0.05, coreSpin: 0.12, pulse: 0.02 },
-  listening: { color: '#37e2ff', spinSpeed: 0.22, coreSpin: 0.3, pulse: 0.045 },
-  thinking: { color: '#ffb648', spinSpeed: 0.85, coreSpin: 0.7, pulse: 0.07 },
-  happy: { color: '#4dffa6', spinSpeed: 0.3, coreSpin: 0.4, pulse: 0.06 },
-  surprised: { color: '#ff5d7a', spinSpeed: 1.3, coreSpin: 1.1, pulse: 0.12 }
+  idle: { color: EMOTION_COLORS.idle, spinSpeed: 0.05, coreSpin: 0.12, pulse: 0.02 },
+  listening: { color: EMOTION_COLORS.listening, spinSpeed: 0.22, coreSpin: 0.3, pulse: 0.045 },
+  thinking: { color: EMOTION_COLORS.thinking, spinSpeed: 0.85, coreSpin: 0.7, pulse: 0.07 },
+  happy: { color: EMOTION_COLORS.happy, spinSpeed: 0.3, coreSpin: 0.4, pulse: 0.06 },
+  surprised: { color: EMOTION_COLORS.surprised, spinSpeed: 1.3, coreSpin: 1.1, pulse: 0.12 }
 }
 
 type Vec3 = [number, number, number]

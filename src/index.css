@@ -6330,15 +6330,6 @@ select {
   background: var(--jv-rail);
 }
 
-.app-rail__logo {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  margin: 2px 0 8px;
-}
-
 .app-rail__group {
   display: flex;
   flex-direction: column;

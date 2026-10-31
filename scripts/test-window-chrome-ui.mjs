@@ -42,6 +42,7 @@ const known = {
   getRuntimeSetupStatus: async () => (flags.runtime ? { ready: false, missing: ['Python'] } : { ready: true, missing: [] }),
   getSetupStatus: async () => ({ ready: true, missing: [] }),
   getWindowChrome: async () => ({ titleBar: true }),
+  setShownEmotion: (emotion) => { (window.__shownEmotions ||= []).push(emotion) },
   getWidgetMode: async () => 'voice',
   getNewModels: async () => [],
   getAppVersion: async () => '0.0.0',
@@ -314,19 +315,24 @@ test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
 })
 
-test("étape 392 : l'orbe de la barre d'icônes est animée et prend la couleur de ce que fait Jaris", options, async () => {
+test("étape 392 : l'orbe de la barre de titre est animée et prend la couleur de ce que fait Jaris", options, async () => {
   // Léo : « dès qu'il y a l'orbe, tu fais ça n'importe où » (orange quand Jaris réfléchit, comme sur le téléphone).
+  // Étape 394 (« tu peux enlever ça ») : plus d'orbe en haut de la barre d'icônes, celle de la barre de titre reste.
   await withPage(async (page) => {
     await page.waitForSelector('.rail__item')
     await page.click('.rail__item:has-text("Chat")')
-    const orb = '.app-rail__logo'
+    assert.equal(await page.locator('.app-rail .jaris-orb, .app-rail img').count(), 0, 'plus de logo dans la barre d’icônes')
+    const orb = '.titlebar__logo'
     await page.waitForSelector(`${orb} canvas`)
-    assert.equal(await page.$('img.app-rail__logo'), null, 'plus de logo fixe dans la barre d’icônes')
+    // Étape 394 : la même couleur part vers l'icône de la barre des tâches.
+    await page.waitForFunction(() => window.__shownEmotions?.at(-1) === 'idle', null, { timeout: 5000 })
     assert.equal(await page.getAttribute(orb, 'data-emotion'), 'idle')
     await page.fill('.composer__input', 'Bonjour')
     await page.keyboard.press('Enter')
     await page.waitForFunction((sel) => document.querySelector(sel).dataset.emotion === 'thinking', orb, { timeout: 5000 })
+    await page.waitForFunction(() => window.__shownEmotions.at(-1) === 'thinking', null, { timeout: 5000 })
     await page.evaluate(() => window.__finishChat())
+    await page.waitForFunction(() => window.__shownEmotions.at(-1) === 'idle', null, { timeout: 5000 })
     await page.waitForFunction((sel) => document.querySelector(sel).dataset.emotion === 'idle', orb, { timeout: 5000 })
     // Le canvas est vraiment dessiné (pas un cadre vide).
     const lit = await page.evaluate((sel) => {

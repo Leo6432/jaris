@@ -300,6 +300,7 @@ const api = {
   duelBatchClose: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelBatchClose),
   onDuelChanged: (cb: (view: DuelSessionView | null) => void) => subscribe(IPC_CHANNELS.duelChanged, cb),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
+  setShownEmotion: (emotion: string): void => ipcRenderer.send(IPC_CHANNELS.setShownEmotion, emotion),
   getWindowChrome: (): Promise<WindowChrome> => invoke(IPC_CHANNELS.getWindowChrome),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => invoke(IPC_CHANNELS.getLaunchAtStartup),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>

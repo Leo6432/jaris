@@ -3,6 +3,7 @@ import { join } from 'path'
 import frame from '../../assets/icon-frame.json'
 import logoPath from '../../assets/jaris-logo.png?asset'
 import { resourcesRoot } from '../paths'
+import { EMOTION_COLORS, tintPixels, type OrbEmotion } from '../../shared/emotionColors'
 
 /**
  * Le même logo transparent pour la fenêtre et l’icône près de l’horloge.
@@ -31,4 +32,38 @@ export function createTrayIcon(): NativeImage {
     if (!icon.isEmpty()) return icon
   }
   return createAppIcon().resize({ width: 32, height: 32, quality: 'best' })
+}
+
+/**
+ * Étape 394 (Léo : « c'est pas possible que le logo en bas de Jaris change aussi de couleur ? ») : l'icône de la barre
+ * des tâches et celle près de l'horloge prennent la couleur de ce que fait Jaris, comme l'orbe animée. Au repos, ce sont
+ * les icônes d'origine (createAppIcon/createTrayIcon, réduites proprement à l'étape 224) ; dans les autres états, le logo
+ * recoloré, réduit par Electron à chaque taille utile (une représentation par échelle d'affichage), gardé en cache.
+ */
+const SCALES = [1, 1.25, 1.5, 2]
+const tintedCache = new Map<string, NativeImage>()
+
+function tintedLogo(color: string, baseSize: number): NativeImage {
+  const key = `${color}:${baseSize}`
+  const cached = tintedCache.get(key)
+  if (cached) return cached
+  const logo = nativeImage.createFromPath(logoPath).crop({ x: frame.left, y: frame.top, width: frame.width, height: frame.height })
+  const image = nativeImage.createEmpty()
+  for (const scaleFactor of SCALES) {
+    const size = Math.round(baseSize * scaleFactor)
+    const small = logo.resize({ width: size, height: size, quality: 'best' })
+    // toBitmap() rend les pixels dans l'ordre B-V-R-A sous Windows et Linux (format natif de Skia).
+    const buffer = Buffer.from(tintPixels(small.toBitmap(), color, process.platform !== 'darwin'))
+    image.addRepresentation({ scaleFactor, width: size, height: size, buffer })
+  }
+  tintedCache.set(key, image)
+  return image
+}
+
+export function appIconFor(emotion: OrbEmotion): NativeImage {
+  return emotion === 'idle' ? createAppIcon() : tintedLogo(EMOTION_COLORS[emotion], 32)
+}
+
+export function trayIconFor(emotion: OrbEmotion): NativeImage {
+  return emotion === 'idle' ? createTrayIcon() : tintedLogo(EMOTION_COLORS[emotion], 16)
 }

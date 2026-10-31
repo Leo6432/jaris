@@ -248,6 +248,7 @@ declare global {
       duelBatchClose: () => Promise<DuelSessionView>
       onDuelChanged: (cb: (view: DuelSessionView | null) => void) => () => void
       setOptionsOpen: (open: boolean) => void
+      setShownEmotion: (emotion: string) => void
       getWindowChrome: () => Promise<WindowChrome>
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
       setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>

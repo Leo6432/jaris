@@ -1506,6 +1506,7 @@ export const IPC_CHANNELS = {
    * dialogue natif (`dialogOpen`) ou une fermeture volontaire (`quitting`).
    */
   setOptionsOpen: 'jaris:set-options-open',
+  setShownEmotion: 'jaris:set-shown-emotion',
   /** renderer <-> main : habillage Windows 11 de la fenêtre principale (WindowChrome). */
   getWindowChrome: 'jaris:get-window-chrome',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
