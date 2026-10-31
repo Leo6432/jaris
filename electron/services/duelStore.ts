@@ -2,7 +2,7 @@ import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { UNREADABLE_DATA_DIR, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
-import { parseDuelVotes, type DuelVote } from '../../shared/duel'
+import { parseDuelReviews, parseDuelVotes, type DuelReview, type DuelVote } from '../../shared/duel'
 
 /**
  * Étape 355 : les votes des duels, une liste dans le dossier de données de Léo (OWNED_ENTRIES : ils suivent
@@ -147,6 +147,69 @@ export function deleteDuelVotes(which: readonly string[] | 'all'): Promise<numbe
       }
     }
     return gone.length
+  })
+}
+
+/**
+ * Étape 399 : les votes proposés par Claude, en attente de Léo (valider ou refuser, façon Tinder). Ils ne comptent nulle
+ * part tant qu'ils ne sont pas validés. Gardés sur le disque : une nuit de duels ne se perd pas si Jaris est fermé.
+ */
+const reviewPath = join(getDataRoot(), 'duel-judge-review.json')
+let reviews: DuelReview[] = []
+
+export async function loadDuelReviews(): Promise<readonly DuelReview[]> {
+  try {
+    const read = await readJsonDataFile(reviewPath, parseDuelReviews, unreadableDir, 'duel-judge-review')
+    reviews = read.status === 'ok' ? read.value : []
+  } catch (err) {
+    console.error('[jaris] Votes de Claude à vérifier illisibles pour l’instant :', err)
+  }
+  return reviews
+}
+
+/** Les votes proposés par Claude, du plus ancien au plus récent. */
+export function getDuelReviews(): readonly DuelReview[] {
+  return reviews
+}
+
+async function readReviews(): Promise<DuelReview[]> {
+  const read = await readJsonDataFile(reviewPath, parseDuelReviews, unreadableDir, 'duel-judge-review')
+  return read.status === 'ok' ? read.value : []
+}
+
+export function addDuelReview(review: DuelReview): Promise<void> {
+  return exclusive(async () => {
+    const list = await readReviews()
+    if (!list.some((r) => r.id === review.id)) list.push(review)
+    await writeFileAtomic(reviewPath, JSON.stringify(list, null, 2))
+    reviews = list
+  })
+}
+
+/**
+ * Léo décide d'un vote proposé par Claude : validé, il devient un vote ordinaire (marqué `judge`, avec ses réponses) ;
+ * refusé, il disparaît. Le vote est ajouté AVANT d'être retiré de la liste d'attente : une coupure entre les deux le
+ * laisse au pire à revoir, jamais perdu. Renvoie `false` pour un identifiant inconnu (déjà décidé).
+ */
+export function decideDuelReview(id: string, accept: boolean): Promise<boolean> {
+  return exclusive(async () => {
+    const list = await readReviews()
+    const review = list.find((r) => r.id === id)
+    if (!review) return false
+    if (accept) {
+      const votes = await readVotes()
+      if (!votes.some((v) => v.id === review.id)) {
+        const { reason: _reason, ...vote } = review
+        votes.push(vote)
+        await writeFileAtomic(storePath, JSON.stringify(votes, null, 2))
+        cache = notDeleted(votes, deleted)
+        loaded = true
+      }
+    }
+    const rest = list.filter((r) => r.id !== id)
+    await writeFileAtomic(reviewPath, JSON.stringify(rest, null, 2))
+    reviews = rest
+    return true
   })
 }
 

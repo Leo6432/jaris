@@ -71,14 +71,18 @@ import {
   setLocalSpeedResolver,
   detectGpu
 } from './services/hardwareScan'
-import { buildDuelVotesExport, defaultDuelExportName, getRankingVotes, loadDuelVotes, loadSharedDuelVotes } from './services/duelStore'
+import { buildDuelVotesExport, defaultDuelExportName, getRankingVotes, loadDuelReviews, loadDuelVotes, loadSharedDuelVotes } from './services/duelStore'
+import { claudeKeyStatus, cleanClaudeKey, clearClaudeKey, saveClaudeKey } from './services/claudeKey'
+import { checkClaudeKey } from './services/duelJudge'
 import {
   abortDuel,
   askDuel,
   closeDuel,
   deleteDuelModels,
   duelAudio,
+  decideDuelReviewFromScreen,
   deleteDuelHistory,
+  duelReviews,
   duelHistory,
   duelHistoryApp,
   duelHistoryCode,
@@ -1770,6 +1774,7 @@ app.whenReady().then(async () => {
     }
   })
   void loadDuelVotes()
+  void loadDuelReviews()
   // Étape 382 : une série de duels interrompue (Windows redémarré, Jaris fermé) reprend là où elle s'était arrêtée.
   void restoreDuelSeries().catch((err) => console.error('[jaris] Série de duels non reprise :', err))
   void loadSharedDuelVotes(join(resourcesRoot(), 'scripts', 'shared-duel-votes.json'))
@@ -1779,20 +1784,39 @@ app.whenReady().then(async () => {
     return value
   }
   ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
-  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown, judged: unknown) => {
     // Étape 382 : une série de duels Code — le nombre de duels par modèle (revérifié par startDuel).
     if (series !== undefined && series !== null && !isDuelSeriesCount(series)) throw new Error(t('duel.error.badRequest'))
+    // Étape 399 : duels Conversation jugés par Claude — le nombre de duels par modèle (revérifié par startDuel).
+    if (judged !== undefined && judged !== null && !isDuelSeriesCount(judged)) throw new Error(t('duel.error.badRequest'))
     const perModel = typeof series === 'number' ? series : undefined
+    const judgePerModel = typeof judged === 'number' ? judged : undefined
     // Un nombre (modèles au hasard) ou, étape 363, la liste des modèles choisis à la main — revérifiée par startDuel.
     if (Array.isArray(pick)) {
       if (pick.length > 200 || !pick.every((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)) {
         throw new Error(t('duel.error.badRequest'))
       }
-      return startDuel(duelCategory(category), pick as string[], perModel)
+      return startDuel(duelCategory(category), pick as string[], perModel, judgePerModel)
     }
     if (typeof pick !== 'number' || !Number.isInteger(pick) || pick < 2 || pick > 6) throw new Error(t('duel.error.badRequest'))
-    return startDuel(duelCategory(category), pick, perModel)
+    return startDuel(duelCategory(category), pick, perModel, judgePerModel)
   })
+  // Étape 399 : la clé API Claude (jamais renvoyée à l'écran : seulement « enregistrée » et ses 4 derniers caractères).
+  ipcMain.handle(IPC_CHANNELS.claudeKeyStatus, () => claudeKeyStatus())
+  ipcMain.handle(IPC_CHANNELS.claudeKeySave, async (_event, value: unknown) => {
+    const key = cleanClaudeKey(value)
+    if (!key) throw new Error(t('judge.error.keyFormat'))
+    const problem = await checkClaudeKey(key)
+    if (problem) throw new Error(problem)
+    await saveClaudeKey(key)
+    return claudeKeyStatus()
+  })
+  ipcMain.handle(IPC_CHANNELS.claudeKeyClear, async () => {
+    await clearClaudeKey()
+    return claudeKeyStatus()
+  })
+  ipcMain.handle(IPC_CHANNELS.duelReviews, () => duelReviews())
+  ipcMain.handle(IPC_CHANNELS.duelReviewDecide, (_event, id: unknown, accept: unknown) => decideDuelReviewFromScreen(id, accept))
   ipcMain.handle(IPC_CHANNELS.duelAsk, (_event, prompt: unknown) => {
     if (typeof prompt !== 'string' || prompt.length > 20_000) throw new Error(t('duel.error.badRequest'))
     // Comme toute nouvelle demande (étape 324) : la mémoire automatique ne doit pas occuper Ollama pendant le tour d'un

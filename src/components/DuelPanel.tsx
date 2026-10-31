@@ -30,7 +30,7 @@ import {
   type DuelSide,
   type DuelVoteSide
 } from '../../shared/duel'
-import type { DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
+import type { ClaudeKeyStatus, DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -1177,6 +1177,218 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
   )
 }
 
+/**
+ * Étape 399 : la clé API Claude du juge. La clé ne revient jamais à l'écran : seulement « enregistrée » et sa fin.
+ * Enregistrer la vérifie d'abord auprès d'Anthropic (une clé refusée n'est pas gardée).
+ */
+function JudgeKeyBox({ status, onChanged }: { status: ClaudeKeyStatus | null; onChanged: (status: ClaudeKeyStatus) => void }): JSX.Element {
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const save = (): void => {
+    const key = value.trim()
+    if (!key) return
+    setBusy(true)
+    setProblem(null)
+    window.jaris
+      .claudeKeySave(key)
+      .then((next) => {
+        setValue('')
+        onChanged(next)
+      })
+      .catch((err) => setProblem(ipcErrorMessage(err)))
+      .finally(() => setBusy(false))
+  }
+  const clear = (): void => {
+    setBusy(true)
+    setProblem(null)
+    window.jaris
+      .claudeKeyClear()
+      .then(onChanged)
+      .catch((err) => setProblem(ipcErrorMessage(err)))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <div className="duel-judge__key">
+      {status?.saved ? (
+        <div className="duel-judge__key-row">
+          <span className="duel-judge__key-saved">{t('judge.key.saved', { end: status.last4 ?? '' })}</span>
+          <button type="button" className="duel-btn" onClick={clear} disabled={busy}>
+            {t('judge.key.remove')}
+          </button>
+        </div>
+      ) : (
+        <form
+          className="duel-judge__key-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            save()
+          }}
+        >
+          <input
+            type="password"
+            className="duel-judge__key-input"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="sk-ant-…"
+            aria-label={t('judge.key.label')}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button type="submit" className="duel-btn duel-btn--primary" disabled={busy || !value.trim()}>
+            {busy ? t('judge.key.checking') : t('judge.key.save')}
+          </button>
+        </form>
+      )}
+      {problem && <p className="duel-home__note duel-home__note--warn">{problem}</p>}
+    </div>
+  )
+}
+
+const JUDGE_STEP_LABEL: Record<'question' | 'a' | 'b' | 'judge', MessageKey> = {
+  question: 'judge.step.question',
+  a: 'judge.step.a',
+  b: 'judge.step.b',
+  judge: 'judge.step.judge'
+}
+
+function verdictLabel(outcome: DuelOutcome): string {
+  return t(outcome === 'a' ? 'duel.vote.a' : outcome === 'b' ? 'duel.vote.b' : outcome === 'tie' ? 'duel.vote.tie' : 'duel.vote.bothBad')
+}
+
+/** Étape 399 : une réponse d'un vote de Claude à vérifier (sans le nom du modèle). */
+function ReviewSide({ name, side }: { name: DuelSide; side: DuelVoteSide }): JSX.Element {
+  return (
+    <section className="duel-side duel-review__side" aria-label={t(name === 'a' ? 'duel.side.a' : 'duel.side.b')}>
+      <header className="duel-side__head">
+        <span className="duel-side__name">
+          <span className="duel-side__letter" aria-hidden="true">
+            {name.toUpperCase()}
+          </span>
+          {t(name === 'a' ? 'duel.side.a' : 'duel.side.b')}
+        </span>
+        {side.durationMs !== null && (
+          <span className="duel-side__status">{t('duel.status.done', { duration: formatDuration(side.durationMs) })}</span>
+        )}
+      </header>
+      <div className="duel-side__actions">
+        <h3 className="duel-side__actions-title">{t('duel.actions.title')}</h3>
+        {side.actions.length ? (
+          <ul>
+            {side.actions.map((action, index) => (
+              <li key={index}>{actionLabel(action)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="duel-side__muted">{t('duel.actions.none')}</p>
+        )}
+      </div>
+      {side.text.trim() ? (
+        <div className="duel-side__text">{renderFormattedText(side.text)}</div>
+      ) : (
+        !side.error && <p className="duel-side__muted">{t('duel.noReply')}</p>
+      )}
+      {side.error && <p className="duel-side__error">{side.error}</p>}
+    </section>
+  )
+}
+
+/**
+ * Étape 399 (Léo : « après ça fait comme Tinder, ça met et je valide ou pas ») : les votes de Claude, un par un. Valider
+ * : le vote compte (classement, choix des modèles) ; refuser : il disparaît. Flèches du clavier : ← refuser, → valider.
+ */
+function DuelReviewScreen({ onBack }: { onBack: () => void }): JSX.Element {
+  const [reviews, setReviews] = useState<DuelReviewView[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState({ accepted: 0, refused: 0 })
+  useEffect(() => {
+    let alive = true
+    window.jaris
+      .duelReviews()
+      .then((list) => alive && setReviews(list))
+      .catch((err) => alive && setError(ipcErrorMessage(err)))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const current = reviews?.[0] ?? null
+  const decide = (accept: boolean): void => {
+    if (!current || busy) return
+    setBusy(true)
+    setError(null)
+    window.jaris
+      .duelReviewDecide(current.id, accept)
+      .then((list) => {
+        setReviews(list)
+        setDone((d) => (accept ? { ...d, accepted: d.accepted + 1 } : { ...d, refused: d.refused + 1 }))
+      })
+      .catch((err) => setError(ipcErrorMessage(err)))
+      .finally(() => setBusy(false))
+  }
+  const decideRef = useRef(decide)
+  decideRef.current = decide
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return
+      if (event.key === 'ArrowRight') decideRef.current(true)
+      else if (event.key === 'ArrowLeft') decideRef.current(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  return (
+    <div className="duel__scroll">
+      <div className="duel-review">
+        <div className="duel-history__head">
+          <button type="button" className="duel-btn duel-history__back" onClick={onBack}>
+            <LineIcon d="M15 6l-6 6 6 6" size={16} />
+            {t('duel.history.back')}
+          </button>
+          {reviews && reviews.length > 0 && <span className="duel-review__count">{t('judge.review.left', { count: reviews.length })}</span>}
+        </div>
+        <h1 className="duel-summary__title">{t('judge.review.title')}</h1>
+        <p className="duel-summary__lead">{t('judge.review.lead')}</p>
+        {error && <p className="duel__error">{error}</p>}
+        {reviews === null && !error ? (
+          <p className="duel-home__note">{t('common.loading')}</p>
+        ) : !current ? (
+          <div className="duel-review__empty" role="status">
+            <p className="duel-home__note">{t('judge.review.empty')}</p>
+            {done.accepted + done.refused > 0 && (
+              <p className="duel-home__note">{t('judge.review.done', { accepted: done.accepted, refused: done.refused })}</p>
+            )}
+          </div>
+        ) : (
+          <article key={current.id} className="duel-review__card" aria-label={t('judge.review.title')}>
+            <p className="duel-review__prompt">{current.prompt}</p>
+            <div className="duel-round__sides duel-review__sides">
+              <ReviewSide name="a" side={current.a} />
+              <ReviewSide name="b" side={current.b} />
+            </div>
+            <div className="duel-review__verdict">
+              <span className="duel-review__verdict-label">{t('judge.review.claudeSays')}</span>
+              <strong className={`duel-review__verdict-outcome duel-summary__outcome--${current.outcome}`}>{verdictLabel(current.outcome)}</strong>
+              <p className="duel-review__reason">{current.reason}</p>
+            </div>
+            <div className="duel-review__actions">
+              <button type="button" className="duel-btn duel-review__refuse" onClick={() => decide(false)} disabled={busy}>
+                <LineIcon d="M6 6l12 12M18 6L6 18" size={16} />
+                {t('judge.review.refuse')}
+              </button>
+              <button type="button" className="duel-btn duel-btn--primary duel-review__accept" onClick={() => decide(true)} disabled={busy}>
+                <LineIcon d="M5 12.5l4.5 4.5L19 7.5" size={16} />
+                {t('judge.review.accept')}
+              </button>
+            </div>
+            <p className="duel-home__note duel-review__keys">{t('judge.review.keys')}</p>
+          </article>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function DuelPanel(): JSX.Element {
   const active = useScreenActive()
   const [view, setView] = useState<DuelSessionView | null>(null)
@@ -1193,6 +1405,12 @@ export default function DuelPanel(): JSX.Element {
   const [seriesMode, setSeriesMode] = useState(false)
   const [perModel, setPerModel] = useState<number>(DUEL_SERIES_DEFAULT)
   const [rankings, setRankings] = useState<DuelRankingView[] | null>(null)
+  /** Étape 399 : en Conversation, Claude écrit les demandes et vote (avec la clé API de Léo). */
+  const [judgeMode, setJudgeMode] = useState(false)
+  const [claudeKey, setClaudeKey] = useState<ClaudeKeyStatus | null>(null)
+  /** Votes de Claude encore à vérifier, et l'écran façon Tinder. */
+  const [reviewCount, setReviewCount] = useState(0)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
@@ -1255,7 +1473,24 @@ export default function DuelPanel(): JSX.Element {
     return () => {
       alive = false
     }
-  }, [home, active])
+  }, [home, active, reviewOpen])
+
+  // Étape 399 : la clé du juge et les votes de Claude à vérifier, relus à chaque retour sur l'accueil du Duel.
+  useEffect(() => {
+    if (!active || reviewOpen) return
+    let alive = true
+    window.jaris
+      .claudeKeyStatus?.()
+      .then((next) => alive && setClaudeKey(next))
+      .catch(() => {})
+    window.jaris
+      .duelReviews?.()
+      .then((list) => alive && setReviewCount(list.length))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [active, reviewOpen, view?.phase, view?.judge?.judged])
 
   // Une session terminée sans passer par « Terminer » (téléchargements impossibles, écran rechargé) : son bilan est
   // demandé ici. Jamais pendant « Terminer » lui-même : le bilan de ce clic contient les changements appliqués, un
@@ -1359,7 +1594,8 @@ export default function DuelPanel(): JSX.Element {
       setEnded(null)
       setDeleted(null)
       const series = category === 'code' && seriesMode ? perModel : undefined
-      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series))
+      const judged = category === 'conversation' && judgeMode ? perModel : undefined
+      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series, judged))
     })
   }
 
@@ -1456,6 +1692,8 @@ export default function DuelPanel(): JSX.Element {
 
   if (historyOpen) {
     content = <DuelHistory onBack={() => setHistoryOpen(false)} />
+  } else if (reviewOpen) {
+    content = <DuelReviewScreen onBack={() => setReviewOpen(false)} />
   } else if (view === null) {
     const ranking = rankings?.find((r) => r.category === category) ?? null
     const chosen = plan?.sizes.find((s) => s.count === size) ?? null
@@ -1468,6 +1706,8 @@ export default function DuelPanel(): JSX.Element {
     // Étape 382 : une série ne télécharge qu'un modèle à la fois (supprimé après ses duels) : il suffit que le plus gros
     // tienne sur le disque.
     const series = category === 'code' && seriesMode
+    // Étape 399 : duels Conversation jugés par Claude — même calcul « au moins N duels par modèle » qu'une série.
+    const judged = category === 'conversation' && judgeMode
     const seriesCount = manual ? pickedNow.length : size
     const seriesMissing = manual ? pickedMissing : (plan?.models ?? []).filter((m) => m.reason === null && !m.installed)
     const seriesFitsDisk =
@@ -1481,9 +1721,10 @@ export default function DuelPanel(): JSX.Element {
     const seriesTotal = manual
       ? planDuelSeries(pickedNow, perModel, () => 0, doneByModel).length
       : planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
-    const seriesAllDone = series && manual && pickedNow.length >= DUEL_MIN_CHOSEN && seriesTotal === 0
+    const seriesAllDone = (series || judged) && manual && pickedNow.length >= DUEL_MIN_CHOSEN && seriesTotal === 0
     const canStart =
       !remoteDown &&
+      (!judged || Boolean(claudeKey?.saved) && !seriesAllDone) &&
       (manual
         ? pickedNow.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk && !seriesAllDone : pickedFitsDisk)
         : Boolean(chosen && (series ? seriesFitsDisk : chosen.fitsDisk)))
@@ -1663,6 +1904,73 @@ export default function DuelPanel(): JSX.Element {
             </section>
           )}
 
+          {category === 'conversation' && (
+            <section className="duel-home__section duel-judge" aria-labelledby="duel-judge-title">
+              <h2 id="duel-judge-title" className="duel-home__label">
+                {t('judge.title')}
+              </h2>
+              <div className="duel-sizes duel-judge__modes" role="radiogroup" aria-labelledby="duel-judge-title">
+                {([false, true] as const).map((option) => (
+                  <button
+                    key={String(option)}
+                    type="button"
+                    role="radio"
+                    aria-checked={judgeMode === option}
+                    className={`duel-size duel-judge__mode${judgeMode === option ? ' duel-size--selected' : ''}`}
+                    onClick={() => setJudgeMode(option)}
+                  >
+                    {t(option ? 'judge.mode.claude' : 'judge.mode.me')}
+                  </button>
+                ))}
+              </div>
+              {judgeMode && (
+                <>
+                  <p className="duel-home__note">{t('judge.lead')}</p>
+                  <JudgeKeyBox status={claudeKey} onChanged={setClaudeKey} />
+                  <div className="duel-series__count">
+                    <span className="duel-series__count-label" id="duel-judge-count">
+                      {t('duel.series.perModel')}
+                    </span>
+                    <div className="duel-series__stepper" role="group" aria-labelledby="duel-judge-count">
+                      <button
+                        type="button"
+                        className="duel-btn duel-series__step"
+                        aria-label={t('duel.series.less')}
+                        onClick={() => setPerModel((n) => Math.max(DUEL_SERIES_MIN, n - 1))}
+                        disabled={perModel <= DUEL_SERIES_MIN}
+                      >
+                        −
+                      </button>
+                      <output className="duel-series__value" aria-live="polite">
+                        {perModel}
+                      </output>
+                      <button
+                        type="button"
+                        className="duel-btn duel-series__step"
+                        aria-label={t('duel.series.more')}
+                        onClick={() => setPerModel((n) => Math.min(DUEL_SERIES_MAX, n + 1))}
+                        disabled={perModel >= DUEL_SERIES_MAX}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
+                  {seriesAllDone && (
+                    <p className="duel-home__note duel-home__note--warn">{t('duel.series.allDone', { count: perModel })}</p>
+                  )}
+                  <p className="duel-home__note">{t('judge.privacy')}</p>
+                </>
+              )}
+            </section>
+          )}
+
+          {reviewCount > 0 && (
+            <button type="button" className="duel-btn duel-judge__review-open" onClick={() => setReviewOpen(true)}>
+              {t('judge.review.open', { count: reviewCount })}
+            </button>
+          )}
+
           <ul className="duel-home__facts">
             <li>{t('duel.realActions')}</li>
             <li>{t('duel.anonymous')}</li>
@@ -1674,7 +1982,7 @@ export default function DuelPanel(): JSX.Element {
             onClick={start}
             disabled={pending !== null || !canStart}
           >
-            {pending === 'start' ? t('duel.starting') : t(series ? 'duel.series.start' : 'duel.start')}
+            {pending === 'start' ? t('duel.starting') : t(series ? 'duel.series.start' : judged ? 'judge.start' : 'duel.start')}
           </button>
 
           <section className="duel-home__section duel-ranking" aria-labelledby="duel-ranking-title">
@@ -1734,6 +2042,55 @@ export default function DuelPanel(): JSX.Element {
           </button>
         </div>
       </div>
+    )
+  } else if (view.phase === 'ready' && view.judge) {
+    // Étape 399 : Claude écrit les demandes et vote, sans Léo. Les votes attendent sa vérification.
+    const judge = view.judge
+    const running = !judge.finished && !judge.stopped && !judge.error
+    content = (
+      <>
+        <div className="duel__bar">
+          <span className="duel__bar-title">{t('judge.run.title')}</span>
+          <span className="duel__bar-meta">{t('judge.run.progress', { index: Math.min(judge.index + (running ? 1 : 0), judge.total), total: judge.total })}</span>
+          {running && (
+            <button type="button" className="duel-btn duel__bar-end" onClick={stop} disabled={pending !== null}>
+              {t('judge.run.stop')}
+            </button>
+          )}
+          <button type="button" className="duel-btn duel__bar-end" onClick={() => end()} disabled={pending !== null}>
+            {t('duel.end')}
+          </button>
+        </div>
+        <div className="duel__scroll">
+          <div className="duel-judge-run" role="status">
+            <div className="duel-progress" aria-hidden="true">
+              <span className="duel-progress__fill" style={{ width: `${Math.max(2, Math.round((judge.index / Math.max(1, judge.total)) * 100))}%` }} />
+            </div>
+            {running && judge.step && <p className="duel-judge-run__step">{t(JUDGE_STEP_LABEL[judge.step])}</p>}
+            {running && round?.prompt && <p className="duel-review__prompt">{round.prompt}</p>}
+            {judge.finished && <p className="duel-judge-run__step">{t('judge.run.finished')}</p>}
+            {judge.stopped && !judge.error && !judge.finished && <p className="duel-judge-run__step">{t('judge.run.stopped')}</p>}
+            {judge.error && <p className="duel__error">{judge.error}</p>}
+            <p className="duel-home__note">
+              {t('judge.run.counts', { judged: judge.judged, skipped: judge.skipped })}
+            </p>
+            {judge.last && (
+              <div className="duel-review__verdict">
+                <span className="duel-review__verdict-label">{t('judge.run.last')}</span>
+                <strong className={`duel-review__verdict-outcome duel-summary__outcome--${judge.last.outcome}`}>{verdictLabel(judge.last.outcome)}</strong>
+                <p className="duel-review__reason">{judge.last.reason}</p>
+              </div>
+            )}
+            {reviewCount > 0 && (
+              <button type="button" className="duel-btn duel-btn--primary duel-judge__review-open" onClick={() => setReviewOpen(true)}>
+                {t('judge.review.open', { count: reviewCount })}
+              </button>
+            )}
+            <p className="duel-home__note">{t('judge.run.away')}</p>
+          </div>
+        </div>
+        {error && <p className="duel__error">{error}</p>}
+      </>
     )
   } else if (view.phase === 'ready' && !round && view.batch) {
     // Étape 381 : la file de duels Code, en attendant que Léo en ouvre un.

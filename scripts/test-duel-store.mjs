@@ -130,3 +130,45 @@ test('étape 398 : supprimer un duel retire le vote, ses applications, et ne com
     rmSync(dataRoot, { recursive: true, force: true })
   }
 })
+
+// Étape 399 : les votes de Claude attendent Léo (valider ou refuser, façon Tinder).
+test('étape 399 : un vote de Claude ne compte qu’une fois validé ; refusé, il disparaît ; tout survit à un redémarrage', async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'jaris-duel-store-'))
+  const review = (id, outcome = 'a') => ({
+    ...vote(id, outcome),
+    category: 'conversation',
+    sides: {
+      a: { text: 'Fait.', actions: [{ tool: 'open_app', detail: 'Bloc-notes' }], durationMs: 1000, error: null, app: false },
+      b: { text: 'Je ne peux pas.', actions: [], durationMs: 900, error: null, app: false }
+    },
+    reason: 'A a vraiment ouvert le Bloc-notes.',
+    judge: 'claude-sonnet-5-5'
+  })
+  try {
+    const store = load(dataRoot)
+    await store.loadDuelVotes()
+    assert.deepEqual(await store.loadDuelReviews(), [])
+    await Promise.all([store.addDuelReview(review('r1')), store.addDuelReview(review('r2', 'b'))])
+    await store.addDuelReview(review('r1'))
+    assert.deepEqual(store.getDuelReviews().map((r) => r.id), ['r1', 'r2'], 'jamais deux fois le même')
+    assert.deepEqual(store.getRankingVotes(), [], 'rien ne compte avant vérification')
+
+    assert.equal(await store.decideDuelReview('r1', true), true)
+    assert.deepEqual(store.getDuelVotes().map((v) => [v.id, v.outcome, v.judge]), [['r1', 'a', 'claude-sonnet-5-5']])
+    assert.equal(store.getDuelVotes()[0].sides.a.actions[0].detail, 'Bloc-notes', 'les réponses suivent le vote')
+    assert.equal('reason' in store.getDuelVotes()[0], false)
+    assert.equal(await store.decideDuelReview('r2', false), true)
+    assert.equal(store.getDuelVotes().length, 1, 'refusé : jamais compté')
+    assert.deepEqual(store.getDuelReviews(), [])
+    assert.equal(await store.decideDuelReview('r1', true), false, 'déjà décidé')
+    assert.equal(store.getDuelVotes().length, 1)
+
+    // Relu après un redémarrage : le vote validé (marqué Claude) est là, plus rien à vérifier.
+    await store.addDuelReview(review('r3'))
+    const restarted = load(dataRoot)
+    assert.deepEqual((await restarted.loadDuelVotes()).map((v) => [v.id, v.judge]), [['r1', 'claude-sonnet-5-5']])
+    assert.deepEqual((await restarted.loadDuelReviews()).map((r) => [r.id, r.reason]), [['r3', 'A a vraiment ouvert le Bloc-notes.']])
+  } finally {
+    rmSync(dataRoot, { recursive: true, force: true })
+  }
+})

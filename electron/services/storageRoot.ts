@@ -109,6 +109,9 @@ export const OWNED_ENTRIES = [
   'duel-votes.json',
   // Étape 398 : les identifiants des votes supprimés depuis l'historique.
   'duel-votes-deleted.json',
+  // Étape 399 : les votes proposés par Claude en attente de Léo, et sa clé API chiffrée.
+  'duel-judge-review.json',
+  'claude-key.bin',
   'duel-apps',
   // Étape 382 : une série de duels en cours, et ses applications pas encore votées (duelSeriesStore.ts).
   'duel-series.json',
@@ -160,6 +163,8 @@ export const LEGACY_ELECTRON_ENTRIES = ['github-token.bin', PHONE_TUNNEL_DIR]
 export const KEPT_AT_DESTINATION_ENTRIES = [
   ...LEGACY_ELECTRON_ENTRIES,
   'github-connection.json',
+  // Étape 399 : chiffrée avec la clé de Chromium de SA racine, comme le jeton GitHub.
+  'claude-key.bin',
   'phone-devices.json',
   ...MODEL_TEST_ENTRIES,
   'conversation-history.json'
@@ -207,6 +212,7 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   'duel-votes.json': 'merge-reminders',
   // Union : une suppression faite d'un côté vaut aussi de l'autre.
   'duel-votes-deleted.json': 'merge-reminders',
+  'duel-judge-review.json': 'merge-reminders',
   'duel-apps': 'keep-both',
   // Une seule série à la fois : celle de la racine gagne (ses applications vont avec elle).
   'duel-series.json': 'destination-wins',

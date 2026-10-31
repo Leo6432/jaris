@@ -19,6 +19,8 @@ import {
   type DuelPlan,
   type DuelRankingView,
   type DuelSessionView,
+  type ClaudeKeyStatus,
+  type DuelReviewView,
   type DuelSummary,
   type AppVersionStatus,
   type LaunchAtStartupStatus,
@@ -272,8 +274,13 @@ const api = {
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   // Étape 355 — le Duel.
   duelPlan: (category: DuelCategory): Promise<DuelPlan> => invoke(IPC_CHANNELS.duelPlan, category),
-  duelStart: (category: DuelCategory, pick: number | string[], series?: number): Promise<DuelSessionView> =>
-    invoke(IPC_CHANNELS.duelStart, category, pick, series ?? null),
+  duelStart: (category: DuelCategory, pick: number | string[], series?: number, judged?: number): Promise<DuelSessionView> =>
+    invoke(IPC_CHANNELS.duelStart, category, pick, series ?? null, judged ?? null),
+  claudeKeyStatus: (): Promise<ClaudeKeyStatus> => invoke(IPC_CHANNELS.claudeKeyStatus),
+  claudeKeySave: (key: string): Promise<ClaudeKeyStatus> => invoke(IPC_CHANNELS.claudeKeySave, key),
+  claudeKeyClear: (): Promise<ClaudeKeyStatus> => invoke(IPC_CHANNELS.claudeKeyClear),
+  duelReviews: (): Promise<DuelReviewView[]> => invoke(IPC_CHANNELS.duelReviews),
+  duelReviewDecide: (id: string, accept: boolean): Promise<DuelReviewView[]> => invoke(IPC_CHANNELS.duelReviewDecide, id, accept),
   duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
   duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
   duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),

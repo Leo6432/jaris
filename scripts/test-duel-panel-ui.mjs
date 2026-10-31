@@ -59,8 +59,8 @@ window.jaris = {
   duelState: async () => window.__view,
   duelPlan: async (category) => { window.__calls.push(['plan', category]); return { ...window.__plan, category } },
   duelRankings: async () => window.__rankings,
-  duelStart: async (category, count, series) => {
-    window.__calls.push(series === undefined ? ['start', category, count] : ['start', category, count, series])
+  duelStart: async (category, count, series, judged) => {
+    window.__calls.push(judged !== undefined ? ['start', category, count, series, judged] : series === undefined ? ['start', category, count] : ['start', category, count, series])
     window.__category = category
     return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
   },
@@ -133,6 +133,19 @@ window.jaris = {
     const batch = window.__view.batch
     return (window.__view = { ...ready(null), batch })
   },
+  claudeKeyStatus: async () => window.__claudeKey || { saved: false, last4: null },
+  claudeKeySave: async (key) => {
+    window.__calls.push(['keySave', key])
+    if (window.__keyError) throw new Error(window.__keyError)
+    return (window.__claudeKey = { saved: true, last4: key.slice(-4) })
+  },
+  claudeKeyClear: async () => { window.__calls.push('keyClear'); return (window.__claudeKey = { saved: false, last4: null }) },
+  duelReviews: async () => window.__reviews || [],
+  duelReviewDecide: async (id, accept) => {
+    window.__calls.push(['decide', id, accept])
+    window.__reviews = (window.__reviews || []).filter((r) => r.id !== id)
+    return window.__reviews
+  },
   duelSkip: async () => {
     window.__calls.push('skip')
     return ready({ number: 2, prompt: null, a: side(), b: side() })
@@ -195,8 +208,8 @@ test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images)
     assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal'])
     assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Conversation')
     await page.waitForSelector('.duel-size')
-    assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode) .duel-size').allTextContents(), ['4', '5', '6'])
-    assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
+    assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size').allTextContents(), ['4', '5', '6'])
+    assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 2 \(9,8 Go\)/)
     await page.click('.duel-size:has-text("4")')
     assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 1 \(5,2 Go\)/)
@@ -1048,5 +1061,103 @@ test('étape 388 : série sur CE PC — pas de changement de machine proposé', 
       assert.equal(await page.locator('.duel-move, .duel-move__open').count(), 0)
     },
     SERIES_VIEW({ perModel: 10, download: null, waiting: 'ollama', deleted: 0, active: true })
+  )
+})
+
+// Étape 399 : Claude écrit les demandes et vote ; Léo vérifie ensuite chaque vote, un par un.
+const REVIEW = (id, prompt, outcome = 'a') =>
+  `{ id: '${id}', at: '2026-10-31T10:00:00.000Z', prompt: '${prompt}', outcome: '${outcome}', reason: 'A a vraiment ouvert le Bloc-notes, B l’a seulement dit.', a: { text: 'C’est fait.', actions: [{ tool: 'open_app', detail: 'Bloc-notes' }], durationMs: 4000, error: null, app: false }, b: { text: 'J’ai ouvert le Bloc-notes.', actions: [], durationMs: 3000, error: null, app: false } }`
+
+test('étape 399 : « Qui vote ? » — Claude demande la clé, puis lance avec le nombre de duels par modèle', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-judge__mode')
+    assert.deepEqual(await page.locator('.duel-judge__mode').allTextContents(), ['Moi', 'Claude (ma clé API)'])
+    assert.equal(await page.locator('.duel-judge__mode[aria-checked="true"]').textContent(), 'Moi', 'Léo vote par défaut')
+    await page.click('.duel-judge__mode:has-text("Claude")')
+    await page.waitForSelector('.duel-judge__key-input')
+    // Sans clé, rien ne peut partir.
+    assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
+    assert.equal(await page.locator('.duel-home__start').textContent(), 'Lancer avec Claude')
+    await page.fill('.duel-judge__key-input', '  sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234  ')
+    await page.click('.duel-judge__key button[type=submit]')
+    await page.waitForSelector('.duel-judge__key-saved')
+    assert.match(await page.textContent('.duel-judge__key-saved'), /…1234/)
+    assert.equal(await page.locator('.duel-judge__key-input').count(), 0, 'la clé n’est plus affichée une fois enregistrée')
+    // Nombre de duels par modèle : réglable.
+    await page.click('.duel-judge [aria-label="Plus de duels"]')
+    const value = Number(await page.textContent('.duel-judge .duel-series__value'))
+    assert.ok(value >= 1)
+    await page.locator('.duel-home__start').click()
+    await page.waitForFunction(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'start'))
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+    assert.equal(call[1], 'conversation')
+    assert.equal(call[3], undefined, 'pas de série en Conversation')
+    assert.equal(call[4], value, 'le nombre de duels par modèle part avec le lancement')
+  })
+})
+
+test('étape 399 : clé refusée — le vrai message s’affiche, rien n’est enregistré', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.click('.duel-judge__mode:has-text("Claude")')
+      await page.fill('.duel-judge__key-input', 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234')
+      await page.click('.duel-judge__key button[type=submit]')
+      await page.waitForSelector('.duel-judge__key .duel-home__note--warn')
+      assert.match(await page.textContent('.duel-judge__key'), /refusée par Anthropic/)
+      assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
+    },
+    `window.__keyError = 'Ta clé API Claude est refusée par Anthropic.'`
+  )
+})
+
+test('étape 399 : en Code, pas de juge Claude (Code garde la série)', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-judge__mode')
+    await page.click('.duel-category:has-text("Code")')
+    await page.waitForSelector('.duel-series__mode')
+    assert.equal(await page.locator('.duel-judge__mode').count(), 0)
+  })
+})
+
+test('étape 399 : vérification façon Tinder — un vote à la fois, Valider, ← pour refuser, puis le bilan', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-judge__review-open')
+      assert.match(await page.textContent('.duel-judge__review-open'), /à vérifier : 2/)
+      await page.click('.duel-judge__review-open')
+      await page.waitForSelector('.duel-review__card')
+      assert.equal(await page.locator('.duel-review__card').count(), 1, 'un seul vote à la fois')
+      assert.equal(await page.textContent('.duel-review__prompt'), 'Ouvre le Bloc-notes')
+      assert.match(await page.textContent('.duel-review__verdict'), /A a vraiment ouvert/)
+      assert.match(await page.textContent('.duel-review__count'), /Restants : 2/)
+      // Les modèles restent anonymes : aucun nom affiché.
+      assert.doesNotMatch(await page.textContent('.duel-review'), /qwen|granite|gemma/)
+      await page.click('.duel-review__accept')
+      await page.waitForFunction(() => document.querySelector('.duel-review__prompt')?.textContent === 'Quelle heure est-il ?')
+      await page.keyboard.press('ArrowLeft')
+      await page.waitForSelector('.duel-review__empty')
+      assert.match(await page.textContent('.duel-review__empty'), /Validés : 1 · Refusés : 1/)
+      const calls = await page.evaluate(() => window.__calls.filter((c) => Array.isArray(c) && c[0] === 'decide'))
+      assert.deepEqual(calls, [['decide', 'r1', true], ['decide', 'r2', false]])
+    },
+    `window.__reviews = [${REVIEW('r1', 'Ouvre le Bloc-notes')}, ${REVIEW('r2', 'Quelle heure est-il ?', 'b')}]`
+  )
+})
+
+test('étape 399 : pendant les duels de Claude — étape en cours, dernier vote, Arrêter ; aucun vote à la main', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-judge-run')
+      assert.match(await page.textContent('.duel__bar'), /Duel 4 sur 12/)
+      assert.match(await page.textContent('.duel-judge-run'), /Le modèle B répond/)
+      assert.match(await page.textContent('.duel-judge-run'), /Votes de Claude : 3 · Duels passés : 0/)
+      assert.match(await page.textContent('.duel-judge-run'), /A a vraiment ouvert/)
+      assert.equal(await page.locator('.duel-vote, .duel-round__vote').count(), 0, 'aucun bouton de vote')
+      await page.getByRole('button', { name: 'Arrêter' }).click()
+      await page.waitForFunction(() => window.__calls.includes('stop'))
+    },
+    `window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 4, prompt: 'Rappelle-moi de sortir le linge dans 20 minutes', a: { status: 'done', text: '', activity: null, startedAt: null, durationMs: 3000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'running', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, revealed: null },
+      judge: { total: 12, index: 3, judged: 3, skipped: 0, step: 'b', last: { outcome: 'a', reason: 'A a vraiment ouvert le Bloc-notes.' }, finished: false, stopped: false, error: null } }`
   )
 })

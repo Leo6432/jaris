@@ -126,7 +126,17 @@ function setup(t) {
       getDuelVotes: () => [],
       getRankingVotes: () => [],
       saveDuelApp: async () => {},
-      readDuelApp: async () => null
+      readDuelApp: async () => null,
+      addDuelReview: async () => {},
+      getDuelReviews: () => [],
+      decideDuelReview: async () => false
+    },
+    './claudeKey': { loadClaudeKey: async () => null },
+    './duelJudge': {
+      JUDGE_MODEL: 'claude-sonnet-5-5',
+      JudgeRefusalError: class JudgeRefusalError extends Error {},
+      judgeDuel: async () => { throw new Error('pas de juge ici') },
+      writeDuelQuestion: async () => { throw new Error('pas de juge ici') }
     },
     '../../shared/duel': duelModule,
     '../../shared/effort': effortModule

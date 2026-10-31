@@ -51,6 +51,42 @@ export interface DuelVote {
   prompt: string
   /** Les deux réponses ; absentes pour un vote d'une version qui ne les gardait pas. */
   sides?: { a: DuelVoteSide; b: DuelVoteSide }
+  /**
+   * Étape 399 : le vote a été proposé par Claude (identifiant du modèle juge), puis validé par Léo. Absent = Léo a voté
+   * lui-même.
+   */
+  judge?: string
+}
+
+/**
+ * Étape 399 (Léo : « ma clé API Claude, il pose la question, attend les deux réponses, vote A ou B et continue ; je
+ * dois vérifier à la fin, comme Tinder ») : un vote proposé par Claude, pas encore compté. Validé, il devient un vote
+ * ordinaire (avec `judge`) ; refusé, il disparaît.
+ */
+export interface DuelReview {
+  id: string
+  category: DuelCategory
+  at: number
+  sessionId: string
+  modelA: string
+  modelB: string
+  prompt: string
+  sides: { a: DuelVoteSide; b: DuelVoteSide }
+  /** Le vote proposé par Claude. */
+  outcome: DuelOutcome
+  /** Pourquoi, en une ou deux phrases. */
+  reason: string
+  judge: string
+}
+
+export function parseDuelReviews(value: unknown): DuelReview[] | null {
+  if (!Array.isArray(value)) return null
+  return value.flatMap((item) => {
+    const vote = parseDuelVote(item)
+    const r = item as Record<string, unknown>
+    if (!vote?.sides || typeof r.reason !== 'string' || typeof r.judge !== 'string' || !r.judge) return []
+    return [{ ...vote, sides: vote.sides, reason: r.reason.slice(0, 2000), judge: r.judge }]
+  })
 }
 
 export function isDuelCategory(value: unknown): value is DuelCategory {
@@ -80,7 +116,8 @@ export function parseDuelVote(value: unknown): DuelVote | null {
     modelB: v.modelB,
     outcome: v.outcome,
     prompt: typeof v.prompt === 'string' ? v.prompt : '',
-    ...(a && b ? { sides: { a, b } } : {})
+    ...(a && b ? { sides: { a, b } } : {}),
+    ...(typeof v.judge === 'string' && v.judge ? { judge: v.judge } : {})
   }
 }
 

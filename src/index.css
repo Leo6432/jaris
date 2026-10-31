@@ -10106,6 +10106,146 @@ ul.reply-list--nested {
   font-size: 13px;
 }
 
+/* Étape 399 : Claude juge les duels Conversation (clé, avancement, vérification façon Tinder). */
+.duel-judge__key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.duel-judge__key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.duel-judge__key-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 36px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.duel-judge__key-saved {
+  font-size: 14px;
+  color: var(--hud-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-judge__review-open {
+  align-self: flex-start;
+}
+
+.duel-judge-run,
+.duel-review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px 0;
+}
+
+.duel-judge-run__step {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.duel-review__count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--hud-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.duel-review__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--jv-bubble);
+  animation: duel-review-in 0.22s ease-out;
+}
+
+@keyframes duel-review-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duel-review__card {
+    animation: none;
+  }
+}
+
+.duel-review__prompt {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--hud-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.duel-review__verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+}
+
+.duel-review__verdict-label {
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
+.duel-review__verdict-outcome {
+  font-size: 15px;
+}
+
+.duel-review__reason {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--hud-text);
+}
+
+.duel-review__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.duel-review__actions .duel-btn {
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.duel-review__refuse {
+  color: var(--hud-danger);
+}
+
+.duel-review__keys {
+  margin: 0;
+  text-align: center;
+}
+
 /* Étape 398 : supprimer des duels de l'historique. */
 .duel-history__head .duel-history__download {
   margin-left: auto;

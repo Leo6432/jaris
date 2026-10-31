@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.40.39",
+  "version": "0.40.40",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
@@ -21,6 +21,7 @@
   },
   "//dependencies": "Uniquement ce que le process principal charge VRAIMENT à l'exécution : electron-builder embarque tout ce qui est listé ici dans l'application installée. Les librairies du renderer (react, three...) sont en devDependencies parce que Vite les compile dans out/renderer : les garder ici les ferait embarquer une deuxième fois, en pure duplication (~55 Mo).",
   "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
     "dotenv": "^17.4.2",
     "undici": "7.29.0"
   },

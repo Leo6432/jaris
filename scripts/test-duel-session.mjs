@@ -26,6 +26,13 @@ const THINKING = {
 /** La réflexion attendue pour chacun : l'équivalent de « moyen » dans SES réglages. */
 const EXPECTED_THINK = { 'alpha-model:3b': 'medium', 'bravo-model:8b': true, 'charlie-model:4b': false, 'delta-model:7b': 'low' }
 const MODELS = ['alpha-model:3b', 'bravo-model:8b', 'charlie-model:4b', 'delta-model:7b']
+/** Étape 399 : le refus de Claude (classificateurs de sécurité) pour UN duel, comme le vrai duelJudge.ts. */
+class JudgeRefusalError extends Error {
+  constructor() {
+    super('refusal')
+    this.name = 'JudgeRefusalError'
+  }
+}
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 async function waitFor(predicate, what) {
@@ -78,10 +85,13 @@ function newSeriesStore() {
   return store
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [] } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [], judge = null } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [] }
   let ollamaDown = false
   const votes = [...priorVotes]
+  // Étape 399 : les votes proposés par Claude, et ce que le faux Claude a reçu.
+  const reviews = []
+  calls.judge = { questions: [], verdicts: [] }
   const apps = new Map()
   const emitted = []
   let profile = initialProfile ?? {
@@ -233,7 +243,28 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         return Buffer.from('RIFFwave')
       }
     },
+    './claudeKey': { loadClaudeKey: async () => judge?.key ?? null },
+    './duelJudge': {
+      JUDGE_MODEL: 'claude-sonnet-5-5',
+      JudgeRefusalError,
+      writeDuelQuestion: async (key, tools, previous, signal) => {
+        calls.judge.questions.push({ key, tools: tools.map((tool) => tool.name), previous: [...previous] })
+        if (judge?.questionImpl) return judge.questionImpl(calls.judge.questions.length, signal)
+        return `Demande numéro ${calls.judge.questions.length}`
+      },
+      judgeDuel: async (key, prompt, a, b, signal) => {
+        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)) })
+        if (judge?.verdictImpl) return judge.verdictImpl(calls.judge.verdicts.length, signal)
+        return { outcome: 'a', reason: 'A a vraiment ouvert l’application.' }
+      }
+    },
     './duelStore': {
+      addDuelReview: async (review) => {
+        reviews.push(review)
+      },
+      getDuelReviews: () => reviews,
+      decideDuelReview: async () => true,
+      deleteDuelVotes: async () => 0,
       addDuelVote: async (vote) => {
         votes.push(vote)
       },
@@ -258,6 +289,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     session,
     calls,
     votes,
+    reviews,
     apps,
     emitted,
     get profile() {
@@ -1273,4 +1305,134 @@ test('étape 382 : refusé hors Code, ou avec un nombre de duels par modèle imp
   await assert.rejects(env.session.startDuel('code', 4, 0))
   await assert.rejects(env.session.startDuel('code', 4, 51))
   await assert.rejects(env.session.startDuel('code', 4, 2.5))
+})
+
+// --- Étape 399 : Claude juge les duels Conversation (clé API de Léo) ---------------------------------------------------
+
+async function judgedSession(env, perModel = 1) {
+  const started = await env.session.startDuel('conversation', 4, undefined, perModel)
+  await waitFor(() => {
+    const judge = env.session.getDuelView()?.judge
+    return Boolean(judge && (judge.finished || judge.error || judge.stopped))
+  }, 'duels jugés finis')
+  return started
+}
+
+test('étape 399 : Claude écrit chaque demande, A puis B répondent, Claude vote — mis de côté, jamais compté', async () => {
+  const env = setup({ installed: MODELS, judge: { key: 'sk-ant-cle-de-test' } })
+  const started = await judgedSession(env, 2)
+  const view = env.session.getDuelView()
+  assert.ok(started.judge, 'la session annonce le juge')
+  assert.equal(view.judge.finished, true)
+  assert.equal(view.judge.error, null)
+  const total = view.judge.total
+  assert.ok(total >= 4, `au moins 2 duels par modèle sur 4 modèles (reçu ${total})`)
+  assert.equal(env.reviews.length, total, 'un vote proposé par duel')
+  assert.equal(env.votes.length, 0, 'aucun vote compté tant que Léo n’a pas vérifié')
+  // Chaque modèle fait au moins 2 duels.
+  const count = new Map()
+  for (const r of env.reviews) for (const m of [r.modelA, r.modelB]) count.set(m, (count.get(m) ?? 0) + 1)
+  for (const model of MODELS) assert.ok((count.get(model) ?? 0) >= 2, `${model} : au moins 2 duels`)
+  const first = env.reviews[0]
+  assert.equal(first.judge, 'claude-sonnet-5-5')
+  assert.equal(first.outcome, 'a')
+  assert.equal(first.prompt, 'Demande numéro 1')
+  assert.equal(first.sides.a.text, 'C’est ouvert.')
+  assert.deepEqual(first.sides.a.actions.map((a) => a.tool), ['open_app'])
+  // A répond avant B, chacun avec SON modèle ; une demande écrite par Claude par duel.
+  const asked = env.calls.converse.map((args) => [args[0], args.at(-1).model])
+  assert.deepEqual(asked.slice(0, 2), [['Demande numéro 1', first.modelA], ['Demande numéro 1', first.modelB]])
+  assert.equal(env.calls.judge.questions.length, total)
+  // Claude voit ce que les outils ont VRAIMENT répondu, pas seulement ce que le modèle affirme.
+  assert.ok(env.calls.judge.verdicts[0].a.toolLog.some((line) => /Résultat de l'outil : L'application Bloc-notes a été lancée/.test(line)))
+  // Claude ne se répète pas : il reçoit les demandes déjà posées ; jamais l'outil d'extinction.
+  assert.deepEqual(env.calls.judge.questions[1].previous, ['Demande numéro 1'])
+  assert.ok(!env.calls.judge.questions[0].tools.includes('shutdown_pc'))
+  assert.equal(env.calls.judge.questions[0].key, 'sk-ant-cle-de-test')
+  // L'écran ne voit jamais un nom de modèle, et le PC reste éveillé le temps des duels.
+  assertAnonymous(env.emitted, 'duels jugés par Claude')
+  assert.deepEqual(env.calls.awake, [true, false])
+  // Léo ne peut pas voter à la place de Claude pendant ce temps.
+  assert.throws(() => env.session.askDuel('autre chose'))
+})
+
+test('étape 399 : sans clé, ou hors Conversation, rien ne démarre', async () => {
+  const noKey = setup({ installed: MODELS })
+  await assert.rejects(() => noKey.session.startDuel('conversation', 4, undefined, 2), /clé API Claude/)
+  assert.equal(noKey.session.getDuelView(), null)
+  const code = setup({ installed: MODELS, judge: { key: 'sk-ant-x' } })
+  await assert.rejects(() => code.session.startDuel('code', 4, undefined, 2))
+  await assert.rejects(() => code.session.startDuel('conversation', 4, undefined, 0))
+})
+
+test('étape 399 : « Arrêter » stoppe tout, les votes déjà proposés restent à vérifier', async () => {
+  let release
+  const gate = new Promise((resolve) => (release = resolve))
+  const env = setup({
+    installed: MODELS,
+    judge: {
+      key: 'sk-ant-x',
+      questionImpl: async (n) => {
+        if (n === 2) await gate
+        return `Demande ${n}`
+      }
+    }
+  })
+  await env.session.startDuel('conversation', 4, undefined, 2)
+  await waitFor(() => env.calls.judge.questions.length === 2, 'deuxième demande en cours')
+  assert.equal(env.reviews.length, 1)
+  env.session.stopDuelRun()
+  release()
+  await waitFor(() => env.session.getDuelView().judge.step === null, 'arrêté')
+  const judge = env.session.getDuelView().judge
+  assert.equal(judge.stopped, true)
+  assert.equal(judge.finished, false)
+  assert.equal(env.reviews.length, 1, 'le vote déjà proposé reste')
+  const conversed = env.calls.converse.length
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(env.calls.converse.length, conversed, 'plus aucun modèle ne répond après « Arrêter »')
+})
+
+test('étape 399 : une panne de Claude arrête avec son message ; un refus de Claude passe juste CE duel', async () => {
+  const down = setup({
+    installed: MODELS,
+    judge: {
+      key: 'sk-ant-x',
+      verdictImpl: async () => {
+        throw new Error('Ta clé API Claude est refusée par Anthropic.')
+      }
+    }
+  })
+  await judgedSession(down)
+  assert.equal(down.session.getDuelView().judge.error, 'Ta clé API Claude est refusée par Anthropic.')
+  assert.equal(down.reviews.length, 0)
+  assert.equal(down.calls.judge.verdicts.length, 1, 'arrêt dès la première panne')
+
+  const refused = setup({
+    installed: MODELS,
+    judge: {
+      key: 'sk-ant-x',
+      questionImpl: async (n) => {
+        if (n === 1) throw new JudgeRefusalError()
+        return `Demande ${n}`
+      }
+    }
+  })
+  await judgedSession(refused, 1)
+  const judge = refused.session.getDuelView().judge
+  assert.equal(judge.finished, true)
+  assert.equal(judge.skipped, 1)
+  assert.equal(refused.reviews.length, judge.total - 1)
+})
+
+test('étape 399 : un outil de JARIS en panne — le duel est rejoué une fois, puis passé sans vote de Claude', async () => {
+  const env = setup({ installed: MODELS, judge: { key: 'sk-ant-x' }, converseImpl: searchFails() })
+  await judgedSession(env, 1)
+  const judge = env.session.getDuelView().judge
+  assert.equal(judge.finished, true)
+  assert.equal(judge.skipped, judge.total, 'chaque duel passé')
+  assert.equal(env.reviews.length, 0)
+  assert.equal(env.calls.judge.verdicts.length, 0, 'Claude ne juge jamais un duel gâché par Jaris')
+  // Rejoué une fois : 2 tours × 2 modèles par duel.
+  assert.equal(env.calls.converse.length, judge.total * 4)
 })

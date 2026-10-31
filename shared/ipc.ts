@@ -1139,7 +1139,39 @@ export interface DuelSessionView {
     deleted: number
     active: boolean
   } | null
+  /**
+   * Étape 399 : Claude écrit les demandes et vote, sans Léo (`null` = pas de juge). `index` = duels déjà passés ;
+   * `step` = ce qui se passe maintenant ; `last` = le dernier vote proposé (côté A/B, sans nom) ; `stopped` = arrêté.
+   */
+  judge?: {
+    total: number
+    index: number
+    judged: number
+    skipped: number
+    step: 'question' | 'a' | 'b' | 'judge' | null
+    last: { outcome: DuelOutcome; reason: string } | null
+    finished: boolean
+    stopped: boolean
+    error: string | null
+  } | null
   error: string | null
+}
+
+/** Étape 399 : ce que l'écran sait de la clé API Claude (jamais la clé elle-même). */
+export interface ClaudeKeyStatus {
+  saved: boolean
+  last4: string | null
+}
+
+/** Étape 399 : un vote proposé par Claude, montré à Léo pour qu'il le valide ou le refuse (sans les noms). */
+export interface DuelReviewView {
+  id: string
+  at: number
+  prompt: string
+  a: DuelVoteSide
+  b: DuelVoteSide
+  outcome: DuelOutcome
+  reason: string
 }
 
 export interface DuelStandingView {
@@ -1429,6 +1461,12 @@ export const IPC_CHANNELS = {
   /** Étape 355 — Duel : plan d'une session, lancement, demande, tour de B, arrêt, vote, fin, réponse lue, suppression. */
   duelPlan: 'jaris:duel-plan',
   duelStart: 'jaris:duel-start',
+  /** renderer -> main, étape 399 : la clé API Claude du juge, et les votes de Claude à valider ou refuser. */
+  claudeKeyStatus: 'jaris:claude-key-status',
+  claudeKeySave: 'jaris:claude-key-save',
+  claudeKeyClear: 'jaris:claude-key-clear',
+  duelReviews: 'jaris:duel-reviews',
+  duelReviewDecide: 'jaris:duel-review-decide',
   duelAsk: 'jaris:duel-ask',
   duelRunB: 'jaris:duel-run-b',
   duelStop: 'jaris:duel-stop',

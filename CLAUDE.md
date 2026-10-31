@@ -10490,3 +10490,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   effacés, copie livrée ignorée, relu après redémarrage et liste ancienne remise, tout supprimer ; vérifié en retirant le
   filtre des votes livrés) et `test-duel-panel-ui.mjs` (corbeille et « Tout supprimer » n'effacent rien sans confirmation,
   « Annuler », un seul duel retiré).
+
+- **Étape 399 (v0.40.40), Léo : « pour Conversation, ma clé API Claude : il pose la question, attend les 2 réponses,
+  vote A ou B et continue », puis, aux questions à choix : les votes de Claude comptent comme les siens MAIS il les
+  vérifie à la fin « comme Tinder », les modèles peuvent tout faire sur le PC (« comme toi »), juge Sonnet 5.5,
+  nombre de duels par modèle choisi par lui.** Accueil du Duel, catégorie Conversation → « Qui vote ? » → « Claude (ma
+  clé API) » : clé, duels par modèle (même plan « au moins N » qu'une série, `planDuelSeries`, en comptant aussi les
+  votes en attente), « Lancer avec Claude ». Pour chaque duel (`runJudgedDuels`, duelSession.ts) : Claude écrit la
+  demande (`writeDuelQuestion`, effort bas, d'après les outils proposés sur CE PC), A puis B répondent pour de vrai,
+  Claude vote (`judgeDuel`, effort élevé) en voyant les appels d'outils AVEC ce qu'ils ont répondu (`toolLog`, sans
+  noms de modèles) — une action annoncée mais absente des outils compte comme non faite. Une panne d'un outil de Jaris :
+  le duel est rejoué une fois, puis passé. Pendant ce temps, aucun vote ni lancement à la main (`notYourTurn`).
+  **Rien ne compte avant Léo** : chaque vote de Claude attend dans `duel-judge-review.json` ; « Votes de Claude à
+  vérifier » les montre un par un, anonymes (demande, ce qu'ont fait A et B, vote et raison de Claude), Valider (→) ou
+  Refuser (←). Validé, il rejoint `duel-votes.json` avec `judge: 'claude-sonnet-5-5'` (sans la raison) et compte comme
+  un vote de Léo ; refusé, il disparaît. L'export des votes (étape 362) les emporte donc tout seul.
+  **Clé** (`claudeKey.ts`) : forme vérifiée (`sk-ant-…`), puis testée par un vrai appel (fiche du modèle) AVANT d'être
+  enregistrée, chiffrée par Windows (`safeStorage`, `claude-key.bin`), jamais envoyée à l'écran (seulement « …1234 »).
+  `claude-key.bin` et `duel-judge-review.json` suivent « Déplacer ». **API** (`duelJudge.ts`, `@anthropic-ai/sdk`
+  1.3.0 figé, externalisé comme undici) : sorties JSON imposées par schéma ; Sonnet 5.5 refuse `temperature` et
+  `budget_tokens` (laissés de côté) ; `stop_reason: 'refusal'` passe CE duel sans tout arrêter ; clé refusée, plus de
+  crédit, limite, réseau : arrêt avec un message clair (24 langues), les votes déjà faits restent. Le PC reste éveillé
+  pendant les duels. Seulement en Conversation (Code a sa série, Vocal demande une écoute). Régression :
+  `test-duel-judge.mjs` (schémas, refus, erreurs de l'API), `test-duel-store.mjs` (attente, validé = vote compté,
+  refusé = effacé), `test-duel-session.mjs` (déroulé complet, rejouer puis passer, refus, arrêt, aucun vote à la main)
+  et `test-duel-panel-ui.mjs` (clé enregistrée sans être réaffichée, clé refusée, nombre envoyé au lancement, rien en
+  Code, vérification un par un au clic et au clavier, avancement et Arrêter). **Non vérifié avec la vraie clé de Léo**
+  (aucune ici) : le premier vrai lancement le dira.
