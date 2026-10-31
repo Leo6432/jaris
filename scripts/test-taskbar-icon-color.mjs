@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadTsModule } from './load-ts-module.mjs'
 
-const { EMOTION_COLORS, tintPixels, isOrbEmotion } = loadTsModule('shared/emotionColors.ts')
+const { EMOTION_COLORS, tintPixels, isOrbEmotion, dotPixels } = loadTsModule('shared/emotionColors.ts')
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 test('recolorer garde la transparence et l’intensité, change seulement la teinte', () => {
@@ -39,8 +39,22 @@ test('seule la grande fenêtre change l’icône, et seulement pour une émotion
   assert.match(handler, /!isOrbEmotion\(emotion\)/)
   assert.match(handler, /fullWindow\.setIcon\(appIconFor\(emotion\)\)/)
   assert.match(handler, /tray\?\.setImage\(trayIconFor\(emotion\)\)/)
+  // Étape 395 : épinglé, Windows garde l'icône du raccourci — la pastille en coin s'affiche quand même, retirée au repos.
+  assert.match(handler, /process\.platform === 'win32'\) fullWindow\.setOverlayIcon\(overlayIconFor\(emotion\), t\(`app\.status\.\$\{emotion\}`\)\)/)
+  assert.match(read('electron/services/trayIcon.ts'), /if \(emotion === 'idle'\) return null/)
   // Au repos : les icônes d'origine, réduites proprement (étape 224), jamais une version recolorée.
   const tray = read('electron/services/trayIcon.ts')
   assert.match(tray, /emotion === 'idle' \? createAppIcon\(\)/)
   assert.match(tray, /emotion === 'idle' \? createTrayIcon\(\)/)
+})
+
+test('la pastille en coin : ronde, de la couleur de l’orbe, transparente hors du rond', () => {
+  const size = 32
+  const px = dotPixels(size, EMOTION_COLORS.thinking, true)
+  const at = (x, y) => [...px.slice((y * size + x) * 4, (y * size + x) * 4 + 4)]
+  assert.deepEqual(at(16, 16), [0x48, 0xb6, 0xff, 255], 'centre : couleur de l’orbe, opaque (B-V-R-A)')
+  assert.equal(at(0, 0)[3], 0, 'coin transparent')
+  assert.equal(at(31, 31)[3], 0)
+  const edge = at(16, 0) // bord : anneau sombre
+  assert.ok(edge[3] > 0 && edge[2] < 0xff, 'bord sombre et visible')
 })

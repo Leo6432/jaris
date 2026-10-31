@@ -10452,3 +10452,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   orange correct). **Non vérifié sous Windows** : si Jaris est épinglé à la barre des tâches, Windows peut garder l'icône
   du raccourci au lieu de celle de la fenêtre. Régression : `node --test scripts/test-taskbar-icon-color.mjs
   scripts/test-window-chrome-ui.mjs`.
+
+- **Étape 395 (v0.40.36), Léo (capture : orbe orange « Jaris réfléchit… », icône Jaris restée turquoise dans la barre
+  des tâches) : « et en bas regarde ».** Le changement de l'étape 394 (`fullWindow.setIcon`) n'a pas d'effet visible
+  quand Jaris est ÉPINGLÉ : Windows y garde l'icône du raccourci. Ajouté le moyen officiel de Windows pour montrer un
+  état sur un bouton de la barre des tâches, qui marche épinglé ou non : une pastille ronde de la couleur de l'orbe en
+  coin de l'icône (`setOverlayIcon`, `overlayIconFor`/`dotPixels`), retirée au repos, avec la phrase d'état traduite
+  (`app.status.*`) pour les lecteurs d'écran. `setIcon` reste pour le cas non épinglé. **Leçon : une icône de fenêtre
+  n'est pas l'icône de la barre des tâches — épinglée, c'est celle du raccourci ; pour signaler un état, la pastille
+  superposée est le seul chemin fiable.** Régression : `node --test scripts/test-taskbar-icon-color.mjs` (pastille
+  ronde, transparente hors du rond, retirée au repos ; vérifié en retirant l'appel). **Non vérifié sous Windows.**
