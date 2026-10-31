@@ -10396,3 +10396,6 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   là où il n'y a qu'une courbe.** Régression : `node --test scripts/test-logo-orb.mjs` (plus de 95 % des points de la
   courbe sur le trait du VRAI logo, cercles et noyau à leur place, plus aucun tirage au hasard, copie du téléphone
   identique ; vérifié avec une forme décalée : 663/1440 points seulement, le test échoue).
+  Premier envoi refusé par la CI Windows : le test cherchait la fin du littéral de phone/app.js par `'\n  }\n'`,
+  absent d'un fichier en CRLF. Normalisé (`replace(/\r\n/g, '\n')`), vérifié sur une copie CRLF (échoue avant, passe
+  après). Troisième fois ce piège : tout test qui découpe un fichier source normalise d'abord ses fins de ligne.

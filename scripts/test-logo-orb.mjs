@@ -63,7 +63,8 @@ test('plus aucun anneau tiré au hasard : la même forme partout', () => {
 })
 
 test('la page du téléphone a une copie identique de la forme du logo', () => {
-  const phone = readFileSync(new URL('../phone/app.js', import.meta.url), 'utf8')
+  // CRLF sous la CI Windows : normaliser avant de chercher la fin du littéral par '\n  }\n'.
+  const phone = readFileSync(new URL('../phone/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const start = phone.indexOf('var ORB_LOGO = ')
   assert.ok(start > 0)
   const literal = phone.slice(start + 'var ORB_LOGO = '.length, phone.indexOf('\n  }\n', start) + 4)
