@@ -287,6 +287,7 @@ const api = {
     invoke(IPC_CHANNELS.duelDeleteModels, models),
   duelRankings: (): Promise<DuelRankingView[]> => invoke(IPC_CHANNELS.duelRankings),
   duelHistory: (): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistory),
+  duelHistoryDelete: (which: string[] | 'all'): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistoryDelete, which),
   duelExportVotes: (): Promise<DuelExportResult> => invoke(IPC_CHANNELS.duelExportVotes),
   duelRemoteSave: (settings: DuelRemoteSettings | null): Promise<DuelRemoteSettings | null> => invoke(IPC_CHANNELS.duelRemoteSave, settings),
   duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),

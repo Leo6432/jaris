@@ -103,6 +103,11 @@ window.jaris = {
     return settings
   },
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
+  duelHistoryDelete: async (which) => {
+    window.__calls.push(['historyDelete', which])
+    window.__history = which === 'all' ? [] : (window.__history || []).filter((e) => !which.includes(e.id))
+    return window.__history
+  },
   duelExportVotes: async () => { window.__calls.push('export'); return window.__exportResult || { saved: true, count: 3 } },
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
   duelHistoryCode: async (id, side) => { window.__calls.push(['historyCode', id, side]); return '<html>\\n<body>serpent</body>\\n</html>' },
@@ -615,6 +620,41 @@ test('étape 362 : « Télécharger les votes » enregistre tout l’historique 
     await page.click(button)
     await page.waitForSelector('.duel__error')
     assert.equal(await page.textContent('.duel__error'), 'Disque plein')
+  }, HISTORY)
+})
+
+test('étape 398 : supprimer un duel ou tout l’historique, toujours après une confirmation dans la page', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.duel-history-button')
+    await page.waitForSelector('.duel-history__item')
+    const deletes = () => page.evaluate(() => window.__calls.filter((c) => Array.isArray(c) && c[0] === 'historyDelete'))
+    // Une corbeille par duel, sur la ligne de la date, habillée par le CSS (pas un bouton du navigateur).
+    const trash = '.duel-history__item:nth-child(2) .duel-history__delete'
+    assert.equal(await page.getAttribute(trash, 'aria-label'), 'Supprimer ce duel')
+    assert.equal(await page.$eval(trash, (el) => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)')
+    await page.click(trash)
+    assert.deepEqual(await deletes(), [], 'la corbeille seule ne supprime rien')
+    await page.waitForSelector('.duel-history__item:nth-child(2) .duel-history__confirm')
+    // « Annuler » : rien n'est supprimé.
+    await page.click('.duel-history__confirm button:has-text("Annuler")')
+    assert.equal(await page.$('.duel-history__confirm'), null)
+    assert.deepEqual(await deletes(), [])
+    // Confirmé : seulement ce duel.
+    await page.click(trash)
+    await page.click('.duel-history__confirm button:has-text("Supprimer")')
+    await page.waitForFunction(() => document.querySelectorAll('.duel-history__item').length === 2)
+    assert.deepEqual(await deletes(), [['historyDelete', ['v2']]])
+    assert.doesNotMatch(await page.textContent('.duel-history__list'), /serpent/)
+    // Tout supprimer : une confirmation qui dit combien et que c'est définitif.
+    await page.click('.duel-history__delete-all')
+    await page.waitForSelector('.duel-history__confirm-all')
+    assert.match(await page.textContent('.duel-history__confirm-all'), /Duels à effacer : 2\..*définitif/)
+    assert.equal((await deletes()).length, 1, 'le bouton seul n’efface rien')
+    await page.click('.duel-history__confirm-all button:has-text("Tout effacer")')
+    await page.waitForFunction(() => document.querySelector('.duel-home__note')?.textContent?.includes('Aucun duel'))
+    assert.deepEqual((await deletes())[1], ['historyDelete', 'all'])
+    assert.equal(await page.$eval('.duel-history__delete-all', (el) => el.disabled), true, 'plus rien à supprimer')
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   }, HISTORY)
 })
 

@@ -1444,6 +1444,8 @@ export const IPC_CHANNELS = {
   duelHistory: 'jaris:duel-history',
   duelHistoryApp: 'jaris:duel-history-app',
   duelHistoryCode: 'jaris:duel-history-code',
+  /** renderer -> main, étape 398 : supprimer des duels de l'historique (`'all'` : tous). */
+  duelHistoryDelete: 'jaris:duel-history-delete',
   duelSideCode: 'jaris:duel-side-code',
   duelRetry: 'jaris:duel-retry',
   duelSkip: 'jaris:duel-skip',

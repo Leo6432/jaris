@@ -107,6 +107,8 @@ export const OWNED_ENTRIES = [
   'reminders.json',
   // Étape 355 : les votes des duels, et les applications des duels Code gardées pour l'historique (duelStore.ts).
   'duel-votes.json',
+  // Étape 398 : les identifiants des votes supprimés depuis l'historique.
+  'duel-votes-deleted.json',
   'duel-apps',
   // Étape 382 : une série de duels en cours, et ses applications pas encore votées (duelSeriesStore.ts).
   'duel-series.json',
@@ -203,6 +205,8 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   'generated-videos': 'keep-both',
   'reminders.json': 'merge-reminders',
   'duel-votes.json': 'merge-reminders',
+  // Union : une suppression faite d'un côté vaut aussi de l'autre.
+  'duel-votes-deleted.json': 'merge-reminders',
   'duel-apps': 'keep-both',
   // Une seule série à la fois : celle de la racine gagne (ses applications vont avec elle).
   'duel-series.json': 'destination-wins',

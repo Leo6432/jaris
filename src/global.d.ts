@@ -235,6 +235,7 @@ declare global {
       duelDeleteModels: (models: string[]) => Promise<{ deleted: string[]; failed: { model: string; error: string }[] }>
       duelRankings: () => Promise<DuelRankingView[]>
       duelHistory: () => Promise<DuelHistoryEntry[]>
+      duelHistoryDelete: (which: string[] | 'all') => Promise<DuelHistoryEntry[]>
       duelExportVotes: () => Promise<DuelExportResult>
       duelRemoteSave: (settings: DuelRemoteSettings | null) => Promise<DuelRemoteSettings | null>
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>

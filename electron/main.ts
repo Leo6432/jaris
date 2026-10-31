@@ -78,6 +78,7 @@ import {
   closeDuel,
   deleteDuelModels,
   duelAudio,
+  deleteDuelHistory,
   duelHistory,
   duelHistoryApp,
   duelHistoryCode,
@@ -1831,6 +1832,7 @@ app.whenReady().then(async () => {
   // Étape 377 : la machine qui fait tourner les modèles des duels (revérifiée par saveDuelRemote).
   ipcMain.handle(IPC_CHANNELS.duelRemoteSave, (_event, settings: unknown) => saveDuelRemote(settings))
   ipcMain.handle(IPC_CHANNELS.duelHistory, () => duelHistory())
+  ipcMain.handle(IPC_CHANNELS.duelHistoryDelete, (_event, which: unknown) => deleteDuelHistory(which))
   // Étape 362 : « Télécharger les votes ». Même garde dialogOpen que les autres « Enregistrer sous » (étape 93).
   ipcMain.handle(IPC_CHANNELS.duelExportVotes, async (): Promise<DuelExportResult> => {
     const now = new Date()

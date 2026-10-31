@@ -10106,6 +10106,64 @@ ul.reply-list--nested {
   font-size: 13px;
 }
 
+/* Étape 398 : supprimer des duels de l'historique. */
+.duel-history__head .duel-history__download {
+  margin-left: auto;
+}
+
+.duel-history__delete-all {
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  font-size: 13px;
+}
+
+.duel-history__confirm-all {
+  margin: 0;
+}
+
+.duel-history__item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.duel-history__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--hud-text-faint);
+  cursor: pointer;
+}
+
+.duel-history__delete:hover:not(:disabled),
+.duel-history__delete:focus-visible {
+  color: var(--hud-danger);
+  background: var(--jv-bubble);
+}
+
+.duel-history__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hud-danger);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--hud-text);
+}
+
+.duel-history__confirm span {
+  flex: 1 1 200px;
+}
+
 .duel-history__exported {
   margin: -12px 0 0;
   font-size: 13px;

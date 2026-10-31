@@ -3,6 +3,7 @@ import { useReportActivity } from '@/lib/useReportActivity'
 import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
+import { DeleteIcon } from '@/components/icons'
 import { setVoiceOutputDevice } from '@/components/JarisOrb'
 import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatModelName } from '@/lib/formatModelName'
@@ -997,6 +998,22 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
   // Étape 362 : « Télécharger les votes » — résultat affiché sous le bouton (rien sur une annulation).
   const [exporting, setExporting] = useState(false)
   const [exported, setExported] = useState<{ count: number } | { error: string } | null>(null)
+  // Étape 398 : supprimer un duel (confirmation dans sa ligne) ou tout l'historique (confirmation sous l'en-tête).
+  const [confirmDelete, setConfirmDelete] = useState<string | 'all' | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const removeVotes = (which: string[] | 'all'): void => {
+    setDeleting(true)
+    setError(null)
+    window.jaris
+      .duelHistoryDelete(which)
+      .then((list) => {
+        setEntries(list)
+        setConfirmDelete(null)
+        setExported(null)
+      })
+      .catch((err) => setError(ipcErrorMessage(err)))
+      .finally(() => setDeleting(false))
+  }
   const exportVotes = (): void => {
     setExporting(true)
     setExported(null)
@@ -1040,7 +1057,34 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
             <LineIcon d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" size={16} />
             {exporting ? t('common.loading') : t('duel.history.download')}
           </button>
+          <button
+            type="button"
+            className="duel-btn duel-history__delete-all"
+            onClick={() => setConfirmDelete('all')}
+            disabled={deleting || !entries?.length || confirmDelete === 'all'}
+          >
+            <DeleteIcon />
+            {t('duel.history.deleteAll')}
+          </button>
         </div>
+        {confirmDelete === 'all' && (
+          <div className="duel-end-confirm duel-history__confirm-all" role="alertdialog" aria-labelledby="duel-delete-all-title" aria-describedby="duel-delete-all-text">
+            <h2 id="duel-delete-all-title" className="duel-end-confirm__title">
+              {t('duel.history.deleteAllTitle')}
+            </h2>
+            <p id="duel-delete-all-text" className="duel-home__note">
+              {t('duel.history.deleteAllText', { count: entries?.length ?? 0 })}
+            </p>
+            <div className="duel-end-confirm__actions">
+              <button type="button" className="duel-btn duel-btn--primary" onClick={() => setConfirmDelete(null)} disabled={deleting} autoFocus>
+                {t('duel.history.deleteCancel')}
+              </button>
+              <button type="button" className="duel-btn duel-end-confirm__danger" onClick={() => removeVotes('all')} disabled={deleting}>
+                {t('duel.history.deleteAllConfirm')}
+              </button>
+            </div>
+          </div>
+        )}
         {exported && (
           <p className={'error' in exported ? 'duel__error' : 'duel-history__exported'} role="status">
             {'error' in exported ? exported.error : t('duel.history.downloaded', { count: exported.count })}
@@ -1075,9 +1119,32 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
               const expanded = open === entry.id
               return (
                 <li key={entry.id} className="duel-history__item">
-                  <p className="duel-history__meta">
-                    {formatRecentDate(entry.at, now)} · {t(CATEGORY_LABEL[entry.category])}
-                  </p>
+                  <div className="duel-history__item-head">
+                    <p className="duel-history__meta">
+                      {formatRecentDate(entry.at, now)} · {t(CATEGORY_LABEL[entry.category])}
+                    </p>
+                    <button
+                      type="button"
+                      className="duel-history__delete"
+                      title={t('duel.history.delete')}
+                      aria-label={t('duel.history.delete')}
+                      onClick={() => setConfirmDelete(entry.id)}
+                      disabled={deleting}
+                    >
+                      <DeleteIcon />
+                    </button>
+                  </div>
+                  {confirmDelete === entry.id && (
+                    <div className="duel-history__confirm" role="alertdialog" aria-label={t('duel.history.deleteOneText')}>
+                      <span>{t('duel.history.deleteOneText')}</span>
+                      <button type="button" className="duel-btn duel-end-confirm__danger" onClick={() => removeVotes([entry.id])} disabled={deleting}>
+                        {t('duel.history.deleteOneConfirm')}
+                      </button>
+                      <button type="button" className="duel-btn" onClick={() => setConfirmDelete(null)} disabled={deleting} autoFocus>
+                        {t('duel.history.deleteCancel')}
+                      </button>
+                    </div>
+                  )}
                   <p className="duel-summary__round-prompt">{entry.prompt}</p>
                   <p className="duel-summary__round-models">
                     {t('duel.summary.versus', { a: formatModelName(entry.modelA ?? '—'), b: formatModelName(entry.modelB ?? '—') })}

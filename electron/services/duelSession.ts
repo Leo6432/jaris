@@ -18,7 +18,7 @@ import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
 import { synthesizeSpeech } from './tts'
-import { addDuelVote, getDuelVotes, getRankingVotes, readDuelApp, saveDuelApp } from './duelStore'
+import { addDuelVote, deleteDuelVotes, getDuelVotes, getRankingVotes, readDuelApp, saveDuelApp } from './duelStore'
 import {
   SERIES_FORMAT,
   SERIES_VERSION,
@@ -1522,6 +1522,18 @@ export function duelHistory(): DuelHistoryEntry[] {
       modelB: vote.modelB,
       sides: vote.sides ?? null
     }))
+}
+
+/**
+ * Étape 398 : supprimer des duels de l'historique (`'all'` : tous). Ce qui vient de l'écran est revérifié : `'all'`, ou
+ * une liste d'identifiants de taille raisonnable. Renvoie l'historique à jour.
+ */
+export async function deleteDuelHistory(which: unknown): Promise<DuelHistoryEntry[]> {
+  if (which !== 'all' && !(Array.isArray(which) && which.length <= 10_000 && which.every((id) => typeof id === 'string'))) {
+    throw new Error(t('duel.error.badRequest'))
+  }
+  await deleteDuelVotes(which)
+  return duelHistory()
 }
 
 /** L'application d'un duel Code de l'historique, dans l'aperçu isolé (`null` si elle n'a pas été gardée). */

@@ -10479,3 +10479,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   tâches (étape 395, `setOverlayIcon`) est retirée, avec `overlayIconFor` et `dotPixels` qui ne servaient qu'à elle. Restent
   l'icône de fenêtre recolorée (`setIcon`), le vrai .ico déclaré à Windows (`setAppDetails`, étape 396) et l'icône près de
   l'horloge. Régression : `scripts/test-taskbar-icon-color.mjs` (plus aucun `setOverlayIcon` dans main.ts).
+- **Étape 398 (v0.40.39), Léo : « dans l'historique duel, pouvoir supprimer des choses ou tout supprimer ».** Une
+  corbeille par duel et « Tout supprimer » dans l'historique des duels, chacune avec une confirmation dans la page (jamais
+  une fenêtre de Windows, qui replierait Jaris en widget, étape 93). `deleteDuelVotes` (duelStore.ts) retire les votes de
+  ce PC et leurs applications Code, et note leurs identifiants dans `duel-votes-deleted.json` AVANT de réécrire la liste.
+  Deux raisons : un vote déjà livré avec Jaris (étape 369) ne compte plus non plus sur ce PC, et un disque rebranché (union
+  par identifiant, dans OWNED_ENTRIES avec la règle `merge-reminders`) ne ramène jamais un vote supprimé. Le classement et
+  le choix des modèles suivent tout de suite (`getRankingVotes` rend un nouvel objet). Ce qui vient de l'écran est
+  revérifié (`'all'` ou une liste d'identifiants). Régression : `test-duel-store.mjs` (vrai dossier : vote et application
+  effacés, copie livrée ignorée, relu après redémarrage et liste ancienne remise, tout supprimer ; vérifié en retirant le
+  filtre des votes livrés) et `test-duel-panel-ui.mjs` (corbeille et « Tout supprimer » n'effacent rien sans confirmation,
+  « Annuler », un seul duel retiré).
