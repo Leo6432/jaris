@@ -147,7 +147,7 @@ import {
 import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
-import { appIconFor, createAppIcon, createTrayIcon, overlayIconFor, trayIconFor } from './services/trayIcon'
+import { appIconFor, createAppIcon, createTrayIcon, overlayIconFor, trayIconFor, writeTaskbarIcons } from './services/trayIcon'
 import { isOrbEmotion, type OrbEmotion } from '../shared/emotionColors'
 import { languageState, loadLanguageSetting, saveLanguageSetting } from './services/language'
 import { t } from '../shared/i18n'
@@ -293,6 +293,26 @@ const VOICE_RESTART_MIN_INTERVAL_MS = 60_000
 let fullWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+// Étape 396 : l'icône du bouton de la barre des tâches, déclarée à Windows comme un vrai fichier .ico par couleur
+// (setAppDetails, la voie de Chrome), Windows ignorant setIcon() pour ce bouton. Même identifiant que le raccourci
+// créé par l'installeur (electron-builder.yml, appId) : le bouton reste celui de Jaris.
+const TASKBAR_APP_ID = 'com.jaris.assistant'
+let taskbarIcons: Record<OrbEmotion, string> | null = null
+let iconEmotion: OrbEmotion = 'idle'
+function applyTaskbarIcon(win: BrowserWindow, emotion: OrbEmotion): void {
+  if (process.platform !== 'win32' || !taskbarIcons || win.isDestroyed()) return
+  try {
+    win.setAppDetails({
+      appId: TASKBAR_APP_ID,
+      appIconPath: taskbarIcons[emotion],
+      appIconIndex: 0,
+      relaunchCommand: `"${process.execPath}"`,
+      relaunchDisplayName: 'Jaris'
+    })
+  } catch (err) {
+    console.error('[icon] icône de la barre des tâches impossible :', err)
+  }
+}
 /** Passe à true via le menu de la barre système "Quitter" OU en fermant la croix de la fenêtre de réglages
  * (les deux quittent vraiment Jaris désormais) — seul minimize (juste en dessous) continue de replier en
  * widget sans jamais toucher à ce drapeau. */
@@ -624,6 +644,7 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
   })
 
   loadRenderer(win, 'full')
+  applyTaskbarIcon(win, iconEmotion)
   return win
 }
 
@@ -1877,13 +1898,13 @@ app.whenReady().then(async () => {
   )
   // Étape 394 : l'icône de la barre des tâches et celle près de l'horloge prennent la couleur de ce que fait Jaris.
   // Seule la grande fenêtre l'envoie (elle seule connaît Chat, Code, Image, Vidéo et Duel, en plus de la voix).
-  let iconEmotion: OrbEmotion = 'idle'
   ipcMain.on(IPC_CHANNELS.setShownEmotion, (event, emotion: unknown) => {
     if (!fullWindow || fullWindow.isDestroyed() || event.sender !== fullWindow.webContents) return
     if (!isOrbEmotion(emotion) || emotion === iconEmotion) return
     iconEmotion = emotion
     try {
       fullWindow.setIcon(appIconFor(emotion))
+      applyTaskbarIcon(fullWindow, emotion)
       tray?.setImage(trayIconFor(emotion))
       // Étape 395 : épinglé, Windows garde l'icône du raccourci ; la pastille en coin, elle, s'affiche toujours.
       if (process.platform === 'win32') fullWindow.setOverlayIcon(overlayIconFor(emotion), t(`app.status.${emotion}`))
@@ -2532,6 +2553,10 @@ app.whenReady().then(async () => {
 
   // Gardé en variable de module : sans référence, Electron peut ramasser l'icône par le garbage collector
   // et la faire disparaître de la barre système.
+  void writeTaskbarIcons(join(app.getPath('userData'), 'taskbar-icons')).then((paths) => {
+    taskbarIcons = paths
+    if (fullWindow) applyTaskbarIcon(fullWindow, iconEmotion)
+  })
   tray = new Tray(createTrayIcon())
   tray.setToolTip('Jaris')
   refreshTrayMenu()

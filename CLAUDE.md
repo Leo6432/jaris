@@ -10462,3 +10462,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   n'est pas l'icône de la barre des tâches — épinglée, c'est celle du raccourci ; pour signaler un état, la pastille
   superposée est le seul chemin fiable.** Régression : `node --test scripts/test-taskbar-icon-color.mjs` (pastille
   ronde, transparente hors du rond, retirée au repos ; vérifié en retirant l'appel). **Non vérifié sous Windows.**
+- **Étape 396 (v0.40.37), Léo : « c'est même pas épinglé ».** Mon explication de l'étape 395 (Windows garde l'icône du
+  raccourci quand Jaris est épinglé) était fausse pour son cas : avec la v0.40.36, la pastille apparaît, donc l'état
+  arrive bien jusqu'à Windows, mais le logo reste turquoise, Jaris n'étant pas épinglé. Windows ignore donc `setIcon()`
+  pour le bouton de la barre des tâches. La cause exacte n'est pas prouvée, faute de Windows ici. Essai : la voie de
+  Chrome pour ses icônes de profil. Au démarrage, chaque couleur du logo est écrite en vrai fichier .ico
+  (`encodeIco`, shared/ico.ts : des PNG dans un .ico, de 16 à 256 px), puis déclarée à Windows comme icône de la
+  fenêtre (`win.setAppDetails`, propriété « RelaunchIconResource »), avec l'identifiant du raccourci de l'installeur
+  (`com.jaris.assistant`). Au repos, c'est le .ico d'origine. La pastille et `setIcon` restent en place : si l'essai
+  marche, la pastille sera peut-être de trop, à décider avec Léo. **Leçon : avant d'expliquer pourquoi un affichage de
+  Windows ne change pas, demander d'abord ce que l'utilisateur voit. Ici, une seule question (« la pastille
+  apparaît-elle ? ») a séparé « l'état n'arrive pas » de « Windows ignore setIcon ».** Régression :
+  `scripts/test-taskbar-icon-color.mjs` (structure du .ico vérifiée aussi en l'ouvrant avec Pillow ; branchement
+  dans la fenêtre). **Non vérifié sous Windows.**

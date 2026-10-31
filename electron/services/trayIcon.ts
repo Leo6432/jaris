@@ -4,6 +4,8 @@ import frame from '../../assets/icon-frame.json'
 import logoPath from '../../assets/jaris-logo.png?asset'
 import { resourcesRoot } from '../paths'
 import { EMOTION_COLORS, dotPixels, tintPixels, type OrbEmotion } from '../../shared/emotionColors'
+import { encodeIco } from '../../shared/ico'
+import { mkdir, writeFile } from 'fs/promises'
 
 /**
  * Le même logo transparent pour la fenêtre et l’icône près de l’horloge.
@@ -88,4 +90,38 @@ export function overlayIconFor(emotion: OrbEmotion): NativeImage | null {
   }
   overlayCache.set(emotion, image)
   return image
+}
+
+/**
+ * Étape 396 (Léo : « c'est même pas épinglé ») : avec la v0.40.36, la pastille apparaît mais le logo reste turquoise, Jaris
+ * n'étant pas épinglé. Windows ignore donc l'icône donnée par setIcon() pour le bouton de la barre des tâches. Essai : la
+ * même voie que Chrome pour ses icônes de profil — l'icône de la FENÊTRE déclarée à Windows comme un vrai fichier .ico
+ * (propriété « RelaunchIconResource », setAppDetails). Chaque couleur est écrite une fois au démarrage ; au repos, le .ico
+ * d'origine. Renvoie null hors Windows ou si l'écriture échoue (rien ne change alors).
+ */
+const ICO_SIZES = [16, 20, 24, 32, 40, 48, 64, 256]
+
+export async function writeTaskbarIcons(dir: string): Promise<Record<OrbEmotion, string> | null> {
+  if (process.platform !== 'win32') return null
+  try {
+    await mkdir(dir, { recursive: true })
+    const logo = nativeImage.createFromPath(logoPath).crop({ x: frame.left, y: frame.top, width: frame.width, height: frame.height })
+    const paths = { idle: windowsIconPath() } as Record<OrbEmotion, string>
+    for (const emotion of Object.keys(EMOTION_COLORS) as OrbEmotion[]) {
+      if (emotion === 'idle') continue
+      const images = ICO_SIZES.map((size) => {
+        const small = logo.resize({ width: size, height: size, quality: 'best' })
+        const tinted = Buffer.from(tintPixels(small.toBitmap(), EMOTION_COLORS[emotion], true))
+        const png = nativeImage.createFromBitmap(tinted, { width: size, height: size }).toPNG()
+        return { size, png: new Uint8Array(png) }
+      })
+      const path = join(dir, `jaris-${emotion}.ico`)
+      await writeFile(path, encodeIco(images))
+      paths[emotion] = path
+    }
+    return paths
+  } catch (err) {
+    console.error('[icon] écriture des icônes de la barre des tâches impossible :', err)
+    return null
+  }
 }

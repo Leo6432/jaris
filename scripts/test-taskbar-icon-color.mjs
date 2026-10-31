@@ -58,3 +58,38 @@ test('la pastille en coin : ronde, de la couleur de l’orbe, transparente hors 
   const edge = at(16, 0) // bord : anneau sombre
   assert.ok(edge[3] > 0 && edge[2] < 0xff, 'bord sombre et visible')
 })
+
+// Étape 396 (Léo : « c'est même pas épinglé ») : la pastille marche, mais Windows ignore setIcon() pour le bouton de la
+// barre des tâches. Essai : chaque couleur écrite en vrai .ico et déclarée à Windows (setAppDetails, comme Chrome).
+test('un .ico lisible par Windows : en-tête, une entrée par taille, PNG à la bonne place', () => {
+  const { encodeIco } = loadTsModule('shared/ico.ts')
+  const png = (n, fill) => new Uint8Array(n).fill(fill)
+  const ico = encodeIco([{ size: 16, png: png(10, 1) }, { size: 256, png: png(20, 2) }])
+  const view = new DataView(ico.buffer)
+  assert.equal(view.getUint16(0, true), 0)
+  assert.equal(view.getUint16(2, true), 1, 'type icône')
+  assert.equal(view.getUint16(4, true), 2, 'deux tailles')
+  assert.equal(ico[6], 16)
+  assert.equal(ico[6 + 16], 0, '256 s’écrit 0')
+  assert.equal(view.getUint16(6 + 6, true), 32, '32 bits par pixel')
+  const off1 = view.getUint32(6 + 12, true)
+  const off2 = view.getUint32(6 + 16 + 12, true)
+  assert.equal(off1, 6 + 32)
+  assert.equal(view.getUint32(6 + 8, true), 10)
+  assert.deepEqual([...ico.slice(off1, off1 + 10)], Array(10).fill(1))
+  assert.deepEqual([...ico.slice(off2, off2 + 20)], Array(20).fill(2))
+  assert.equal(ico.length, 6 + 32 + 30)
+  assert.throws(() => encodeIco([{ size: 300, png: png(1, 0) }]))
+})
+
+test('la couleur part aussi vers Windows comme icône de fenêtre, avec l’identifiant du raccourci', () => {
+  const main = read('electron/main.ts')
+  const start = main.indexOf('ipcMain.on(IPC_CHANNELS.setShownEmotion')
+  const handler = main.slice(start, main.indexOf('\n  })', start))
+  assert.match(handler, /applyTaskbarIcon\(fullWindow, emotion\)/)
+  assert.match(main, /appIconPath: taskbarIcons\[emotion\]/)
+  const appId = read('electron-builder.yml').match(/^appId: (.+)$/m)[1].trim()
+  assert.match(main, new RegExp(`TASKBAR_APP_ID = '${appId.replace(/\./g, '\\.')}'`), 'même identifiant que le raccourci de l’installeur')
+  assert.match(main, /applyTaskbarIcon\(win, iconEmotion\)\n  return win/, 'une fenêtre recréée reprend la bonne couleur')
+  assert.match(read('electron/services/trayIcon.ts'), /paths = \{ idle: windowsIconPath\(\) \}/, 'au repos : le .ico d’origine')
+})
