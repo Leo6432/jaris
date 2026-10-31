@@ -48,9 +48,13 @@ test('la question : Sonnet 5.5, sortie JSON imposée, outils de CE PC, sans rép
   assert.equal(body.output_config.format.type, 'json_schema')
   assert.deepEqual(body.output_config.format.schema.required, ['prompt'])
   assert.equal(body.output_config.format.schema.additionalProperties, false)
-  assert.match(body.system, /search_web: Cherche sur internet/)
-  assert.match(body.system, /in French/, 'la langue de Jaris')
-  assert.match(body.system, /shut down/, 'jamais d’extinction du PC')
+  const system = body.system.map((block) => block.text).join('\n')
+  assert.match(system, /search_web: Cherche sur internet/)
+  assert.match(system, /in French/, 'la langue de Jaris')
+  assert.match(system, /shut down/, 'jamais d’extinction du PC')
+  // La notice qui explique Jaris est en tête, mise en cache (identique d'un duel à l'autre).
+  assert.match(body.system[0].text, /# What Jaris is/)
+  assert.deepEqual(body.system[0].cache_control, { type: 'ephemeral' })
   assert.match(body.messages[0].content, /- Ouvre le Bloc-notes\n- Rappelle-moi de boire/)
   // Aucun réglage refusé par Sonnet 5.5 (température, réflexion désactivée, budget de réflexion).
   assert.equal(body.temperature, undefined)
@@ -59,25 +63,47 @@ test('la question : Sonnet 5.5, sortie JSON imposée, outils de CE PC, sans rép
 
 test('le vote : A/B anonymes, résultats des outils inclus, verdict et raison relus', async () => {
   const sent = fake(message(JSON.stringify({ winner: 'b', reason: 'B a vraiment programmé le rappel.' })))
-  const verdict = await judge.judgeDuel(
-    'sk-ant-cle',
-    'Rappelle-moi de sortir le chien dans 20 minutes',
-    side('C’est noté !'),
-    side('Rappel programmé.', {
+  const verdict = await judge.judgeDuel('sk-ant-cle', {
+    prompt: 'Rappelle-moi de sortir le chien dans 20 minutes',
+    a: side('C’est noté !'),
+    b: side('Rappel programmé.', {
       toolLog: ['Outil appelé : set_reminder({"delay_minutes":20})', "Résultat de l'outil : Rappel programmé dans 20 minutes."]
-    })
-  )
+    }),
+    tools: [{ name: 'set_reminder', description: 'Programme un rappel' }]
+  })
   assert.deepEqual(verdict, { outcome: 'b', reason: 'B a vraiment programmé le rappel.' })
-  const content = sent[0].body.messages[0].content
+  // La même notice que pour la question : ce qu'est Jaris, ce que prouve chaque outil, les outils de ce PC.
+  const system = sent[0].body.system.map((block) => block.text).join('\n')
+  assert.match(system, /# What Jaris is/)
+  assert.match(system, /open_app: "… a été lancé" means Windows received the launch request/)
+  assert.match(system, /- set_reminder: Programme un rappel/)
+  assert.equal(sent[0].body.messages[0].content.length, 1, 'sans captures : le texte seul')
+  const content = sent[0].body.messages[0].content[0].text
   assert.match(content, /Request: Rappelle-moi de sortir le chien/)
   assert.match(content, /=== Assistant A ===\nTool calls: none\nFinal reply:\nC’est noté !/)
   assert.match(content, /Résultat de l'outil : Rappel programmé dans 20 minutes\./)
   assert.deepEqual(sent[0].body.output_config.format.schema.properties.winner.enum, ['a', 'b', 'tie', 'bothBad'])
   // Une réponse illisible ou hors des choix n'est jamais prise pour un vote.
   fake(message(JSON.stringify({ winner: 'c', reason: 'x' })))
-  await assert.rejects(() => judge.judgeDuel('k', 'p', side('a'), side('b')), (err) => err.name === 'JudgeStopError')
+  await assert.rejects(() => judge.judgeDuel('k', { prompt: 'p', a: side('a'), b: side('b'), tools: [] }), (err) => err.name === 'JudgeStopError')
   fake(message('pas du json'))
-  await assert.rejects(() => judge.judgeDuel('k', 'p', side('a'), side('b')), (err) => err.name === 'JudgeStopError')
+  await assert.rejects(() => judge.judgeDuel('k', { prompt: 'p', a: side('a'), b: side('b'), tools: [] }), (err) => err.name === 'JudgeStopError')
+})
+
+test('le vote avec l’écran : chaque capture est une vraie image, annoncée par son moment, une capture ratée est sautée', async () => {
+  const sent = fake(message(JSON.stringify({ winner: 'a', reason: 'Le Bloc-notes est ouvert sur la capture après A.' })))
+  await judge.judgeDuel('k', {
+    prompt: 'Ouvre le Bloc-notes',
+    a: side('C’est ouvert.'),
+    b: side('C’est ouvert.'),
+    tools: [],
+    screens: { before: 'AAAA', afterA: null, afterB: 'CCCC' }
+  })
+  const content = sent[0].body.messages[0].content
+  assert.deepEqual(
+    content.slice(1).map((block) => (block.type === 'text' ? block.text : `${block.source.media_type}:${block.source.data}`)),
+    ['Screenshot before A started:', 'image/jpeg:AAAA', 'Screenshot after B finished:', 'image/jpeg:CCCC']
+  )
 })
 
 test('un refus de Claude passe CE duel ; une clé refusée, plus de crédit ou pas de réseau arrêtent avec un message clair', async () => {

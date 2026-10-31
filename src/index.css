@@ -10113,6 +10113,11 @@ ul.reply-list--nested {
   gap: 8px;
 }
 
+/* Montrer l'écran à Claude : une case à cocher qui reprend la ligne des modèles à choisir, encadrée. */
+.duel-judge__screens {
+  border: 1px solid var(--hud-line);
+}
+
 .duel-judge__key-row {
   display: flex;
   flex-wrap: wrap;

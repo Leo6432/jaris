@@ -78,6 +78,20 @@ export async function captureScreenshotBase64(): Promise<ScreenCapture> {
   }
 }
 
+/**
+ * Étape 399 : capture plein écran en JPEG (base64) pour Claude, qui juge les duels. Plus légère qu'un PNG : trois
+ * captures partent avec chaque vote.
+ */
+export async function captureScreenJpegBase64(): Promise<string> {
+  const { size } = screen.getPrimaryDisplay()
+  const width = Math.min(size.width, MAX_SCREENSHOT_WIDTH)
+  const height = Math.round((size.height / size.width) * width)
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width, height } })
+  const source = sources[0]
+  if (!source || source.thumbnail.isEmpty()) throw new Error(t('vision.noSource'))
+  return source.thumbnail.toJPEG(80).toString('base64')
+}
+
 export interface PilotScreenCapture extends ScreenCapture {
   /** La même capture à pleine résolution : le viseur (MAI-UI, étape 251) y recadre son 2e regard (zoom). */
   full: NativeImage

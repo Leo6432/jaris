@@ -59,8 +59,8 @@ window.jaris = {
   duelState: async () => window.__view,
   duelPlan: async (category) => { window.__calls.push(['plan', category]); return { ...window.__plan, category } },
   duelRankings: async () => window.__rankings,
-  duelStart: async (category, count, series, judged) => {
-    window.__calls.push(judged !== undefined ? ['start', category, count, series, judged] : series === undefined ? ['start', category, count] : ['start', category, count, series])
+  duelStart: async (category, count, series, judged, judgeScreens) => {
+    window.__calls.push(judged !== undefined ? ['start', category, count, series, judged, judgeScreens] : series === undefined ? ['start', category, count] : ['start', category, count, series])
     window.__category = category
     return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
   },
@@ -1093,7 +1093,30 @@ test('étape 399 : « Qui vote ? » — Claude demande la clé, puis lance avec 
     assert.equal(call[1], 'conversation')
     assert.equal(call[3], undefined, 'pas de série en Conversation')
     assert.equal(call[4], value, 'le nombre de duels par modèle part avec le lancement')
+    assert.equal(call[5], true, 'les captures d’écran sont demandées par défaut')
   })
+})
+
+test('étape 399 : « Montrer mon écran à Claude » — cochée par défaut, décochée elle n’envoie aucune capture, et le texte le dit', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.click('.duel-judge__mode:has-text("Claude")')
+      await page.waitForSelector('.duel-judge__screens')
+      assert.equal(await page.getAttribute('.duel-judge__screens', 'aria-checked'), 'true')
+      assert.match(await page.textContent('.duel-judge'), /3 captures de ton écran par duel/)
+      // Même famille visuelle que les cases des modèles, mais encadrée.
+      const border = await page.$eval('.duel-judge__screens', (el) => getComputedStyle(el).borderTopStyle)
+      assert.equal(border, 'solid')
+      await page.click('.duel-judge__screens')
+      assert.equal(await page.getAttribute('.duel-judge__screens', 'aria-checked'), 'false')
+      assert.doesNotMatch(await page.textContent('.duel-judge'), /captures de ton écran/)
+      await page.locator('.duel-home__start').click()
+      await page.waitForFunction(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'start'))
+      const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+      assert.equal(call[5], false)
+    },
+    `window.__claudeKey = { saved: true, last4: 'abcd' }`
+  )
 })
 
 test('étape 399 : clé refusée — le vrai message s’affiche, rien n’est enregistré', options, async () => {

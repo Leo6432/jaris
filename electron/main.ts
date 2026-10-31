@@ -174,6 +174,7 @@ import {
 import { appendJournal, getJournalPath } from './services/requestJournal'
 import { getProfile, patchProfile, saveProfile } from './services/profileStore'
 import { setPilotWindowHooks } from './services/pilotWindows'
+import { captureScreenJpegBase64 } from './services/vision'
 import {
   getLaunchAtStartup,
   LOGIN_REVEAL_GRACE_MS,
@@ -1771,6 +1772,23 @@ app.whenReady().then(async () => {
         if (powerSaveBlocker.isStarted(seriesAwake)) powerSaveBlocker.stop(seriesAwake)
         seriesAwake = null
       }
+    },
+    // Étape 399 : les fenêtres de Jaris sont retirées de la capture le temps de la prendre (sous Windows 10 2004 et
+    // plus, setContentProtection les exclut des captures) : Claude doit voir ce que les modèles ont fait, pas Jaris.
+    captureScreen: async () => {
+      const ours = [fullWindow, widgetWindow].filter((w): w is BrowserWindow => !!w && !w.isDestroyed())
+      ours.forEach((w) => w.setContentProtection(true))
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        return await captureScreenJpegBase64()
+      } catch (err) {
+        console.error('[jaris] Capture pour Claude impossible :', err)
+        return null
+      } finally {
+        if (fullWindow && !fullWindow.isDestroyed()) fullWindow.setContentProtection(false)
+        // Le widget reprend l'état que lui donne le pilotage d'écran (protégé seulement pendant un pilotage).
+        applyPilotWidgetGuard()
+      }
     }
   })
   void loadDuelVotes()
@@ -1784,22 +1802,24 @@ app.whenReady().then(async () => {
     return value
   }
   ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
-  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown, judged: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown, judged: unknown, judgeScreens: unknown) => {
     // Étape 382 : une série de duels Code — le nombre de duels par modèle (revérifié par startDuel).
     if (series !== undefined && series !== null && !isDuelSeriesCount(series)) throw new Error(t('duel.error.badRequest'))
     // Étape 399 : duels Conversation jugés par Claude — le nombre de duels par modèle (revérifié par startDuel).
     if (judged !== undefined && judged !== null && !isDuelSeriesCount(judged)) throw new Error(t('duel.error.badRequest'))
     const perModel = typeof series === 'number' ? series : undefined
     const judgePerModel = typeof judged === 'number' ? judged : undefined
+    // Étape 399 : montrer l'écran à Claude (captures) — un booléen, rien d'autre.
+    const screens = judgeScreens === true
     // Un nombre (modèles au hasard) ou, étape 363, la liste des modèles choisis à la main — revérifiée par startDuel.
     if (Array.isArray(pick)) {
       if (pick.length > 200 || !pick.every((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)) {
         throw new Error(t('duel.error.badRequest'))
       }
-      return startDuel(duelCategory(category), pick as string[], perModel, judgePerModel)
+      return startDuel(duelCategory(category), pick as string[], perModel, judgePerModel, screens)
     }
     if (typeof pick !== 'number' || !Number.isInteger(pick) || pick < 2 || pick > 6) throw new Error(t('duel.error.badRequest'))
-    return startDuel(duelCategory(category), pick, perModel, judgePerModel)
+    return startDuel(duelCategory(category), pick, perModel, judgePerModel, screens)
   })
   // Étape 399 : la clé API Claude (jamais renvoyée à l'écran : seulement « enregistrée » et ses 4 derniers caractères).
   ipcMain.handle(IPC_CHANNELS.claudeKeyStatus, () => claudeKeyStatus())

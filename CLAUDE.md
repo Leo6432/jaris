@@ -10517,3 +10517,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   et `test-duel-panel-ui.mjs` (clé enregistrée sans être réaffichée, clé refusée, nombre envoyé au lancement, rien en
   Code, vérification un par un au clic et au clavier, avancement et Arrêter). **Non vérifié avec la vraie clé de Léo**
   (aucune ici) : le premier vrai lancement le dira.
+
+- **Étape 400 (v0.40.41), Léo : « comment Claude va savoir s'ils ont bien écrit, regardé mon écran, ouvert une
+  app ? », puis « oui » aux captures, et « tu donnes un fichier à Claude pour lui expliquer ? sinon il ne connaît
+  rien ».** Deux ajouts au juge de l'étape 399 :
+  1. **Une notice** (`jarisBrief`, duelJudge.ts), en tête de chaque demande à Claude (question ET vote). Elle explique
+     ce qu'est Jaris et comment se passe un duel. Elle donne aussi la liste des outils proposés sur CE PC, et ce que
+     prouve le résultat de chaque outil — et ce qu'il ne prouve PAS. Par exemple, « … a été lancé » veut dire que Windows
+     a reçu la demande, pas qu'une fenêtre est visible ; look_at_screen est la description d'un autre modèle local, qui
+     peut se tromper. Avant, le vote ne recevait que trois critères et aucune liste d'outils. La notice est identique d'un
+     duel à l'autre : elle est mise en cache (`cache_control` sur le premier bloc système), pour ne la payer en entier
+     qu'une fois.
+  2. **« Montrer mon écran à Claude »**, cochée par défaut, sur l'accueil du juge. Jaris prend 3 captures par duel :
+     avant A, après A et après B, chacune après 1,5 s pour laisser l'écran se poser. Elles sont envoyées en JPEG
+     (1280 px de large) comme de vraies images, chacune annoncée par son moment. Pendant la prise, les fenêtres de Jaris
+     sont exclues de la capture (`setContentProtection`, le même mécanisme que le pilotage d'écran, étape 256). Le widget
+     retrouve ensuite l'état que lui donne le pilotage (`applyPilotWidgetGuard`). La notice prévient Claude que la
+     capture après B peut encore montrer ce que A a ouvert : il doit la comparer à celle d'après A. Une capture ratée
+     est sautée, et le vote se fait sans elle. Le texte de confidentialité dit que tout le reste de l'écran part chez
+     Anthropic ; décochée, rien n'est capturé. Les captures ne sont PAS gardées avec le vote : trois images par duel
+     feraient grossir le fichier des votes à vérifier de plusieurs dizaines de Mo.
+  Régression : `test-duel-judge.mjs` (notice en tête et en cache, ce que prouve open_app, outils de ce PC, images
+  annoncées, capture ratée sautée), `test-duel-session.mjs` (captures prises à la question, après A et après B, puis
+  transmises ; aucune si la case est décochée ; vérifié en retirant la capture d'après A), `test-duel-panel-ui.mjs`
+  (cochée par défaut, encadrée, texte qui change, choix envoyé au lancement). **Non vérifié sous Windows** : que
+  `setContentProtection` retire bien Jaris des captures prises par `desktopCapturer`, et le coût réel par duel.

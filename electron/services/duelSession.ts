@@ -30,7 +30,7 @@ import {
   saveDuelApp
 } from './duelStore'
 import { loadClaudeKey } from './claudeKey'
-import { JUDGE_MODEL, JudgeRefusalError, judgeDuel, writeDuelQuestion, type JudgedSide } from './duelJudge'
+import { JUDGE_MODEL, JudgeRefusalError, judgeDuel, writeDuelQuestion, type DuelScreens, type JudgedSide } from './duelJudge'
 import {
   SERIES_FORMAT,
   SERIES_VERSION,
@@ -251,6 +251,8 @@ interface JudgeState {
   last: { outcome: DuelOutcome; reason: string } | null
   /** Les demandes déjà posées, pour que Claude ne se répète pas. */
   prompts: string[]
+  /** Léo a choisi de montrer l'écran à Claude : captures avant A, après A, après B. */
+  screens: boolean
   controller: AbortController
   finished: boolean
   error: string | null
@@ -263,6 +265,11 @@ export interface DuelEnvironment {
   emit: (view: DuelSessionView | null) => void
   /** Étape 382 : garder le PC éveillé pendant qu'une série tourne (powerSaveBlocker, main.ts). */
   keepAwake?: (on: boolean) => void
+  /**
+   * Étape 399 : une capture de l'écran (JPEG en base64), sans les fenêtres de Jaris, pour que Claude voie ce que les
+   * modèles ont vraiment fait. `null` si la capture échoue : le vote se fait alors sans elle.
+   */
+  captureScreen?: () => Promise<string | null>
 }
 
 let environment: DuelEnvironment = { onReminderFire: () => {}, emit: () => {} }
@@ -528,7 +535,8 @@ export async function startDuel(
   category: DuelCategory,
   pick: number | readonly string[],
   seriesPerModel?: number,
-  judgePerModel?: number
+  judgePerModel?: number,
+  judgeScreens = false
 ): Promise<DuelSessionView> {
   if (busy()) throw new Error(t('duel.error.alreadyRunning'))
   // Étape 399 : Claude juge — duels Conversation seulement, et jamais sans clé enregistrée.
@@ -604,6 +612,7 @@ export async function startDuel(
           step: null,
           last: null,
           prompts: [],
+          screens: judgeScreens,
           controller: new AbortController(),
           finished: false,
           error: null
@@ -1684,6 +1693,25 @@ function keptSide(side: SideState): DuelVoteSide {
   return { text: side.text.slice(0, DUEL_HISTORY_TEXT_MAX), actions: side.actions, durationMs: side.durationMs, error: side.error, app: false }
 }
 
+/** Temps laissé à l'écran avant une capture pour Claude (une fenêtre qui s'ouvre, une animation). */
+let judgeScreenSettleMs = 1500
+
+/** Tests : pas d'attente avant une capture. */
+export function setJudgeScreenSettleMs(ms: number): void {
+  judgeScreenSettleMs = ms
+}
+
+/** Laisse à l'écran le temps de se poser (fenêtre qui s'ouvre, texte tapé), puis le photographie. */
+async function captureForJudge(): Promise<string | null> {
+  if (!environment.captureScreen) return null
+  await new Promise((resolve) => setTimeout(resolve, judgeScreenSettleMs))
+  try {
+    return await environment.captureScreen()
+  } catch {
+    return null
+  }
+}
+
 async function runJudgedDuels(current: Session): Promise<void> {
   const judge = current.judge
   if (!judge) return
@@ -1738,15 +1766,19 @@ async function runJudgedDuels(current: Session): Promise<void> {
       if (!stillHere()) return
       round.prompt = prompt
       judge.prompts.push(prompt)
+      let screens: DuelScreens | null = null
       for (let attempt = 0; ; attempt++) {
+        screens = judge.screens ? { before: await captureForJudge(), afterA: null, afterB: null } : null
         judge.step = 'a'
         emitNow()
         await runSide(current, round, 'a')
         if (!stillHere()) return
+        if (screens) screens.afterA = await captureForJudge()
         judge.step = 'b'
         emitNow()
         await runSide(current, round, 'b')
         if (!stillHere()) return
+        if (screens) screens.afterB = await captureForJudge()
         const trouble = Boolean(round.sides.a.trouble || round.sides.b.trouble)
         if (!trouble || attempt >= 1) break
         round.sides = { a: emptySide(), b: emptySide() }
@@ -1761,7 +1793,7 @@ async function runJudgedDuels(current: Session): Promise<void> {
       emitNow()
       let verdict
       try {
-        verdict = await judgeDuel(apiKey, prompt, judgedSide(round.sides.a), judgedSide(round.sides.b), signal)
+        verdict = await judgeDuel(apiKey, { prompt, a: judgedSide(round.sides.a), b: judgedSide(round.sides.b), tools, screens }, signal)
       } catch (err) {
         if (!stillHere()) return
         if (err instanceof JudgeRefusalError) {

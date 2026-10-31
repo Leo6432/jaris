@@ -1407,6 +1407,8 @@ export default function DuelPanel(): JSX.Element {
   const [rankings, setRankings] = useState<DuelRankingView[] | null>(null)
   /** Étape 399 : en Conversation, Claude écrit les demandes et vote (avec la clé API de Léo). */
   const [judgeMode, setJudgeMode] = useState(false)
+  // Étape 399 : captures d'écran envoyées à Claude (avant A, après A, après B) — Léo les a demandées ; il peut les couper.
+  const [judgeScreens, setJudgeScreens] = useState(true)
   const [claudeKey, setClaudeKey] = useState<ClaudeKeyStatus | null>(null)
   /** Votes de Claude encore à vérifier, et l'écran façon Tinder. */
   const [reviewCount, setReviewCount] = useState(0)
@@ -1595,7 +1597,7 @@ export default function DuelPanel(): JSX.Element {
       setDeleted(null)
       const series = category === 'code' && seriesMode ? perModel : undefined
       const judged = category === 'conversation' && judgeMode ? perModel : undefined
-      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series, judged))
+      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series, judged, judged !== undefined && judgeScreens))
     })
   }
 
@@ -1959,7 +1961,24 @@ export default function DuelPanel(): JSX.Element {
                   {seriesAllDone && (
                     <p className="duel-home__note duel-home__note--warn">{t('duel.series.allDone', { count: perModel })}</p>
                   )}
-                  <p className="duel-home__note">{t('judge.privacy')}</p>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={judgeScreens}
+                    className={`duel-pick duel-judge__screens${judgeScreens ? ' duel-pick--checked' : ''}`}
+                    onClick={() => setJudgeScreens((on) => !on)}
+                  >
+                    <span className="duel-pick__box" aria-hidden="true">
+                      {judgeScreens && (
+                        <svg viewBox="0 0 16 16" width="12" height="12">
+                          <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="duel-pick__name">{t('judge.screens.label')}</span>
+                    <span className="duel-pick__meta">{t('judge.screens.hint')}</span>
+                  </button>
+                  <p className="duel-home__note">{t(judgeScreens ? 'judge.privacy.screens' : 'judge.privacy')}</p>
                 </>
               )}
             </section>

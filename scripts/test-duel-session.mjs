@@ -252,8 +252,9 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         if (judge?.questionImpl) return judge.questionImpl(calls.judge.questions.length, signal)
         return `Demande numéro ${calls.judge.questions.length}`
       },
-      judgeDuel: async (key, prompt, a, b, signal) => {
-        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)) })
+      judgeDuel: async (key, input, signal) => {
+        const { prompt, a, b, tools, screens } = input
+        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)), tools: tools.map((tool) => tool.name), screens: screens ?? null })
         if (judge?.verdictImpl) return judge.verdictImpl(calls.judge.verdicts.length, signal)
         return { outcome: 'a', reason: 'A a vraiment ouvert l’application.' }
       }
@@ -280,10 +281,22 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     '../../shared/effort': effortModule
   })
   const session = loadTsModule('electron/services/duelSession.ts', modules)
+  session.setJudgeScreenSettleMs(0)
   session.setDuelEnvironment({
     onReminderFire: () => {},
     emit: (view) => emitted.push(JSON.parse(JSON.stringify(view))),
-    keepAwake: (on) => calls.awake.push(on)
+    keepAwake: (on) => calls.awake.push(on),
+    // Étape 399 : chaque capture rend une image numérotée, et dit ce que faisait le duel à ce moment-là.
+    ...(judge?.screens
+      ? {
+          captureScreen: async () => {
+            calls.screens = calls.screens ?? []
+            const step = session.getDuelView()?.judge?.step ?? null
+            calls.screens.push(step)
+            return `image-${calls.screens.length}`
+          }
+        }
+      : {})
   })
   return {
     session,
@@ -1309,8 +1322,8 @@ test('étape 382 : refusé hors Code, ou avec un nombre de duels par modèle imp
 
 // --- Étape 399 : Claude juge les duels Conversation (clé API de Léo) ---------------------------------------------------
 
-async function judgedSession(env, perModel = 1) {
-  const started = await env.session.startDuel('conversation', 4, undefined, perModel)
+async function judgedSession(env, perModel = 1, screens = false) {
+  const started = await env.session.startDuel('conversation', 4, undefined, perModel, screens)
   await waitFor(() => {
     const judge = env.session.getDuelView()?.judge
     return Boolean(judge && (judge.finished || judge.error || judge.stopped))
@@ -1435,4 +1448,19 @@ test('étape 399 : un outil de JARIS en panne — le duel est rejoué une fois, 
   assert.equal(env.calls.judge.verdicts.length, 0, 'Claude ne juge jamais un duel gâché par Jaris')
   // Rejoué une fois : 2 tours × 2 modèles par duel.
   assert.equal(env.calls.converse.length, judge.total * 4)
+})
+
+test('étape 399 : Claude reçoit les outils de CE PC, et l’écran avant A, après A et après B quand Léo l’a choisi', async () => {
+  const env = setup({ installed: MODELS, judge: { key: 'sk-ant-cle-de-test', screens: true } })
+  await judgedSession(env, 1, true)
+  const first = env.calls.judge.verdicts[0]
+  assert.ok(first.tools.includes('open_app') && !first.tools.includes('shutdown_pc'), 'la notice liste les outils proposés')
+  assert.deepEqual(first.screens, { before: 'image-1', afterA: 'image-2', afterB: 'image-3' })
+  // Avant A : la demande est écrite, A n'a pas commencé ; après A : B n'a pas commencé ; après B : avant le vote.
+  assert.deepEqual(env.calls.screens.slice(0, 3), ['question', 'a', 'b'])
+  // Sans la case cochée : aucune capture, même si Jaris sait en prendre.
+  const off = setup({ installed: MODELS, judge: { key: 'sk-ant-cle-de-test', screens: true } })
+  await judgedSession(off, 1, false)
+  assert.equal(off.calls.screens, undefined)
+  assert.equal(off.calls.judge.verdicts[0].screens, null)
 })

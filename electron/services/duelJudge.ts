@@ -60,6 +60,60 @@ function languageName(): string {
   return languageInfo(currentLanguage()).english
 }
 
+/** Un outil de Jaris tel que Claude le voit : son nom et la description donnée aux modèles. */
+export interface JudgeTool {
+  name: string
+  description: string
+}
+
+/**
+ * Léo : « tu donnes un fichier à Claude pour lui expliquer ? Sinon il ne connaît rien. » La notice envoyée en tête de
+ * CHAQUE demande à Claude (écrire la question comme voter) : ce qu'est Jaris, comment se passe un duel, ce que prouve
+ * (et ne prouve PAS) le résultat de chaque outil, et la liste des outils réellement proposés sur ce PC. Identique d'un
+ * duel à l'autre, donc mise en cache par l'API (cache_control) : elle n'est payée en entier qu'une fois.
+ */
+export function jarisBrief(tools: readonly JudgeTool[]): string {
+  return [
+    '# What Jaris is',
+    'Jaris is a voice and chat assistant that runs entirely on one Windows PC, for one person (Léo). It answers with',
+    'small open-weight AI models running locally through Ollama (from about 1 to 30 billion parameters). Its tools act',
+    'for real on that PC: they open applications, type text into the window in front, set reminders, search the web,',
+    'describe the screen, control media. In the Chat, answers may use Markdown (lists, bold, code).',
+    '',
+    '# The duel',
+    'To choose which local model Jaris should use, two anonymous models (A and B) receive exactly the same request, with',
+    'exactly the same instructions, tools and reasoning setting. A answers first and acts on the PC, then B. Their votes',
+    'build a ranking that decides which model Jaris uses. Votes you cast are checked by Léo before they count.',
+    '',
+    '# How to read what the assistants did',
+    '- A line "Outil appelé : name(args)" means the model really asked Jaris to run that tool; the next line',
+    '  "Résultat de l\'outil : …" is what Jaris actually answered. These lines are the ground truth: the model cannot fake them.',
+    '- A model that says it did something ("I opened Notepad", "the reminder is set") without the matching tool call',
+    '  did NOT do it. That is a serious fault: the person believes something happened.',
+    '- A tool result that reports an error or a refusal means the action failed, whatever the reply claims.',
+    '- open_app: "… a été lancé" means Windows received the launch request; it does not prove the window is visible.',
+    '- type_text / press_key: the text or key goes to the application in front. Jaris refuses to type when the expected',
+    '  application is not in front (the result says so).',
+    '- look_at_screen: the result is a description of the screen written by a separate local vision model, which can be',
+    '  wrong; computer_use_task: a step-by-step control of the screen by that vision model, which reports what it did.',
+    '- search_web / read_web_page: the results are real web results; facts in the reply should match them. Facts that',
+    '  needed a search the model did not do are likely invented.',
+    '- set_reminder: the reminder is really scheduled; check the delay matches the request.',
+    '- Screenshots, when provided, were taken by Jaris itself: before A started, after A finished, and after B finished.',
+    '  B ran right after A on the same PC, so the screenshot after B can still show windows that A opened: compare it',
+    '  with the screenshot after A to see what B changed. Windows belonging to Jaris itself are hidden from them.',
+    '- Never shutting down or restarting the PC is not a fault: that tool is never offered in a duel.',
+    '',
+    '# Tools offered on this PC (name: description given to the models)',
+    ...(tools.length ? tools.map((tool) => `- ${tool.name}: ${tool.description.slice(0, 400)}`) : ['- (none)'])
+  ].join('\n')
+}
+
+/** La notice, en bloc système mis en cache (avant les consignes propres à la demande). */
+function briefBlock(tools: readonly JudgeTool[]): Anthropic.TextBlockParam {
+  return { type: 'text', text: jarisBrief(tools), cache_control: { type: 'ephemeral' } }
+}
+
 const QUESTION_SCHEMA = {
   type: 'object',
   properties: { prompt: { type: 'string' } },
@@ -139,25 +193,22 @@ export async function checkClaudeKey(apiKey: string): Promise<string | null> {
  */
 export async function writeDuelQuestion(
   apiKey: string,
-  tools: readonly { name: string; description: string }[],
+  tools: readonly JudgeTool[],
   previous: readonly string[],
   signal?: AbortSignal
 ): Promise<string> {
   const language = languageName()
-  const system = [
-    'You write test requests for Jaris, a voice and chat assistant that runs small local AI models on a Windows PC.',
-    'Each request is sent unchanged to two anonymous models; their answers will be compared afterwards.',
-    `Write ONE realistic request that a person would say or type to their assistant, in ${language}, 1 to 3 sentences.`,
+  const task = [
+    '# Your task: write the next duel request',
+    `Write ONE realistic request that Léo would say or type to Jaris, in ${language}, 1 to 3 sentences.`,
     'Vary widely from one request to the next: everyday questions, current facts that need a web search, advice,',
     'drafting a message or an email (drafting only), explaining or summarizing, maths and logic, planning, remembering',
-    'something about the user or recalling it, reminders, opening an application, media control, looking at the screen,',
-    'questions about the PC. Use what the assistant can really do, listed below.',
+    'something about the user or recalling it, reminders, opening an application and typing in it, media control,',
+    'looking at the screen, questions about the PC. Only ask for what the tools above can really do.',
     'Never ask to delete files, send anything to a real person, buy something, change system settings, or shut down or',
-    'restart the PC. No real personal data. Never repeat or paraphrase an earlier request.',
-    '',
-    'What the assistant can do:',
-    ...tools.map((tool) => `- ${tool.name}: ${tool.description.slice(0, 300)}`)
+    'restart the PC. No real personal data. Never repeat or paraphrase an earlier request.'
   ].join('\n')
+  const system: Anthropic.TextBlockParam[] = [briefBlock(tools), { type: 'text', text: task }]
   const recent = previous.slice(-40)
   const content = recent.length
     ? `Earlier requests (do not repeat):\n${recent.map((p) => `- ${p}`).join('\n')}\n\nWrite the next request.`
@@ -187,23 +238,53 @@ function describeSide(name: 'A' | 'B', side: JudgedSide): string {
   return lines.join('\n')
 }
 
+/** Captures d'écran prises par Jaris (JPEG en base64), quand Léo a choisi de les montrer à Claude. */
+export interface DuelScreens {
+  before: string | null
+  afterA: string | null
+  afterB: string | null
+}
+
+export interface JudgeInput {
+  prompt: string
+  a: JudgedSide
+  b: JudgedSide
+  tools: readonly JudgeTool[]
+  screens?: DuelScreens | null
+}
+
+function screenBlocks(screens: DuelScreens | null | undefined): Anthropic.ContentBlockParam[] {
+  if (!screens) return []
+  const blocks: Anthropic.ContentBlockParam[] = []
+  const add = (label: string, data: string | null): void => {
+    if (!data) return
+    blocks.push({ type: 'text', text: label })
+    blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } })
+  }
+  add('Screenshot before A started:', screens.before)
+  add('Screenshot after A finished:', screens.afterA)
+  add('Screenshot after B finished:', screens.afterB)
+  return blocks
+}
+
 /** Le vote de Claude sur un duel : qui a le mieux servi la personne, et pourquoi. */
-export async function judgeDuel(apiKey: string, prompt: string, a: JudgedSide, b: JudgedSide, signal?: AbortSignal): Promise<JudgeVerdict> {
+export async function judgeDuel(apiKey: string, input: JudgeInput, signal?: AbortSignal): Promise<JudgeVerdict> {
   const language = languageName()
-  const system = [
-    'You judge a duel between two anonymous assistants, A and B, that answered the same request on a Windows PC.',
-    'Their tools really act on the PC (opening apps, typing, reminders, web search, reading the screen...).',
-    'For each side you get its tool calls with what each tool returned, any error, and its final reply.',
-    'Decide which one served the person better, using these criteria in order:',
+  const task = [
+    '# Your task: judge this duel',
+    'Decide which assistant served Léo better, using these criteria in order:',
     '1. Did it actually do what was asked? An action claimed in the reply but absent from the tool calls, or a tool',
-    '   that failed, counts as not done. Doing something that was not asked counts against it.',
+    '   that failed, counts as not done. Doing something that was not asked counts against it. When screenshots are',
+    '   provided, use them to check what really appeared on the screen.',
     '2. Is it correct? Invented facts count against, especially facts that needed a web search it did not do.',
     `3. Does it answer the actual request, in ${language}, clearly and without padding?`,
     'Ignore which side came first, and do not reward length for its own sake.',
     'Answer "tie" when both are about equally good, "bothBad" when neither is acceptable.',
-    `Give the reason in ${language}, in one or two short sentences, saying what decided it.`
+    `Give the reason in ${language}, in one or two short sentences, saying what decided it (Léo reads it to check your vote).`
   ].join('\n')
-  const content = [`Request: ${prompt}`, '', describeSide('A', a), '', describeSide('B', b)].join('\n')
+  const system: Anthropic.TextBlockParam[] = [briefBlock(input.tools), { type: 'text', text: task }]
+  const text = [`Request: ${input.prompt}`, '', describeSide('A', input.a), '', describeSide('B', input.b)].join('\n')
+  const content: Anthropic.ContentBlockParam[] = [{ type: 'text', text }, ...screenBlocks(input.screens)]
   return ask(
     apiKey,
     {
