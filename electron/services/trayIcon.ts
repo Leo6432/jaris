@@ -3,7 +3,7 @@ import { join } from 'path'
 import frame from '../../assets/icon-frame.json'
 import logoPath from '../../assets/jaris-logo.png?asset'
 import { resourcesRoot } from '../paths'
-import { EMOTION_COLORS, dotPixels, tintPixels, type OrbEmotion } from '../../shared/emotionColors'
+import { EMOTION_COLORS, tintPixels, type OrbEmotion } from '../../shared/emotionColors'
 import { encodeIco } from '../../shared/ico'
 import { mkdir, writeFile } from 'fs/promises'
 
@@ -68,28 +68,6 @@ export function appIconFor(emotion: OrbEmotion): NativeImage {
 
 export function trayIconFor(emotion: OrbEmotion): NativeImage {
   return emotion === 'idle' ? createTrayIcon() : tintedLogo(EMOTION_COLORS[emotion], 16)
-}
-
-/**
- * Étape 395 (Léo, capture : orbe orange, icône de la barre des tâches restée turquoise). Quand Jaris est ÉPINGLÉ à la barre
- * des tâches, Windows y garde l'icône du raccourci : setIcon() ne la change pas. La pastille superposée (setOverlayIcon),
- * le moyen officiel de Windows pour montrer un état sur un bouton de la barre des tâches, marche épinglé ou non : une petite
- * pastille de la couleur de l'orbe en coin de l'icône, rien au repos.
- */
-const overlayCache = new Map<OrbEmotion, NativeImage>()
-
-export function overlayIconFor(emotion: OrbEmotion): NativeImage | null {
-  if (emotion === 'idle') return null
-  const cached = overlayCache.get(emotion)
-  if (cached) return cached
-  const image = nativeImage.createEmpty()
-  for (const scaleFactor of SCALES) {
-    const size = Math.round(16 * scaleFactor)
-    const buffer = Buffer.from(dotPixels(size, EMOTION_COLORS[emotion], process.platform !== 'darwin'))
-    image.addRepresentation({ scaleFactor, width: size, height: size, buffer })
-  }
-  overlayCache.set(emotion, image)
-  return image
 }
 
 /**

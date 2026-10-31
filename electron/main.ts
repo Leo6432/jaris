@@ -147,7 +147,7 @@ import {
 import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
-import { appIconFor, createAppIcon, createTrayIcon, overlayIconFor, trayIconFor, writeTaskbarIcons } from './services/trayIcon'
+import { appIconFor, createAppIcon, createTrayIcon, trayIconFor, writeTaskbarIcons } from './services/trayIcon'
 import { isOrbEmotion, type OrbEmotion } from '../shared/emotionColors'
 import { languageState, loadLanguageSetting, saveLanguageSetting } from './services/language'
 import { t } from '../shared/i18n'
@@ -1906,8 +1906,7 @@ app.whenReady().then(async () => {
       fullWindow.setIcon(appIconFor(emotion))
       applyTaskbarIcon(fullWindow, emotion)
       tray?.setImage(trayIconFor(emotion))
-      // Étape 395 : épinglé, Windows garde l'icône du raccourci ; la pastille en coin, elle, s'affiche toujours.
-      if (process.platform === 'win32') fullWindow.setOverlayIcon(overlayIconFor(emotion), t(`app.status.${emotion}`))
+      // Étape 397 (Léo : « enlève la pastille ») : plus de pastille en coin de l’icône (étape 395 retirée).
     } catch (err) {
       console.error('[icon] changement de couleur impossible :', err)
     }

@@ -10436,3 +10436,7 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   apparaît-elle ? ») a séparé « l'état n'arrive pas » de « Windows ignore setIcon ».** Régression :
   `scripts/test-taskbar-icon-color.mjs` (structure du .ico vérifiée aussi en l'ouvrant avec Pillow ; branchement
   dans la fenêtre). **Non vérifié sous Windows.**
+- **Étape 397 (v0.40.38), Léo : « enlève la pastille ».** La pastille de couleur en coin de l'icône de la barre des
+  tâches (étape 395, `setOverlayIcon`) est retirée, avec `overlayIconFor` et `dotPixels` qui ne servaient qu'à elle. Restent
+  l'icône de fenêtre recolorée (`setIcon`), le vrai .ico déclaré à Windows (`setAppDetails`, étape 396) et l'icône près de
+  l'horloge. Régression : `scripts/test-taskbar-icon-color.mjs` (plus aucun `setOverlayIcon` dans main.ts).
