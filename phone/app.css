@@ -121,33 +121,18 @@ textarea {
   margin: 0;
 }
 
-/* Orbe : le vrai logo de Jaris (anneau irrégulier), qui respire ; plus vite pendant que Jaris travaille. */
+/* Orbe : le même dessin animé que sur le PC (app.js, makeOrb) — anneaux au bord irrégulier dont la couleur et la
+   vitesse suivent ce que fait Jaris. Plus d'image qui tourne : ça ne ressemblait pas au PC. */
 .orb {
+  display: block;
   width: 38px;
   height: 38px;
   flex: none;
-  animation: breathe 3.2s ease-in-out infinite;
 }
 
 .orb--big {
   width: 150px;
   height: 150px;
-}
-
-.orb--busy {
-  animation: spin 2.4s linear infinite;
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.93);
-    opacity: 0.85;
-  }
 }
 
 @keyframes spin {
@@ -157,10 +142,7 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb,
-  .orb--busy,
-  .message,
-  .message__tile img {
+  .message {
     animation: none;
   }
 }
@@ -242,10 +224,8 @@ textarea {
 }
 
 .topbar .orb {
-  width: 44px;
-  height: 44px;
-  padding: 6px;
-  box-sizing: content-box;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: var(--card);
   box-shadow: var(--card-shadow);
@@ -430,10 +410,10 @@ textarea {
   background: var(--hover);
 }
 
-.message__tile img {
-  width: 26px;
-  height: 26px;
-  animation: spin 2.4s linear infinite;
+.message__tile canvas {
+  display: block;
+  width: 32px;
+  height: 32px;
 }
 
 .message__text {
@@ -614,10 +594,10 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-.voice__orb img {
+.voice__orb canvas {
+  display: block;
   width: 100%;
   height: 100%;
-  animation: breathe 3.2s ease-in-out infinite;
 }
 
 /* Écoute : un halo qui suit le volume de la voix. */
@@ -638,13 +618,6 @@ textarea {
   border-color: var(--line-strong);
 }
 
-.voice__orb--working img {
-  animation: spin 2.4s linear infinite;
-}
-
-.voice__orb--speaking img {
-  animation: breathe 0.9s ease-in-out infinite;
-}
 
 .voice__state {
   margin: 0;

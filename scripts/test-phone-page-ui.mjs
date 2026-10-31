@@ -596,7 +596,7 @@ test('façon Muse (étape 374) : carte d’action pendant le travail, réponse e
       const card = await page.evaluate(() => {
         const item = document.querySelector('.message--pending')
         return {
-          tile: Boolean(item.querySelector('.message__tile img')),
+          tile: Boolean(item.querySelector('.message__tile canvas')),
           title: item.querySelector('.message__title')?.textContent,
           status: item.querySelector('.message__body')?.textContent
         }
@@ -621,5 +621,48 @@ test('façon Muse (étape 374) : carte d’action pendant le travail, réponse e
     // Le bouton de la barre passe au Vocal.
     await page.click('#to-voice')
     await page.waitForSelector('#tab-voice:not([hidden])')
+  })
+})
+
+test('orbe (étape 391) : le même dessin animé que le PC, centré dans sa case, qui change pendant le travail', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    // Une orbe dessinée = des pixels de couleur au centre du canvas (jamais une image du logo qui tourne).
+    const drawn = (selector) =>
+      page.evaluate((sel) => {
+        const canvas = document.querySelector(sel)
+        if (!canvas || canvas.tagName !== 'CANVAS' || !canvas.width) return 0
+        const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+        let lit = 0
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 40) lit++
+        return lit
+      }, selector)
+    await page.waitForTimeout(300)
+    assert.ok((await drawn('#top-orb')) > 50, 'l’orbe de l’en-tête est dessinée')
+    assert.equal(await page.getAttribute('#top-orb', 'data-emotion'), 'idle')
+    assert.equal(await page.$('img[src="/logo.png"]'), null, 'plus aucune image du logo à faire tourner')
+    // Elle bouge : deux instants différents ne donnent pas la même image.
+    const frame = () => page.evaluate(() => document.querySelector('#top-orb').toDataURL())
+    const a = await frame()
+    await page.waitForTimeout(400)
+    assert.notEqual(await frame(), a, 'l’orbe est animée')
+
+    await page.fill('#input', 'comment faire du pain')
+    await page.click('#send')
+    await page.waitForSelector('.message--pending .message__tile canvas')
+    assert.equal(await page.getAttribute('#top-orb', 'data-emotion'), 'thinking', 'en-tête : Jaris réfléchit')
+    const centered = await page.evaluate(() => {
+      const tile = document.querySelector('.message--pending .message__tile').getBoundingClientRect()
+      const orb = document.querySelector('.message--pending .message__tile canvas').getBoundingClientRect()
+      return {
+        dx: Math.abs(tile.left + tile.width / 2 - (orb.left + orb.width / 2)),
+        dy: Math.abs(tile.top + tile.height / 2 - (orb.top + orb.height / 2))
+      }
+    })
+    assert.ok(centered.dx < 0.6 && centered.dy < 0.6, `orbe centrée dans sa case (écart ${centered.dx}, ${centered.dy})`)
+    await page.waitForTimeout(200)
+    assert.ok((await drawn('.message--pending .message__tile canvas')) > 20, 'l’orbe de la carte est dessinée')
+    await page.waitForFunction(() => !document.querySelector('.message--pending'))
+    assert.equal(await page.getAttribute('#top-orb', 'data-emotion'), 'idle', 'en-tête : retour au repos')
   })
 })

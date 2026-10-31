@@ -10350,3 +10350,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `OLLAMA_MAX_LOADED_MODELS` assez grand (sinon il fait attendre les modèles en trop, sans échec). **Non vérifié en usage
   réel** : Ollama avec des dizaines de modèles sur 8 cartes. Régression : `scripts/test-duel.mjs` (40 modèles à 4 duels
   sur 1 536 Go, 37 sur 1 000 Go : c'est la mémoire qui arrête ; vérifié en remettant un plafond).
+
+- **Étape 391 (v0.40.32), Léo (capture du téléphone) : « c'est pas centré, et sur téléphone tu fais tourner l'orbe
+  mais sur PC elle ne tourne pas, elle fait une petite animation ».** La page du téléphone faisait tourner une IMAGE du
+  logo (`logo.png`, `animation: spin`) : un dessin figé qui pivote, rien à voir avec l'orbe du PC (`JarisOrb.tsx` :
+  anneaux au bord irrégulier, anneaux fins, noyau en maillage, couleur et vitesse selon ce que fait Jaris). Elle est
+  maintenant dessinée de la même façon (`makeOrb` / `setOrbEmotion`, phone/app.js, copie en JavaScript simple du dessin
+  du PC, mêmes couleurs et vitesses ; un seul anneau sous 48 px, comme le widget replié). En-tête, carte « Jaris
+  travaille », écran d'appairage et onglet Vocal : repos (turquoise), réfléchit (orange), écoute (bleu), répond (vert).
+  Une seule boucle d'animation pour toutes les orbes ; une orbe cachée n'est pas dessinée ; « réduire les animations »
+  la dessine une fois, immobile. Le cercle de l'en-tête n'a plus de marge intérieure (le canvas mesure toute sa
+  boîte : une marge l'aurait décentré). Cache du service worker monté (`jaris-page-v5`). Régression :
+  `scripts/test-phone-page-ui.mjs` (orbe dessinée et animée, plus aucune image du logo, centrée dans sa case à moins
+  d'un pixel, orange pendant le travail puis retour au repos ; vérifié en retirant le changement d'état).

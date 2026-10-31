@@ -19,7 +19,7 @@
   <body>
     <!-- Appairage : affiché tant que ce téléphone n'a pas de jeton (ou s'il a été déconnecté depuis le PC). -->
     <main id="pair" class="pair" hidden>
-      <img class="orb orb--big" src="/logo.png" alt="" aria-hidden="true" />
+      <canvas id="pair-orb" class="orb orb--big" aria-hidden="true"></canvas>
       <h1>Jaris</h1>
       <p class="pair__lead" data-i18n="pwa.pair.lead">Connecte ce téléphone à ton Jaris.</p>
       <p class="pair__hint" data-i18n-strong="pwa.pair.hint" data-i18n-strong-value="pwa.pair.path">Sur ton PC : <strong>Options → Jaris partout → Connecter un téléphone</strong>, puis tape le code affiché.</p>
@@ -32,7 +32,7 @@
 
     <div id="app" class="app" hidden>
       <header class="topbar">
-        <img id="top-orb" class="orb" src="/logo.png" alt="" aria-hidden="true" />
+        <canvas id="top-orb" class="orb" aria-hidden="true"></canvas>
         <div class="topbar__title">
           <span class="topbar__name">Jaris</span>
           <span class="topbar__line"><span id="pc-dot" class="pc-dot" aria-hidden="true"></span><span id="top-status" class="topbar__status" data-i18n="pwa.status.connecting">Connexion à ton PC…</span></span>
@@ -68,7 +68,7 @@
       <!-- Vocal : comme l'Agent vocal du PC. Jaris répond à voix haute, avec sa voix. -->
       <section id="tab-voice" class="tab voice" data-tab="voice" hidden>
         <button id="voice-orb" class="voice__orb" type="button" aria-label="Parler à Jaris" data-i18n-aria-label="pwa.voice.talk">
-          <img src="/logo.png" alt="" aria-hidden="true" />
+          <canvas id="voice-orb-canvas" aria-hidden="true"></canvas>
         </button>
         <p id="voice-state" class="voice__state" aria-live="polite" data-i18n="pwa.voice.tapToTalk">Touche Jaris pour parler</p>
         <p id="voice-help" class="voice__help" data-i18n="pwa.voice.help">Parle, puis fais une pause ou touche encore Jaris : il te répond à voix haute.</p>

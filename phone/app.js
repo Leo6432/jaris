@@ -24,6 +24,192 @@
     return document.getElementById(id)
   }
 
+  // Orbe de Jaris : le même dessin que sur le PC (src/components/JarisOrb.tsx) — deux anneaux au bord irrégulier, deux
+  // anneaux fins et un petit noyau en maillage, dont la couleur et la vitesse suivent ce que fait Jaris. Avant, la page
+  // faisait tourner une image du logo, ce qui ne ressemblait pas au PC. Toutes les orbes partagent une seule boucle
+  // d'animation ; une orbe cachée (onglet fermé) n'est pas dessinée.
+  var ORB_STYLES = {
+    idle: { color: '#33e6c8', spinSpeed: 0.05, coreSpin: 0.12, pulse: 0.02 },
+    listening: { color: '#37e2ff', spinSpeed: 0.22, coreSpin: 0.3, pulse: 0.045 },
+    thinking: { color: '#ffb648', spinSpeed: 0.85, coreSpin: 0.7, pulse: 0.07 },
+    happy: { color: '#4dffa6', spinSpeed: 0.3, coreSpin: 0.4, pulse: 0.06 }
+  }
+  var ORB_MINIMAL = 48
+  var ORB_SEGMENTS = 140
+  var ORB_CORE = (function () {
+    var points = []
+    var golden = Math.PI * (3 - Math.sqrt(5))
+    for (var i = 0; i < 46; i++) {
+      var y = 1 - (i / 45) * 2
+      var r = Math.sqrt(Math.max(0, 1 - y * y))
+      points.push([Math.cos(golden * i) * r, y, Math.sin(golden * i) * r])
+    }
+    var seen = {}
+    var edges = []
+    points.forEach(function (p, i) {
+      points
+        .map(function (q, j) {
+          var dx = p[0] - q[0]
+          var dy = p[1] - q[1]
+          var dz = p[2] - q[2]
+          return [j, dx * dx + dy * dy + dz * dz]
+        })
+        .filter(function (e) {
+          return e[0] !== i
+        })
+        .sort(function (a, b) {
+          return a[1] - b[1]
+        })
+        .slice(0, 3)
+        .forEach(function (e) {
+          var key = Math.min(i, e[0]) + ':' + Math.max(i, e[0])
+          if (!seen[key]) {
+            seen[key] = true
+            edges.push([i, e[0]])
+          }
+        })
+    })
+    return { points: points, edges: edges }
+  })()
+  var orbs = []
+  var orbFrame = 0
+  var orbLast = 0
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  function orbHarmonics(count) {
+    var list = []
+    for (var i = 0; i < count; i++) list.push({ freq: 3 + Math.floor(Math.random() * 6), amp: 0.02 + Math.random() * 0.045, phase: Math.random() * Math.PI * 2 })
+    return list
+  }
+
+  function orbRing(ctx, base, max, harmonics, rotation, color, alpha) {
+    ctx.beginPath()
+    for (var i = 0; i <= ORB_SEGMENTS; i++) {
+      var angle = (i / ORB_SEGMENTS) * Math.PI * 2
+      var r = base
+      for (var h = 0; h < harmonics.length; h++) r += base * harmonics[h].amp * Math.sin(angle * harmonics[h].freq + harmonics[h].phase + rotation)
+      r = Math.min(r, max)
+      var x = Math.cos(angle + rotation) * r
+      var y = Math.sin(angle + rotation) * r
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.strokeStyle = color
+    ctx.globalAlpha = alpha
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }
+
+  function orbCircle(ctx, radius, color, alpha) {
+    ctx.beginPath()
+    ctx.arc(0, 0, radius, 0, Math.PI * 2)
+    ctx.strokeStyle = color
+    ctx.globalAlpha = alpha
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }
+
+  function orbCore(ctx, radius, angleY, color) {
+    var cosY = Math.cos(angleY)
+    var sinY = Math.sin(angleY)
+    var cosX = Math.cos(0.5)
+    var sinX = Math.sin(0.5)
+    var projected = ORB_CORE.points.map(function (p) {
+      var x1 = p[0] * cosY - p[2] * sinY
+      var z1 = p[0] * sinY + p[2] * cosY
+      return { x: x1, y: p[1] * cosX - z1 * sinX, depth: (p[1] * sinX + z1 * cosX + 1) / 2 }
+    })
+    ctx.lineWidth = 0.6
+    ORB_CORE.edges.forEach(function (e) {
+      var a = projected[e[0]]
+      var b = projected[e[1]]
+      ctx.beginPath()
+      ctx.moveTo(a.x * radius, a.y * radius)
+      ctx.lineTo(b.x * radius, b.y * radius)
+      ctx.strokeStyle = color
+      ctx.globalAlpha = 0.15 + ((a.depth + b.depth) / 2) * 0.55
+      ctx.stroke()
+    })
+    ctx.globalAlpha = 1
+  }
+
+  function drawOrb(orb, time, dt) {
+    var canvas = orb.canvas
+    var size = canvas.clientWidth
+    if (!size || !canvas.isConnected) return
+    var dpr = window.devicePixelRatio || 1
+    if (canvas.width !== Math.round(size * dpr)) {
+      canvas.width = Math.round(size * dpr)
+      canvas.height = Math.round(size * dpr)
+    }
+    var style = ORB_STYLES[orb.emotion] || ORB_STYLES.idle
+    orb.angle += style.spinSpeed * dt
+    orb.coreAngle += style.coreSpin * dt
+    var ctx = canvas.getContext('2d')
+    var center = size / 2
+    var color = style.color
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, size, size)
+    ctx.save()
+    ctx.translate(center, center)
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.shadowColor = color
+    if (size < ORB_MINIMAL) {
+      // Petite orbe : un seul anneau irrégulier, qui respire et tourne plus fort (comme le widget replié du PC).
+      ctx.shadowBlur = 5
+      ctx.lineWidth = 1.4
+      orbRing(ctx, center * 0.62 * (1 + Math.sin(time * 0.0015) * style.pulse * 4), center * 0.92, orb.outer, orb.angle * 2.5, color, 0.9)
+    } else {
+      var breathe = 1 + Math.sin(time * 0.0015) * style.pulse
+      ctx.shadowBlur = 8
+      ctx.lineWidth = 1.6
+      orbRing(ctx, center * 0.68 * breathe, center * 0.9, orb.outer, orb.angle, color, 0.85)
+      orbRing(ctx, center * 0.6 * breathe, center * 0.9, orb.inner, -orb.angle * 0.55, color, 0.45)
+      ctx.shadowBlur = 5
+      orbCircle(ctx, center * 0.46, color, 0.3)
+      orbCircle(ctx, center * 0.35, color, 0.2)
+      ctx.shadowBlur = 7
+      orbCore(ctx, center * 0.14, orb.coreAngle, color)
+    }
+    ctx.restore()
+  }
+
+  function orbLoop(time) {
+    var dt = Math.min(0.05, (time - (orbLast || time)) / 1000)
+    orbLast = time
+    orbs = orbs.filter(function (orb) {
+      return orb.canvas.isConnected
+    })
+    orbs.forEach(function (orb) {
+      if (orb.canvas.offsetParent !== null) drawOrb(orb, time, dt)
+    })
+    orbFrame = orbs.length && !reduceMotion ? requestAnimationFrame(orbLoop) : 0
+  }
+
+  /** Transforme un <canvas> en orbe de Jaris. Avec « réduire les animations », elle est dessinée une fois, immobile. */
+  function makeOrb(canvas, emotion) {
+    var orb = { canvas: canvas, emotion: emotion || 'idle', angle: 0, coreAngle: 0, outer: orbHarmonics(4), inner: orbHarmonics(3) }
+    canvas.jarisOrb = orb
+    canvas.setAttribute('data-emotion', orb.emotion)
+    orbs.push(orb)
+    if (reduceMotion) requestAnimationFrame(function (t) {
+      drawOrb(orb, t, 0)
+    })
+    else if (!orbFrame) orbFrame = requestAnimationFrame(orbLoop)
+    return orb
+  }
+
+  function setOrbEmotion(canvas, emotion) {
+    if (!canvas || !canvas.jarisOrb) return
+    canvas.jarisOrb.emotion = emotion
+    canvas.setAttribute('data-emotion', emotion)
+    if (reduceMotion) requestAnimationFrame(function (t) {
+      drawOrb(canvas.jarisOrb, t, 0)
+    })
+  }
+
   // Étape 293 : les textes viennent du PC, dans la langue de Jaris (/i18n.js, servi juste avant cette page et gardé
   // avec elle par le service worker). Une clé absente se voit telle quelle plutôt que de laisser un texte vide.
   var I18N = (window.JARIS_I18N && window.JARIS_I18N.messages) || {}
@@ -371,7 +557,7 @@
   }
 
   function refreshBusyLook() {
-    $('top-orb').classList.toggle('orb--busy', conversationBusy || studioBusy)
+    setOrbEmotion($('top-orb'), conversationBusy || studioBusy ? 'thinking' : 'idle')
     $('send').disabled = conversationBusy
     if (!conversationBusy && !studioBusy) setStatus('')
   }
@@ -472,10 +658,10 @@
       // Carte d'action façon Muse : l'orbe qui tourne, le nom de Jaris, et l'étape en cours (mise à jour en direct).
       var tile = document.createElement('span')
       tile.className = 'message__tile'
-      var orb = document.createElement('img')
-      orb.src = '/logo.png'
-      orb.alt = ''
+      var orb = document.createElement('canvas')
+      orb.setAttribute('aria-hidden', 'true')
       tile.appendChild(orb)
+      makeOrb(orb, 'thinking')
       var textBox = document.createElement('div')
       textBox.className = 'message__text'
       var title = document.createElement('span')
@@ -609,6 +795,7 @@
     voice.state = state
     var orb = $('voice-orb')
     orb.className = 'voice__orb' + (state === 'idle' ? '' : ' voice__orb--' + state)
+    setOrbEmotion($('voice-orb-canvas'), { listening: 'listening', working: 'thinking', speaking: 'happy' }[state] || 'idle')
     $('voice-state').textContent = text
     $('voice-cancel').hidden = state !== 'listening'
     $('voice-help').hidden = state !== 'idle'
@@ -1473,6 +1660,9 @@
       pair(code)
     }
   })
+  makeOrb($('pair-orb'))
+  makeOrb($('top-orb'))
+  makeOrb($('voice-orb-canvas'))
   var initialCode = codeFromAddress()
   if (token) showApp()
   else if (initialCode) {
