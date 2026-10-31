@@ -10340,3 +10340,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   avec le nombre de demandes en parallèle.** Régression : `scripts/test-ollama-chat-stream.mjs` (dispatcher transmis,
   vérifié en le retirant ; délai branché dans main.ts supérieur à 5 minutes). **Non vérifié en usage réel** : le
   débit d'une série sur un pod avec ce correctif.
+
+- **Étape 390 (v0.40.31), Léo (8 B200 chez Civo, 250 $ de crédit gratuit) : « pas 48 modèles comme ça, faut qu'il
+  regarde sa capacité et donne le meilleur pour la machine ».** Une série de duels Code faisait tourner au plus 12 modèles
+  en même temps (`DUEL_SERIES_MAX_MODELS`, étape 385, pensé pour une seule H200). Ce plafond fixe est retiré : seule la
+  mémoire donnée pour la machine décide (`batchSlotsToStart` en mode série, `seriesRoomForModel`), chaque modèle avec
+  jusqu'à 4 duels à la fois. Sur 8 B200 (1 536 Go au total), 40 modèles de 10 Go tournent ensemble. Pour plusieurs
+  cartes, Léo donne la mémoire TOTALE ; Ollama place lui-même chaque modèle sur une carte. Ollama doit suivre :
+  `OLLAMA_MAX_LOADED_MODELS` assez grand (sinon il fait attendre les modèles en trop, sans échec). **Non vérifié en usage
+  réel** : Ollama avec des dizaines de modèles sur 8 cartes. Régression : `scripts/test-duel.mjs` (40 modèles à 4 duels
+  sur 1 536 Go, 37 sur 1 000 Go : c'est la mémoire qui arrête ; vérifié en remettant un plafond).

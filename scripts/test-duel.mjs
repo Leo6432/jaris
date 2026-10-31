@@ -376,9 +376,14 @@ test('étape 385 : série — autant de modèles que la carte en tient, jusqu’
   // Un modèle déjà à 4 duels n'en reçoit pas un 5e ; les autres de la file passent quand même.
   const busy = Array.from({ length: 4 }, () => ({ model: 'm0', sizeGb: 5 }))
   assert.deepEqual(duel.batchSlotsToStart(busy, [slot('x', 'm0', 5), slot('y', 'm1', 5)], 140, 'series'), ['y'])
-  // Au plus DUEL_SERIES_MAX_MODELS modèles, même sur une carte immense.
-  const many = Array.from({ length: 20 }, (_, i) => slot(`k${i}`, `n${i}`, 1))
-  assert.equal(duel.batchSlotsToStart([], many, 10_000, 'series').length, duel.DUEL_SERIES_MAX_MODELS)
+  // Étape 390 : aucun plafond fixe — sur une très grosse machine (8 B200), 40 modèles tournent ensemble, chacun à 4 duels.
+  const many = []
+  for (let m = 0; m < 40; m++) for (let k = 0; k < 4; k++) many.push(slot(`n${m}-${k}`, `n${m}`, 10))
+  const big = duel.batchSlotsToStart([], many, 1536, 'series')
+  assert.equal(new Set(big.map((k) => k.split('-')[0])).size, 40)
+  assert.equal(big.length, 160)
+  // … et c'est bien la mémoire qui arrête : 10 Go à 4 duels = 27 Go, 1 000 Go en tiennent 37.
+  assert.equal(new Set(duel.batchSlotsToStart([], many, 1000, 'series').map((k) => k.split('-')[0])).size, 37)
   // Petite carte : rien ne change (un seul modèle tient).
   assert.equal(new Set(duel.batchSlotsToStart([], waiting, 8, 'series').map((k) => k.split('-')[0])).size, 1)
   // Taille inconnue d'un modèle déjà chargé : jamais un duel de plus « gratuit ».
@@ -394,7 +399,9 @@ test('étape 385 : télécharger un modèle de plus seulement s’il tient avec 
   assert.equal(duel.seriesRoomForModel([], 6, 8), false, 'carte de 8 Go : jamais un second modèle')
   assert.equal(duel.seriesRoomForModel([5], 5, null), false, 'carte inconnue')
   assert.equal(duel.seriesRoomForModel([5], Number.NaN, 140), false, 'taille inconnue')
-  assert.equal(duel.seriesRoomForModel(Array(duel.DUEL_SERIES_MAX_MODELS).fill(1), 1, 10_000), false)
+  // Étape 390 : pas de plafond fixe, seulement la mémoire (40 modèles de 10 Go à 4 duels = 1 080 Go).
+  assert.equal(duel.seriesRoomForModel(Array(39).fill(10), 10, 1536), true)
+  assert.equal(duel.seriesRoomForModel(Array(39).fill(10), 10, 1000), false)
 })
 
 test('étape 382 : planning d’une série — chaque modèle au moins N duels, contre des adversaires variés, A/B au hasard', () => {
