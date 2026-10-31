@@ -56,6 +56,8 @@ const known = {
   getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, downloadLabel: '5 Go' }),
   getVideoStudioStatus: async () => ({ supported: true, capable: true, reason: null, qualities: [{ id: 'light', label: 'Légère', installed: false, downloadLabel: '12 Go' }] }),
   getConversationHistory: async () => [],
+  // Étape 392 : une réponse du Chat qui reste en cours tant que le test ne la libère pas.
+  sendChatMessage: () => new Promise((resolve) => { window.__finishChat = () => resolve({ role: 'assistant', content: 'Voilà.' }) }),
   getMemoryGraph: async () => ({ nodes: [{ id: 'Léo', isCenter: true }, { id: 'Travail' }], links: [{ source: 'Léo', target: 'Travail' }] })
 }
 window.jaris = new Proxy(known, {
@@ -310,4 +312,30 @@ test("Agent vocal : l'orbe animé du logo de Jaris, seul, sans rond ni bouton au
 
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
+})
+
+test("étape 392 : l'orbe de la barre d'icônes est animée et prend la couleur de ce que fait Jaris", options, async () => {
+  // Léo : « dès qu'il y a l'orbe, tu fais ça n'importe où » (orange quand Jaris réfléchit, comme sur le téléphone).
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    await page.click('.rail__item:has-text("Chat")')
+    const orb = '.app-rail__logo'
+    await page.waitForSelector(`${orb} canvas`)
+    assert.equal(await page.$('img.app-rail__logo'), null, 'plus de logo fixe dans la barre d’icônes')
+    assert.equal(await page.getAttribute(orb, 'data-emotion'), 'idle')
+    await page.fill('.composer__input', 'Bonjour')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction((sel) => document.querySelector(sel).dataset.emotion === 'thinking', orb, { timeout: 5000 })
+    await page.evaluate(() => window.__finishChat())
+    await page.waitForFunction((sel) => document.querySelector(sel).dataset.emotion === 'idle', orb, { timeout: 5000 })
+    // Le canvas est vraiment dessiné (pas un cadre vide).
+    const lit = await page.evaluate((sel) => {
+      const c = document.querySelector(`${sel} canvas`)
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let n = 0
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 40) n++
+      return n
+    }, orb)
+    assert.ok(lit > 20, `orbe dessinée (${lit} pixels)`)
+  })
 })

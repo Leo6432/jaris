@@ -111,7 +111,7 @@
     ctx.globalAlpha = 1
   }
 
-  function orbCore(ctx, radius, angleY, color) {
+  function orbCore(ctx, radius, angleY, color, width) {
     var cosY = Math.cos(angleY)
     var sinY = Math.sin(angleY)
     var cosX = Math.cos(0.5)
@@ -121,7 +121,7 @@
       var z1 = p[0] * sinY + p[2] * cosY
       return { x: x1, y: p[1] * cosX - z1 * sinX, depth: (p[1] * sinX + z1 * cosX + 1) / 2 }
     })
-    ctx.lineWidth = 0.6
+    ctx.lineWidth = width || 0.6
     ORB_CORE.edges.forEach(function (e) {
       var a = projected[e[0]]
       var b = projected[e[1]]
@@ -161,6 +161,10 @@
       ctx.shadowBlur = 5
       ctx.lineWidth = 1.4
       orbRing(ctx, center * 0.62 * (1 + Math.sin(time * 0.0015) * style.pulse * 4), center * 0.92, orb.outer, orb.angle * 2.5, color, 0.9)
+      // Le cercle et le noyau du milieu, agrandis et plus marqués : à la taille du grand rendu, ils feraient
+      // 2 pixels et disparaîtraient (Léo : « pourquoi il n'y a pas de cercle au milieu »).
+      orbCircle(ctx, center * 0.36, color, 0.55)
+      orbCore(ctx, center * 0.2, orb.coreAngle * 1.5, color, 0.9)
     } else {
       var breathe = 1 + Math.sin(time * 0.0015) * style.pulse
       ctx.shadowBlur = 8

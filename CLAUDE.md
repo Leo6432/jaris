@@ -10402,3 +10402,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   boîte : une marge l'aurait décentré). Cache du service worker monté (`jaris-page-v5`). Régression :
   `scripts/test-phone-page-ui.mjs` (orbe dessinée et animée, plus aucune image du logo, centrée dans sa case à moins
   d'un pixel, orange pendant le travail puis retour au repos ; vérifié en retirant le changement d'état).
+
+- **Étape 392 (v0.40.33), Léo (capture de la carte « Jaris réfléchit… » du téléphone) : « pourquoi il n'y a pas de
+  cercle au milieu, il n'y a qu'un seul cercle », puis « le système de couleur, mets-le sur ordinateur aussi » et, à la
+  question où : « dès qu'il y a l'orbe, tu fais ça n'importe où ».**
+  1. **Centre des petites orbes** : sous 48 px, l'orbe ne dessinait qu'un anneau (choix des étapes 69-70 pour le widget
+     replié). Le cercle et le noyau du milieu reviennent, AGRANDIS et plus marqués qu'en grand (rayons 0,36 et 0,2 du
+     rayon, traits plus épais) : à l'échelle du grand rendu ils feraient 2 pixels et disparaîtraient. Même dessin sur
+     le PC (`JarisOrb.tsx`, `drawCore` prend une épaisseur de trait) et sur le téléphone (`phone/app.js`, `orbCore`).
+  2. **La couleur suit ce que fait Jaris partout où il y a une orbe** : le logo fixe de la barre d'icônes et de la
+     barre de titre devient l'orbe animée (`LiveOrb`, App.tsx). Sa couleur : l'état de la voix d'abord, sinon ce que
+     font les écrans (`activity` du store, `shownEmotion` : « répond » l'emporte sur « réfléchit »), sinon le repos.
+     Chaque écran le signale par `useReportActivity` (src/lib) : Chat orange pendant la réflexion, vert dès que la
+     réponse s'écrit ; Code, Image, Vidéo et Duel orange pendant leur travail. Effacé quand l'écran est démonté, pour
+     ne jamais laisser une orbe orange. L'écran vocal garde l'état de la voix seul (son texte et son bouton en
+     dépendent). Cache du service worker monté (`jaris-page-v6`).
+  Régression : `scripts/test-phone-page-ui.mjs` (centre de la petite orbe dessiné ; échoue sans le cercle et le noyau)
+  et `scripts/test-window-chrome-ui.mjs` (orbe animée dans la barre d'icônes, orange pendant une réponse du Chat puis
+  au repos ; échoue quand le Chat ne signale plus rien).

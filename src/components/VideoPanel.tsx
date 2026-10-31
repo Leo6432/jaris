@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useReportActivity } from '@/lib/useReportActivity'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import MediaPending from '@/components/MediaPending'
@@ -52,6 +53,7 @@ export default function VideoPanel(): JSX.Element {
   const [seconds, setSeconds] = useState<VideoSeconds>(readSavedSeconds)
   const [quality, setQuality] = useState<VideoQuality | null>(null)
   const [generating, setGenerating] = useState(false)
+  useReportActivity('video', generating ? 'thinking' : null)
   const [logLine, setLogLine] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [videos, setVideos] = useState<GeneratedVideoSummary[]>([])

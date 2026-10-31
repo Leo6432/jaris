@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useReportActivity } from '@/lib/useReportActivity'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
@@ -310,6 +311,7 @@ function CollapseIcon(): JSX.Element {
 export default function CodePanel(): JSX.Element {
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
+  useReportActivity('code', generating ? 'thinking' : null)
   const [appResult, setAppResult] = useState<GeneratedApp | null>(null)
   const [view, setView] = useState<View>('preview')
   const [error, setError] = useState<string | null>(null)

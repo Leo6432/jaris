@@ -14,11 +14,10 @@ import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { migrateLegacyCodeConversations } from '@/lib/codeConversations'
-import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
+import { shownEmotion, useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode, WindowChrome } from '../shared/ipc'
 import ModelEffortPicker from '@/components/ModelEffortPicker'
 import { ShellSlotsContext } from '@/lib/shellContext'
-import logo64 from '@/assets/jaris-logo-64.png'
 import logo160 from '@/assets/jaris-logo-160.png'
 import { t, tn, useLanguage } from '@/lib/i18n'
 import type { MessageKey } from '../shared/i18n'
@@ -67,10 +66,25 @@ function LineIcon({ d, size = 18 }: { d: string; size?: number }): JSX.Element {
  * Barre de titre façon Windows 11 : zone de déplacement de la fenêtre ; les boutons réduire/agrandir/fermer
  * sont les vrais de Windows, posés par-dessus à droite (titleBarOverlay, main.ts).
  */
+/**
+ * Étape 392 (Léo : « dès qu'il y a l'orbe, tu fais ça n'importe où ») : le logo fixe devient l'orbe animée, qui
+ * prend la couleur de ce que fait Jaris (voix, Chat, Code, Image, Vidéo, Duel), comme sur le téléphone.
+ */
+function LiveOrb({ size, className }: { size: number; className: string }): JSX.Element {
+  const emotion = useJarisStore((state) => state.emotion)
+  const activity = useJarisStore((state) => state.activity)
+  const shown = shownEmotion(emotion, activity)
+  return (
+    <span className={className} data-emotion={shown} role="img" aria-label="Jaris">
+      <JarisOrb emotion={shown} size={size} />
+    </span>
+  )
+}
+
 function TitleBar(): JSX.Element {
   return (
     <div className="titlebar">
-      <img className="titlebar__logo" src={logo64} alt="" />
+      <LiveOrb className="titlebar__logo" size={20} />
       <span className="titlebar__name">Jaris</span>
     </div>
   )
@@ -617,7 +631,7 @@ export default function App(): JSX.Element {
               barre ») : deux colonnes. La barre d'icônes (modes en haut, outils en bas) ne change jamais ; la
               colonne de liste à côté se replie à la demande et garde la même place sur tous les écrans. */}
           <nav className="app-rail" aria-label={t('app.rail.label')}>
-            <img className="app-rail__logo" src={logo64} alt="Jaris" />
+            <LiveOrb className="app-rail__logo" size={30} />
             <div className="app-rail__group">
               {MODES.map(({ id, label, title, icon }) => (
                 <RailButton

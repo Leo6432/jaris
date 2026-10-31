@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useReportActivity } from '@/lib/useReportActivity'
 import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
@@ -1207,6 +1208,7 @@ export default function DuelPanel(): JSX.Element {
 
   const round = view?.round ?? null
   const anyRunning = round ? round.a.status === 'running' || round.b.status === 'running' : false
+  useReportActivity('duel', anyRunning ? 'thinking' : null)
   useEffect(() => {
     if (!anyRunning) return
     setNow(Date.now())

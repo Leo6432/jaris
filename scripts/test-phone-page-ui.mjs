@@ -662,6 +662,18 @@ test('orbe (étape 391) : le même dessin animé que le PC, centré dans sa case
     assert.ok(centered.dx < 0.6 && centered.dy < 0.6, `orbe centrée dans sa case (écart ${centered.dx}, ${centered.dy})`)
     await page.waitForTimeout(200)
     assert.ok((await drawn('.message--pending .message__tile canvas')) > 20, 'l’orbe de la carte est dessinée')
+    // Étape 392 (Léo : « pourquoi il n'y a pas de cercle au milieu ») : même en petit, le centre est dessiné.
+    const middle = await page.evaluate(() => {
+      const canvas = document.querySelector('.message--pending .message__tile canvas')
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+      const c = canvas.width / 2
+      let lit = 0
+      for (let y = 0; y < canvas.height; y++)
+        for (let x = 0; x < canvas.width; x++)
+          if (Math.hypot(x - c, y - c) < c * 0.28 && data[(y * canvas.width + x) * 4 + 3] > 60) lit++
+      return lit
+    })
+    assert.ok(middle > 10, `le cercle du milieu est dessiné (${middle} pixels)`)
     await page.waitForFunction(() => !document.querySelector('.message--pending'))
     assert.equal(await page.getAttribute('#top-orb', 'data-emotion'), 'idle', 'en-tête : retour au repos')
   })

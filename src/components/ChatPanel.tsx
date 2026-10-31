@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useReportActivity } from '@/lib/useReportActivity'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
@@ -40,6 +41,8 @@ export default function ChatPanel(): JSX.Element {
   const [streamingReply, setStreamingReply] = useState('')
   // Étape 273 : recherches web et pages lues pendant la réponse en cours (bloc dépliable, comme Claude).
   const [liveWeb, setLiveWeb] = useState<WebActivity[]>([])
+  // Étape 392 : l'orbe de Jaris (barre d'icônes) devient orange pendant la réflexion, verte pendant la réponse.
+  useReportActivity('chat', sending || externalBusy ? (streamingReply ? 'happy' : 'thinking') : null)
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   /** Conversations (étape 96) : la liste complète et laquelle est active — affichées par Workspace. */
   const [conversations, setConversations] = useState<ConversationList | null>(null)

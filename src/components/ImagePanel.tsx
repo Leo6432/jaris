@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useReportActivity } from '@/lib/useReportActivity'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import MediaPending from '@/components/MediaPending'
@@ -26,6 +27,7 @@ export default function ImagePanel(): JSX.Element {
   const [installing, setInstalling] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
+  useReportActivity('image', generating ? 'thinking' : null)
   const [logLine, setLogLine] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [images, setImages] = useState<GeneratedImageSummary[]>([])

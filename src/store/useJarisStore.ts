@@ -11,8 +11,17 @@ export type { JarisEmotion }
  */
 const MAX_LOGS = 20
 
+/** Ce qu'un écran est en train de faire (Chat, Code, Image, Vidéo, Duel) : réfléchit, ou répond déjà. */
+export type ActivityState = 'thinking' | 'happy'
+
 interface JarisState {
   emotion: JarisEmotion
+  /**
+   * Étape 392 (Léo : « dès qu'il y a l'orbe, tu fais ça n'importe où ») : ce que fait chaque écran en ce moment.
+   * Les orbes hors du mode vocal (barre d'icônes, barre de titre) prennent leur couleur ici (voir `shownEmotion`).
+   */
+  activity: Record<string, ActivityState>
+  setActivity: (source: string, state: ActivityState | null) => void
   transcript: string | null
   reply: string | null
   logs: string[]
@@ -27,6 +36,7 @@ interface JarisState {
 
 export const useJarisStore = create<JarisState>((set) => ({
   emotion: 'idle',
+  activity: {},
   transcript: null,
   reply: null,
   logs: [],
@@ -39,8 +49,29 @@ export const useJarisStore = create<JarisState>((set) => ({
     set(emotion === 'idle' ? { emotion, transcript: null, reply: null } : { emotion })
   },
 
+  setActivity: (source, next) =>
+    set((state) => {
+      if ((state.activity[source] ?? null) === next) return state
+      const activity = { ...state.activity }
+      if (next) activity[source] = next
+      else delete activity[source]
+      return { activity }
+    }),
+
   setTranscript: (text) => set({ transcript: text }),
   setReply: (text) => set({ reply: text }),
   pushLog: (message) => set((state) => ({ logs: [...state.logs, message].slice(-MAX_LOGS) })),
   setSetupStatus: (status) => set({ setupStatus: status })
 }))
+
+/**
+ * Couleur d'une orbe qui représente Jaris en général : la voix d'abord (elle a ses propres états), sinon ce que
+ * font les écrans (« répond » l'emporte sur « réfléchit »), sinon le repos.
+ */
+export function shownEmotion(emotion: JarisEmotion, activity: Record<string, ActivityState>): JarisEmotion {
+  if (emotion !== 'idle') return emotion
+  const states = Object.values(activity)
+  if (states.includes('happy')) return 'happy'
+  if (states.includes('thinking')) return 'thinking'
+  return 'idle'
+}

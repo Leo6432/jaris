@@ -169,9 +169,9 @@ function project(point: Vec3, angleY: number, tiltX: number): { x: number; y: nu
   return { x: x1, y: y2, depth: (z2 + 1) / 2 }
 }
 
-function drawCore(ctx: CanvasRenderingContext2D, radius: number, angleY: number, color: string): void {
+function drawCore(ctx: CanvasRenderingContext2D, radius: number, angleY: number, color: string, lineWidth = 0.6): void {
   const projected = CORE_POINTS.map((p) => project(p, angleY, CORE_TILT))
-  ctx.lineWidth = 0.6
+  ctx.lineWidth = lineWidth
   for (const [a, b] of CORE_EDGES) {
     const pa = projected[a]
     const pb = projected[b]
@@ -315,6 +315,11 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
         ctx.shadowBlur = 5 + level * 6
         ctx.lineWidth = 1.4
         drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, color, 0.9, level, time)
+        // Étape 392 (Léo : « pourquoi il n'y a pas de cercle au milieu, il n'y a qu'un seul cercle ») : le cercle
+        // et le noyau du centre reviennent, agrandis et plus marqués qu'en grand (à l'échelle du grand rendu, ils
+        // feraient 2 pixels et disparaîtraient). Même dessin sur la page du téléphone (phone/app.js).
+        drawGlassRing(ctx, center * 0.36, color, 0.55)
+        drawCore(ctx, center * 0.2 * (1 + level * 0.2), coreAngleRef.current * 1.5, color, 0.9)
       } else {
         // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
         // de s'estomper avant d'être coupé net par les bords du canvas.

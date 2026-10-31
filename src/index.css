@@ -5321,9 +5321,10 @@ body {
 }
 
 .titlebar__logo {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
 }
 
 .titlebar__name {
@@ -6330,11 +6331,12 @@ select {
 }
 
 .app-rail__logo {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  margin: 4px 0 10px;
-  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  margin: 2px 0 8px;
 }
 
 .app-rail__group {
