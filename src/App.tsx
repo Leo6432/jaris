@@ -120,14 +120,6 @@ function RailButton({ label, icon, active, onClick, title }: {
   )
 }
 
-function MicIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3" />
-    </svg>
-  )
-}
-
 /**
  * Deux fenêtres partagent ce même bundle : le widget flottant, toujours là en haut au centre de l'écran
  * (`?mode=widget`, façon "notch" depuis l'étape 68 — bas à droite avant), et la fenêtre de réglages classique
@@ -759,11 +751,23 @@ export default function App(): JSX.Element {
                 <div className="app app--voice voice-screen" data-emotion={emotion}>
                   <div className="voice-screen__stage">
                     {/* Étape 267 (Léo : « utilise l'orbe classique, celui du logo de l'application ») : l'orbe
-                        animé de Jaris en grand, seul, sans rond ni bouton autour — le clic dessus réveille Jaris,
-                        le bouton « Parler à Jaris » en bas reste le chemin au clavier. */}
-                    <JarisOrb emotion={emotion} size={voiceOrbSize} onClick={wakeFromClick} />
-                    {/* Au repos, une question plutôt que « Parle à Jaris » : le bouton juste en dessous le dit déjà. */}
+                        animé de Jaris en grand, seul, sans rond ni bouton autour — le clic dessus réveille Jaris.
+                        Étape 402 (Léo) : plus de bouton « Parler à Jaris » — l'orbe, « + » et « Jaris » suffisent ;
+                        l'orbe est aussi le chemin au clavier. */}
+                    <JarisOrb emotion={emotion} size={voiceOrbSize} onClick={wakeFromClick} label={t('app.voice.talk')} />
                     <h1 className="app__status">{emotion === 'idle' ? t('app.voice.prompt') : t(STATUS_LABEL[emotion])}</h1>
+                    {/* Étape 402 : le choix du modèle juste sous la question (même sélecteur que le Chat et le mode Code). */}
+                    <div className="app__model-picker">
+                      <ModelEffortPicker mode="voice" />
+                    </div>
+
+                    {/* Étape 325 : pourquoi le clic n'a rien déclenché, juste sous l'orbe et sa question. Pas répété quand
+                        l'avertissement « la voix ne fonctionne pas » plus bas dit déjà la même chose. */}
+                    {wakeNotice && !(wakeNotice.kind === 'listening' && setupStatus && !setupStatus.ready) && (
+                      <p className="voice-screen__notice" role="status">
+                        {wakeNotice.text}
+                      </p>
+                    )}
 
                     {(transcript || reply || voiceActivity) && (
                       <div className="app__conversation">
@@ -775,30 +779,6 @@ export default function App(): JSX.Element {
                   </div>
 
                   <div className="app__voice-footer">
-                    <div className="voice-screen__controls">
-                      {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
-                      <div className="app__model-picker">
-                        <ModelEffortPicker mode="voice" />
-                      </div>
-                      <button
-                        type="button"
-                        className="voice-screen__talk"
-                        onClick={wakeFromClick}
-                        disabled={emotion !== 'idle'}
-                      >
-                        <MicIcon />
-                        {emotion === 'idle' ? t('app.voice.talk') : emotion === 'listening' ? t('app.voice.listening') : t('app.voice.wait')}
-                      </button>
-                    </div>
-
-                    {/* Étape 325 : pourquoi le bouton n'a rien déclenché, juste dessous. Pas répété quand l'avertissement
-                        « la voix ne fonctionne pas » plus bas dit déjà la même chose (une seule explication à l'écran). */}
-                    {wakeNotice && !(wakeNotice.kind === 'listening' && setupStatus && !setupStatus.ready) && (
-                      <p className="voice-screen__notice" role="status">
-                        {wakeNotice.text}
-                      </p>
-                    )}
-
                     <div className="app__hint app__hint--small">
                       {t('app.voice.hint')}
                     </div>

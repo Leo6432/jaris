@@ -28,6 +28,7 @@ import {
   isPureCalculation,
   isScreenQuestion,
   lookStoppedTask,
+  roundsStoppedTask,
   looksLikeKnowledgeQuestion,
   normalizeAssistantText,
   promiseWithoutAction,
@@ -539,7 +540,8 @@ const FAILING_TASK = {
 }
 const EXTRA_TRACES = [
   ['outil en échec (le vrai lève une erreur), puis historique sans l’échange raté', FAILING_TASK, [calls(['computer_use_task', { goal: 'Réserver un billet SNCF pour Paris demain matin' }]), text('Je regarde pour après-demain.', 'Il demande après-demain.'), text('Je regarde pour après-demain.')]],
-  ['plafond d’allers-retours atteint', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }]))],
+  // Étape 402 : au plafond, une dernière réponse sans outil au lieu d'abandonner.
+  ['plafond d’allers-retours atteint, puis dernière réponse sans outil', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [...Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }])), text('Je n’ai trouvé aucune note.')]],
   ['réflexion du modèle gardée entre deux appels (canal voix)', SCENARIOS.find((s) => s.id === 'bitcoin'), [{ ...calls(['search_web', { query: 'bitcoin euro' }]), thinking: 'Il faut chercher le cours.' }, text('61 234,50 €.', 'Je lis le résultat.')]],
   ['mise en forme et émojis nettoyés comme à la voix', SCENARIOS.find((s) => s.id === 'blague'), [text('**Blague** 😄 :\n- Pourquoi les poissons sont-ils mal payés ? Parce qu’ils travaillent au noir&#33;')]],
   ['réponse vide remplacée par la phrase de secours', SCENARIOS.find((s) => s.id === 'merci'), [text('')]],
@@ -566,7 +568,8 @@ const EXTRA_TRACES = [
       text('</ifm|think> Ton code wifi est TROMPETTE-42.')
     ]
   ],
-  ['arguments en texte JSON (certains modèles)', SCENARIOS.find((s) => s.id === 'dictee-rappel'), [{ raw: { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: '{"message":"Sortir le gâteau","delay_minutes":20}' } }] }, done_reason: 'stop' } }, text('Rappel programmé.')]]
+  ['arguments en texte JSON (certains modèles)', SCENARIOS.find((s) => s.id === 'dictee-rappel'), [{ raw: { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: '{"message":"Sortir le gâteau","delay_minutes":20}' } }] }, done_reason: 'stop' } }, text('Rappel programmé.')]],
+  ['plafond atteint, puis dernière réponse vide : abandon', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [...Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }])), text('')]]
 ]
 
 test('le VRAI converse() et la copie du test envoient les mêmes requêtes et donnent les mêmes réponses — toutes les demandes, toutes les façons', async () => {
@@ -589,8 +592,10 @@ test('le VRAI converse() et la copie du test envoient les mêmes requêtes et do
     }
     assert.equal(run.turns.length, jaris.outcomes.length, `${what} : nombre de tours joués`)
     assert.deepEqual(JSON.parse(JSON.stringify(run.finalState)), JSON.parse(JSON.stringify({ ...jaris.state, notes: Object.fromEntries(jaris.state.notes) })), `${what} : état final du PC`)
-    // Jaris envoie toujours la fenêtre de contexte du test (8192) et ses 14 outils.
-    assert.ok(jaris.requests.every((r) => r.numCtx === 8192 && r.tools === TOOLS.length), what)
+    // Jaris envoie toujours la fenêtre de contexte du test (8192) et ses outils — sauf la dernière réponse, au
+    // plafond d'actions (étape 402), qui part sans aucun outil.
+    const finalNote = (messages) => messages.at(-1)?.role === 'system' && /nombre maximal d'actions/.test(messages.at(-1).content)
+    assert.ok(jaris.requests.every((r, i) => r.numCtx === 8192 && (finalNote(jaris.seen[i]) ? r.tools === undefined : r.tools === TOOLS.length)), what)
   }
 })
 
@@ -603,7 +608,10 @@ test('la boucle est bien exercée : relances, échecs, plafond et nettoyage ont 
   const failed = await run(FAILING_TASK, EXTRA_TRACES[0][2])
   assert.match(failed.turns[0].reply, /^Échec de l'outil : Le modèle de vision/)
   assert.ok(!failed.turns[1].messages.some((m) => m.content?.startsWith?.("Échec de l'outil")), 'l’échange raté n’est pas renvoyé au modèle')
-  assert.match((await run(byId('ne-pas-lancer'), EXTRA_TRACES[1][2])).reason, /plus de 10 allers-retours/)
+  const capped = await run(byId('ne-pas-lancer'), EXTRA_TRACES[1][2])
+  assert.equal(capped.turns[0].reply, 'Je n’ai trouvé aucune note.')
+  assert.equal(capped.modelCalls.length, MAX_TOOL_ROUNDS + 1, '20 allers-retours puis la dernière réponse')
+  assert.match((await run(byId('ne-pas-lancer'), EXTRA_TRACES[10][2])).reason, /aucune réponse finale/)
   assert.equal((await run(byId('blague'), EXTRA_TRACES[3][2])).turns[0].reply, 'Blague : Pourquoi les poissons sont-ils mal payés ? Parce qu’ils travaillent au noir!')
   assert.match((await run(byId('merci'), EXTRA_TRACES[4][2])).reason, /réponse vide/)
   assert.match((await run(byId('merci'), EXTRA_TRACES[5][2])).reason, /fenêtre de contexte pleine/)
@@ -1350,6 +1358,30 @@ test('regarder l’écran en pleine tâche rend la main au modèle ; seule une q
     assert.equal(lookStoppedTask(r), expected, JSON.stringify(r))
     assert.equal(realHardwareScan().lookStoppedTask(r), expected, `copie de Jaris : ${JSON.stringify(r)}`)
   }
+})
+
+test('étape 402 : seules les demandes coupées par l’ancienne limite de 10 allers-retours sont à refaire', () => {
+  const cases = [
+    [{ turns: [{ error: 'plus de 10 allers-retours sans réponse finale' }] }, true],
+    [{ turns: [{ error: null }, { error: 'plus de 10 allers-retours sans réponse finale' }] }, true],
+    [{ turns: [{ error: '20 allers-retours, puis aucune réponse finale sans outil' }] }, false],
+    [{ turns: [{ error: 'réponse vide' }] }, false],
+    [{ turns: [{ error: null }] }, false],
+    [{}, false]
+  ]
+  for (const [r, expected] of cases) {
+    assert.equal(roundsStoppedTask(r), expected, JSON.stringify(r))
+    assert.equal(realHardwareScan().roundsStoppedTask(r), expected, `copie de Jaris : ${JSON.stringify(r)}`)
+  }
+  // Et Jaris le compte comme « à refaire » dans le fichier d'une campagne.
+  const traces = [
+    JSON.stringify({ type: 'campagne', versions: { demandes: SCENARIO_TEST_VERSION } }),
+    JSON.stringify({ type: 'demande', model: 'm1', id: 'meteo', pass: 0, ok: false, turns: [{ error: 'plus de 10 allers-retours sans réponse finale' }] }),
+    JSON.stringify({ type: 'demande', model: 'm2', id: 'meteo', pass: 0, ok: false, turns: [{ error: null }] })
+  ].join('\n')
+  const done = realHardwareScan().campaignCompletion(traces)
+  assert.ok(done.todo?.scenarios.has('m1'))
+  assert.ok(!done.todo?.scenarios.has('m2'))
 })
 
 // Étape 244, Léo : « je vois pas tester les modèles avec la dernière version ». Une demande arrêtée par l'ancien regard

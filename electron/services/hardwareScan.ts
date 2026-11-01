@@ -1381,6 +1381,16 @@ export function lookStoppedTask(row: { calls?: unknown; turns?: unknown }): bool
   })
 }
 
+/**
+ * Étape 402 : une demande jouée quand Jaris abandonnait après 10 allers-retours. Avec 20 actions puis une dernière
+ * réponse sans outil, le modèle aurait continué : à refaire. Jouée après, elle n'a plus ce message (refaite une fois).
+ * Copie dans scripts/benchmark-scenarios.mjs, vérifiée identique par test.
+ */
+export function roundsStoppedTask(row: { turns?: unknown }): boolean {
+  const turns = Array.isArray(row.turns) ? (row.turns as Array<{ error?: unknown }>) : []
+  return turns.some((turn) => /^plus de 10 allers-retours/.test(String(turn?.error ?? '')))
+}
+
 /** Réponse d'Ollama quand le modèle n'est pas (ou plus) là : copie de MODEL_NOT_FOUND (benchmark-models.mjs). */
 const MODEL_NOT_FOUND = /model '[^']+' not found/
 
@@ -1432,7 +1442,7 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     // avant son rejeu, ou illisible par Ollama). Sans ça, K2 Horizon 0.9B, jamais testé en code, n'était plus proposé.
     const reason = String(row.reason ?? '')
     const pending =
-      Boolean(row.timeout) || (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) || (row.type === 'demande' && lookStoppedTask(row))
+      Boolean(row.timeout) || (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) || (row.type === 'demande' && (lookStoppedTask(row) || roundsStoppedTask(row)))
     if (row.type === 'question' && versions?.conversation === CONVERSATION_TEST_VERSION) {
       latest.set(`conversation|${model}|${row.index}|${row.pass}`, { role: 'conversation', model, pending: false })
     } else if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {

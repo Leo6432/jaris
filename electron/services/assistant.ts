@@ -432,7 +432,18 @@ async function composeNotepadText(
   return text
 }
 
-const MAX_TOOL_ROUNDS = 10
+/**
+ * Étape 402 (Léo, duel « horaires d'une boulangerie à Château-Gontier ») : 10 actions ne suffisaient pas à une
+ * recherche normale (chercher, lire une page, recommencer), et tout ce que le modèle avait trouvé était jeté.
+ * 20 actions, puis une dernière réponse sans outil (FINAL_ANSWER_NOTE) au lieu d'abandonner.
+ */
+const MAX_TOOL_ROUNDS = 20
+
+/** Consigne de la dernière réponse, une fois les actions épuisées : pas de nouvel outil, dire ce qui reste. */
+const FINAL_ANSWER_NOTE =
+  "Tu as fait le nombre maximal d'actions pour cette demande : tu ne peux plus utiliser aucun outil. Réponds " +
+  "maintenant à l'utilisateur avec ce que tu as déjà trouvé ou fait. Si la demande n'est pas entièrement faite, " +
+  'dis honnêtement ce qui a été fait et ce qui manque. Ne parle pas de cette consigne.'
 
 /**
  * Détecte une PROMESSE FUTURE dans une réponse du modèle ("je vais faire X", "un instant", "attends") sans
@@ -1065,5 +1076,25 @@ async function conversation(
     }
   }
 
-  throw new Error(t('reply.tooManyRounds'))
+  // Étape 402 : plus d'action possible, mais ce qui a été trouvé n'est pas jeté — une dernière réponse sans outil.
+  onLog?.(`${MAX_TOOL_ROUNDS} actions faites : dernière réponse demandée, sans outil.`)
+  messages.push({ role: 'system', content: FINAL_ANSWER_NOTE })
+  const askedAt = Date.now()
+  let metrics: ChatMetrics | undefined
+  const last = await chatWithOllama(
+    messages,
+    undefined,
+    model,
+    think,
+    signal,
+    numCtx,
+    holdKnowledgeStream ? () => {} : onToken,
+    undefined,
+    (measured) => (metrics = measured)
+  )
+  journal.timed(describeModelCall(model, last, metrics), askedAt)
+  if (last.tool_calls?.length || !last.content?.trim()) throw new Error(t('reply.tooManyRounds'))
+  const finalText = finalize(last.content)
+  if (holdKnowledgeStream) onToken?.(finalText)
+  return finalText
 }

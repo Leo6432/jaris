@@ -59,6 +59,7 @@ import {
   SCENARIO_TOTAL,
   demandSuccessRate,
   lookStoppedTask,
+  roundsStoppedTask,
   runScenario,
   scenarioSeed
 } from './benchmark-scenarios.mjs'
@@ -1301,8 +1302,9 @@ async function chat(model, testCase) {
  */
 const THINK_REFUSED = /does not support thinking|thinking is not supported/i
 
-async function chatScenario(model, messages, seed, thinkModes) {
-  const body = { model, messages, tools: TOOLS, stream: false, options: { num_ctx: CONVERSATION_NUM_CTX, seed } }
+async function chatScenario(model, messages, seed, thinkModes, { tools = true } = {}) {
+  // Étape 402 : la dernière réponse, après 20 allers-retours, part sans outil.
+  const body = { model, messages, tools: tools ? TOOLS : undefined, stream: false, options: { num_ctx: CONVERSATION_NUM_CTX, seed } }
   // Un modèle qui a déjà refusé la réflexion n'est plus interrogé avec : une requête de moins par appel.
   if (!thinkModes.has(THINK_OFF)) body.think = 'medium'
   try {
@@ -1959,7 +1961,8 @@ async function main() {
     const crashed = (r) => /^erreur/.test(r.reason ?? '') && (!r.replay || MODEL_NOT_FOUND.test(r.reason))
     // Étape 242 : une demande où « regarder l'écran » en pleine tâche avait arrêté Jaris (avant le correctif) est
     // refaite aussi : avec Jaris corrigé, le modèle aurait continué. Une fois refaite, elle n'a plus cette forme.
-    const lookStopped = (r) => r.type === 'demande' && lookStoppedTask(r)
+    // Étape 402 : aussi les demandes coupées par l'ancienne limite de 10 allers-retours.
+    const lookStopped = (r) => r.type === 'demande' && (lookStoppedTask(r) || roundsStoppedTask(r))
     return [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r)) && inScope(r))
   }
 
@@ -2031,7 +2034,7 @@ async function main() {
       const onEvent = ({ kind, messages, ...event }) => trace({ type: `demande-${kind}`, ...where, ...event, ...(messages ? { messages: compactMessages(messages) } : {}) })
       process.stdout.write(`  [${record.pass}/2] demande « ${record.id} » (rejouée) ... `)
       try {
-        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, record.seed, thinkModes), { variant: record.variant, onEvent })
+        const run = await runScenario(scenario, (messages, opts) => chatScenario(model, messages, record.seed, thinkModes, opts), { variant: record.variant, onEvent })
         trace({
           type: 'demande',
           ...where,
@@ -2580,7 +2583,7 @@ async function main() {
         trace({ type: `demande-${kind}`, ...where, ...event, ...(messages ? { messages: compactMessages(messages) } : {}) })
       try {
         guard.check()
-        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes), { variant, onEvent })
+        const run = await runScenario(scenario, (messages, opts) => chatScenario(model, messages, seed, thinkModes, opts), { variant, onEvent })
         guard.passed()
         // Dans le fichier de résultats : de quoi rejuger (appels, réponses), sans les requêtes entières (traces).
         const turns = run.turns.map(({ messages: _messages, ...turn }) => turn)

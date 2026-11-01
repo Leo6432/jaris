@@ -10561,3 +10561,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   B attend, vote et relecture, refus en Code et au-delà de 5 ; vérifié en retirant l'historique) et
   `test-duel-panel-ui.mjs` (vrai navigateur : champ et indication sous le vote, réponse envoyée, réponses d'avant sur
   les deux cartes, pas de vote pendant le nouveau tour, rien en Code). **Non vérifié en usage réel.**
+
+- **Étape 402 (v0.40.43), duel « horaires d'une boulangerie à Château-Gontier » (capture de Léo) : le modèle B
+  avait fait une vraie recherche (recherches + pages lues), puis « Trop d'actions enchaînées, j'abandonne » et tout
+  était jeté. Léo : « 10 actions c'est pas assez non ? », et « enlève le bouton Parler à Jaris… mets le modèle sous
+  Que puis-je faire pour toi ».**
+  1. **20 actions par demande au lieu de 10, puis une dernière réponse au lieu d'abandonner** (assistant.ts,
+     `MAX_TOOL_ROUNDS`, `FINAL_ANSWER_NOTE`) : à la limite, une consigne système et un dernier appel au modèle SANS
+     outil — il répond avec ce qu'il a trouvé et dit ce qui manque. Seul un dernier appel vide (ou qui veut encore un
+     outil) donne l'ancien message d'abandon. Vaut partout : Chat, voix, téléphone, duels. 10 allers-retours, c'est
+     5 recherches et 5 pages lues : trop peu pour une recherche ordinaire.
+     **Le banc de test des modèles suit, sans tout refaire** : la copie de la boucle (benchmark-scenarios.mjs) fait
+     pareil (vérifié par le test croisé avec le vrai converse(), consigne comprise), et seules les demandes coupées
+     par l'ancienne limite (« plus de 10 allers-retours… », `roundsStoppedTask`, copie dans hardwareScan.ts vérifiée
+     identique) sont « à refaire » : le bouton « Tester les modèles » les propose, le rejeu les reprend à l'identique.
+     Une demande finie en moins de 10 allers-retours aurait donné exactement la même chose : rien à refaire.
+     `SCENARIO_TEST_VERSION` n'est donc PAS augmentée (elle aurait fait refaire les 1 440 demandes).
+  2. **Écran vocal : plus de bouton « Parler à Jaris »** — l'orbe, « + » et « Jaris » suffisent. L'orbe devient le
+     bouton, clavier compris (`role="button"`, Tab puis Entrée ou Espace, contour au focus ; JarisOrb prend un `label`).
+     Le choix du modèle passe juste sous « Que puis-je faire pour toi ? », la raison d'un clic sans effet (étape 325)
+     juste en dessous. La phrase d'aide commence par « Clique sur l'orbe pour parler. » (24 langues) ; `app.voice.listening`
+     et `app.voice.wait`, qui ne servaient qu'au bouton, sont retirées.
+  Régression : `node --test scripts/test-benchmark-scenarios.mjs` (20 allers-retours puis la dernière réponse, sans
+  outil ; dernier appel vide = abandon ; seules les anciennes coupures à 10 à refaire, dans Jaris et dans le script —
+  vérifié en changeant la consigne dans la copie, puis en retirant la règle de Jaris : chacun échoue) et
+  `scripts/test-voice-wake-notice-ui.mjs` (pas de bouton, modèle centré juste sous la question, orbe au clavier).
+  **Non vérifié en usage réel** : la qualité des dernières réponses des petits modèles à la limite.

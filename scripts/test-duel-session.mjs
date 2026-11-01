@@ -1139,8 +1139,9 @@ test('étape 382 : disque limité — jamais plus de modèles téléchargés qu�
 
 test('étape 383 : disque plein sur une machine dont Jaris ne connaît pas la place — la série attend une suppression, puis reprend', async () => {
   const sizes = Object.fromEntries(MODELS.map((m) => [m, 10]))
-  // 25 Go sur le « pod » : deux modèles de 10 Go à la fois, pas trois. Jaris ne connaît pas cette place (null).
-  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, sizes, podDiskGb: 25 })
+  // 15 Go sur le « pod » : un seul modèle de 10 Go à la fois — le suivant est toujours refusé d'abord (avec 25 Go,
+  // deux modèles tenaient et, selon le tirage du planning, aucun refus n'arrivait parfois). Jaris ne connaît pas cette place.
+  const env = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, sizes, podDiskGb: 15 })
   env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
   await env.session.startDuel('code', 4, 3)
   await waitFor(() => seriesDone(env), 'la série a fini de tourner')

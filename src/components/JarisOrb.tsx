@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { RefObject } from 'react'
+import type { KeyboardEvent, RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
 import { LOGO_LOOP, logoLoopOffset } from '../../shared/logoOrb'
 import { EMOTION_COLORS } from '../../shared/emotionColors'
@@ -10,6 +10,8 @@ interface JarisOrbProps {
   /** Élément <audio> qui joue la voix de Jaris : sert à faire vibrer l'anneau en rythme avec la parole. */
   audioElRef?: RefObject<HTMLAudioElement>
   onClick?: () => void
+  /** Étape 402 : nom lu par un lecteur d'écran quand l'orbe est un bouton (`onClick`). */
+  label?: string
   /** Remplace UNIQUEMENT la couleur de `EMOTION_STYLES[emotion]` (jamais modifiée elle-même) — vitesse de
    * rotation/pulsation restent celles de `emotion`. Sert au sélecteur de voix (Options → Voix) : même forme
    * reconnaissable (anneau déchiqueté) que sur l'accueil, une couleur différente par voix pour les distinguer
@@ -214,7 +216,7 @@ function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>)
 }
 
 /** Cœur visuel de Jaris façon J.A.R.V.I.S. : anneau holographique irrégulier + noyau filaire, qui vibre avec la voix. */
-export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, color }: JarisOrbProps): JSX.Element {
+export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, label, color }: JarisOrbProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const emotionRef = useRef(emotion)
   const colorRef = useRef(color)
@@ -309,6 +311,20 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
       className={`jaris-orb${onClick ? ' jaris-orb--clickable' : ''}`}
       style={{ width: size, height: size }}
       onClick={onClick}
+      // Étape 402 : le bouton « Parler à Jaris » retiré de l'écran vocal, l'orbe cliquable est aussi le chemin au
+      // clavier (Tab, puis Entrée ou Espace).
+      {...(onClick
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            'aria-label': label,
+            onKeyDown: (event: KeyboardEvent) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              onClick()
+            }
+          }
+        : {})}
     >
       <canvas ref={canvasRef} />
     </div>

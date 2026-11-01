@@ -5766,23 +5766,6 @@ select {
   line-height: 1.5;
 }
 
-.voice-screen__talk {
-  height: 40px;
-  padding: 0 22px;
-  font-family: var(--hud-font-body);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--jv-accent-ink);
-  background: var(--hud-accent);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.voice-screen__talk:hover {
-  opacity: 0.9;
-}
-
 /* --- Options : un écran du rail, façon Paramètres de Windows 11 ------------ */
 
 .options-page--embedded {
@@ -6033,7 +6016,6 @@ select {
 .image-install__button,
 .quality-picker__download,
 .app__onboarding button,
-.voice-screen__talk,
 .empty-state__suggestion {
   border-radius: 9999px;
 }
@@ -6700,41 +6682,16 @@ select {
   padding-top: 16px;
 }
 
-.voice-screen__controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
+/* Étape 402 : le choix du modèle juste sous la question, plus près d'elle que le reste. */
 .voice-screen .app__model-picker {
-  margin: 0;
+  margin: -8px 0 0;
 }
 
-.voice-screen__talk {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 22px;
-  border: none;
-  border-radius: 9999px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--jv-accent-ink);
-  background: var(--hud-accent);
-  cursor: pointer;
-  transition: transform 0.1s ease-out, opacity 0.2s ease;
-}
-
-.voice-screen__talk:not(:disabled):active {
-  transform: scale(0.97);
-}
-
-/* Pendant l'écoute ou la réponse : le bouton reste en place (rien ne saute), estompé, et dit ce qui se passe. */
-.voice-screen__talk:disabled {
-  opacity: 0.45;
-  cursor: default;
+/* L'orbe est le bouton de l'écran vocal : un contour visible au clavier, rond comme lui. */
+.jaris-orb--clickable:focus-visible {
+  outline: 2px solid var(--hud-accent);
+  outline-offset: 6px;
+  border-radius: 50%;
 }
 
 .voice-screen .app__hint--small {

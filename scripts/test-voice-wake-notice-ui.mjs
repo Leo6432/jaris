@@ -106,7 +106,7 @@ async function withVoiceScreen(run, flags = {}) {
   try {
     const page = await browser.newPage({ viewport: { width: 1000, height: 760 } })
     await page.setContent(html.replace('<div id="root"></div>', `<div id="root"></div><script>window.__flags = ${JSON.stringify(flags)}</script>`))
-    await page.waitForSelector('.voice-screen__talk')
+    await page.waitForSelector('.voice-screen__stage .jaris-orb')
     await run(page)
   } finally {
     await browser.close()
@@ -123,12 +123,13 @@ const options = { skip: chromium ? false : 'Playwright indisponible dans cet env
 test('écoute qui charge encore : « Parler à Jaris » dit pourquoi, juste sous le bouton, puis l’efface quand elle est prête', options, async () => {
   await withVoiceScreen(async (page) => {
     assert.equal(await noticeText(page), null, 'aucune raison ne doit s’afficher avant un essai')
-    await page.click('.voice-screen__talk')
+    await page.click('.voice-screen__stage .jaris-orb')
     await waitNotice(page, LOADING)
     assert.equal(await page.evaluate(() => window.__wake.calls), 1)
 
     const layout = await page.evaluate(() => {
-      const button = document.querySelector('.voice-screen__talk').getBoundingClientRect()
+      // Étape 402 : plus de bouton « Parler à Jaris » ; la raison suit le choix du modèle, sous la question.
+      const button = document.querySelector('.voice-screen__stage .app__model-picker').getBoundingClientRect()
       const notice = document.querySelector('.voice-screen__notice')
       const rect = notice.getBoundingClientRect()
       const probe = document.createElement('span')
@@ -157,7 +158,7 @@ test('un changement d’état seul ne fait jamais apparaître de raison, mais me
     await page.waitForTimeout(250)
     assert.equal(await noticeText(page), null, 'une raison est apparue sans que Léo ait essayé')
 
-    await page.click('.voice-screen__talk')
+    await page.click('.voice-screen__stage .jaris-orb')
     await waitNotice(page, LOADING)
     // Le chargement échoue : la raison affichée suit l'état réel, avec le vrai message.
     await page.evaluate((reason) => window.__emitWake({ reason, attempt: false }), FAILED)
@@ -165,7 +166,7 @@ test('un changement d’état seul ne fait jamais apparaître de raison, mais me
 
     // Un essai réussi efface la raison.
     await page.evaluate(() => { window.__wake.reason = null })
-    await page.click('.voice-screen__talk')
+    await page.click('.voice-screen__stage .jaris-orb')
     await waitNoNotice(page)
   }, { reason: LOADING })
 })
@@ -176,7 +177,7 @@ test('clic désactivé dans Options → Voix : le bouton et l’orbe disent où 
     const leaveAndComeBack = async () => {
       await page.click('.rail__item:has-text("Chat")')
       await page.click('.rail__item:has-text("Vocal")')
-      await page.waitForSelector('.voice-screen__talk')
+      await page.waitForSelector('.voice-screen__stage .jaris-orb')
     }
     await page.click('.voice-screen__stage .jaris-orb')
     await waitNotice(page, expected)
@@ -185,7 +186,7 @@ test('clic désactivé dans Options → Voix : le bouton et l’orbe disent où 
     await leaveAndComeBack()
     assert.equal(await noticeText(page), null, 'une raison périmée reste affichée au retour sur l’écran vocal')
 
-    await page.click('.voice-screen__talk')
+    await page.click('.voice-screen__stage .jaris-orb')
     await waitNotice(page, expected)
     assert.equal(await page.evaluate(() => window.__wake.calls), 0, 'le clic désactivé ne doit toujours rien déclencher')
 
@@ -199,10 +200,43 @@ test('clic désactivé dans Options → Voix : le bouton et l’orbe disent où 
 test('la voix en panne déjà expliquée plus bas : la même raison n’est pas répétée sous le bouton', options, async () => {
   await withVoiceScreen(async (page) => {
     await page.waitForSelector('.app__setup-warning')
-    await page.click('.voice-screen__talk')
+    await page.click('.voice-screen__stage .jaris-orb')
     await page.waitForFunction(() => window.__wake.calls === 1)
     await page.waitForTimeout(250)
     assert.equal(await noticeText(page), null, 'deux cadres disent la même chose')
     assert.match(await page.textContent('.app__setup-warning'), /Micro introuvable/)
   }, { reason: FAILED, broken: true })
+})
+
+// Étape 402 (Léo : « enlève le bouton Parler avec Jaris… et mets le modèle sous Que puis-je faire pour toi ») :
+// plus de bouton, l'orbe est le bouton (clavier compris), et le choix du modèle suit juste la question.
+test('écran vocal : pas de bouton « Parler à Jaris », l’orbe se déclenche au clavier, le modèle est sous la question', options, async () => {
+  await withVoiceScreen(async (page) => {
+    const layout = await page.evaluate(() => {
+      const stage = document.querySelector('.voice-screen__stage')
+      const children = [...stage.children].map((el) => el.className)
+      const status = stage.querySelector('.app__status').getBoundingClientRect()
+      const picker = stage.querySelector('.app__model-picker').getBoundingClientRect()
+      const orb = stage.querySelector('.jaris-orb')
+      return {
+        talkButton: [...document.querySelectorAll('button')].some((b) => /Parler à Jaris/.test(b.textContent)),
+        order: children.indexOf('app__model-picker') - children.indexOf('app__status'),
+        gap: picker.top - status.bottom,
+        centered: Math.abs(picker.left + picker.width / 2 - (status.left + status.width / 2)),
+        role: orb.getAttribute('role'),
+        label: orb.getAttribute('aria-label'),
+        tab: orb.tabIndex
+      }
+    })
+    assert.equal(layout.talkButton, false, 'le bouton « Parler à Jaris » est encore là')
+    assert.equal(layout.order, 1, 'le choix du modèle doit suivre la question')
+    assert.ok(layout.gap >= 0 && layout.gap < 24, `le choix du modèle doit être juste sous la question (écart de ${layout.gap} px)`)
+    assert.ok(layout.centered < 4, 'le choix du modèle doit être centré sous la question')
+    assert.equal(layout.role, 'button')
+    assert.equal(layout.label, 'Parler à Jaris')
+    assert.equal(layout.tab, 0)
+    await page.focus('.voice-screen__stage .jaris-orb')
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => window.__wake.calls === 1)
+  })
 })

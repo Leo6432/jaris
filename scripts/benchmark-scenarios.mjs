@@ -27,7 +27,23 @@ export const SCENARIO_TEST_VERSION = 3
 /** Copie de LOOKUP_TOOLS (assistant.ts), vérifiée par le test : après l'un d'eux, pas de relance vers search_web. */
 export const LOOKUP_TOOLS = new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats'])
 
-export const MAX_TOOL_ROUNDS = 10
+export const MAX_TOOL_ROUNDS = 20
+
+/** Copie de FINAL_ANSWER_NOTE (assistant.ts, étape 402), vérifiée par le test croisé. */
+const FINAL_ANSWER_NOTE =
+  "Tu as fait le nombre maximal d'actions pour cette demande : tu ne peux plus utiliser aucun outil. Réponds " +
+  "maintenant à l'utilisateur avec ce que tu as déjà trouvé ou fait. Si la demande n'est pas entièrement faite, " +
+  'dis honnêtement ce qui a été fait et ce qui manque. Ne parle pas de cette consigne.'
+
+/**
+ * Étape 402 : une demande jouée quand Jaris abandonnait après 10 allers-retours. Avec 20 actions puis une dernière
+ * réponse sans outil, le modèle aurait continué : la demande est à refaire. Jouée après, elle ne peut plus avoir ce
+ * message, donc elle n'est jamais refaite deux fois. Copie dans hardwareScan.ts, vérifiée identique par test.
+ */
+export function roundsStoppedTask(row) {
+  const turns = Array.isArray(row.turns) ? row.turns : []
+  return turns.some((turn) => /^plus de 10 allers-retours/.test(String(turn?.error ?? '')))
+}
 
 /** Même valeur que MAX_HISTORY_MESSAGES (conversationSession.ts), vérifiée par le test. */
 export const MAX_HISTORY_MESSAGES = 12
@@ -654,7 +670,25 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           messages.push({ role: 'tool', content: result })
         }
       }
-      if (reply === null) throw new ScenarioStop(`plus de ${MAX_TOOL_ROUNDS} allers-retours sans réponse finale`)
+      if (reply === null) {
+        // Copie de l'étape 402 (assistant.ts) : une dernière réponse, sans outil.
+        messages.push({ role: 'system', content: FINAL_ANSWER_NOTE })
+        const sent = messages.length
+        const callStart = performance.now()
+        onEvent?.({ kind: 'requete', turn: turnIndex, round: MAX_TOOL_ROUNDS, messages: [...messages] })
+        const data = await chat(messages, { tools: false })
+        const rawMessage = data.message ?? { role: 'assistant', content: '' }
+        const message = typeof rawMessage.content === 'string' ? { ...rawMessage, content: stripLeakedThinking(rawMessage.content) } : rawMessage
+        const { message: _m, ...meta } = data
+        modelCalls.push({ turn: turnIndex, round: MAX_TOOL_ROUNDS, sent, ms: Math.round(performance.now() - callStart), response: rawMessage, meta })
+        onEvent?.({ kind: 'reponse', turn: turnIndex, round: MAX_TOOL_ROUNDS, ms: modelCalls.at(-1).ms, response: rawMessage, meta })
+        const content = str(message.content)
+        if (message.tool_calls?.length || !content.trim()) {
+          throw new ScenarioStop(`${MAX_TOOL_ROUNDS} allers-retours, puis aucune réponse finale sans outil`)
+        }
+        reply = finalizeReply(content, userText)
+        turn.raw = content
+      }
     } catch (err) {
       if (!(err instanceof ScenarioStop)) {
         // Erreur inattendue (Ollama, délai dépassé…) : ce qui a déjà été joué part avec l'erreur, pour être
