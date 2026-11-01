@@ -374,6 +374,7 @@
   "chat.suggest.3": "Avaa Spotify ja soita jazzia",
   "chat.image.sent": "Jarisille lähetetty kuva",
   "chat.stopped": "Vastaus pysäytetty.",
+  "chat.ui.preparing": "Valmistellaan näkymää…",
   "chat.image.drawn": "Jarisin piirtämä kuva",
   "chat.image.saved": "Kuva tallennettu",
   "chat.image.download": "Lataa kuva",

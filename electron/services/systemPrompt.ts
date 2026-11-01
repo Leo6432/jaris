@@ -29,6 +29,26 @@ export function dateTimeNote(now: Date = new Date(), locale = 'fr-FR'): string {
  * instructions pour le modèle, jamais lues par l'utilisateur —, mais la réponse suit la langue choisie dans Jaris.
  * Le français par défaut donne exactement les consignes d'avant (scripts/benchmark-cases.mjs en garde une copie).
  */
+/**
+ * Blocs interactifs du Chat (shared/uiBlocks.ts) : canal écrit SEULEMENT, la voix ne sait pas les montrer. Le
+ * modèle remplit un objet JSON, Jaris le dessine. Un exemple par type : un petit modèle imite mieux un exemple
+ * qu'il ne suit une règle abstraite.
+ */
+const UI_BLOCKS_GUIDE =
+  "Quand ça aide VRAIMENT la lecture, tu peux ajouter dans ta réponse un bloc interactif que Jaris dessine : " +
+  "un bloc de code de langage jaris-ui qui contient UN objet JSON valide, et rien d'autre. Types possibles : " +
+  'comparaison de plusieurs choses -> {"type":"table","title":"...","columns":["Modèle","Prix"],"rows":[["A","12 €"],["B","15 €"]]} ; ' +
+  'chiffres qui évoluent ou à comparer -> {"type":"chart","kind":"bar" ou "line","title":"...","unit":"°C","labels":["Lun","Mar"],"values":[12,15]} (values = nombres) ; ' +
+  'recette, tutoriel, marche à suivre -> {"type":"steps","title":"...","items":["Étape 1...","Étape 2..."]} ; ' +
+  'liste de courses ou de choses à faire -> {"type":"checklist","title":"...","items":["...","..."]} ; ' +
+  'question à laquelle l\'utilisateur répond en choisissant -> {"type":"choices","title":"Ta question ?","options":["Choix A","Choix B"]} ; ' +
+  'calcul que l\'utilisateur voudra refaire avec d\'autres valeurs -> {"type":"calculator","title":"...",' +
+  '"inputs":[{"name":"prix","label":"Prix","value":100,"unit":"€"},{"name":"remise","label":"Remise","value":20,"unit":"%"}],' +
+  '"outputs":[{"label":"Prix final","formula":"prix*(1-remise/100)","unit":"€"}]} (formule : nombres, noms des inputs, + - * / ^ et parenthèses). ' +
+  "Écris les textes du bloc dans la langue de ta réponse, mets une phrase normale avant le bloc, un seul bloc " +
+  "par sujet, et jamais de bloc pour une réponse courte ou une simple conversation. Les chiffres d'un bloc " +
+  "suivent les mêmes règles que le reste de ta réponse (ils viennent d'une vraie recherche quand c'est un fait). "
+
 export function buildSystemPrompt(userName: string | null, memoryTitles: string[], channel: ConverseChannel, replyLanguage = 'French'): string {
   const french = replyLanguage === 'French'
   const answerIn = french
@@ -65,7 +85,8 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
         'de listes à puces ni de mise en forme, uniquement du texte normal. '
       : `${answerIn}, de façon claire et directe. Tu réponds par écrit dans une fenêtre de chat : ` +
         "tu peux utiliser des listes à puces, des blocs de code et des retours à la ligne quand ça rend la " +
-        "réponse plus lisible, mais reste concis et n'en abuse pas pour une réponse courte. Pas d'émojis. "
+        "réponse plus lisible, mais reste concis et n'en abuse pas pour une réponse courte. Pas d'émojis. " +
+        UI_BLOCKS_GUIDE
 
   return (
     "Tu es Jaris, un assistant personnel qui tourne entièrement en local sur l'ordinateur de " +

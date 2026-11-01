@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { i18nModules, loadTsModule } from './load-ts-module.mjs'
 
 /**
  * Étape 234 (bêta de Jaris) : le Chat affichait les blocs de code avec leurs « ``` », alors que les consignes
@@ -11,11 +12,25 @@ import ts from 'typescript'
  */
 const require = createRequire(import.meta.url)
 const { renderToStaticMarkup } = require('react-dom/server')
-const out = ts.transpileModule(readFileSync(new URL('../src/lib/formatReply.tsx', import.meta.url), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
-}).outputText
-const exports = {}
-vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(exports, require, { exports })
+const i18n = i18nModules()['../../shared/i18n']
+
+/** Charge un fichier .ts/.tsx du dépôt, ses imports du dépôt compris (blocs interactifs, étape 380). */
+function loadRepoModule(relativePath) {
+  const out = ts.transpileModule(readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
+  }).outputText
+  const local = (name) => {
+    if (name.endsWith('shared/i18n')) return i18n
+    if (name === '@/components/ReplyBlock') return loadRepoModule('src/components/ReplyBlock.tsx')
+    if (name.endsWith('shared/uiBlocks')) return uiBlocks
+    return require(name)
+  }
+  const module = { exports: {} }
+  vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(module.exports, local, module)
+  return module.exports
+}
+const uiBlocks = loadTsModule('shared/uiBlocks.ts')
+const exports = loadRepoModule('src/lib/formatReply.tsx')
 const html = (text) => renderToStaticMarkup(exports.renderFormattedText(text))
 
 test('bloc de code : affiché comme du code, sans ses accents graves', () => {
@@ -159,4 +174,57 @@ test('sous-puces : une liste entièrement en retrait reste à un niveau ; un 3e 
     '<ol class="reply-list"><li>Installer<ol class="reply-list reply-list--nested"><li>Télécharger' +
       '<ol class="reply-list reply-list--nested"><li>Ouvrir le site</li><li>Cliquer</li></ol></li><li>Lancer</li></ol></li><li>Configurer</li></ol>'
   )
+})
+
+/**
+ * Étape 380 (Léo : « sur ChatGPT ils ont ajouté l'UI, on peut faire pareil », choix « blocs tout prêts ») : un bloc
+ * ```jaris-ui devient un vrai composant de Jaris, jamais du JSON affiché ni du HTML du modèle interprété.
+ */
+const ui = (json) => html('Voici :\n```jaris-ui\n' + json + '\n```\nFin.')
+
+test('bloc tableau : un vrai tableau, sans JSON ni accents graves', () => {
+  const result = ui('{"type":"table","title":"Prix","columns":["Modèle","Prix"],"rows":[["A","12 €"],["B","15 €"]]}')
+  assert.match(result, /<figure class="reply-ui reply-ui--table">/)
+  assert.match(result, /<th scope="col">Modèle<\/th>/)
+  assert.match(result, /<td class="reply-ui__num">12 €<\/td>/)
+  assert.ok(!result.includes('"type"'))
+  assert.ok(!result.includes('```'))
+  assert.match(result, /Voici :/)
+  assert.match(result, /Fin\./)
+})
+
+test('bloc graphique : une barre par valeur, et les valeurs lisibles par un lecteur d’écran', () => {
+  const result = ui('{"type":"chart","kind":"bar","title":"Températures","unit":"°C","labels":["Lun","Mar","Mer"],"values":[12,"15,5",9]}')
+  assert.equal(result.match(/class="reply-ui__bar"/g)?.length, 3)
+  assert.match(result, /<th scope="row">Mar<\/th><td>15,5 °C<\/td>/)
+  assert.match(result, /role="img"/)
+})
+
+test('bloc étapes, liste à cocher, choix et calculateur : chacun son composant', () => {
+  assert.equal(ui('{"type":"steps","items":["Préchauffer","Mélanger"]}').match(/type="checkbox"/g)?.length, 2)
+  assert.match(ui('{"type":"checklist","items":["Pain","Lait","Œufs"]}'), /0\/3/)
+  // Sans fonction de clic (ancienne réponse, widget), les choix sont montrés mais pas cliquables.
+  assert.equal(ui('{"type":"choices","title":"Lequel ?","options":["A","B"]}').match(/disabled=""/g)?.length, 2)
+  const calc = ui(
+    '{"type":"calculator","inputs":[{"name":"prix","label":"Prix","value":100,"unit":"€"},{"name":"remise","label":"Remise","value":20}],"outputs":[{"label":"Prix final","formula":"prix*(1-remise/100)","unit":"€"}]}'
+  )
+  assert.match(calc, /<dd>80 €<\/dd>/)
+})
+
+test('bloc illisible : son contenu reste visible comme du code (rien n’est perdu)', () => {
+  const result = ui('{"type":"table", oups')
+  assert.match(result, /<pre class="reply-code-block">/)
+  assert.ok(!result.includes('reply-ui reply-ui--'))
+})
+
+test('bloc pas encore fermé : une ligne d’attente, jamais le JSON qui défile', () => {
+  const result = html('Voici :\n```jaris-ui\n{"type":"table","colu')
+  assert.match(result, /reply-ui__pending/)
+  assert.ok(!result.includes('colu'))
+})
+
+test('le texte d’un bloc n’est jamais interprété en HTML', () => {
+  const result = ui('{"type":"checklist","items":["<img src=x onerror=alert(1)>"]}')
+  assert.ok(!result.includes('<img src=x'))
+  assert.match(result, /&lt;img src=x/)
 })

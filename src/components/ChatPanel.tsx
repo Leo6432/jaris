@@ -245,7 +245,14 @@ export default function ChatPanel(): JSX.Element {
               {message.image && message.role === 'user' && (
                 <img className="chat-panel__message-image" src={message.image} alt={t('chat.image.sent')} />
               )}
-              {renderFormattedText(message.content)}
+              {/* Choix cliquables seulement sur la DERNIÈRE réponse, et pas pendant qu'une autre s'écrit : un choix
+                  d'une vieille réponse partirait hors de propos. */}
+              {renderFormattedText(message.content, {
+                onChoice:
+                  message.role === 'assistant' && index === messages.length - 1 && !sending
+                    ? (option) => void send(option)
+                    : undefined
+              })}
               {/* Étape 272 : réponse coupée par « Arrêter » — dit discrètement, pour qu'une phrase tronquée ne
                   passe pas pour une réponse complète. */}
               {message.stopped && message.content !== t('chat.stopped') && <p className="chat-panel__stopped">{t('chat.stopped')}</p>}

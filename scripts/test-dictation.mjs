@@ -20,6 +20,7 @@ function load(path, modules = {}) {
   return exports
 }
 import { createRequire } from 'node:module'
+import { loadTsModule } from './load-ts-module.mjs'
 const require = createRequire(import.meta.url)
 
 const { downsampleTo16k, encodeWav16k, appendDictation } = load('../src/lib/dictation.ts')
@@ -36,7 +37,8 @@ test('48 kHz ramené à 16 kHz : un tiers des échantillons, la moyenne de chaqu
 test('le WAV de la dictée est accepté tel quel par le contrôle de Jaris (16 kHz mono 16 bits)', () => {
   const wav = Buffer.from(encodeWav16k(new Float32Array(1600).fill(0.5)))
   assert.equal(wav.length, 44 + 1600 * 2)
-  const { isExpectedWav } = load('../electron/services/phoneServer.ts', {})
+  // Étape 380 : phoneServer.ts importe la version texte des blocs interactifs du Chat (shared/uiBlocks.ts).
+  const { isExpectedWav } = load('../electron/services/phoneServer.ts', { '../../shared/uiBlocks': loadTsModule('shared/uiBlocks.ts') })
   assert.equal(isExpectedWav(wav), true)
   // Et les valeurs hors bornes sont écrêtées, pas repliées.
   const loud = Buffer.from(encodeWav16k(new Float32Array([2, -2])))

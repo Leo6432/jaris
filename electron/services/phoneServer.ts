@@ -7,6 +7,7 @@ import type { ChatMessage, ModelChoiceInfo, PhoneDevice } from '../../shared/ipc
 import type { PhoneDeviceStore } from './phoneDevices'
 import { currentLanguage, currentLocale, t, type MessageKey } from '../../shared/i18n'
 import { fr } from '../../shared/i18n/fr'
+import { uiBlocksToText } from '../../shared/uiBlocks'
 
 /**
  * Serveur du téléphone (étape 214). Il n'écoute QUE sur 127.0.0.1 : rien sur le réseau local, rien sur
@@ -343,7 +344,8 @@ export class PhoneServer {
       },
       mode
     )
-    job.reply = result.reply
+    // La page du téléphone ne dessine pas les blocs interactifs du Chat : leur version texte, jamais du JSON.
+    job.reply = uiBlocksToText(result.reply)
     if (result.image) job.image = result.image
   }
 
@@ -471,7 +473,9 @@ export class PhoneServer {
         return
       }
       if (req.method === 'GET' && path === '/api/history') {
-        const messages = (await this.deps.history()).slice(-40)
+        const messages = (await this.deps.history())
+          .slice(-40)
+          .map((message) => ({ ...message, content: uiBlocksToText(message.content) }))
         send(res, 200, { messages })
         return
       }

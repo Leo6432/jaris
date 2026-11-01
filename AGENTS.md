@@ -10572,3 +10572,42 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   vrai code. Les scores déjà notés ont été mesurés avec les anciennes descriptions : l'écart est petit, mais
   ce n'est pas exactement le même test.
   Régression : `node --test scripts/test-benchmark-cases.mjs` (copies identiques).
+
+- **Blocs interactifs dans les réponses du Chat (v0.41.0, Léo : « sur ChatGPT ils ont ajouté l'UI chat, on
+  peut faire pareil », choix par question : « blocs tout prêts »).** C'est l'équivalent de l'« Intelligent UI »
+  de ChatGPT (7 octobre 2026). Le modèle n'écrit jamais d'interface : il remplit UN objet JSON dans un bloc
+  ```jaris-ui, et Jaris le dessine avec ses propres composants (`src/components/ReplyBlock.tsx`). Six types :
+  tableau, graphique (barres ou courbe, une seule série), étapes, liste à cocher, choix à cliquer, calculateur.
+  - **Pourquoi des blocs plutôt qu'une mini-appli libre** : un petit modèle local remplit bien un objet, mais
+    casse souvent une page HTML (voir le mode Code). Les blocs restent fiables et gardent le style de Jaris.
+  - **Tout vient du modèle, donc tout est vérifié** (`shared/uiBlocks.ts`, module pur) : tailles bornées,
+    nombres relus même écrits en texte (« 12,5 », « 1 200 »), JSON tolérant (virgule en trop, retour à la
+    ligne brut). Le texte reste du texte : React l'échappe. Le calculateur a son propre lecteur de formules,
+    **jamais eval ni Function**, et un nom n'est accepté que s'il appartient VRAIMENT aux champs
+    (`hasOwnProperty`, jamais `in` : « toString » existe sur tout objet). Une sortie dont la formule ne marche
+    pas n'est pas affichée.
+  - Bloc encore en cours d'écriture : une ligne « Préparation de l'affichage… », jamais le JSON qui défile.
+    Bloc illisible : son contenu reste visible comme du code, rien n'est perdu.
+  - **Les choix ne sont cliquables que sur la DERNIÈRE réponse**, et pas pendant qu'une autre s'écrit : un
+    choix d'une ancienne réponse partirait hors de propos. Un clic envoie le choix comme message.
+  - Consigne au modèle (`UI_BLOCKS_GUIDE`, systemPrompt.ts) : **canal écrit seulement**, avec un exemple par
+    type. La voix ne la reçoit pas, donc les consignes du test des modèles (canal voix) ne changent pas, et
+    leurs scores restent valables. La page du téléphone ne sait pas dessiner les blocs : `uiBlocksToText` les
+    transforme en lignes ordinaires (réponses ET historique).
+  - **Défaut vu sur capture, pas dans les tests** : un graphique dessiné à une largeur fixe puis étiré
+    rendait le texte des axes minuscule. Le dessin suit maintenant la vraie largeur (`ResizeObserver`, 1 unité
+    = 1 pixel). Graphique dans la couleur du texte : pas de couleur vive dans le Chat.
+  - Le champ du calculateur est exclu de la règle générale des champs dans la règle elle-même
+    (`:not(.reply-ui__field-input)`), comme les autres exceptions, plutôt que par des `!important`
+    concurrents.
+  - **Piège de test** : `scripts/test-format-reply.mjs` chargeait formatReply.tsx avec un simple `require`.
+    Le nouvel import d'un composant .tsx l'aurait cassé : il charge maintenant les fichiers du dépôt qu'il
+    importe.
+
+  Régression : `node --test scripts/test-ui-blocks.mjs scripts/test-format-reply.mjs
+  scripts/test-reply-blocks-ui.mjs`. Ces tests couvrent : la lecture tolérante, les formules qui refusent le
+  code, la version texte, le rendu de chaque bloc, et dans un vrai navigateur le clic sur un choix, les
+  cases, le calculateur, le survol du graphique et l'absence de débordement à 620 px. Vérifié en remettant
+  deux défauts : choix jamais cliquables, tableau sans défilement. Chaque test concerné échoue bien.
+  **Non vérifié en usage réel** : la façon dont les VRAIS modèles locaux de Léo utilisent ces blocs (bon
+  moment, JSON correct). À juger dans le Chat.

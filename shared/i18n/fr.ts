@@ -384,6 +384,7 @@ export const fr = {
   "chat.suggest.3": "Ouvre Spotify et mets du jazz",
   "chat.image.sent": "Image envoyée à Jaris",
   "chat.stopped": "Réponse arrêtée.",
+  "chat.ui.preparing": "Préparation de l'affichage…",
   "chat.image.drawn": "Image dessinée par Jaris",
   "chat.image.saved": "Image enregistrée",
   "chat.image.download": "Télécharger l'image",

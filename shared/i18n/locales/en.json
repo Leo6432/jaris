@@ -374,6 +374,7 @@
   "chat.suggest.3": "Open Spotify and play some jazz",
   "chat.image.sent": "Image sent to Jaris",
   "chat.stopped": "Answer stopped.",
+  "chat.ui.preparing": "Preparing the display…",
   "chat.image.drawn": "Image drawn by Jaris",
   "chat.image.saved": "Image saved",
   "chat.image.download": "Download the image",

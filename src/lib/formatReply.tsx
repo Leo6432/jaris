@@ -1,4 +1,7 @@
 import { Fragment } from 'react'
+import { ReplyBlock, type ReplyBlockOptions } from '@/components/ReplyBlock'
+import { parseUiBlock, UI_FENCE_LANGUAGE } from '../../shared/uiBlocks'
+import { t } from '../../shared/i18n'
 
 /**
  * Le canal "chat" du prompt système (assistant.ts) autorise le modèle à utiliser du markdown léger (listes,
@@ -219,18 +222,37 @@ function renderText(text: string, keyPrefix: string): JSX.Element[] {
  * dit justement au modèle qu'il peut en écrire. Un bloc pas encore fermé (réponse en cours d'écriture) est déjà
  * montré comme du code. Le texte reste échappé par React : rien de ce que renvoie le modèle n'est interprété en HTML.
  */
-export function renderFormattedText(content: string): JSX.Element {
+export function renderFormattedText(content: string, options: ReplyBlockOptions = {}): JSX.Element {
   const pieces: JSX.Element[] = []
-  const fence = /```[\w+#.-]*[ \t]*\n?([\s\S]*?)(?:```|$)/g
+  const fence = /```([\w+#.-]*)[ \t]*\n?([\s\S]*?)(```|$)/g
   let last = 0
   let match: RegExpExecArray | null
   while ((match = fence.exec(content))) {
     if (match.index > last) pieces.push(...renderText(content.slice(last, match.index), `t${last}`))
-    pieces.push(
-      <pre key={`c${match.index}`} className="reply-code-block">
-        <code>{match[1].replace(/\n$/, '')}</code>
-      </pre>
-    )
+    const body = match[2].replace(/\n$/, '')
+    if (match[1] === UI_FENCE_LANGUAGE) {
+      // Bloc interactif (shared/uiBlocks.ts). Encore en cours d'écriture : une ligne d'attente plutôt que du JSON
+      // qui défile. Fermé mais illisible : son contenu reste visible comme du code, rien n'est perdu.
+      const closed = match[3] === '```'
+      const block = closed ? parseUiBlock(body) : null
+      pieces.push(
+        block ? (
+          <ReplyBlock key={`u${match.index}`} block={block} onChoice={options.onChoice} />
+        ) : closed ? (
+          <pre key={`c${match.index}`} className="reply-code-block">
+            <code>{body}</code>
+          </pre>
+        ) : (
+          <p key={`p${match.index}`} className="reply-ui__pending">{t('chat.ui.preparing')}</p>
+        )
+      )
+    } else {
+      pieces.push(
+        <pre key={`c${match.index}`} className="reply-code-block">
+          <code>{body}</code>
+        </pre>
+      )
+    }
     last = fence.lastIndex
     if (match[0].length === 0) break
   }
