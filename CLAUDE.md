@@ -11,6 +11,32 @@ pièges y sont déjà documentés. Ajouter chaque nouvelle étape À LA FIN de `
 ici, seulement une nouvelle règle générale si elle est vraiment importante.
 `CLAUDE.md` et `AGENTS.md` doivent rester identiques (seule l'attribution des commits diffère).
 
+## Carte de Jaris (ce qu'il fait, où c'est)
+
+**Modes (barre d'icônes à gauche)** : Vocal (orbe, mot « Jaris », touche + du pavé, Ctrl+Alt+J), Chat (plusieurs
+conversations, blocs interactifs `jaris-ui`), Code (application HTML générée avec aperçu isolé, ou travail sur un
+dépôt GitHub), Image (FLUX.2 klein), Vidéo (FastWan 2.2), Duel (votes à l'aveugle entre modèles). Plus : Cerveau
+(notes de mémoire), widget flottant (repli de la fenêtre), Options, accès depuis le téléphone.
+**Où c'est dans le code**
+- Main Electron : `electron/main.ts` (fenêtres, widget, IPC, démarrage) ; canaux et types partagés : `shared/ipc.ts`,
+  `electron/preload.ts`, `src/global.d.ts` (les trois à garder synchronisés).
+- Conversation (voix, Chat, téléphone, duels) : `assistant.ts` (`converse()`, relances, raccourcis), `tools.ts`
+  (outils), `systemPrompt.ts`, `chatSession.ts`, `conversationStore.ts`, `memoryExtractor.ts`, `requestJournal.ts`.
+- Voix : `voicePipeline.ts` + sidecars Python `python/voice_server.py` (Parakeet v3 en RAM, mot « Jaris » confirmé
+  par la transcription, `wake_confirmation.py`) et `tts_server.py` (Supertonic) ; `transcriptCorrector.ts`.
+- Ollama : Jaris a SON Ollama (`ollamaEngine.ts`, port 11435) ; appels dans `ollama.ts`. Choix des modèles par rôle
+  (Faible/Moyen/Élevé, Vision, Code, Image, Vidéo, pilotage) : `hardwareScan.ts`, scores dans
+  `scripts/verified-tool-scores.md`, tests des modèles `scripts/benchmark-*.mjs`, duels `duelSession.ts`/`shared/duel.ts`.
+- Web : `webSearch.ts` (DuckDuckGo puis Startpage dans une fenêtre cachée, plus de Docker), `webPage.ts`.
+- Pilotage d'écran : `computerUse.ts`, `uiAutomation.ts`, `backgroundControl.ts`, viseur MAI-UI (`maiUi.ts`).
+- Code : `codeGenerator.ts`, `generatedAppPreview.ts` (protocole `jaris-preview:`), GitHub `github.ts`,
+  `githubSession.ts`, `repoAgent.ts`. Image/Vidéo : `imageGenerator.ts`, `videoGenerator.ts` (stable-diffusion.cpp).
+- Téléphone : `phoneServer.ts` + `phoneTunnel.ts` (Tailscale Funnel, `tunnel/` en Go), page `phone/`.
+- Données : `storageRoot.ts` (racine, `OWNED_ENTRIES`), « Déplacer » `relocation.ts`/`modelsLocation.ts`,
+  écritures `atomicFile.ts`, nettoyage des anciennes fonctions `legacyCleanup.ts`.
+- Écran : `src/App.tsx`, `src/components/*` (un panneau par mode, `Workspace.tsx` pour la liste à gauche,
+  `Composer.tsx` pour le champ de saisie), style `src/index.css`, textes `shared/i18n` (24 langues).
+
 ## À vérifier après CHAQUE changement, avant de le considérer terminé
 
 1. `npm run typecheck` — sans erreur (node ET web).
