@@ -55,8 +55,38 @@ const THREAD = [
         columns: ['Modèle', 'Prix', 'Autonomie', 'Poids', 'Couleur', 'Garantie'],
         rows: [['Un nom de modèle vraiment très long', '1 299 €', '12 h', '1,4 kg', 'Gris sidéral', '2 ans']]
       }) +
+      'Les pays :' +
+      fence({ type: 'cards', items: [{ title: 'Suède', text: 'Système mixte.' }, { title: 'Danemark', text: 'Pension publique.' }] }) +
+      'Les montants :' +
+      fence({
+        type: 'bars',
+        headline: '297 000 € versés',
+        subtitle: '550 € par mois',
+        items: [
+          { label: 'Rendement de 5 %', value: 1080000, text: '1,08 M€' },
+          { label: 'Rendement de 10 %', value: 4960000, text: '4,96 M€', highlight: true }
+        ],
+        note: 'Avant impôts.'
+      }) +
+      'L’affluence :' +
+      fence({
+        type: 'stats',
+        items: [
+          { label: 'Dimanche 25 octobre', value: '78 %', tag: 'Très chargé', tone: 'bad', detail: 'Ouvert de 10 h à 19 h' },
+          { label: 'Samedi 24 octobre', value: '40 %', tag: 'Plutôt calme', tone: 'good' }
+        ]
+      }) +
       'Et toi ?' +
-      fence({ type: 'choices', title: 'Lequel préfères-tu ?', options: ['Choix A', 'Choix B'] })
+      fence({ type: 'choices', title: 'Lequel préfères-tu ?', options: ['Choix A', 'Choix B'] }) +
+      'Deux questions :' +
+      fence({
+        type: 'form',
+        submit: 'Trouver mes billets',
+        questions: [
+          { question: 'Tu as acheté tes billets où ?', options: ['Site officiel', 'Autre site'] },
+          { question: 'As-tu reçu l’e-mail ?', options: ['Oui', 'Non'] }
+        ]
+      })
   }
 ]
 
@@ -125,6 +155,8 @@ window.jaris = {
   // Étape 272 : « longue » ne répond qu'une fois « Arrêter » cliqué, comme une vraie réponse interrompue.
   sendChatMessage: (prompt) => {
     window.__sent.push(prompt)
+    // Étape 404 : « longue » ne répond qu'à window.__finish(), le temps de regarder la liste de gauche.
+    if (prompt === 'longue') return new Promise((resolve) => (window.__finish = () => resolve({ role: 'assistant', content: 'Fini.' })))
     return Promise.resolve({ role: 'assistant', content: 'Bien noté.' })
   },
   cancelChat: () => {
@@ -266,5 +298,60 @@ test('liste de courses en simples puces : chaque ligne se coche quand même ; un
     const deco = await list.locator('.reply-ui__tick--done .reply-ui__tick-text').evaluate((el) => getComputedStyle(el).textDecorationLine)
     assert.equal(deco, 'line-through')
     assert.equal(await list.locator('.reply-ui__tick--done').count(), 1)
+  })
+})
+
+test('étape 404 — cartes, barres et chiffres clés : dessinés, barres proportionnelles, niveau en couleur ET en mot', options, async () => {
+  await withPage(async (page) => {
+    assert.deepEqual(await page.locator('.reply-ui__card-title').allTextContents(), ['Suède', 'Danemark'])
+    assert.equal((await page.locator('.reply-ui__headline').textContent()).trim(), '297 000 € versés')
+    const widths = await page.locator('.reply-ui__bar-fill').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
+    const track = await page.locator('.reply-ui__bar-track').first().evaluate((el) => el.getBoundingClientRect().width)
+    assert.ok(Math.abs(widths[1] - track) <= 1, 'la plus grande valeur remplit toute la barre')
+    assert.ok(Math.abs(widths[0] / track - 1080000 / 4960000) < 0.02, `barre de 5 % mal proportionnée : ${widths[0]}/${track}`)
+    // Niveau « très chargé » : rouge pour le chiffre, mot écrit à côté (jamais la couleur seule).
+    const value = page.locator('.reply-ui__stat--bad .reply-ui__stat-value')
+    const [r, g, b] = (await value.evaluate((el) => getComputedStyle(el).color)).match(/\d+/g).map(Number)
+    assert.ok(r > g + 60 && r > b + 60, 'le niveau « bad » doit être rouge')
+    assert.equal((await page.locator('.reply-ui__stat--bad .reply-ui__tag').textContent()).trim(), 'Très chargé')
+  })
+})
+
+test('étape 404 — questions : bouton grisé tant qu’il manque une réponse, puis toutes les réponses partent ensemble', options, async () => {
+  await withPage(async (page) => {
+    const form = page.locator('.reply-ui--form')
+    const submit = form.locator('.reply-ui__submit')
+    assert.equal((await submit.textContent()).trim(), 'Trouver mes billets')
+    assert.equal(await submit.isDisabled(), true)
+    await form.locator('.reply-ui__radio', { hasText: 'Autre site' }).click()
+    assert.equal(await submit.isDisabled(), true, 'une question sans réponse : rien ne part')
+    await form.locator('.reply-ui__radio', { hasText: 'Non' }).click()
+    assert.equal(await submit.isDisabled(), false)
+    // Le bouton est réellement habillé (pilule pleine), pas le style par défaut du navigateur.
+    const radius = await submit.evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius))
+    assert.ok(radius > 100, 'bouton en pilule')
+    await submit.click()
+    await page.waitForFunction(() => window.__sent.length === 1)
+    assert.deepEqual(await page.evaluate(() => window.__sent), ['Tu as acheté tes billets où ? Autre site\nAs-tu reçu l’e-mail ? Non'])
+    assert.equal(await submit.isDisabled(), true, 'une fois envoyé, plus rien ne repart')
+  })
+})
+
+test('étape 404 — la conversation qui travaille scintille dans la liste, et s’arrête à la fin', options, async () => {
+  await withPage(async (page) => {
+    const title = page.locator('.workspace__item-title', { hasText: 'blocs' })
+    assert.equal(await page.locator('.workspace__item-title--working').count(), 0)
+    await page.fill('.composer__input', 'longue')
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.workspace__item-title--working')
+    assert.equal(await title.evaluate((el) => getComputedStyle(el).animationName), 'workspace-working')
+    assert.equal(await page.locator('.workspace__item[aria-busy="true"]').count(), 1)
+    await page.evaluate(() => window.__finish())
+    await page.waitForFunction(() => !document.querySelector('.workspace__item-title--working'))
+    // Question posée depuis le petit widget (même conversation) : elle scintille aussi.
+    await page.evaluate(() => window.__busy(true))
+    await page.waitForSelector('.workspace__item-title--working')
+    await page.evaluate(() => window.__busy(false))
+    await page.waitForFunction(() => !document.querySelector('.workspace__item-title--working'))
   })
 })

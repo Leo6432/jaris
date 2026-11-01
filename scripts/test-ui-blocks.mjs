@@ -6,7 +6,7 @@ import { loadTsModule } from './load-ts-module.mjs'
  * Étape 380 : lecture des blocs interactifs du Chat (shared/uiBlocks.ts). Tout vient du modèle : chaque bloc est
  * vérifié, borné, et le calculateur n'exécute jamais de code (lecteur de formules maison, pas d'eval).
  */
-const { parseUiBlock, parseLenientJson, evaluateFormula, uiBlocksToText, toNumber } = loadTsModule('shared/uiBlocks.ts')
+const { parseUiBlock, parseLenientJson, evaluateFormula, uiBlocksToText, toNumber, formAnswerMessage } = loadTsModule('shared/uiBlocks.ts')
 
 test('JSON écrit par un petit modèle : virgule en trop et retour à la ligne brut tolérés', () => {
   assert.deepEqual(parseLenientJson('{"a":[1,2,],}'), { a: [1, 2] })
@@ -104,4 +104,50 @@ test('version texte (page du téléphone) : lignes ordinaires, jamais de JSON', 
   assert.equal(uiBlocksToText('A\n```jaris-ui\n{oups}\n```\nB').includes('oups'), false)
   // Un bloc de code ordinaire n'est pas touché.
   assert.equal(uiBlocksToText('```js\nx\n```'), '```js\nx\n```')
+})
+
+test('étape 404 — cartes, barres, chiffres clés : lus, bornés, éléments vides écartés', () => {
+  const cards = parseUiBlock('{"type":"cards","items":[{"title":"Suède","text":"Mixte"},{},{"text":"Seul"}]}')
+  assert.deepEqual(cards.items.map((item) => item.title), ['Suède', ''])
+  assert.equal(parseUiBlock('{"type":"cards","items":[{}]}'), null)
+
+  const bars = parseUiBlock(
+    '{"type":"bars","headline":"297 000 € versés","items":[{"label":"5 %","value":"1080000"},{"label":"7 %","value":1950000,"text":"1,95 M€","highlight":true},{"label":"x","value":"beaucoup"}]}'
+  )
+  assert.equal(bars.items.length, 2, 'une barre sans nombre ne peut pas avoir de longueur')
+  assert.equal(bars.items[0].value, 1080000)
+  assert.equal(bars.items[1].text, '1,95 M€')
+  assert.equal(bars.items[1].highlight, true)
+  assert.equal(bars.items[0].highlight, false)
+
+  const stats = parseUiBlock('{"type":"stats","items":[{"label":"Dimanche","value":"78 %","tone":"bad","tag":"Très chargé"},{"value":"40 %","tone":"rouge-vif"}]}')
+  assert.equal(stats.items[0].tone, 'bad')
+  assert.equal(stats.items[1].tone, 'neutral', 'un niveau inconnu ne donne jamais une couleur au hasard')
+})
+
+test('étape 404 — questions : 2 choix au moins par question, réponses envoyées en une seule ligne par question', () => {
+  const form = parseUiBlock(
+    '{"type":"form","submit":"Trouver mes billets","questions":[{"question":"Où ?","options":["Site","Appli","Site"]},{"question":"Seule","options":["A"]},{"question":"Reçu l’e-mail","options":["Oui","Non"]}]}'
+  )
+  assert.equal(form.questions.length, 2, 'une question à un seul choix ne sert à rien')
+  assert.deepEqual(form.questions[0].options, ['Site', 'Appli'])
+  assert.equal(form.submit, 'Trouver mes billets')
+  assert.equal(formAnswerMessage(form.questions, ['Site', 'Non']), 'Où ? Site\nReçu l’e-mail : Non')
+  assert.equal(parseUiBlock('{"type":"form","questions":[]}'), null)
+})
+
+test('étape 404 — version texte des nouveaux blocs (page du téléphone)', () => {
+  const fence = (json) => '\n```jaris-ui\n' + JSON.stringify(json) + '\n```\n'
+  const text = uiBlocksToText(
+    fence({ type: 'bars', headline: '297 000 €', items: [{ label: '5 %', value: 1, text: '1,08 M€' }] }) +
+      fence({ type: 'stats', items: [{ label: 'Dimanche', value: '78 %', tag: 'Très chargé', detail: '10 h à 19 h' }] }) +
+      fence({ type: 'form', questions: [{ question: 'Où ?', options: ['Site', 'Appli'] }] }) +
+      fence({ type: 'cards', items: [{ title: 'Suède', text: 'Mixte' }] })
+  )
+  assert.match(text, /\*\*297 000 €\*\*/)
+  assert.match(text, /- 5 % : 1,08 M€/)
+  assert.match(text, /- Dimanche : 78 % \(Très chargé\) — 10 h à 19 h/)
+  assert.match(text, /1\. Où \?\n   - Site\n   - Appli/)
+  assert.match(text, /- \*\*Suède\*\* : Mixte/)
+  assert.ok(!text.includes('"type"'))
 })

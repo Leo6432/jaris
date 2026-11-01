@@ -10974,3 +10974,277 @@ input.reply-ui__field-input {
   color: var(--hud-text);
   font-variant-numeric: tabular-nums;
 }
+/* Étape 404 : blocs inspirés de ChatGPT (cartes, barres, chiffres clés, questions), dans les gris de Jaris. Seuls les
+   niveaux des chiffres clés prennent une couleur de sens (vert, ambre, rouge), toujours accompagnée de son mot. */
+.reply-ui__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reply-ui__card {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--jv-frame);
+}
+.reply-ui__card:first-child {
+  padding-top: 2px;
+}
+.reply-ui__card:last-child {
+  padding-bottom: 2px;
+  border-bottom: none;
+}
+.reply-ui__card-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+.reply-ui__card-text {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--hud-text);
+}
+.reply-ui__tag {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--jv-hover-strong);
+  font-size: 0.8em;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+}
+.reply-ui__subtitle {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--hud-text-dim);
+}
+.reply-ui__headline {
+  margin: 6px 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--jv-frame);
+  font-size: 1.75em;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--hud-text);
+  font-variant-numeric: tabular-nums;
+}
+.reply-ui__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.reply-ui__bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 6px;
+}
+.reply-ui__bar-label {
+  min-width: 0;
+  color: var(--hud-text);
+}
+.reply-ui__bar-value {
+  font-size: 1.2em;
+  font-weight: 650;
+  color: var(--hud-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.reply-ui__bar-track {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(var(--jv-ink-rgb), 0.08);
+  overflow: hidden;
+}
+.reply-ui__bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: rgba(var(--jv-ink-rgb), 0.38);
+}
+.reply-ui__bar-row--highlight .reply-ui__bar-fill {
+  background: var(--jv-accent);
+}
+.reply-ui__bar-row--highlight .reply-ui__bar-label {
+  font-weight: 600;
+}
+.reply-ui__note {
+  margin: 14px 0 0;
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--hud-text-faint);
+}
+.reply-ui__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+.reply-ui__stat {
+  --tone: var(--hud-text);
+  padding: 12px 14px;
+  border: 1px solid var(--jv-frame);
+  border-radius: 10px;
+  min-width: 0;
+}
+.reply-ui__stat--good {
+  --tone: var(--hud-ok);
+}
+.reply-ui__stat--warn {
+  --tone: var(--hud-gold);
+}
+.reply-ui__stat--bad {
+  --tone: var(--hud-danger);
+}
+.reply-ui__stat-label {
+  margin: 0;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+.reply-ui__stat-value {
+  margin: 4px 0 0;
+  font-size: 2em;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--tone);
+  font-variant-numeric: tabular-nums;
+}
+.reply-ui__tag--tone {
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+}
+.reply-ui__stat--neutral .reply-ui__tag--tone {
+  color: var(--hud-text-dim);
+  background: var(--jv-hover-strong);
+}
+.reply-ui__stat-detail {
+  margin: 8px 0 0;
+  font-size: 0.85em;
+  color: var(--hud-text-dim);
+}
+.reply-ui__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.reply-ui__question {
+  margin: 0;
+  padding: 0 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--jv-frame);
+  min-width: 0;
+}
+.reply-ui__question + .reply-ui__question {
+  padding-top: 14px;
+}
+.reply-ui__question-text {
+  float: left;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 0;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+.reply-ui__question-text + * {
+  clear: both;
+}
+.reply-ui__radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--hud-text);
+}
+.reply-ui__radio:hover {
+  background: var(--jv-hover);
+}
+.reply-ui__question:disabled .reply-ui__radio {
+  cursor: default;
+}
+.reply-ui__question:disabled .reply-ui__radio:hover {
+  background: transparent;
+}
+.reply-ui__question:disabled .reply-ui__radio:not(.reply-ui__radio--chosen) {
+  color: var(--hud-text-faint);
+}
+.reply-ui__radio input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.reply-ui__radio-mark {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgba(var(--jv-ink-rgb), 0.4);
+  border-radius: 50%;
+}
+.reply-ui__radio--chosen .reply-ui__radio-mark {
+  border: 5px solid var(--jv-accent);
+}
+.reply-ui__radio input:focus-visible + .reply-ui__radio-mark {
+  outline: 2px solid var(--jv-accent);
+  outline-offset: 2px;
+}
+.reply-ui__submit {
+  margin-top: 14px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--jv-accent);
+  color: var(--jv-accent-ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.reply-ui__submit:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Étape 404 (Léo, capture de ChatGPT) : la conversation qui travaille scintille dans la liste de gauche, pour voir
+   d'un coup d'œil laquelle est en cours même après en avoir ouvert une autre. */
+.workspace__item-title--working {
+  color: transparent;
+  background: linear-gradient(90deg, var(--hud-text-faint) 0%, var(--hud-text-faint) 35%, var(--hud-text) 50%, var(--hud-text-faint) 65%, var(--hud-text-faint) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: workspace-working 1.8s linear infinite;
+}
+@keyframes workspace-working {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace__item-title--working {
+    animation: none;
+    color: var(--hud-text-faint);
+    background: none;
+  }
+}
+/* Les blocs de l'étape 404 prennent toute la largeur de la réponse, comme chez ChatGPT : « .chat-panel__body > figure »
+   (largeur ajustée au contenu, pour les images) les réduisait à la taille de leur plus long mot. */
+.chat-panel__body > figure.reply-ui--cards,
+.chat-panel__body > figure.reply-ui--bars,
+.chat-panel__body > figure.reply-ui--stats,
+.chat-panel__body > figure.reply-ui--form {
+  width: 100%;
+}
+.reply-ui__question:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}

@@ -30,6 +30,11 @@ export interface WorkspaceItem {
   removeLabel?: { action: string; question: string }
   /** Nom à écrire tel quel (un dépôt « leo/projet »), sans la majuscule de début donnée aux autres titres. */
   exactTitle?: boolean
+  /**
+   * Étape 404 (Léo, capture de ChatGPT) : Jaris travaille sur cet élément (réponse en cours, application en
+   * écriture) — son titre scintille dans la liste, même quand un autre élément est ouvert.
+   */
+  working?: boolean
 }
 
 interface WorkspaceProps {
@@ -117,8 +122,15 @@ export default function Workspace({
                     className={`workspace__item${item.id === activeId ? ' workspace__item--active' : ''}`}
                     onClick={() => onSelect(item.id)}
                     title={item.meta ? `${item.title} · ${item.meta}` : item.title}
+                    aria-busy={item.working || undefined}
                   >
-                    <span className={`workspace__item-title${item.exactTitle ? ' workspace__item-title--exact' : ''}`}>{item.title}</span>
+                    <span
+                      className={`workspace__item-title${item.exactTitle ? ' workspace__item-title--exact' : ''}${
+                        item.working ? ' workspace__item-title--working' : ''
+                      }`}
+                    >
+                      {item.title}
+                    </span>
                     {/* Masquée dans la barre latérale (comme ChatGPT), visible dans la colonne autonome. */}
                     {item.meta && <span className="workspace__item-meta">{item.meta}</span>}
                   </button>

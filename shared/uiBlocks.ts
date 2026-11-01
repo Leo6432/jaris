@@ -59,7 +59,37 @@ export interface UiCalculator {
   inputs: UiCalculatorInput[]
   outputs: UiCalculatorOutput[]
 }
-export type UiBlock = UiTable | UiChart | UiSteps | UiChecklist | UiChoices | UiCalculator
+/** Étape 404 : plusieurs choses présentées chacune en quelques phrases (pays, options, solutions…). */
+export interface UiCards {
+  type: 'cards'
+  title?: string
+  items: { title: string; text: string; tag?: string }[]
+}
+/** Étape 404 : montants ou parts comparés en barres, avec un gros chiffre de tête facultatif. */
+export interface UiBars {
+  type: 'bars'
+  title?: string
+  headline?: string
+  subtitle?: string
+  note?: string
+  items: { label: string; value: number; text: string; highlight: boolean }[]
+}
+export type UiTone = 'good' | 'warn' | 'bad' | 'neutral'
+/** Étape 404 : quelques chiffres clés, chacun avec un niveau (calme, chargé…) dit par sa couleur ET par un mot. */
+export interface UiStats {
+  type: 'stats'
+  title?: string
+  note?: string
+  items: { label: string; value: string; tag?: string; tone: UiTone; detail?: string }[]
+}
+/** Étape 404 : plusieurs questions à choix, envoyées ensemble par un seul bouton (comme ChatGPT). */
+export interface UiForm {
+  type: 'form'
+  title?: string
+  submit?: string
+  questions: { question: string; options: string[] }[]
+}
+export type UiBlock = UiTable | UiChart | UiSteps | UiChecklist | UiChoices | UiCalculator | UiCards | UiBars | UiStats | UiForm
 
 const MAX_TEXT = 300
 const MAX_ROWS = 50
@@ -69,6 +99,16 @@ const MAX_ITEMS = 30
 const MAX_OPTIONS = 6
 const MAX_INPUTS = 8
 const MAX_OUTPUTS = 4
+const MAX_CARDS = 8
+const MAX_BARS = 12
+const MAX_STATS = 8
+const MAX_QUESTIONS = 5
+const TONES: UiTone[] = ['good', 'warn', 'bad', 'neutral']
+
+function records(value: unknown, max: number): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry)).slice(0, max)
+}
 
 function text(value: unknown): string {
   if (typeof value === 'string') return value.trim().slice(0, MAX_TEXT)
@@ -217,9 +257,66 @@ export function parseUiBlock(source: string): UiBlock | null {
       }
       return inputs.length && outputs.length ? { type: 'calculator', title, inputs, outputs } : null
     }
+    case 'cards': {
+      const items = records(data.items, MAX_CARDS)
+        .map((item) => ({ title: text(item.title), text: text(item.text), tag: optionalText(item.tag) }))
+        .filter((item) => item.title || item.text)
+      return items.length ? { type: 'cards', title, items } : null
+    }
+    case 'bars': {
+      const items = records(data.items, MAX_BARS)
+        .map((item) => {
+          const value = toNumber(item.value)
+          return value === null
+            ? null
+            : { label: text(item.label), value, text: text(item.text) || formatNumber(value), highlight: item.highlight === true }
+        })
+        .filter((item): item is UiBars['items'][number] => item !== null && !!item.label)
+      if (!items.length) return null
+      return {
+        type: 'bars',
+        title,
+        headline: optionalText(data.headline),
+        subtitle: optionalText(data.subtitle),
+        note: optionalText(data.note),
+        items
+      }
+    }
+    case 'stats': {
+      const items = records(data.items, MAX_STATS)
+        .map((item) => ({
+          label: text(item.label),
+          value: text(item.value),
+          tag: optionalText(item.tag),
+          tone: TONES.includes(item.tone as UiTone) ? (item.tone as UiTone) : 'neutral',
+          detail: optionalText(item.detail)
+        }))
+        .filter((item) => item.value)
+      return items.length ? { type: 'stats', title, note: optionalText(data.note), items } : null
+    }
+    case 'form': {
+      const questions = records(data.questions, MAX_QUESTIONS)
+        .map((item) => ({ question: text(item.question), options: [...new Set(textList(item.options, MAX_OPTIONS))] }))
+        .filter((item) => item.question && item.options.length >= 2)
+      return questions.length ? { type: 'form', title, submit: optionalText(data.submit), questions } : null
+    }
     default:
       return null
   }
+}
+
+/**
+ * Message envoyé par un bloc form (étape 404) : une ligne par question, la question suivie de la réponse choisie.
+ * Une question terminée par « ? » est suivie directement de sa réponse ; sinon « question : réponse ».
+ */
+export function formAnswerMessage(questions: UiForm['questions'], answers: string[]): string {
+  return questions
+    .map((item, index) => {
+      const question = item.question.replace(/[\s:]+$/, '')
+      const answer = answers[index] ?? ''
+      return /\?$/.test(question) ? `${question} ${answer}` : t('common.labelValue', { label: question, value: answer })
+    })
+    .join('\n')
 }
 
 /**
@@ -354,6 +451,28 @@ export function uiBlocksToText(content: string): string {
         }
         break
       }
+      case 'cards':
+        for (const item of block.items) lines.push(`- ${item.title ? `**${item.title}**${item.text ? ` : ${item.text}` : ''}` : item.text}`)
+        break
+      case 'bars':
+        if (block.subtitle) lines.push(block.subtitle)
+        if (block.headline) lines.push(`**${block.headline}**`)
+        for (const item of block.items) lines.push(`- ${t('common.labelValue', { label: item.label, value: item.text })}`)
+        if (block.note) lines.push(block.note)
+        break
+      case 'stats':
+        for (const item of block.items) {
+          const value = [item.value, item.tag && `(${item.tag})`].filter(Boolean).join(' ')
+          lines.push(`- ${item.label ? t('common.labelValue', { label: item.label, value }) : value}${item.detail ? ` — ${item.detail}` : ''}`)
+        }
+        if (block.note) lines.push(block.note)
+        break
+      case 'form':
+        block.questions.forEach((item, index) => {
+          lines.push(`${index + 1}. ${item.question}`)
+          for (const option of item.options) lines.push(`   - ${option}`)
+        })
+        break
     }
     return `\n${lines.join('\n')}\n`
   })

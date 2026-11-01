@@ -10664,3 +10664,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-reply-blocks-ui.mjs` (vrai Chat : une seule réponse cochable, une case se coche ; échoue si le Chat ne
   transmet plus l'option). **Non corrigé** : la question finale du modèle (« vérifier ta note d'allergies ? »), une
   réponse du modèle, pas de l'écran.
+
+- **Étape 404 (v0.41.2), Léo, captures de ChatGPT à l'appui : « 1. quand il travaille sur une conversation, une
+  animation comme Claude pour voir les chats qui travaillent ; 2. ChatGPT a plein d'UI stylées ; 3. le système de
+  questions-réponses comme tous les chatbots ».**
+  1. **La conversation qui travaille scintille dans la liste de gauche** (`WorkspaceItem.working`, Workspace.tsx :
+     reflet qui passe sur le titre, `aria-busy`, figé en couleur discrète avec « réduire les animations »). Chat : la
+     conversation où la question a été posée (`workingIn`, état et pas ref, sinon la liste ne se redessine pas), y
+     compris une question venue du widget ou du téléphone (la conversation active à ce moment-là). Code : l'élément
+     ouvert pendant un travail (la liste ne change pas d'élément pendant un travail, étape 288). Image et Vidéo n'ont
+     pas d'élément tant que le dessin n'est pas fini : rien à faire scintiller.
+  2. **Quatre nouveaux blocs** (shared/uiBlocks.ts, ReplyBlock.tsx), même principe que l'étape 380 (le modèle remplit
+     un objet, Jaris dessine) : `cards` (éléments en quelques phrases séparés par un filet), `bars` (gros chiffre de
+     tête, barres proportionnelles au NOMBRE avec le texte du modèle à droite, une barre mise en avant), `stats`
+     (chiffres clés avec un niveau good/warn/bad : la couleur de sens ET le mot, jamais la couleur seule ; un niveau
+     inconnu reste neutre) et `form` (questions). Pas d'images comme ChatGPT : Jaris n'en a pas de sources fiables
+     en local. Version texte pour le téléphone (`uiBlocksToText`).
+  3. **Questions-réponses** (`form`) : plusieurs questions à choix, bouton grisé tant qu'une réponse manque, puis
+     TOUTES les réponses partent en un seul message (`formAnswerMessage` : « question ? réponse », une ligne par
+     question) ; figé après l'envoi, et seulement sur la dernière réponse (même règle que les choix). La consigne dit
+     au modèle de poser ses questions dans ce bloc plutôt qu'en texte (canal écrit seulement : scores inchangés).
+  **Piège CSS** : `.chat-panel__body > figure { width: fit-content }` (pour les images) bat `.reply-ui { width: 100% }`
+  (une classe + une balise contre une classe) : les nouveaux blocs faisaient la largeur de leur plus long mot, vu sur
+  capture. Règle plus précise pour ces quatre blocs. **Piège de manipulation** : une commande refusée par la
+  vérification de sécurité (un `rm` sur une variable) n'est PAS exécutée du tout, y compris le `cat >>` qui la
+  précédait — revérifier le fichier après un refus. Régression : `node --test scripts/test-ui-blocks.mjs
+  scripts/test-reply-blocks-ui.mjs` (lecture et bornes, réponses du formulaire, version texte ; vrai navigateur :
+  barres proportionnelles, niveau rouge avec son mot, bouton grisé puis envoi groupé, titre qui scintille pendant
+  la réponse et pour le widget, puis s'arrête). **Non vérifié en usage réel** : l'usage que les modèles locaux de
+  Léo feront de ces blocs.

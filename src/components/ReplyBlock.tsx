@@ -2,13 +2,18 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { t } from '../../shared/i18n'
 import {
   evaluateFormula,
+  formAnswerMessage,
   formatNumber,
   toNumber,
+  type UiBars,
   type UiBlock,
   type UiCalculator,
+  type UiCards,
   type UiChart,
   type UiChecklist,
   type UiChoices,
+  type UiForm,
+  type UiStats,
   type UiSteps,
   type UiTable
 } from '../../shared/uiBlocks'
@@ -38,6 +43,10 @@ export function ReplyBlock({ block, onChoice }: { block: UiBlock } & ReplyBlockO
       {block.type === 'checklist' && <TickList block={block} />}
       {block.type === 'choices' && <ChoicesBlock block={block} onChoice={onChoice} />}
       {block.type === 'calculator' && <CalculatorBlock block={block} />}
+      {block.type === 'cards' && <CardsBlock block={block} />}
+      {block.type === 'bars' && <BarsBlock block={block} />}
+      {block.type === 'stats' && <StatsBlock block={block} />}
+      {block.type === 'form' && <FormBlock block={block} onChoice={onChoice} />}
     </figure>
   )
 }
@@ -322,5 +331,117 @@ function CalculatorBlock({ block }: { block: UiCalculator }): JSX.Element {
         })}
       </dl>
     </div>
+  )
+}
+
+/** Étape 404 : chaque élément en quelques phrases, séparé du suivant par un filet (comme ChatGPT, sans image). */
+function CardsBlock({ block }: { block: UiCards }): JSX.Element {
+  return (
+    <ul className="reply-ui__cards">
+      {block.items.map((item, index) => (
+        <li key={index} className="reply-ui__card">
+          {item.title && <p className="reply-ui__card-title">{item.title}</p>}
+          {item.text && <p className="reply-ui__card-text">{item.text}</p>}
+          {item.tag && <span className="reply-ui__tag">{item.tag}</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Étape 404 : barres horizontales, la plus grande valeur remplissant toute la largeur. Le texte affiché à droite est
+ * celui du modèle (« 1,08 M€ »), la longueur de la barre vient du nombre : jamais l'un à la place de l'autre.
+ */
+function BarsBlock({ block }: { block: UiBars }): JSX.Element {
+  const max = Math.max(...block.items.map((item) => Math.abs(item.value)), 0)
+  return (
+    <div className="reply-ui__bars-wrap">
+      {block.subtitle && <p className="reply-ui__subtitle">{block.subtitle}</p>}
+      {block.headline && <p className="reply-ui__headline">{block.headline}</p>}
+      <ul className="reply-ui__bars">
+        {block.items.map((item, index) => (
+          <li key={index} className={`reply-ui__bar-row${item.highlight ? ' reply-ui__bar-row--highlight' : ''}`}>
+            <span className="reply-ui__bar-label">{item.label}</span>
+            <span className="reply-ui__bar-value">{item.text}</span>
+            <span className="reply-ui__bar-track" aria-hidden="true">
+              <span className="reply-ui__bar-fill" style={{ width: `${max > 0 ? (Math.abs(item.value) / max) * 100 : 0}%` }} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      {block.note && <p className="reply-ui__note">{block.note}</p>}
+    </div>
+  )
+}
+
+/** Étape 404 : chiffres clés. Le niveau se lit par la couleur ET par son mot (jamais la couleur seule). */
+function StatsBlock({ block }: { block: UiStats }): JSX.Element {
+  return (
+    <div className="reply-ui__stats-wrap">
+      <ul className="reply-ui__stats">
+        {block.items.map((item, index) => (
+          <li key={index} className={`reply-ui__stat reply-ui__stat--${item.tone}`}>
+            {item.label && <p className="reply-ui__stat-label">{item.label}</p>}
+            <p className="reply-ui__stat-value">{item.value}</p>
+            {item.tag && <span className="reply-ui__tag reply-ui__tag--tone">{item.tag}</span>}
+            {item.detail && <p className="reply-ui__stat-detail">{item.detail}</p>}
+          </li>
+        ))}
+      </ul>
+      {block.note && <p className="reply-ui__note">{block.note}</p>}
+    </div>
+  )
+}
+
+/**
+ * Étape 404 (Léo, capture de ChatGPT : « le système de questions-réponses comme tous les chatbots ») : plusieurs
+ * questions à choix, un seul bouton qui envoie toutes les réponses d'un coup comme message de l'utilisateur. Le bouton
+ * reste désactivé tant qu'une question n'a pas de réponse ; après l'envoi, tout est figé.
+ */
+function FormBlock({ block, onChoice }: { block: UiForm } & ReplyBlockOptions): JSX.Element {
+  const name = useId()
+  const [answers, setAnswers] = useState<(string | null)[]>(() => block.questions.map(() => null))
+  const [sent, setSent] = useState(false)
+  const locked = !onChoice || sent
+  const complete = answers.every((answer) => answer !== null)
+  return (
+    <form
+      className="reply-ui__form"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (locked || !complete) return
+        setSent(true)
+        onChoice(formAnswerMessage(block.questions, answers as string[]))
+      }}
+    >
+      {block.questions.map((item, questionIndex) => (
+        <fieldset key={questionIndex} className="reply-ui__question" disabled={locked}>
+          <legend className="reply-ui__question-text">
+            {block.questions.length > 1 ? `${questionIndex + 1}. ` : ''}
+            {item.question}
+          </legend>
+          {item.options.map((option) => (
+            <label
+              key={option}
+              className={`reply-ui__radio${answers[questionIndex] === option ? ' reply-ui__radio--chosen' : ''}`}
+            >
+              <input
+                type="radio"
+                name={`${name}-${questionIndex}`}
+                value={option}
+                checked={answers[questionIndex] === option}
+                onChange={() => setAnswers((previous) => previous.map((value, i) => (i === questionIndex ? option : value)))}
+              />
+              <span className="reply-ui__radio-mark" aria-hidden="true" />
+              <span>{option}</span>
+            </label>
+          ))}
+        </fieldset>
+      ))}
+      <button type="submit" className="reply-ui__submit" disabled={locked || !complete}>
+        {block.submit ?? t('common.send')}
+      </button>
+    </form>
   )
 }

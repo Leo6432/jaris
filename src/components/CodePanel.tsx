@@ -771,6 +771,9 @@ export default function CodePanel(): JSX.Element {
     .sort((a, b) => b.at - a.at)
     .map(({ item }) => item)
 
+  // Étape 404 : pendant un travail, la liste reste sur l'élément ouvert (étape 288) — c'est lui qui scintille.
+  const workingItemId = appResult?.path ?? (repo ? repoConversationKey(repo.fullName) : null)
+
   // La conversation affichée est enregistrée sous le nom de son élément, une fois le travail fini (jamais pendant :
   // la phrase de Jaris change à chaque fragment reçu). La fin du dernier travail (durée, fichiers) en fait partie.
   const activeConversation = appResult ? appConversationKey(appResult.path) : repo ? repoConversationKey(repo.fullName) : null
@@ -928,7 +931,7 @@ export default function CodePanel(): JSX.Element {
       newLabel={t('code.new')}
       label={t('app.mode.code')}
       onNew={startOver}
-      items={listItems}
+      items={generating ? listItems.map((item) => (item.id === workingItemId ? { ...item, working: true } : item)) : listItems}
       activeId={appResult?.path ?? (repo ? repoConversationKey(repo.fullName) : null)}
       onSelect={(id) => void (id.startsWith('repo:') ? openRepoFromList(id.slice('repo:'.length)) : openRecent(id))}
       onDelete={(id) => void (id.startsWith('repo:') ? removeRepoFromList(id.slice('repo:'.length)) : remove(id))}

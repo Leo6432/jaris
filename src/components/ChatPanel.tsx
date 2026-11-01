@@ -56,6 +56,11 @@ export default function ChatPanel(): JSX.Element {
   const sendingIn = useRef<string | null>(null)
   const activeIdRef = useRef<string | null>(null)
   activeIdRef.current = conversations?.activeId ?? null
+  /**
+   * Étape 404 : conversation où Jaris travaille (question posée ici, ou depuis le widget / le téléphone) — son titre
+   * scintille dans la liste. Un état, pas une ref : la liste doit se redessiner quand il change.
+   */
+  const [workingIn, setWorkingIn] = useState<string | null>(null)
   const answerIsHere = (): boolean => sendingIn.current === null || sendingIn.current === activeIdRef.current
   /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
   const [savedIndex, setSavedIndex] = useState<number | null>(null)
@@ -100,6 +105,8 @@ export default function ChatPanel(): JSX.Element {
     const followBusy = (busy: boolean): void => {
       if (ownSendRef.current) return
       setExternalBusy(busy)
+      // La question venue du widget ou du téléphone part dans la conversation active à ce moment-là.
+      setWorkingIn(busy ? activeIdRef.current : null)
       // L'étape affichée (« Recherche sur internet… ») était celle de cette réponse : elle ne doit pas rester.
       if (!busy) setProgress(null)
     }
@@ -193,6 +200,7 @@ export default function ChatPanel(): JSX.Element {
     // fil dès réception, donc les deux restent cohérents.
     setMessages((prev) => [...prev, { role: 'user', content: prompt, image: image?.dataUrl }])
     sendingIn.current = activeIdRef.current
+    setWorkingIn(activeIdRef.current)
 
     try {
       const reply = await window.jaris.sendChatMessage(prompt, image?.base64)
@@ -205,6 +213,7 @@ export default function ChatPanel(): JSX.Element {
     } finally {
       ownSendRef.current = false
       sendingIn.current = null
+      setWorkingIn(null)
       setSending(false)
       setProgress(null)
       setStreamingReply('')
@@ -220,7 +229,8 @@ export default function ChatPanel(): JSX.Element {
       items={(conversations?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
         title: conversation.title,
-        meta: formatRecentDate(Date.parse(conversation.updatedAt))
+        meta: formatRecentDate(Date.parse(conversation.updatedAt)),
+        working: conversation.id === workingIn
       }))}
       activeId={conversations?.activeId ?? null}
       onSelect={(id) => void applyConversationChange(window.jaris.selectConversation(id))}

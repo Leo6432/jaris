@@ -42,11 +42,20 @@ const UI_BLOCKS_GUIDE =
   'recette, tutoriel, marche à suivre -> {"type":"steps","title":"...","items":["Étape 1...","Étape 2..."]} ; ' +
   'liste de courses ou de choses à faire -> {"type":"checklist","title":"...","items":["...","..."]} ; ' +
   'question à laquelle l\'utilisateur répond en choisissant -> {"type":"choices","title":"Ta question ?","options":["Choix A","Choix B"]} ; ' +
+  'plusieurs questions avant de pouvoir bien répondre -> {"type":"form","questions":[{"question":"Où as-tu acheté tes billets ?","options":["Site officiel","Autre site"]},' +
+  '{"question":"As-tu reçu l\'e-mail ?","options":["Oui","Non"]}],"submit":"Trouver mes billets"} ; ' +
+  'plusieurs choses présentées chacune en quelques phrases (pays, options, solutions) -> {"type":"cards","items":[{"title":"Suède","text":"..."},{"title":"Danemark","text":"..."}]} ; ' +
+  'montants ou parts à comparer -> {"type":"bars","headline":"297 000 € versés","subtitle":"550 € par mois pendant 45 ans",' +
+  '"items":[{"label":"Rendement de 5 %","value":1080000,"text":"1,08 M€"},{"label":"Rendement de 7 %","value":1950000,"text":"1,95 M€","highlight":true}],"note":"..."} ' +
+  '(headline, subtitle, note et highlight facultatifs ; value = nombre, text = ce qui s\'affiche) ; ' +
+  'quelques chiffres clés avec un niveau -> {"type":"stats","items":[{"label":"Dimanche 25 octobre","value":"78 %","tag":"Très chargé","tone":"bad","detail":"Ouvert de 10 h à 19 h"}]} ' +
+  '(tone : good, warn, bad ou neutral) ; ' +
   'calcul que l\'utilisateur voudra refaire avec d\'autres valeurs -> {"type":"calculator","title":"...",' +
   '"inputs":[{"name":"prix","label":"Prix","value":100,"unit":"€"},{"name":"remise","label":"Remise","value":20,"unit":"%"}],' +
   '"outputs":[{"label":"Prix final","formula":"prix*(1-remise/100)","unit":"€"}]} (formule : nombres, noms des inputs, + - * / ^ et parenthèses). ' +
   "Une liste de courses ou de choses à faire va TOUJOURS dans un bloc checklist (un bloc par rubrique si elle " +
-  "en a plusieurs), jamais en simples puces. " +
+  "en a plusieurs), jamais en simples puces. Quand il te manque des informations pour bien répondre, pose tes " +
+  "questions dans un bloc form (ou choices pour une seule question), pas en texte. " +
   "Écris les textes du bloc dans la langue de ta réponse, mets une phrase normale avant le bloc, un seul bloc " +
   "par sujet, et jamais de bloc pour une réponse courte ou une simple conversation. Les chiffres d'un bloc " +
   "suivent les mêmes règles que le reste de ta réponse (ils viennent d'une vraie recherche quand c'est un fait). "
