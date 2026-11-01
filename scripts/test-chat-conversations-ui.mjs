@@ -127,7 +127,10 @@ window.jaris = {
     window.__log = cb
     return () => {}
   },
-  onChatStreamToken: () => () => {},
+  onChatStreamToken: (cb) => {
+    window.__token = cb
+    return () => {}
+  },
   // Étape 346 : le test annonce lui-même une réponse en cours ailleurs (petit widget), comme le main.
   getChatBusy: () => Promise.resolve(false),
   onChatBusy: (cb) => {
@@ -154,6 +157,18 @@ window.jaris = {
   },
   // Étape 272 : « longue » ne répond qu'une fois « Arrêter » cliqué, comme une vraie réponse interrompue.
   sendChatMessage: (prompt) => {
+    // « lent » : comme le main, la question rejoint SON fil tout de suite, la réponse quand le test l'envoie.
+    if (prompt.startsWith('lent')) {
+      const thread = THREADS[window.__state.activeId]
+      thread.push({ role: 'user', content: prompt })
+      return new Promise((resolve) => {
+        window.__answer = (content) => {
+          const reply = { role: 'assistant', content }
+          thread.push(reply)
+          resolve(reply)
+        }
+      })
+    }
     if (!prompt.startsWith('longue')) return Promise.resolve({ role: 'assistant', content: 'ok' })
     return new Promise((resolve) => {
       window.__stopChat = () => resolve({ role: 'assistant', content: 'Bonjour, voici le début', stopped: true })
@@ -505,5 +520,34 @@ test('question posée depuis le widget : le Chat montre « réfléchit », puis 
     })
     await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('réponse arrivée'))
     assert.equal(await page.locator('.chat-panel__message--pending').count(), 0, '« réfléchit » reste affiché après la réponse')
+  })
+})
+
+// Léo : « j'envoie un message, je vais dans une autre conversation, mon message a disparu ».
+test('quitter la conversation pendant la réponse puis y revenir : question et réponse en cours retrouvées', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.chat-panel__message')
+    await page.fill('.composer__input', 'lent : une recette de pâtes ?')
+    await page.keyboard.press('Enter')
+    await page.evaluate(() => window.__token('Des pâtes, '))
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('Des pâtes,'))
+
+    await page.click('.workspace__list li:nth-child(2) .workspace__item')
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('recette de crêpes'))
+    // La réponse continue pendant qu'on regarde l'autre fil : rien ne doit s'y afficher.
+    await page.evaluate(() => window.__token('du sel.'))
+    await page.waitForTimeout(100)
+    const other = await page.textContent('.chat-panel__thread')
+    assert.doesNotMatch(other, /pâtes/, "ni la question ni la réponse dans l'autre conversation")
+
+    await page.click('.workspace__list li:nth-child(1) .workspace__item')
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('une recette de pâtes'))
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('Des pâtes, du sel.'))
+
+    await page.evaluate(() => window.__answer('Des pâtes, du sel.'))
+    await page.waitForFunction(() => !document.querySelector('.chat-panel__message--pending'))
+    const texts = await page.$$eval('.chat-panel__message', (nodes) => nodes.map((n) => n.textContent))
+    assert.equal(texts.filter((t) => t.includes('une recette de pâtes')).length, 1, 'question une seule fois')
+    assert.equal(texts.filter((t) => t.includes('Des pâtes, du sel.')).length, 1, 'réponse une seule fois')
   })
 })

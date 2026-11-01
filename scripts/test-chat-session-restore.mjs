@@ -18,7 +18,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cha
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup(pastEntries, { historyDelayMs = 0, onConverse = null } = {}) {
+function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = null } = {}) {
   const appended = []
   const calls = { converse: 0, vision: [], exchanges: [], memoryCancels: 0, cancelsSeenByConverse: [] }
   const modules = {
@@ -66,9 +66,10 @@ function setup(pastEntries, { historyDelayMs = 0, onConverse = null } = {}) {
     './conversationStore': {
       getConversationHistory: async () => {
         if (historyDelayMs) await new Promise((resolve) => setTimeout(resolve, historyDelayMs))
-        return pastEntries
+        // `store` : plusieurs conversations, et ce qui est enregistré se relit (fil quitté puis rouvert).
+        return store ? appended.filter((entry) => entry.conversationId === store.active) : pastEntries
       },
-      getActiveConversationId: async () => 'conv-A',
+      getActiveConversationId: async () => store?.active ?? 'conv-A',
       appendConversationEntry: async (entry, conversationId) => { appended.push({ ...entry, conversationId }) }
     },
     './conversationSession': {
@@ -340,4 +341,49 @@ test('une réponse en cours est annoncée (question affichée), puis sa fin — 
   await chatSession.send('échec', () => {}, () => {})
   assert.equal(chatSession.busy, false)
   assert.equal(JSON.stringify(seen), '[true,false,true,false]')
+})
+
+// Léo : « j'envoie un message, je vais dans une autre conversation, mon message a disparu ». L'échange n'est écrit sur le
+// disque qu'avec sa réponse : le fil relu en revenant n'avait plus la question, puis la réponse arrivait seule.
+test('quitter le fil pendant la réponse puis y revenir : la question est toujours là, puis la réponse', async () => {
+  let release
+  const store = { active: 'conv-A' }
+  const { chatSession, appended } = setup([], { store, onConverse: () => new Promise((resolve) => (release = resolve)) })
+  await chatSession.getVisibleMessages()
+  const sending = chatSession.send('Une recette de crêpes ?', () => {}, () => {})
+  while (!release) await new Promise((resolve) => setTimeout(resolve, 5))
+  const contents = async () => JSON.parse(JSON.stringify(await chatSession.getVisibleMessages())).map((m) => m.content)
+
+  store.active = 'conv-B'
+  chatSession.reset()
+  assert.deepEqual(await contents(), [], "la question n'apparaît pas dans l'autre conversation")
+  store.active = 'conv-A'
+  chatSession.reset()
+  assert.deepEqual(await contents(), ['Une recette de crêpes ?'], 'la question est toujours là au retour')
+
+  release('Farine, œufs, lait.')
+  await sending
+  assert.deepEqual(await contents(), ['Une recette de crêpes ?', 'Farine, œufs, lait.'])
+  assert.equal(appended.length, 1)
+  chatSession.reset()
+  assert.deepEqual(await contents(), ['Une recette de crêpes ?', 'Farine, œufs, lait.'], 'relu du disque : sans doublon')
+})
+
+test("réponse arrivée pendant qu'on est ailleurs : retrouvée en revenant, une seule fois", async () => {
+  let release
+  const store = { active: 'conv-A' }
+  const { chatSession } = setup([], { store, onConverse: () => new Promise((resolve) => (release = resolve)) })
+  await chatSession.getVisibleMessages()
+  const sending = chatSession.send('Quelle heure ?', () => {}, () => {})
+  while (!release) await new Promise((resolve) => setTimeout(resolve, 5))
+  store.active = 'conv-B'
+  chatSession.reset()
+  await chatSession.getVisibleMessages()
+  release('Midi.')
+  await sending
+  assert.equal(JSON.stringify(await chatSession.getVisibleMessages()), '[]', 'rien dans le fil B')
+  store.active = 'conv-A'
+  chatSession.reset()
+  const back = JSON.parse(JSON.stringify(await chatSession.getVisibleMessages())).map((m) => m.content)
+  assert.deepEqual(back, ['Quelle heure ?', 'Midi.'])
 })

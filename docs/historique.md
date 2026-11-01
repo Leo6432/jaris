@@ -10698,3 +10698,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   barres proportionnelles, niveau rouge avec son mot, bouton grisé puis envoi groupé, titre qui scintille pendant
   la réponse et pour le widget, puis s'arrête). **Non vérifié en usage réel** : l'usage que les modèles locaux de
   Léo feront de ces blocs.
+
+- **Étape 405 (v0.41.3), Léo : « des fois quand j'envoie un message je vais dans une autre conversation, mon message
+  que j'ai envoyé a disparu ».** Cause lue dans le code : un échange n'est écrit sur le disque qu'avec sa RÉPONSE.
+  Changer de fil pendant que Jaris répond remet le fil à zéro (`reset`) ; en revenant, le fil relu du disque n'avait
+  plus la question, puis la réponse arrivait seule (ou nulle part si on était resté ailleurs). Et ce qui s'était
+  écrit en direct pendant l'absence était perdu : la réponse reprenait au milieu d'une phrase. Corrigé :
+  `ChatSession.pending` (chatSession.ts) garde les échanges en cours par conversation, rajoutés au fil relu (question,
+  puis réponse dès qu'elle est là), avec le MÊME identifiant que l'échange enregistré pour ne jamais l'afficher deux
+  fois ; la réponse est rangée dans son fil d'après la conversation (`loadedFor`), plus d'après l'« époque » (un
+  aller-retour changeait l'époque et la réponse n'était plus affichée). Côté écran (ChatPanel.tsx), le texte et les
+  recherches en cours sont gardés en entier pendant qu'on regarde un autre fil (affichés seulement dans le leur), et
+  si le fil a changé pendant la réponse, il est relu à la fin au lieu d'y ajouter la réponse seule. Régression :
+  `test-chat-session-restore.mjs` (fil quitté puis rouvert, réponse arrivée pendant l'absence, sans doublon) et
+  `test-chat-conversations-ui.mjs` (vrai navigateur : rien dans l'autre fil, question et réponse en cours retrouvées,
+  chacune une seule fois) ; les deux échouent sur l'ancien code. **Non vérifié en usage réel.**

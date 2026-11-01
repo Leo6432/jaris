@@ -55,6 +55,15 @@ class ChatSession {
    * est dans le fil, mais le Chat ne savait pas qu'une réponse arrivait (pas de « réfléchit », réponse absente).
    */
   private inFlight = 0
+  /**
+   * Léo : « j'envoie un message, je vais dans une autre conversation, mon message a disparu ». Un échange n'est
+   * écrit sur le disque qu'avec sa réponse : revenir dans le fil pendant la réponse le relisait SANS la question,
+   * puis la réponse arrivait seule (ou nulle part). Les échanges en cours, par conversation, sont donc gardés ici et
+   * rajoutés au fil relu ; même identifiant que l'échange enregistré, pour ne jamais l'afficher deux fois.
+   */
+  private pending = new Map<string, { conversationId: string; prompt: string; reply?: ChatMessage }>()
+  /** Conversation que représente `visible` (null tant qu'il n'est pas chargé, ou après un changement de fil). */
+  private loadedFor: string | null = null
   private busyListener: ((busy: boolean) => void) | null = null
 
   /** Prévenu quand une réponse commence (question affichée) et quand plus aucune n'est attendue. */
@@ -93,11 +102,19 @@ class ChatSession {
   }
 
   private async load(epoch: number): Promise<void> {
+    const activeId = await getActiveConversationId()
     const pastEntries = await getConversationHistory(MAX_VISIBLE_MESSAGES / 2)
     const images = await Promise.all(pastEntries.map((entry) => (entry.image ? readGeneratedImageDataUrl(entry.image) : null)))
     // Fil changé pendant la lecture : ce qui vient d'être lu est celui d'avant.
     if (epoch !== this.epoch) return
-    this.visible = pastEntries.flatMap((entry, i): ChatMessage[] => [
+    this.loadedFor = activeId
+    const saved = new Set(pastEntries.map((entry) => entry.id))
+    const inProgress = [...this.pending.entries()].flatMap(([id, exchange]): ChatMessage[] =>
+      exchange.conversationId === activeId && !saved.has(id)
+        ? [{ role: 'user', content: exchange.prompt }, ...(exchange.reply ? [exchange.reply] : [])]
+        : []
+    )
+    this.visible = [...pastEntries.flatMap((entry, i): ChatMessage[] => [
       { role: 'user', content: entry.transcript },
       {
         role: 'assistant',
@@ -106,7 +123,7 @@ class ChatSession {
         // Étape 273 : le bloc « A cherché sur le web » revient après un redémarrage.
         ...(entry.web?.length ? { web: entry.web } : {})
       }
-    ])
+    ]), ...inProgress].slice(-MAX_VISIBLE_MESSAGES)
   }
 
   /** Messages à afficher dans le fil, amorcés depuis le disque au premier appel (voir ensureLoaded). */
@@ -119,6 +136,8 @@ class ChatSession {
   clear(): void {
     this.epoch += 1
     clearSessionHistory()
+    this.pending.clear()
+    this.loadedFor = null
     this.visible = []
     this.loading = Promise.resolve()
   }
@@ -133,6 +152,7 @@ class ChatSession {
   reset(): void {
     this.epoch += 1
     clearSessionHistory()
+    this.loadedFor = null
     this.visible = []
     this.loading = null
   }
@@ -214,6 +234,30 @@ class ChatSession {
     // Étape 328 : la conversation où la question est POSÉE, pour y ranger la réponse même si Léo change de fil entre-temps.
     const epoch = this.epoch
     const conversationId = await getActiveConversationId()
+    const exchangeId = randomUUID()
+    this.pending.set(exchangeId, { conversationId, prompt })
+    try {
+      return await this.respond(markShown, epoch, conversationId, exchangeId, prompt, onReminderFire, onLog, onSoundCue, onToken, imageBase64, restrictions, channel, onWebActivity)
+    } finally {
+      this.pending.delete(exchangeId)
+    }
+  }
+
+  private async respond(
+    markShown: () => void,
+    epoch: number,
+    conversationId: string,
+    exchangeId: string,
+    prompt: string,
+    onReminderFire: (message: string) => void,
+    onLog: (message: string) => void,
+    onSoundCue?: (cue: SoundCue) => void,
+    onToken?: (delta: string) => void,
+    imageBase64?: string,
+    restrictions?: ConverseRestrictions,
+    channel: 'chat' | 'voice' = 'chat',
+    onWebActivity?: (activity: WebActivity) => void
+  ): Promise<ChatMessage> {
     this.pushVisible({ role: 'user', content: prompt })
     markShown()
     onSoundCue?.('thinking')
@@ -230,7 +274,7 @@ class ChatSession {
       this.running.delete(controller)
       onLog(t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))
       onSoundCue?.('error')
-      return this.pushIfSameThread(epoch, { role: 'assistant', content: gpuStatus.message as string })
+      return this.finish(exchangeId, conversationId, { role: 'assistant', content: gpuStatus.message as string })
     }
 
     let reply: string
@@ -274,9 +318,9 @@ class ChatSession {
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
       // La lecture d'une image ne s'interrompt pas en route : sa réponse arrivée après « Arrêter » est écartée.
-      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId, exchangeId)
     } catch (err) {
-      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web, epoch, conversationId, exchangeId)
       this.running.delete(controller)
       const detail = err instanceof Error ? err.message : String(err)
       onLog(`Erreur Ollama (chat) : ${detail}`)
@@ -284,7 +328,7 @@ class ChatSession {
       // Le détail (déjà clair et actionnable, voir ollama.ts : "Impossible de joindre Ollama...",
       // "Ollama a répondu 500 : ...") est ajouté au lieu d'être perdu derrière un message générique — même
       // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
-      return this.pushIfSameThread(epoch, {
+      return this.finish(exchangeId, conversationId, {
         role: 'assistant',
         content: t('chat.cannotThink', { detail }),
         ...(web.length ? { web } : {})
@@ -300,9 +344,18 @@ class ChatSession {
     // l'historique commun (onglet Historique du menu Options, et amorçage du contexte au prochain lancement).
     void extractMemoryFromExchange(prompt, reply, onLog, conversationId)
     const image = generated as GeneratedImage | null
+    const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
+    // Affichée (et gardée pour un fil relu) AVANT l'écriture sur le disque : un retour dans ce fil pendant l'écriture
+    // la retrouve quand même, et l'identifiant commun évite tout doublon une fois l'échange écrit.
+    const message = this.finish(exchangeId, conversationId, {
+      role: 'assistant',
+      content: reply,
+      ...(imageUrl ? { image: imageUrl } : {}),
+      ...(web.length ? { web } : {})
+    })
     await appendConversationEntry(
       {
-        id: randomUUID(),
+        id: exchangeId,
         timestamp: new Date().toISOString(),
         transcript: prompt,
         reply,
@@ -311,14 +364,7 @@ class ChatSession {
       },
       conversationId
     )
-
-    const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
-    return this.pushIfSameThread(epoch, {
-      role: 'assistant',
-      content: reply,
-      ...(imageUrl ? { image: imageUrl } : {}),
-      ...(web.length ? { web } : {})
-    })
+    return message
   }
 
   /**
@@ -331,15 +377,22 @@ class ChatSession {
     streamed: string,
     web: WebActivity[],
     epoch: number,
-    conversationId: string
+    conversationId: string,
+    exchangeId: string
   ): Promise<ChatMessage> {
     for (const running of this.running) if (running.signal.aborted) this.running.delete(running)
     const partial = streamed.trim()
+    const message = this.finish(exchangeId, conversationId, {
+      role: 'assistant',
+      content: partial || t('chat.stopped'),
+      stopped: true,
+      ...(web.length ? { web } : {})
+    })
     if (partial) {
       if (epoch === this.epoch) pushSessionExchange(prompt, partial)
       await appendConversationEntry(
         {
-          id: randomUUID(),
+          id: exchangeId,
           timestamp: new Date().toISOString(),
           transcript: prompt,
           reply: partial,
@@ -348,12 +401,7 @@ class ChatSession {
         conversationId
       )
     }
-    return this.pushIfSameThread(epoch, {
-      role: 'assistant',
-      content: partial || t('chat.stopped'),
-      stopped: true,
-      ...(web.length ? { web } : {})
-    })
+    return message
   }
 
   /**
@@ -377,9 +425,15 @@ class ChatSession {
     return true
   }
 
-  /** Ajoute au fil affiché seulement s'il n'a pas changé depuis la question (étape 328) ; rend le message dans tous les cas. */
-  private pushIfSameThread(epoch: number, message: ChatMessage): ChatMessage {
-    return epoch === this.epoch ? this.pushVisible(message) : message
+  /**
+   * Réponse arrivée : ajoutée au fil affiché seulement si c'est celui de la question (étape 328), même si Léo en est
+   * parti puis revenu entre-temps (le fil relu contient alors la question, voir load) ; gardée avec l'échange en
+   * cours pour un fil relu avant qu'elle soit écrite. Rend le message dans tous les cas.
+   */
+  private finish(exchangeId: string, conversationId: string, message: ChatMessage): ChatMessage {
+    const exchange = this.pending.get(exchangeId)
+    if (exchange) exchange.reply = message
+    return this.loadedFor === conversationId ? this.pushVisible(message) : message
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {

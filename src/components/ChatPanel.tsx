@@ -61,6 +61,15 @@ export default function ChatPanel(): JSX.Element {
    * scintille dans la liste. Un état, pas une ref : la liste doit se redessiner quand il change.
    */
   const [workingIn, setWorkingIn] = useState<string | null>(null)
+  /**
+   * Léo (« j'envoie un message, je vais dans une autre conversation, mon message a disparu ») : la réponse en cours
+   * est gardée en entier même pendant qu'on regarde un autre fil, pour la retrouver telle quelle en revenant ; et si
+   * le fil a changé pendant la réponse, le fil est relu à la fin (le main le tient à jour) au lieu d'y ajouter la
+   * réponse seule.
+   */
+  const streamRef = useRef('')
+  const liveWebRef = useRef<WebActivity[]>([])
+  const leftDuringSend = useRef(false)
   const answerIsHere = (): boolean => sendingIn.current === null || sendingIn.current === activeIdRef.current
   /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
   const [savedIndex, setSavedIndex] = useState<number | null>(null)
@@ -130,9 +139,12 @@ export default function ChatPanel(): JSX.Element {
       const list = await result
       activeIdRef.current = list.activeId
       setConversations(list)
-      // Réponse en cours dans un autre fil : ce qui s'écrivait en direct n'appartient pas à celui-ci.
-      setStreamingReply('')
-      setLiveWeb([])
+      // Réponse en cours : elle n'est affichée que dans SON fil (answerIsHere), et reprise telle quelle au retour.
+      if (ownSendRef.current) leftDuringSend.current = true
+      else {
+        setStreamingReply('')
+        setLiveWeb([])
+      }
       setProgress(null)
       setMessages(await window.jaris.getChatHistory())
     } catch (err) {
@@ -158,11 +170,22 @@ export default function ChatPanel(): JSX.Element {
   // après les étapes d'outil éventuelles montrées par `progress` ci-dessus.
   useEffect(() => {
     return window.jaris.onChatStreamToken((delta) => {
-      if (answerIsHere()) setStreamingReply((prev) => prev + delta)
+      if (!ownSendRef.current) {
+        if (answerIsHere()) setStreamingReply((prev) => prev + delta)
+        return
+      }
+      streamRef.current += delta
+      setStreamingReply(streamRef.current)
     })
   }, [])
   useEffect(() => {
     return window.jaris.onChatWebActivity((activity) => {
+      if (ownSendRef.current) {
+        liveWebRef.current = mergeWebActivity(liveWebRef.current, activity)
+        setLiveWeb(liveWebRef.current)
+        if (!activity.pending && answerIsHere()) setProgress(null)
+        return
+      }
       if (!answerIsHere()) return
       setLiveWeb((prev) => mergeWebActivity(prev, activity))
       // Étape 274 : recherche terminée — « Recherche sur internet… » n'est plus vrai, Jaris lit les résultats.
@@ -188,6 +211,9 @@ export default function ChatPanel(): JSX.Element {
       setAttachment(null)
     }
     ownSendRef.current = true
+    streamRef.current = ''
+    liveWebRef.current = []
+    leftDuringSend.current = false
     setExternalBusy(false)
     setSending(true)
     setProgress(null)
@@ -204,7 +230,10 @@ export default function ChatPanel(): JSX.Element {
 
     try {
       const reply = await window.jaris.sendChatMessage(prompt, image?.base64)
-      if (answerIsHere()) setMessages((prev) => [...prev, reply])
+      if (answerIsHere()) {
+        if (leftDuringSend.current) setMessages(await window.jaris.getChatHistory())
+        else setMessages((prev) => [...prev, reply])
+      }
       // Le titre d'une conversation est dérivé de son PREMIER message (conversationStore.ts) : sans cette
       // relecture, la liste afficherait encore "Nouvelle conversation" après le tout premier échange.
       setConversations(await window.jaris.listConversations())
