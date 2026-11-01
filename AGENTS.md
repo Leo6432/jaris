@@ -80,6 +80,11 @@ python scripts/test-wake-confirmation.py   # mot d'activation
 - Toutes les demandes au même modèle doivent avoir la même fenêtre de contexte (sinon rechargement silencieux).
 - Ollama : donner le VRAI chemin des modèles (pas une jonction). « Téléchargé » ne veut pas dire « relisible » :
   vérifier avant de mesurer.
+- Un réglage passé à une bibliothèque peut être accepté sans erreur puis ignoré (`readonly` de node:sqlite,
+  délai caché de 10 min de LiteLLM) : vérifier qu'il AGIT, pas seulement qu'il est envoyé.
+- Pour savoir où un logiciel écrit (cache, modèles), lire SON code, jamais supposer (voix Supertonic, pip).
+- Retirer une fonctionnalité, c'est aussi effacer ce qu'elle a installé chez l'utilisateur (fichiers,
+  conteneurs et images Docker) — en gardant ses données à lui (`legacyCleanup.ts`).
 - Sécurité : jamais de shell avec une donnée utilisateur (`execFile`/`spawn` avec tableau d'arguments, valeurs
   par variable d'environnement) ; les chemins venus de l'écran sont revérifiés côté main.
 
@@ -117,6 +122,7 @@ python scripts/test-wake-confirmation.py   # mot d'activation
 - Taille d'un modèle : lue dans le registre, jamais de mémoire. Vérifier licence, architecture supportée par
   Ollama, et digest du tag avant d'ajouter un modèle. Après tout changement, comparer les choix sur une grille
   de machines types.
+- Les vitesses d'Artificial Analysis changent souvent : tests de règles avec des vitesses fictives.
 - Les listes recopiées entre `hardwareScan.ts` et `scripts/benchmark-models.mjs` sont vérifiées par test.
 
 **Travail avec Léo**
