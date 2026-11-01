@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useReportActivity } from '@/lib/useReportActivity'
 import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
@@ -18,6 +18,7 @@ import {
   DUEL_CATEGORIES,
   DUEL_CODE_IDEAS,
   DUEL_DEFAULT_SIZE,
+  DUEL_MAX_FOLLOW_UPS,
   DUEL_MIN_CHOSEN,
   DUEL_SERIES_DEFAULT,
   DUEL_SERIES_MAX,
@@ -28,6 +29,7 @@ import {
   type DuelCategory,
   type DuelOutcome,
   type DuelSide,
+  type DuelTurn,
   type DuelVoteSide
 } from '../../shared/duel'
 import type { ClaudeKeyStatus, DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
@@ -769,6 +771,41 @@ function DuelAppView({ name, url, loadCode }: { name: DuelSide; url: string; loa
   )
 }
 
+/**
+ * Étape 401 : les réponses d'avant d'un modèle, quand Léo lui a répondu (une question sur sa ville, par exemple), avec
+ * chaque réponse de Léo dessous. La réponse en cours vient ensuite, comme d'habitude.
+ */
+function EarlierTurns({ turns, followUps, category }: { turns: readonly DuelTurn[]; followUps: readonly string[]; category: DuelCategory }): JSX.Element | null {
+  if (!turns.length) return null
+  return (
+    <div className="duel-side__earlier">
+      {turns.map((turn, index) => (
+        <div key={index} className="duel-side__turn-earlier">
+          {turn.actions.length > 0 && (
+            <ul className="duel-side__earlier-actions">
+              {turn.actions.map((action, i) => (
+                <li key={i}>{actionLabel(action)}</li>
+              ))}
+            </ul>
+          )}
+          {turn.text.trim() ? (
+            <div className="duel-side__text">{category === 'voice' ? turn.text : renderFormattedText(turn.text)}</div>
+          ) : (
+            !turn.error && <p className="duel-side__muted">{t('duel.noReply')}</p>
+          )}
+          {turn.error && <p className="duel-side__error">{turn.error}</p>}
+          {followUps[index] !== undefined && (
+            <p className="duel-side__you">
+              <span className="duel-side__you-label">{t('duel.followUp.you')}</span>
+              {followUps[index]}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 interface SideCardProps {
   name: DuelSide
   side: DuelSideView
@@ -779,9 +816,13 @@ interface SideCardProps {
   onListen: () => void
   /** Étape 358 : le nom du modèle, révélé après le vote ; `null` avant. */
   model: string | null
+  /** Étape 401 : ce que Léo a répondu aux deux modèles. */
+  followUps: readonly string[]
+  /** Étape 401 : B pas encore lancé pour ce tour (ses réponses d'avant restent affichées au-dessus). */
+  waiting?: ReactNode
 }
 
-function SideCard({ name, side, category, now, playing, onStop, onListen, model }: SideCardProps): JSX.Element {
+function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting }: SideCardProps): JSX.Element {
   const running = side.status === 'running'
   const final = finished(side)
   const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
@@ -803,6 +844,9 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model 
         </span>
         <span className="duel-side__status">{statusLabel(side)}</span>
       </header>
+
+      <EarlierTurns turns={side.earlier ?? []} followUps={followUps} category={category} />
+      {side.status === 'idle' && waiting}
 
       {running && (
         <p className="duel-side__activity" aria-live="polite">
@@ -945,6 +989,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
           <span className="duel-side__status">{t('duel.status.done', { duration: formatDuration(side.durationMs) })}</span>
         )}
       </header>
+      <EarlierTurns turns={side.earlier ?? []} followUps={entry.followUps ?? []} category={entry.category} />
       {entry.category !== 'code' && (
         <div className="duel-side__actions">
           <h3 className="duel-side__actions-title">{t('duel.actions.title')}</h3>
@@ -1414,9 +1459,11 @@ export default function DuelPanel(): JSX.Element {
   const [reviewCount, setReviewCount] = useState(0)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
+  // Étape 401 : la réponse de Léo aux deux modèles, avant de voter.
+  const [reply, setReply] = useState('')
   const [error, setError] = useState<string | null>(null)
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
-  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'vote' | 'next' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
+  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'followUp' | 'vote' | 'next' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   // Étape 381 : l'éditeur « plusieurs demandes d'un coup » (Code seulement).
   const [batchEditing, setBatchEditing] = useState(false)
@@ -1612,6 +1659,16 @@ export default function DuelPanel(): JSX.Element {
 
   const runB = (): void => {
     void run('runB', async () => setView(await window.jaris.duelRunB()))
+  }
+
+  const followUp = (): void => {
+    const text = reply.trim()
+    if (!text) return
+    stopAudio()
+    void run('followUp', async () => {
+      setView(await window.jaris.duelFollowUp(text))
+      setReply('')
+    })
   }
 
   const stop = (): void => {
@@ -2150,6 +2207,28 @@ export default function DuelPanel(): JSX.Element {
     // Un outil de Jaris a échoué : ce duel ne compte pas (rien n'est voté contre un modèle pour une panne de Jaris).
     const trouble = Boolean(round.a.trouble || round.b.trouble)
     const noneRunning = round.a.status !== 'running' && round.b.status !== 'running'
+    const followUps = round.followUps ?? []
+    // Étape 401 : Léo peut répondre aux deux modèles (une question sur sa ville…) avant de voter.
+    const canFollowUp = bothDone && !trouble && !round.revealed && view.category !== 'code' && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS
+    const waitingB = (
+      <>
+        {finished(round.a) && round.a.trouble ? (
+          <p className="duel-side__muted">{t('duel.trouble.waitB')}</p>
+        ) : view.batch ? (
+          // Étape 381 : dans une file, Jaris lance B tout seul quand la carte a de la place.
+          <p className="duel-side__muted">{t('duel.batch.status.waiting')}</p>
+        ) : finished(round.a) ? (
+          <div className="duel-side__turn">
+            <p>{t('duel.waitB')}</p>
+            <button type="button" className="duel-btn duel-btn--primary" onClick={runB} disabled={pending !== null}>
+              {t('duel.runB')}
+            </button>
+          </div>
+        ) : (
+          <p className="duel-side__muted">{t('duel.waitA')}</p>
+        )}
+      </>
+    )
     content = (
       <>
         <div className="duel__bar">
@@ -2203,8 +2282,9 @@ export default function DuelPanel(): JSX.Element {
                   onStop={stop}
                   onListen={() => void play('a')}
                   model={round.revealed?.a ?? null}
+                  followUps={followUps}
                 />
-                {round.b.status === 'idle' ? (
+                {round.b.status === 'idle' && !(round.b.earlier ?? []).length ? (
                   <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
                     <header className="duel-side__head">
                       <span className="duel-side__name">
@@ -2215,21 +2295,7 @@ export default function DuelPanel(): JSX.Element {
                       </span>
                       <span className="duel-side__status">{t('duel.status.waiting')}</span>
                     </header>
-                    {finished(round.a) && round.a.trouble ? (
-                      <p className="duel-side__muted">{t('duel.trouble.waitB')}</p>
-                    ) : view.batch ? (
-                      // Étape 381 : dans une file, Jaris lance B tout seul quand la carte a de la place.
-                      <p className="duel-side__muted">{t('duel.batch.status.waiting')}</p>
-                    ) : finished(round.a) ? (
-                      <div className="duel-side__turn">
-                        <p>{t('duel.waitB')}</p>
-                        <button type="button" className="duel-btn duel-btn--primary" onClick={runB} disabled={pending !== null}>
-                          {t('duel.runB')}
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="duel-side__muted">{t('duel.waitA')}</p>
-                    )}
+                    {waitingB}
                   </section>
                 ) : (
                   <SideCard
@@ -2241,6 +2307,8 @@ export default function DuelPanel(): JSX.Element {
                     onStop={stop}
                     onListen={() => void play('b')}
                     model={round.revealed?.b ?? null}
+                    followUps={followUps}
+                    waiting={waitingB}
                   />
                 )}
               </div>
@@ -2285,6 +2353,7 @@ export default function DuelPanel(): JSX.Element {
                   <h2 id="duel-vote-title" className="duel-vote__title">
                     {t('duel.vote.title')}
                   </h2>
+                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t('duel.followUp.hint')}</p>}
                   <div className="duel-vote__buttons">
                     {OUTCOMES.map(({ outcome, label }) => (
                       <button
@@ -2320,6 +2389,23 @@ export default function DuelPanel(): JSX.Element {
             onError={setError}
             imagesAllowed={false}
             submitOnEnter={view.category !== 'code'}
+            rows={2}
+          />
+        )}
+        {canFollowUp && (
+          <Composer
+            value={reply}
+            onChange={setReply}
+            onSubmit={followUp}
+            placeholder={t('duel.followUp.placeholder')}
+            submitLabel={t('duel.followUp.submit')}
+            busyLabel={t('common.loading')}
+            busy={pending === 'followUp'}
+            attachment={null}
+            onAttachmentChange={() => {}}
+            onError={setError}
+            imagesAllowed={false}
+            submitOnEnter
             rows={2}
           />
         )}

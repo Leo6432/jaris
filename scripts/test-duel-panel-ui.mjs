@@ -73,6 +73,12 @@ window.jaris = {
     const r = window.__view.round
     return ready({ ...r, b: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'writing' } }) })
   },
+  duelFollowUp: async (message) => {
+    window.__calls.push(['followUp', message])
+    const r = window.__view.round
+    const keep = (x) => [...(x.earlier || []), { text: x.text, actions: x.actions, error: x.error, durationMs: x.durationMs }]
+    return ready({ ...r, followUps: [...(r.followUps || []), message], a: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' }, earlier: keep(r.a) }), b: side({ earlier: keep(r.b) }) })
+  },
   duelStop: async () => { window.__calls.push('stop') },
   duelVote: async (outcome) => {
     window.__calls.push(['vote', outcome])
@@ -1183,4 +1189,59 @@ test('étape 399 : pendant les duels de Claude — étape en cours, dernier vote
       round: { number: 4, prompt: 'Rappelle-moi de sortir le linge dans 20 minutes', a: { status: 'done', text: '', activity: null, startedAt: null, durationMs: 3000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'running', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, revealed: null },
       judge: { total: 12, index: 3, judged: 3, skipped: 0, step: 'b', last: { outcome: 'a', reason: 'A a vraiment ouvert le Bloc-notes.' }, finished: false, stopped: false, error: null } }`
   )
+})
+
+test('étape 401 : un modèle demande la ville — Léo répond aux deux avant de voter, chacun garde ses réponses d’avant', options, async () => {
+  const init = `
+    var __s = (p) => Object.assign({ status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, p)
+    window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 1, prompt: 'Quel temps fera-t-il demain ?', followUps: [], revealed: null,
+        a: __s({ status: 'done', durationMs: 3000, text: 'Dans quelle ville es-tu ?' }),
+        b: __s({ status: 'done', durationMs: 5000, text: 'Je ne sais pas où tu es.' }) } }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vote')
+    // Le vote reste là, et un champ propose de répondre aux deux modèles.
+    assert.equal(await page.locator('.duel-vote__button').count(), 4)
+    assert.match(await page.textContent('.duel-vote__follow-hint'), /ta réponse part aux deux modèles/)
+    assert.equal(await page.getAttribute('.composer__input', 'placeholder'), 'Répondre aux deux modèles…')
+    await page.fill('.composer__input', 'Lyon')
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'followUp'))
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'followUp'), ['followUp', 'Lyon'])
+    await page.waitForSelector('.duel-side--running')
+    // Les réponses d'avant restent visibles sur les DEUX cartes, avec la réponse de Léo dessous.
+    assert.deepEqual(await page.locator('.duel-side__turn-earlier .duel-side__text').allTextContents(), ['Dans quelle ville es-tu ?', 'Je ne sais pas où tu es.'])
+    assert.deepEqual(await page.locator('.duel-side__you').allTextContents(), ['ToiLyon', 'ToiLyon'])
+    assert.equal(await page.locator('.composer').count(), 0, 'pas de nouvelle réponse tant que les modèles travaillent')
+    assert.equal(await page.locator('.duel-vote__button').count(), 0, 'pas de vote pendant le nouveau tour')
+    assert.match(await page.textContent('.duel-round__sides > section:nth-child(2)'), /Le modèle B répondra/)
+    // La bulle de Léo est habillée par le CSS (fond, coins arrondis), pas un texte brut.
+    const bubble = await page.$eval('.duel-side__you', (el) => ({ radius: getComputedStyle(el).borderTopLeftRadius, bg: getComputedStyle(el).backgroundColor }))
+    assert.equal(bubble.radius, '16px')
+    assert.notEqual(bubble.bg, 'rgba(0, 0, 0, 0)')
+
+    // A a répondu : B se lance comme d'habitude, ses réponses d'avant toujours au-dessus.
+    await page.evaluate(() => {
+      const r = window.__view.round
+      window.__emit(window.__ready({ ...r, a: { ...r.a, status: 'done', durationMs: 2000, text: 'Il fera beau à Lyon.' } }))
+    })
+    await settle(page)
+    await page.click('.duel-round__sides > section:nth-child(2) .duel-btn--primary')
+    assert.ok((await page.evaluate(() => window.__calls)).includes('runB'))
+  }, init)
+})
+
+test('étape 401 : pas de champ de réponse en duel Code', options, async () => {
+  const init = `
+    var __s = (p) => Object.assign({ status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, p)
+    window.__category = 'code'
+    window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 1, prompt: 'Un compteur', followUps: [], revealed: null, together: false,
+        a: __s({ status: 'done', durationMs: 3000, previewUrl: 'data:text/html,<p>A</p>' }),
+        b: __s({ status: 'done', durationMs: 5000, previewUrl: 'data:text/html,<p>B</p>' }) } }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vote')
+    assert.equal(await page.locator('.composer').count(), 0)
+    assert.equal(await page.locator('.duel-vote__follow-hint').count(), 0)
+  }, init)
 })

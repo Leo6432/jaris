@@ -283,6 +283,7 @@ const api = {
   duelReviewDecide: (id: string, accept: boolean): Promise<DuelReviewView[]> => invoke(IPC_CHANNELS.duelReviewDecide, id, accept),
   duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
   duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
+  duelFollowUp: (message: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelFollowUp, message),
   duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),
   duelVote: (outcome: DuelOutcome): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelVote, outcome),
   duelEnd: (force?: boolean): Promise<DuelSummary> => invoke(IPC_CHANNELS.duelEnd, force === true),

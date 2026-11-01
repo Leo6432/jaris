@@ -13,7 +13,7 @@ import {
   type DuelCandidate,
   type DuelMachineOverride
 } from './hardwareScan'
-import { deleteModel, fetchOllamaVersion, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
+import { deleteModel, fetchOllamaVersion, type OllamaMessage, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
 import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
@@ -45,7 +45,9 @@ import {
 import {
   DUEL_CATEGORIES,
   DUEL_FORBIDDEN_TOOLS,
+  DUEL_FOLLOW_UP_MAX_CHARS,
   DUEL_HISTORY_TEXT_MAX,
+  DUEL_MAX_FOLLOW_UPS,
   DUEL_MIN_CHOSEN,
   DUEL_MIN_MODELS,
   DUEL_BATCH_MAX,
@@ -151,6 +153,8 @@ interface RoundState {
   number: number
   pair: [string, string]
   prompt: string | null
+  /** Étape 401 : ce que Léo a répondu aux deux modèles depuis la demande (même message aux deux), dans l'ordre. */
+  followUps: string[]
   sides: Record<DuelSide, SideState>
   /** Étape 358 : noms révélés après le vote, comme sur Arena. */
   revealed: { a: string; b: string; outcome: DuelOutcome } | null
@@ -310,7 +314,8 @@ function emptySide(): SideState {
     audioData: null,
     html: null,
     retries: 0,
-    toolLog: []
+    toolLog: [],
+    earlier: []
   }
 }
 
@@ -333,7 +338,7 @@ export function getDuelView(): DuelSessionView | null {
     dropReason: session.dropReason,
     votes: session.history.length,
     round: round
-      ? { number: round.number, prompt: round.prompt, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
+      ? { number: round.number, prompt: round.prompt, followUps: round.followUps, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
       : null,
     batch: session.batch
       ? session.batch.map((r) => ({
@@ -628,6 +633,7 @@ export async function startDuel(
       number: index + 1,
       pair,
       prompt: '',
+      followUps: [],
       sides: { a: emptySide(), b: emptySide() },
       revealed: null,
       tools: null,
@@ -702,7 +708,7 @@ function nextRound(current: Session): void {
     return
   }
   const together = canRunDuelTogether(current.category, [current.sizes.get(pair[0]) ?? NaN, current.sizes.get(pair[1]) ?? NaN], current.vramGb)
-  current.round = { number: current.history.length + 1, pair, prompt: null, sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null, together }
+  current.round = { number: current.history.length + 1, pair, prompt: null, followUps: [], sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null, together }
 }
 
 function sideFinished(side: SideState): boolean {
@@ -753,6 +759,49 @@ export function askDuel(prompt: string): DuelSessionView {
   return getDuelView() as DuelSessionView
 }
 
+/**
+ * Étape 401 : ce qu'un côté doit répondre maintenant (la demande, ou la dernière réponse de Léo), et SA conversation
+ * d'avant — chaque modèle ne voit que ses propres réponses, jamais celles de l'autre.
+ */
+export function sideConversation(round: Pick<RoundState, 'prompt' | 'followUps'>, side: Pick<SideState, 'earlier'>): { ask: string; history: OllamaMessage[] } {
+  const asks = [round.prompt ?? '', ...round.followUps]
+  const history: OllamaMessage[] = []
+  side.earlier.forEach((turn, index) => {
+    history.push({ role: 'user', content: asks[index] ?? '' }, { role: 'assistant', content: turn.text })
+  })
+  return { ask: asks[side.earlier.length] ?? asks[asks.length - 1], history }
+}
+
+/**
+ * Étape 401 (Léo : « des fois il me demande ma localisation, mais je peux pas renvoyer un message, là on a direct le
+ * vote ») : Léo répond aux DEUX modèles avec le même message avant de voter. Chacun garde sa conversation ; A répond
+ * d'abord, puis B quand Léo a vérifié ce que A a fait, comme pour la demande. Pas en Code (une demande = une
+ * application), ni dans une file, ni avec Claude comme juge.
+ */
+export function followUpDuel(message: unknown): DuelSessionView {
+  const current = session
+  if (current?.judge) throw new Error(t('duel.error.notYourTurn'))
+  const round = current?.round
+  if (!current || current.phase !== 'ready' || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
+  // L'écran ne propose jamais de répondre dans ces cas : une telle demande ne vient pas de lui.
+  if (current.category === 'code' || current.batch?.includes(round)) throw new Error(t('duel.error.badRequest'))
+  if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
+  if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
+  if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
+  if (round.followUps.length >= DUEL_MAX_FOLLOW_UPS) throw new Error(t('duel.followUp.limit', { count: DUEL_MAX_FOLLOW_UPS }))
+  const text = typeof message === 'string' ? message.trim() : ''
+  if (!text) throw new Error(t('duel.error.emptyPrompt'))
+  if (text.length > DUEL_FOLLOW_UP_MAX_CHARS) throw new Error(t('duel.error.badRequest'))
+  for (const name of ['a', 'b'] as const) {
+    const side = round.sides[name]
+    const earlier = [...side.earlier, { text: side.text, actions: side.actions, error: side.error, durationMs: side.durationMs }]
+    Object.assign(side, emptySide(), { earlier })
+  }
+  round.followUps.push(text)
+  void runSide(current, round, 'a')
+  return getDuelView() as DuelSessionView
+}
+
 /** Le tour du modèle B, quand Léo a vérifié ce que A a fait. */
 export function runDuelB(): DuelSessionView {
   const current = session
@@ -797,6 +846,7 @@ export function startDuelBatch(prompts: readonly unknown[]): DuelSessionView {
       number: current.history.length + index + 1,
       pair,
       prompt,
+      followUps: [],
       sides: { a: emptySide(), b: emptySide() },
       revealed: null,
       tools: null,
@@ -1279,6 +1329,7 @@ export async function restoreDuelSeries(): Promise<boolean> {
       number: r.number,
       pair: r.pair,
       prompt: r.prompt,
+      followUps: [],
       sides: { a: await restoreSide(r.number, 'a', r.a), b: await restoreSide(r.number, 'b', r.b) },
       revealed: null,
       tools: null,
@@ -1317,7 +1368,8 @@ export async function restoreDuelSeries(): Promise<boolean> {
 async function runSide(current: Session, round: RoundState, sideName: DuelSide): Promise<void> {
   const side = round.sides[sideName]
   const model = round.pair[sideName === 'a' ? 0 : 1]
-  const prompt = round.prompt as string
+  // Étape 401 : après une réponse de Léo, le modèle répond à CE message, avec sa propre conversation d'avant.
+  const { ask: prompt, history } = sideConversation(round, side)
   const runKey = `${round.number}:${sideName}`
   runControllers.get(runKey)?.abort()
   const controller = new AbortController()
@@ -1340,7 +1392,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
         () =>
           current.category === 'code'
             ? runCode(current, side, model, prompt, think, controller.signal)
-            : runConversation(current, side, model, prompt, think, tools, controller.signal),
+            : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
         current.sizes
       )
     }
@@ -1403,7 +1455,8 @@ async function runConversation(
   prompt: string,
   think: ThinkValue,
   tools: ReadonlySet<string>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  history: OllamaMessage[] = []
 ): Promise<void> {
   const profile = await getProfile()
   // « Arrêter » pendant cette lecture : rien ne part au modèle.
@@ -1427,7 +1480,7 @@ async function runConversation(
       }
       emitSoon()
     },
-    [],
+    history,
     signal,
     undefined,
     channel,
@@ -1529,12 +1582,16 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
         console.error('[jaris] Duel : application non gardée pour l’historique —', err)
       }
     }
+    // Étape 401 : les réponses d'avant (Léo a répondu aux modèles) partent avec le vote, et la durée compte tous les tours.
+    const earlier = side.earlier.map((turn) => ({ ...turn, text: turn.text.slice(0, DUEL_HISTORY_TEXT_MAX) }))
+    const total = [...side.earlier.map((turn) => turn.durationMs), side.durationMs]
     return {
       text: side.text.slice(0, DUEL_HISTORY_TEXT_MAX),
       actions: side.actions,
-      durationMs: side.durationMs,
+      durationMs: total.every((value) => value === null) ? null : total.reduce<number>((sum, value) => sum + (value ?? 0), 0),
       error: side.error,
-      app
+      app,
+      ...(earlier.length ? { earlier } : {})
     }
   }
   const sides = { a: await keep('a'), b: await keep('b') }
@@ -1547,6 +1604,7 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
     modelB,
     outcome,
     prompt: round.prompt,
+    ...(round.followUps.length ? { followUps: [...round.followUps] } : {}),
     sides
   })
   if (session !== current) return getDuelView() as DuelSessionView
@@ -1587,7 +1645,8 @@ export function retryDuel(): DuelSessionView {
   if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   if (round.sides.a.status === 'running' || round.sides.b.status === 'running') throw new Error(t('duel.error.notFinished'))
   if (!round.sides.a.trouble && !round.sides.b.trouble) throw new Error(t('duel.error.badRequest'))
-  round.sides = { a: emptySide(), b: emptySide() }
+  // Étape 401 : seul le tour en cours est refait ; les réponses d'avant (Léo a répondu aux modèles) restent.
+  round.sides = { a: { ...emptySide(), earlier: round.sides.a.earlier }, b: { ...emptySide(), earlier: round.sides.b.earlier } }
   // Relus au nouveau tour de A : le modèle d'images a peut-être été installé entre-temps.
   round.tools = null
   if (current.batch?.includes(round)) {
@@ -1632,6 +1691,7 @@ export function duelHistory(): DuelHistoryEntry[] {
       category: vote.category,
       at: vote.at,
       prompt: vote.prompt,
+      followUps: vote.followUps ?? [],
       outcome: vote.outcome,
       modelA: vote.modelA,
       modelB: vote.modelB,
@@ -1738,6 +1798,7 @@ async function runJudgedDuels(current: Session): Promise<void> {
         number: judge.index + 1,
         pair,
         prompt: null,
+        followUps: [],
         sides: { a: emptySide(), b: emptySide() },
         revealed: null,
         together: false,

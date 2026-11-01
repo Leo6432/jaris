@@ -4,7 +4,7 @@ import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
-import type { DuelAction, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelVoteSide } from './duel'
+import type { DuelAction, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelTurn, DuelVoteSide } from './duel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -1085,12 +1085,16 @@ export interface DuelSideView {
   error: string | null
   /** Un outil de Jaris a échoué (recherche, vision…) : pas la faute du modèle, le duel ne peut pas être voté. */
   trouble: DuelToolTrouble | null
+  /** Étape 401 : les réponses d'avant, quand Léo a répondu aux modèles ; la réponse en cours est `text`/`actions`. */
+  earlier: DuelTurn[]
 }
 
 export interface DuelRoundView {
   /** Numéro du duel dans la session, à partir de 1. */
   number: number
   prompt: string | null
+  /** Étape 401 : ce que Léo a répondu aux deux modèles depuis la demande, dans l'ordre. */
+  followUps: string[]
   a: DuelSideView
   b: DuelSideView
   /** Étape 358 : après le vote, les noms sont révélés (comme sur Arena) ; `null` avant le vote. */
@@ -1215,6 +1219,8 @@ export interface DuelHistoryEntry {
   category: DuelCategory
   at: number
   prompt: string
+  /** Étape 401 : ce que Léo a répondu aux deux modèles avant de voter. */
+  followUps: string[]
   outcome: DuelOutcome
   modelA: string | null
   modelB: string | null
@@ -1469,6 +1475,8 @@ export const IPC_CHANNELS = {
   duelReviewDecide: 'jaris:duel-review-decide',
   duelAsk: 'jaris:duel-ask',
   duelRunB: 'jaris:duel-run-b',
+  /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */
+  duelFollowUp: 'jaris:duel-follow-up',
   duelStop: 'jaris:duel-stop',
   duelVote: 'jaris:duel-vote',
   duelEnd: 'jaris:duel-end',

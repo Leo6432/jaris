@@ -98,6 +98,7 @@ import {
   planDuel,
   retryDuel,
   runDuelB,
+  followUpDuel,
   setDuelEnvironment,
   skipDuel,
   nextDuel,
@@ -1847,6 +1848,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.duelRunB, () => {
     cancelMemoryExtraction()
     return runDuelB()
+  })
+  ipcMain.handle(IPC_CHANNELS.duelFollowUp, (_event, message: unknown) => {
+    cancelMemoryExtraction()
+    return followUpDuel(message)
   })
   ipcMain.handle(IPC_CHANNELS.duelStop, () => stopDuelRun())
   ipcMain.handle(IPC_CHANNELS.duelVote, (_event, outcome: unknown) => {

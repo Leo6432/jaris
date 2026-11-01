@@ -34,9 +34,32 @@ export interface DuelVoteSide {
   durationMs: number | null
   error: string | null
   app: boolean
+  /**
+   * Étape 401 : les réponses d'avant, quand Léo a répondu aux modèles (une question sur sa ville, par exemple) avant de
+   * voter. Dans l'ordre ; `text`/`actions` ci-dessus sont la DERNIÈRE réponse. Absent sans réponse de Léo.
+   */
+  earlier?: DuelTurn[]
+}
+
+/** Étape 401 : une réponse d'un modèle avant que Léo lui réponde. */
+export interface DuelTurn {
+  text: string
+  actions: DuelAction[]
+  error: string | null
+  durationMs: number | null
 }
 
 export const DUEL_HISTORY_TEXT_MAX = 8000
+
+/**
+ * Étape 401 (Léo : « des fois il me demande ma localisation, mais je peux pas renvoyer un message ») : combien de fois
+ * Léo peut répondre aux deux modèles avant de voter. Au-delà, ce n'est plus un duel sur une demande mais une longue
+ * conversation, et l'historique gardé avec le vote grossirait sans fin.
+ */
+export const DUEL_MAX_FOLLOW_UPS = 5
+
+/** Étape 401 : la longueur maximale d'une réponse de Léo aux modèles, revérifiée côté main. */
+export const DUEL_FOLLOW_UP_MAX_CHARS = 2000
 
 export interface DuelVote {
   id: string
@@ -49,6 +72,8 @@ export interface DuelVote {
   outcome: DuelOutcome
   /** La demande faite, gardée pour que Léo puisse relire ses duels. */
   prompt: string
+  /** Étape 401 : ce que Léo a répondu aux deux modèles avant de voter, dans l'ordre. Absent sans réponse. */
+  followUps?: string[]
   /** Les deux réponses ; absentes pour un vote d'une version qui ne les gardait pas. */
   sides?: { a: DuelVoteSide; b: DuelVoteSide }
   /**
@@ -107,6 +132,10 @@ export function parseDuelVote(value: unknown): DuelVote | null {
   if (typeof v.at !== 'number' || !Number.isFinite(v.at)) return null
   const a = parseVoteSide(typeof v.sides === 'object' && v.sides !== null ? (v.sides as Record<string, unknown>).a : null)
   const b = parseVoteSide(typeof v.sides === 'object' && v.sides !== null ? (v.sides as Record<string, unknown>).b : null)
+  // Étape 401 : les réponses de Léo aux modèles (relues sans jamais en garder plus que la limite).
+  const followUps = Array.isArray(v.followUps)
+    ? v.followUps.filter((x): x is string => typeof x === 'string').slice(0, DUEL_MAX_FOLLOW_UPS).map((x) => x.slice(0, DUEL_FOLLOW_UP_MAX_CHARS))
+    : []
   return {
     id: v.id,
     category: v.category,
@@ -116,29 +145,47 @@ export function parseDuelVote(value: unknown): DuelVote | null {
     modelB: v.modelB,
     outcome: v.outcome,
     prompt: typeof v.prompt === 'string' ? v.prompt : '',
+    ...(followUps.length ? { followUps } : {}),
     ...(a && b ? { sides: { a, b } } : {}),
     ...(typeof v.judge === 'string' && v.judge ? { judge: v.judge } : {})
   }
 }
 
 /** Une réponse gardée, ou `null` si elle n'a pas la bonne forme (le vote reste valable sans elle). */
-function parseVoteSide(value: unknown): DuelVoteSide | null {
-  if (typeof value !== 'object' || value === null) return null
-  const s = value as Record<string, unknown>
-  if (typeof s.text !== 'string') return null
-  const actions = Array.isArray(s.actions)
-    ? s.actions.filter(
+function parseActions(value: unknown): DuelAction[] {
+  return Array.isArray(value)
+    ? value.filter(
         (x): x is DuelAction =>
           typeof x === 'object' && x !== null && typeof (x as DuelAction).tool === 'string' &&
           ((x as DuelAction).detail === null || typeof (x as DuelAction).detail === 'string')
       )
     : []
+}
+
+function parseVoteSide(value: unknown): DuelVoteSide | null {
+  if (typeof value !== 'object' || value === null) return null
+  const s = value as Record<string, unknown>
+  if (typeof s.text !== 'string') return null
+  const duration = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+  // Étape 401 : les réponses d'avant, quand Léo a répondu aux modèles.
+  const earlier: DuelTurn[] = Array.isArray(s.earlier)
+    ? s.earlier
+        .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>).text === 'string')
+        .slice(0, DUEL_MAX_FOLLOW_UPS)
+        .map((x) => ({
+          text: (x.text as string).slice(0, DUEL_HISTORY_TEXT_MAX),
+          actions: parseActions(x.actions),
+          error: typeof x.error === 'string' ? x.error : null,
+          durationMs: duration(x.durationMs)
+        }))
+    : []
   return {
     text: s.text.slice(0, DUEL_HISTORY_TEXT_MAX),
-    actions,
-    durationMs: typeof s.durationMs === 'number' && Number.isFinite(s.durationMs) ? s.durationMs : null,
+    actions: parseActions(s.actions),
+    durationMs: duration(s.durationMs),
     error: typeof s.error === 'string' ? s.error : null,
-    app: s.app === true
+    app: s.app === true,
+    ...(earlier.length ? { earlier } : {})
   }
 }
 

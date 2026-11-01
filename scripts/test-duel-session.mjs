@@ -1464,3 +1464,78 @@ test('étape 399 : Claude reçoit les outils de CE PC, et l’écran avant A, ap
   assert.equal(off.calls.screens, undefined)
   assert.equal(off.calls.judge.verdicts[0].screens, null)
 })
+
+test('étape 401 : Léo répond aux deux modèles avant de voter, chacun garde SA conversation, le vote garde tout', async () => {
+  // A demande la ville, B répond tout de suite : chaque côté a sa propre réponse, que l'autre ne voit jamais.
+  const env = setup({
+    installed: MODELS,
+    converseImpl: async (prompt, _n, _r, _log, history, _s, _l, _c, onToken) => {
+      const turn = env.calls.converse.length
+      const reply = prompt === 'Quel temps fera-t-il ?' ? (turn === 1 ? 'Dans quelle ville es-tu ?' : 'Je ne sais pas où tu es.') : `Il fera beau à ${prompt} (${history.length} messages avant).`
+      onToken?.(reply)
+      return reply
+    }
+  })
+  await readySession(env)
+  env.session.askDuel('Quel temps fera-t-il ?')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  assert.throws(() => env.session.followUpDuel('Lyon'), /fini|finir/, 'pas avant que les deux aient répondu')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  assert.throws(() => env.session.followUpDuel('   '), /demande/)
+
+  const view = env.session.followUpDuel('Lyon')
+  assert.deepEqual(view.round.followUps, ['Lyon'])
+  assert.equal(view.round.b.status, 'idle', 'B attend que Léo ait vérifié A, comme pour la demande')
+  assert.equal(view.round.b.earlier[0].text, 'Je ne sais pas où tu es.', 'la réponse d’avant reste affichée')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A répond à Lyon')
+  // A reçoit SA conversation : la demande, puis SA réponse — jamais celle de B.
+  assert.equal(env.calls.converse[2][0], 'Lyon')
+  assert.deepEqual(env.calls.converse[2][4], [
+    { role: 'user', content: 'Quel temps fera-t-il ?' },
+    { role: 'assistant', content: 'Dans quelle ville es-tu ?' }
+  ])
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B répond à Lyon')
+  assert.deepEqual(env.calls.converse[3][4][1], { role: 'assistant', content: 'Je ne sais pas où tu es.' })
+  assert.equal(env.calls.converse[3][11].model, env.calls.converse[1][11].model, 'B reste le même modèle')
+  const round = env.session.getDuelView().round
+  assert.equal(round.a.text, 'Il fera beau à Lyon (2 messages avant).')
+  assertAnonymous(env.emitted, 'pendant la réponse de Léo')
+
+  await env.session.voteDuel('a')
+  const vote = env.votes[0]
+  assert.equal(vote.prompt, 'Quel temps fera-t-il ?')
+  assert.deepEqual(vote.followUps, ['Lyon'])
+  assert.equal(vote.sides.a.earlier[0].text, 'Dans quelle ville es-tu ?')
+  assert.equal(vote.sides.a.text, 'Il fera beau à Lyon (2 messages avant).')
+  assert.deepEqual(env.session.duelHistory()[0].followUps, ['Lyon'])
+  // Relu depuis le disque : rien de perdu.
+  const reread = duelModule.parseDuelVote(JSON.parse(JSON.stringify(vote)))
+  assert.deepEqual(reread.followUps, ['Lyon'])
+  assert.equal(reread.sides.b.earlier[0].text, 'Je ne sais pas où tu es.')
+  assert.throws(() => env.session.followUpDuel('Paris'), /déjà voté/, 'plus de réponse une fois les noms connus')
+})
+
+test('étape 401 : pas de réponse aux modèles en Code, ni au-delà de la limite', async () => {
+  const code = setup({ installed: MODELS, category: 'code' })
+  await code.session.startDuel('code', 4)
+  await waitFor(() => code.session.getDuelView()?.phase === 'ready', 'prête')
+  code.session.askDuel('Un compteur')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B')
+  assert.throws(() => code.session.followUpDuel('Plus grand'), /invalide/)
+
+  const env = setup({ installed: MODELS })
+  await readySession(env)
+  env.session.askDuel('Salut')
+  for (let i = 0; i <= duelModule.DUEL_MAX_FOLLOW_UPS; i++) {
+    await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+    env.session.runDuelB()
+    await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+    if (i < duelModule.DUEL_MAX_FOLLOW_UPS) env.session.followUpDuel(`Réponse ${i}`)
+  }
+  assert.throws(() => env.session.followUpDuel('Encore'), new RegExp(String(duelModule.DUEL_MAX_FOLLOW_UPS)))
+  assert.equal(env.session.getDuelView().round.a.earlier.length, duelModule.DUEL_MAX_FOLLOW_UPS)
+})

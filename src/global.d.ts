@@ -232,6 +232,7 @@ declare global {
       duelReviewDecide: (id: string, accept: boolean) => Promise<DuelReviewView[]>
       duelAsk: (prompt: string) => Promise<DuelSessionView>
       duelRunB: () => Promise<DuelSessionView>
+      duelFollowUp: (message: string) => Promise<DuelSessionView>
       duelStop: () => Promise<void>
       duelVote: (outcome: DuelOutcome) => Promise<DuelSessionView>
       duelEnd: (force?: boolean) => Promise<DuelSummary>

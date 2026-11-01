@@ -10542,3 +10542,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   transmises ; aucune si la case est décochée ; vérifié en retirant la capture d'après A), `test-duel-panel-ui.mjs`
   (cochée par défaut, encadrée, texte qui change, choix envoyé au lancement). **Non vérifié sous Windows** : que
   `setContentProtection` retire bien Jaris des captures prises par `desktopCapturer`, et le coût réel par duel.
+
+- **Étape 401 (v0.40.42), Léo : « des fois il me demande ma localisation, mais je peux pas renvoyer un message, là on
+  a direct le vote ».** En duel Conversation et Vocal, une fois les deux réponses finies, un champ « Répondre aux deux
+  modèles… » apparaît sous le vote (qui reste disponible). Le MÊME message part aux deux modèles (`followUpDuel`,
+  duelSession.ts) : c'est la seule façon de rester juste quand un seul des deux a posé une question. Chaque modèle garde
+  SA conversation (`sideConversation` : la demande, puis ses propres réponses, jamais celles de l'autre, passées à
+  `converse` comme historique). A répond d'abord, puis B quand Léo a vérifié ce que A a fait, comme pour la demande.
+  Les réponses d'avant restent affichées sur chaque carte, avec la réponse de Léo en bulle dessous (`EarlierTurns`).
+  Au plus 5 réponses (`DUEL_MAX_FOLLOW_UPS`) : au-delà, ce n'est plus un duel sur une demande. Le vote garde tout
+  (`followUps`, `earlier` de chaque côté, durée = somme des tours), relu par `parseDuelVote` et montré dans
+  l'historique. « Rejouer » (outil de Jaris en panne) ne refait que le tour en cours. Pas en Code (une demande = une
+  application), ni dans une file, ni avec Claude comme juge. **Piège attrapé en relisant avant de tester** : le lecteur
+  des votes (`parseDuelVote`/`parseVoteSide`) ne recopie que les champs qu'il connaît — sans l'y ajouter, les réponses
+  de Léo auraient disparu au premier redémarrage. **Leçon : un champ ajouté à un objet enregistré doit l'être aussi au
+  lecteur qui le valide.** Vu sur capture : la bulle de Léo disparaissait sur la carte d'un modèle en train de répondre
+  (même couleur) ; un liseré la garde visible. Régression : `test-duel-session.mjs` (historique de CHAQUE modèle,
+  B attend, vote et relecture, refus en Code et au-delà de 5 ; vérifié en retirant l'historique) et
+  `test-duel-panel-ui.mjs` (vrai navigateur : champ et indication sous le vote, réponse envoyée, réponses d'avant sur
+  les deux cartes, pas de vote pendant le nouveau tour, rien en Code). **Non vérifié en usage réel.**
