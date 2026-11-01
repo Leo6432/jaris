@@ -51,6 +51,8 @@ dépôt GitHub), Image (FLUX.2 klein), Vidéo (FastWan 2.2), Duel (votes à l'av
 8. Push (vérifier que `origin` pointe bien vers `https://github.com/Leo6432/jaris.git`).
    **Tout push sur la branche de travail PUBLIE une Release** : ne rien pousser avant la fin des tests, et
    changer de numéro de version avant chaque nouvel envoi à publier (un tag existant fait sauter la Release).
+   **Branche de travail : `claude/jaris-local-ai-assistant-a2drk4`** (partir toujours de sa dernière version ;
+   tout push sur une branche `claude/**` lance la CI).
 9. Vérifier la CI (`Installeur Windows`) ET que la Release `Jaris-Setup-X.Y.Z.exe` correspond bien au commit
    poussé. Échec réseau `ECONNRESET` = relancer le job, pas un nouveau commit.
 10. Confirmer à Léo en une ligne courte une fois la Release publiée, jamais avant.
