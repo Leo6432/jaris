@@ -151,3 +151,12 @@ test('étape 404 — version texte des nouveaux blocs (page du téléphone)', ()
   assert.match(text, /- \*\*Suède\*\* : Mixte/)
   assert.ok(!text.includes('"type"'))
 })
+
+// Vu chez Léo : `headers` au lieu de `columns`, et chaque ligne en objet.
+test('tableau : lignes écrites en objets et colonnes nommées « headers » acceptées', () => {
+  const fromObjects = parseUiBlock('{"type":"table","rows":[{"Offre":"RED","Prix":"11 €"},{"Offre":"Free","Prix":"9 €"}]}')
+  assert.equal(JSON.stringify(fromObjects.columns), JSON.stringify(['Offre', 'Prix']))
+  assert.equal(JSON.stringify(fromObjects.rows), JSON.stringify([['RED', '11 €'], ['Free', '9 €']]))
+  const headers = parseUiBlock('{"type":"table","headers":["A","B"],"rows":[["1","2"]]}')
+  assert.equal(JSON.stringify(headers.columns), JSON.stringify(['A', 'B']))
+})

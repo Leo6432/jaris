@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { CheckableList, ReplyBlock, type ReplyBlockOptions } from '@/components/ReplyBlock'
-import { parseUiBlock, UI_FENCE_LANGUAGE } from '../../shared/uiBlocks'
+import { markdownTablesToBlocks, parseUiBlock, UI_FENCE_LANGUAGE } from '../../shared/uiBlocks'
 import { t } from '../../shared/i18n'
 
 /**
@@ -233,7 +233,8 @@ function renderText(text: string, keyPrefix: string, checkable = false): JSX.Ele
  * dit justement au modèle qu'il peut en écrire. Un bloc pas encore fermé (réponse en cours d'écriture) est déjà
  * montré comme du code. Le texte reste échappé par React : rien de ce que renvoie le modèle n'est interprété en HTML.
  */
-export function renderFormattedText(content: string, options: ReplyBlockOptions = {}): JSX.Element {
+export function renderFormattedText(rawContent: string, options: ReplyBlockOptions = {}): JSX.Element {
+  const content = markdownTablesToBlocks(rawContent)
   const pieces: JSX.Element[] = []
   const fence = /```([\w+#.-]*)[ \t]*\n?([\s\S]*?)(```|$)/g
   let last = 0
@@ -241,7 +242,12 @@ export function renderFormattedText(content: string, options: ReplyBlockOptions 
   while ((match = fence.exec(content))) {
     if (match.index > last) pieces.push(...renderText(content.slice(last, match.index), `t${last}`, options.checkableLists))
     const body = match[2].replace(/\n$/, '')
-    if (match[1] === UI_FENCE_LANGUAGE) {
+    // Vu chez Léo : un bloc écrit en ```json (ou sans langue) au lieu de ```jaris-ui restait affiché en JSON brut.
+    // Il est dessiné s'il est un vrai bloc fermé (un « type » connu) ; tout autre JSON reste du code.
+    const asBlock = (match[1] === 'json' || match[1] === '') && match[3] === '```' ? parseUiBlock(body) : null
+    if (asBlock) {
+      pieces.push(<ReplyBlock key={`u${match.index}`} block={asBlock} onChoice={options.onChoice} />)
+    } else if (match[1] === UI_FENCE_LANGUAGE) {
       // Bloc interactif (shared/uiBlocks.ts). Encore en cours d'écriture : une ligne d'attente plutôt que du JSON
       // qui défile. Fermé mais illisible : son contenu reste visible comme du code, rien n'est perdu.
       const closed = match[3] === '```'

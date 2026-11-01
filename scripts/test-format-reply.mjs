@@ -276,3 +276,31 @@ test('demande de liste de courses ou de choses à faire reconnue, et seulement c
     assert.equal(uiBlocks.wantsChecklist(request), false, request)
   }
 })
+
+// Léo (captures « Compare 3 forfaits mobiles dans un tableau ») : un tableau Markdown restait affiché avec ses barres,
+// et un bloc écrit en ```json au lieu de ```jaris-ui restait en JSON brut.
+test('tableau Markdown du modèle : dessiné comme un vrai tableau, sans barres ni étoiles', () => {
+  const result = html(
+    'Top 3 :\n\n| Opérateur | Prix |\n|---|---|\n| **YouPrice** (Orange) | 7,99 € |\n| RED by SFR | 11,99 € |\n\nVoilà.'
+  )
+  assert.match(result, /<table class="reply-ui__table">/)
+  assert.match(result, /YouPrice \(Orange\)/)
+  assert.ok(!result.includes('|---'), result)
+  assert.ok(!result.includes('**'), result)
+  assert.match(result, /Top 3 :/)
+  assert.match(result, /Voilà\./)
+})
+
+test('un tableau Markdown dans un bloc de code reste du code', () => {
+  const result = html('```\n| a | b |\n|---|---|\n| 1 | 2 |\n```')
+  assert.ok(!result.includes('reply-ui__table'))
+  assert.match(result, /<code>\| a \| b \|/)
+})
+
+test('bloc écrit en ```json : dessiné s’il est un vrai bloc, du code sinon', () => {
+  const block = html('Voici :\n```json\n{"type":"table","columns":["Offre","Prix"],"rows":[["RED","11 €"]]}\n```')
+  assert.match(block, /<table class="reply-ui__table">/)
+  assert.ok(!block.includes('&quot;type&quot;'))
+  const plain = html('```json\n{"nom":"Léo"}\n```')
+  assert.match(plain, /<pre class="reply-code-block">/)
+})

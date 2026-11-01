@@ -36,7 +36,8 @@ export function dateTimeNote(now: Date = new Date(), locale = 'fr-FR'): string {
  */
 const UI_BLOCKS_GUIDE =
   "Quand ça aide VRAIMENT la lecture, tu peux ajouter dans ta réponse un bloc interactif que Jaris dessine : " +
-  "un bloc de code de langage jaris-ui qui contient UN objet JSON valide, et rien d'autre. Types possibles : " +
+  "un bloc de code qui commence par ```jaris-ui (jamais ```json) et contient UN objet JSON valide, et rien d'autre. " +
+  "Types possibles : " +
   'comparaison de plusieurs choses -> {"type":"table","title":"...","columns":["Modèle","Prix"],"rows":[["A","12 €"],["B","15 €"]]} ; ' +
   'chiffres qui évoluent ou à comparer -> {"type":"chart","kind":"bar" ou "line","title":"...","unit":"°C","labels":["Lun","Mar"],"values":[12,15]} (values = nombres) ; ' +
   'recette, tutoriel, marche à suivre -> {"type":"steps","title":"...","items":["Étape 1...","Étape 2..."]} ; ' +
@@ -55,7 +56,11 @@ const UI_BLOCKS_GUIDE =
   '"outputs":[{"label":"Prix final","formula":"prix*(1-remise/100)","unit":"€"}]} (formule : nombres, noms des inputs, + - * / ^ et parenthèses). ' +
   "Une liste de courses ou de choses à faire va TOUJOURS dans un bloc checklist (un bloc par rubrique si elle " +
   "en a plusieurs), jamais en simples puces. Quand il te manque des informations pour bien répondre, pose tes " +
-  "questions dans un bloc form (ou choices pour une seule question), pas en texte. " +
+  "questions dans un bloc form (ou choices pour une seule question), jamais en liste de questions dans le texte. " +
+  "Une demande de conseil ou de choix (acheter, choisir, recommander, « conseille-moi ») qui dépend de ce que tu " +
+  "ne sais pas encore (budget, usage, préférences) commence TOUJOURS par un bloc form de 2 à 4 questions à choix, " +
+  "sans conseil encore : tu conseilles une fois les réponses reçues. Un tableau s'écrit dans un bloc table, jamais " +
+  "en tableau Markdown avec des barres. " +
   "Écris les textes du bloc dans la langue de ta réponse, mets une phrase normale avant le bloc, un seul bloc " +
   "par sujet, et jamais de bloc pour une réponse courte ou une simple conversation. Les chiffres d'un bloc " +
   "suivent les mêmes règles que le reste de ta réponse (ils viennent d'une vraie recherche quand c'est un fait). "

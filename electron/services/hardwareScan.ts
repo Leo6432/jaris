@@ -799,6 +799,14 @@ export interface ModelArchInfo {
   embeddingLength: number
   /** Taille de contexte maximale supportée par LE MODÈLE LUI-MÊME — jamais dépassée, même si la VRAM le permettrait. */
   maxContextLength: number
+  /**
+   * Couches qui gardent vraiment la mémoire de conversation (cache K/V). Un modèle « hybride » (qwen3.5/3.6/3.8 :
+   * `qwen35.full_attention_interval` = 4, relevé dans le GGUF de qwen3.5:9b) n'en a qu'une sur quatre ; les autres
+   * ont un petit état fixe. Les compter toutes surestimait la mémoire par 4 et bloquait le curseur sur 8k.
+   */
+  attentionLayers?: number
+  /** Dimension d'une tête de clé / de valeur quand le modèle la donne (`attention.key_length`), sinon calculée. */
+  headDim?: number
 }
 
 export function parseModelArchInfo(modelInfo: Record<string, unknown> | null): ModelArchInfo | null {
@@ -817,7 +825,28 @@ export function parseModelArchInfo(modelInfo: Record<string, unknown> | null): M
   if (blockCount == null || headCount == null || headCountKv == null || embeddingLength == null || maxContextLength == null) {
     return null
   }
-  return { blockCount, headCount, headCountKv, embeddingLength, maxContextLength }
+  const interval = find('.full_attention_interval')
+  const recurrent = Object.entries(modelInfo).find(([key, value]) => key.endsWith('.attention.recurrent_layers') && Array.isArray(value))?.[1] as
+    | unknown[]
+    | undefined
+  const attentionLayers =
+    recurrent && recurrent.length === blockCount
+      ? recurrent.filter((isRecurrent) => isRecurrent === false).length
+      : interval && interval > 1
+        ? Math.ceil(blockCount / interval)
+        : undefined
+  const keyLength = find('.attention.key_length')
+  const valueLength = find('.attention.value_length')
+  const headDim = keyLength && valueLength ? (keyLength + valueLength) / 2 : undefined
+  return {
+    blockCount,
+    headCount,
+    headCountKv,
+    embeddingLength,
+    maxContextLength,
+    ...(attentionLayers ? { attentionLayers } : {}),
+    ...(headDim ? { headDim } : {})
+  }
 }
 
 /**
@@ -830,8 +859,8 @@ export function parseModelArchInfo(modelInfo: Record<string, unknown> | null): M
  */
 export function kvCacheBytesPerToken(arch: ModelArchInfo): number {
   const BYTES_PER_KV_VALUE_F16 = 2
-  const headDim = arch.embeddingLength / arch.headCount
-  return 2 * arch.blockCount * arch.headCountKv * headDim * BYTES_PER_KV_VALUE_F16
+  const headDim = arch.headDim ?? arch.embeddingLength / arch.headCount
+  return 2 * (arch.attentionLayers ?? arch.blockCount) * arch.headCountKv * headDim * BYTES_PER_KV_VALUE_F16
 }
 
 /**

@@ -200,10 +200,25 @@ export function parseUiBlock(source: string): UiBlock | null {
   const title = optionalText(data.title)
   switch (data.type) {
     case 'table': {
-      const columns = textList(data.columns, MAX_COLUMNS)
-      if (!columns.length || !Array.isArray(data.rows)) return null
-      const rows = data.rows
-        .filter((row): row is unknown[] => Array.isArray(row))
+      // Vu chez Léo : des modèles écrivent `headers` au lieu de `columns`, et chaque ligne en objet
+      // ({"Opérateur": "RED", …}) au lieu d'une liste — le bloc restait affiché en JSON brut.
+      const rawRows = Array.isArray(data.rows) ? data.rows : Array.isArray(data.data) ? data.data : null
+      const firstObject = rawRows?.find((row) => row && typeof row === 'object' && !Array.isArray(row)) as Record<string, unknown> | undefined
+      const columns = textList(data.columns ?? data.headers, MAX_COLUMNS).length
+        ? textList(data.columns ?? data.headers, MAX_COLUMNS)
+        : firstObject
+          ? Object.keys(firstObject).slice(0, MAX_COLUMNS)
+          : []
+      if (!columns.length || !rawRows) return null
+      const rows = rawRows
+        .map((row): unknown[] | null =>
+          Array.isArray(row)
+            ? row
+            : row && typeof row === 'object'
+              ? columns.map((column, index) => (row as Record<string, unknown>)[column] ?? Object.values(row as Record<string, unknown>)[index])
+              : null
+        )
+        .filter((row): row is unknown[] => row !== null)
         .slice(0, MAX_ROWS)
         .map((row) => columns.map((_, index) => text(row[index])))
         .filter((row) => row.some(Boolean))
@@ -503,4 +518,51 @@ export function wantsChecklist(request: string): boolean {
     /\bliste\b[^.?!\n]{0,40}\b(courses|achats|choses a faire|taches|trucs a faire|ingredients a acheter|affaires|valise|bagages)\b/.test(text) ||
     /\b(check-?list|to-?do(?:-?list)?|liste a cocher|shopping list|grocery list|packing list|to do list)\b/.test(text)
   )
+}
+
+/** Le séparateur d'un tableau Markdown : « |---|:---:| ». */
+const MD_TABLE_SEPARATOR = /^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)+\|?[ \t]*$/
+
+function markdownCells(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  return trimmed.split('|').map((cell) =>
+    cell
+      .trim()
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/(?<![*\w])\*([^*\n]+?)\*(?![*\w])/g, '$1')
+  )
+}
+
+/**
+ * Léo (capture « Compare 3 forfaits mobiles ») : le modèle écrit souvent un tableau Markdown (« | A | B | » puis
+ * « |---|---| ») au lieu du bloc jaris-ui, et il s'affichait avec ses barres. Il devient un vrai bloc tableau, rendu par
+ * Jaris comme les autres. Rien ne change dans un bloc de code.
+ */
+export function markdownTablesToBlocks(content: string): string {
+  const lines = content.split('\n')
+  const out: string[] = []
+  let inFence = false
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]
+    if (/^[ \t]*```/.test(line)) inFence = !inFence
+    const next = lines[i + 1]
+    if (!inFence && line.includes('|') && next !== undefined && MD_TABLE_SEPARATOR.test(next)) {
+      const columns = markdownCells(line)
+      if (columns.length >= 2) {
+        const rows: string[][] = []
+        let j = i + 2
+        while (j < lines.length && lines[j].trim().includes('|') && lines[j].trim() !== '') {
+          rows.push(markdownCells(lines[j]))
+          j += 1
+        }
+        if (rows.length) {
+          out.push('```' + UI_FENCE_LANGUAGE, JSON.stringify({ type: 'table', columns, rows }), '```')
+          i = j - 1
+          continue
+        }
+      }
+    }
+    out.push(line)
+  }
+  return out.join('\n')
 }

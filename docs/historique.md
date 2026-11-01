@@ -10713,3 +10713,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-chat-session-restore.mjs` (fil quitté puis rouvert, réponse arrivée pendant l'absence, sans doublon) et
   `test-chat-conversations-ui.mjs` (vrai navigateur : rien dans l'autre fil, question et réponse en cours retrouvées,
   chacune une seule fois) ; les deux échouent sur l'ancien code. **Non vérifié en usage réel.**
+
+- **Étape 406 (v0.41.4), Léo, 4 captures : « il veut pas faire les questions-réponses ni les UI, sauf les modèles
+  Élevé, et même eux ça met le script et pas l'affichage » + « on peut pas monter la mémoire, qwen3.5:9b 8000 tokens
+  c'est pas beaucoup ».**
+  1. **Affichage** : le modèle écrivait un tableau en Markdown (« | A | B | », « |---| ») ou un bloc ```json au
+     lieu de ```jaris-ui, parfois avec `headers` au lieu de `columns` et des lignes en objets : tout restait affiché
+     brut. `markdownTablesToBlocks` (shared/uiBlocks.ts) change un tableau Markdown en bloc tableau (jamais dans un
+     bloc de code) ; un bloc ```json (ou sans langue) est dessiné s'il est un vrai bloc fermé au « type » connu
+     (tout autre JSON reste du code) ; `parseUiBlock` accepte `headers` et des lignes en objets. Consigne du Chat
+     renforcée : toujours ```jaris-ui, jamais de tableau Markdown, et une demande de conseil ou de choix
+     (« conseille-moi ») commence par un bloc form de 2 à 4 questions. Ça reste une consigne : un petit modèle peut
+     encore l'ignorer (canal écrit seulement, scores des tests inchangés).
+  2. **Mémoire** : qwen3.5/3.6/3.8 sont HYBRIDES. Relevé dans le vrai GGUF de qwen3.5:9b (en-tête lu par requête
+     HTTP Range sur le registre d'Ollama) : `qwen35.full_attention_interval` = 4, seules 8 couches sur 32 gardent la
+     mémoire de conversation, les autres ont un petit état fixe ; `attention.key_length` = 256. Jaris comptait les 32
+     couches : mémoire surestimée 4 fois, curseur bloqué sur 8k sur une carte de 8 Go. `parseModelArchInfo` lit
+     maintenant l'intervalle (ou `recurrent_layers` quand Ollama la donne : il vide les listes de plus de 5
+     éléments sans « verbose ») et la dimension des têtes. **Leçon : avant de calculer la mémoire d'un modèle, lire
+     son en-tête GGUF — une architecture récente peut ne pas suivre la formule des transformeurs classiques.**
+  Régression : `test-format-reply.mjs`, `test-ui-blocks.mjs`, `test-context-length.mjs` (vrais chiffres de
+  qwen3.5:9b), chacun vérifié en retirant son correctif. **Non vérifié en usage réel** : le nouveau maximum du curseur
+  sur la machine de Léo (dépend de la mémoire vidéo libre) et le suivi de la consigne par ses modèles.

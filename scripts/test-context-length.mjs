@@ -192,3 +192,28 @@ test('computeAvailableSteps garantit au moins 4 paliers dès que la VRAM laisse 
   // Un max plus grand encore garde l'échelle d'Ollama telle quelle (déjà bien plus que 4 valeurs).
   assert.deepEqual(computeAvailableSteps(262144), [8192, 16384, 32768, 65536, 131072, 262144])
 })
+
+// Léo : « on peut pas monter la mémoire, qwen3.5:9b 8000 tokens c'est pas beaucoup ». qwen3.5 est hybride : une couche
+// sur quatre garde la mémoire de conversation (valeurs relevées dans le vrai GGUF de qwen3.5:9b). Les 32 étaient comptées.
+const ARCH_QWEN35_9B = {
+  'qwen35.block_count': 32,
+  'qwen35.attention.head_count': 16,
+  'qwen35.attention.head_count_kv': 4,
+  'qwen35.embedding_length': 4096,
+  'qwen35.context_length': 262144,
+  'qwen35.attention.key_length': 256,
+  'qwen35.attention.value_length': 256,
+  'qwen35.full_attention_interval': 4,
+  // Ollama vide les listes de plus de 5 éléments dans /api/show (sans « verbose »).
+  'qwen35.attention.recurrent_layers': []
+}
+
+test('modèle hybride (qwen3.5) : seules les couches d’attention comptent, 4 fois moins de mémoire', () => {
+  const { parseModelArchInfo, kvCacheBytesPerToken } = loadHardwareScan({ freeVramMib: 8000 })
+  const arch = parseModelArchInfo(ARCH_QWEN35_9B)
+  assert.equal(arch.attentionLayers, 8)
+  // 2 (K+V) x 8 couches x 4 têtes K/V x 256 x 2 octets = 32 768 octets par token.
+  assert.equal(kvCacheBytesPerToken(arch), 32768)
+  const withList = parseModelArchInfo({ ...ARCH_QWEN35_9B, 'qwen35.full_attention_interval': undefined, 'qwen35.attention.recurrent_layers': Array.from({ length: 32 }, (_, i) => i % 4 !== 3) })
+  assert.equal(withList.attentionLayers, 8)
+})
