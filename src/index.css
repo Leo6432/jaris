@@ -10865,6 +10865,15 @@ ul.reply-list--nested {
   color: var(--hud-text-faint);
   text-decoration: line-through;
 }
+/* Étape 403 : liste ordinaire d'une réponse rendue cochable (liste de courses, choses à faire). Même allure que le
+   bloc checklist, sans carte autour : elle reste dans le fil du texte. */
+.reply-ui__ticks--inline {
+  margin: 6px 0 12px -6px;
+  white-space: normal;
+}
+.reply-ui__ticks--inline .reply-ui__tick-text {
+  white-space: pre-wrap;
+}
 .reply-ui__count {
   margin: 6px 0 0 6px;
   font-size: 0.85em;

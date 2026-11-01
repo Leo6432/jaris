@@ -367,3 +367,21 @@ function line(label: string, value: number, unit?: string): string {
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 2 }).format(value)
 }
+
+/**
+ * Étape 403 (Léo, capture d'une « liste de courses pour des crêpes » rendue en simples puces) : la consigne
+ * « utilise un bloc checklist » est facultative pour le modèle, et un petit modèle local ne la suit pas toujours.
+ * Quand la DEMANDE est une liste de courses ou de choses à faire, l'écran rend lui-même les listes de la réponse
+ * cochables — même si le modèle a écrit de simples puces. Ne regarde que la demande : une liste dans une réponse
+ * ordinaire (avantages, explications) reste une liste.
+ */
+export function wantsChecklist(request: string): boolean {
+  const text = request
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+  return (
+    /\bliste\b[^.?!\n]{0,40}\b(courses|achats|choses a faire|taches|trucs a faire|ingredients a acheter|affaires|valise|bagages)\b/.test(text) ||
+    /\b(check-?list|to-?do(?:-?list)?|liste a cocher|shopping list|grocery list|packing list|to do list)\b/.test(text)
+  )
+}

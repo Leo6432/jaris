@@ -10650,3 +10650,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   deux défauts : choix jamais cliquables, tableau sans défilement. Chaque test concerné échoue bien.
   **Non vérifié en usage réel** : la façon dont les VRAIS modèles locaux de Léo utilisent ces blocs (bon
   moment, JSON correct). À juger dans le Chat.
+
+- **Liste de courses cochable même en simples puces (v0.41.1, Léo, capture : « fais-moi une liste de courses pour
+  des crêpes » rendue en puces ordinaires).** La consigne des blocs (v0.41.0) laissait le bloc checklist facultatif,
+  et le modèle de Léo ne l'a pas utilisé. Deux corrections : la consigne dit maintenant qu'une liste de courses ou de
+  choses à faire va TOUJOURS dans un bloc checklist (canal écrit seulement : les scores des tests ne changent pas) ;
+  et surtout, comme pour les autres consignes qu'un petit modèle ne suit pas toujours, l'écran le fait lui-même.
+  Quand la DEMANDE est une liste de courses, de choses à faire, une checklist ou une to-do (`wantsChecklist`,
+  shared/uiBlocks.ts, quelques formulations anglaises comprises), les listes à puces ou numérotées de la réponse
+  deviennent cochables (`checkableLists`, formatReply.tsx ; `CheckableList`, ReplyBlock.tsx), en gardant leur mise
+  en forme et leurs sous-listes. Seule la demande compte : une liste dans une réponse ordinaire reste une liste.
+  Régression : `test-format-reply.mjs` (cases, mise en forme gardée, demandes reconnues ou non) et
+  `test-reply-blocks-ui.mjs` (vrai Chat : une seule réponse cochable, une case se coche ; échoue si le Chat ne
+  transmet plus l'option). **Non corrigé** : la question finale du modèle (« vérifier ta note d'allergies ? »), une
+  réponse du modèle, pas de l'écran.

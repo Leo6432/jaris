@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { t } from '../../shared/i18n'
 import {
   evaluateFormula,
@@ -21,6 +21,11 @@ import {
 export interface ReplyBlockOptions {
   /** Clic sur un choix : envoyé comme message de l'utilisateur. Absent = choix affichés sans être cliquables. */
   onChoice?: (option: string) => void
+  /**
+   * Étape 403 : la demande était une liste de courses ou de choses à faire (voir wantsChecklist) — les listes à
+   * puces ou numérotées de la réponse deviennent cochables, même sans bloc checklist du modèle.
+   */
+  checkableLists?: boolean
 }
 
 export function ReplyBlock({ block, onChoice }: { block: UiBlock } & ReplyBlockOptions): JSX.Element {
@@ -222,6 +227,30 @@ function TickList({ block, numbered = false }: { block: UiSteps | UiChecklist; n
         {count}/{block.items.length}
       </p>
     </>
+  )
+}
+
+/**
+ * Une liste ordinaire de la réponse rendue cochable (étape 403) : même allure que le bloc checklist, mais le texte de
+ * chaque élément garde sa mise en forme (gras, sous-liste), puisqu'il vient du rendu habituel des réponses.
+ */
+export function CheckableList({ items, numbered = false, start = 1 }: { items: ReactNode[]; numbered?: boolean; start?: number }): JSX.Element {
+  const [done, setDone] = useState<boolean[]>(() => items.map(() => false))
+  const toggle = (index: number): void => setDone((previous) => previous.map((value, i) => (i === index ? !value : value)))
+  return (
+    <ul className={`reply-ui__ticks reply-ui__ticks--inline${numbered ? ' reply-ui__ticks--numbered' : ''}`}>
+      {items.map((item, index) => (
+        <li key={index}>
+          <label className={`reply-ui__tick${done[index] ? ' reply-ui__tick--done' : ''}`}>
+            <input type="checkbox" checked={done[index] ?? false} onChange={() => toggle(index)} />
+            <span className="reply-ui__tick-mark" aria-hidden="true">
+              {done[index] ? '✓' : numbered ? start + index : ''}
+            </span>
+            <span className="reply-ui__tick-text">{item}</span>
+          </label>
+        </li>
+      ))}
+    </ul>
   )
 }
 

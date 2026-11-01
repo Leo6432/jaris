@@ -7,6 +7,7 @@ import logo from '@/assets/jaris-logo-64.png'
 import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
+import { wantsChecklist } from '../../shared/uiBlocks'
 import { formatChatProgress } from '@/lib/formatChatProgress'
 import { ELAPSED_HINT_MS, formatDuration } from '@/lib/formatCodeGenProgress'
 import { useElapsedMs } from '@/lib/useElapsedMs'
@@ -251,7 +252,8 @@ export default function ChatPanel(): JSX.Element {
                 onChoice:
                   message.role === 'assistant' && index === messages.length - 1 && !sending
                     ? (option) => void send(option)
-                    : undefined
+                    : undefined,
+                checkableLists: message.role === 'assistant' && wantsChecklist(messages[index - 1]?.content ?? '')
               })}
               {/* Étape 272 : réponse coupée par « Arrêter » — dit discrètement, pour qu'une phrase tronquée ne
                   passe pas pour une réponse complète. */}

@@ -45,6 +45,8 @@ const UI_BLOCKS_GUIDE =
   'calcul que l\'utilisateur voudra refaire avec d\'autres valeurs -> {"type":"calculator","title":"...",' +
   '"inputs":[{"name":"prix","label":"Prix","value":100,"unit":"€"},{"name":"remise","label":"Remise","value":20,"unit":"%"}],' +
   '"outputs":[{"label":"Prix final","formula":"prix*(1-remise/100)","unit":"€"}]} (formule : nombres, noms des inputs, + - * / ^ et parenthèses). ' +
+  "Une liste de courses ou de choses à faire va TOUJOURS dans un bloc checklist (un bloc par rubrique si elle " +
+  "en a plusieurs), jamais en simples puces. " +
   "Écris les textes du bloc dans la langue de ta réponse, mets une phrase normale avant le bloc, un seul bloc " +
   "par sujet, et jamais de bloc pour une réponse courte ou une simple conversation. Les chiffres d'un bloc " +
   "suivent les mêmes règles que le reste de ta réponse (ils viennent d'une vraie recherche quand c'est un fait). "

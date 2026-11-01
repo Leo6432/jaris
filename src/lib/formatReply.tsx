@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { ReplyBlock, type ReplyBlockOptions } from '@/components/ReplyBlock'
+import { CheckableList, ReplyBlock, type ReplyBlockOptions } from '@/components/ReplyBlock'
 import { parseUiBlock, UI_FENCE_LANGUAGE } from '../../shared/uiBlocks'
 import { t } from '../../shared/i18n'
 
@@ -192,7 +192,7 @@ function renderChildren(children: ListNode[], keyPrefix: string): JSX.Element[] 
 }
 
 /** Hors bloc de code : titres, gras, italique, `code` — les listes et les séparateurs. */
-function renderText(text: string, keyPrefix: string): JSX.Element[] {
+function renderText(text: string, keyPrefix: string, checkable = false): JSX.Element[] {
   const blocks = toBlocks(text)
   const balanced = blocks.every((block) => {
     if (block.kind === 'rule') return true
@@ -209,6 +209,17 @@ function renderText(text: string, keyPrefix: string): JSX.Element[] {
       if (index > 0) while (lines.length && lines[0].trim() === '') lines.shift()
       if (index < blocks.length - 1) while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
       return lines.length ? renderInline(lines.join('\n'), key) : []
+    }
+    if (checkable) {
+      // Une case par élément de premier niveau ; ses sous-éléments restent une liste ordinaire sous son texte.
+      const nodes = toTree(block.items)
+      const contents = nodes.map((node, nodeIndex) => (
+        <>
+          {renderInline(node.item.text, `${key}-${nodeIndex}`)}
+          {renderChildren(node.children, `${key}-${nodeIndex}`)}
+        </>
+      ))
+      return [<CheckableList key={key} items={contents} numbered={block.kind === 'ol'} start={block.kind === 'ol' ? block.start : 1} />]
     }
     const items = renderNodes(toTree(block.items), key)
     return block.kind === 'ol'
@@ -228,7 +239,7 @@ export function renderFormattedText(content: string, options: ReplyBlockOptions 
   let last = 0
   let match: RegExpExecArray | null
   while ((match = fence.exec(content))) {
-    if (match.index > last) pieces.push(...renderText(content.slice(last, match.index), `t${last}`))
+    if (match.index > last) pieces.push(...renderText(content.slice(last, match.index), `t${last}`, options.checkableLists))
     const body = match[2].replace(/\n$/, '')
     if (match[1] === UI_FENCE_LANGUAGE) {
       // Bloc interactif (shared/uiBlocks.ts). Encore en cours d'écriture : une ligne d'attente plutôt que du JSON
@@ -256,6 +267,6 @@ export function renderFormattedText(content: string, options: ReplyBlockOptions 
     last = fence.lastIndex
     if (match[0].length === 0) break
   }
-  if (last < content.length) pieces.push(...renderText(content.slice(last), `t${last}`))
+  if (last < content.length) pieces.push(...renderText(content.slice(last), `t${last}`, options.checkableLists))
   return <>{pieces}</>
 }

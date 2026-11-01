@@ -228,3 +228,51 @@ test('le texte d’un bloc n’est jamais interprété en HTML', () => {
   assert.ok(!result.includes('<img src=x'))
   assert.match(result, /&lt;img src=x/)
 })
+
+/**
+ * Étape 403 (Léo, capture d'une « liste de courses pour des crêpes » en simples puces) : quand la demande est une
+ * liste de courses ou de choses à faire, les listes de la réponse deviennent cochables, même sans bloc checklist.
+ */
+const CREPES =
+  'Pour faire des crêpes :\n\n**Ingrédients de base :**\n- Farine (250 g)\n- **Œufs** (3 ou 4)\n- Lait (50 cl)\n\n' +
+  '**Pour servir :**\n1. Caramel\n2. Miel\n   - ou sirop d’érable\n\nBon appétit.'
+
+test('liste de courses demandée : chaque élément de premier niveau devient une case, la mise en forme reste', () => {
+  const result = renderToStaticMarkup(exports.renderFormattedText(CREPES, { checkableLists: true }))
+  assert.equal(result.match(/type="checkbox"/g)?.length, 5)
+  assert.equal(result.match(/reply-ui__ticks--inline/g)?.length, 2)
+  assert.match(result, /<strong>Œufs<\/strong> \(3 ou 4\)/)
+  // La sous-liste reste une liste ordinaire sous son élément, et le texte autour reste du texte.
+  assert.match(result, /<ul class="reply-list reply-list--nested">/)
+  assert.match(result, /<strong>Pour servir :<\/strong>/)
+  assert.match(result, /Bon appétit\./)
+})
+
+test('sans liste de courses demandée : les listes restent de simples listes', () => {
+  const result = html(CREPES)
+  assert.ok(!result.includes('type="checkbox"'))
+  assert.match(result, /<ul class="reply-list">/)
+})
+
+test('demande de liste de courses ou de choses à faire reconnue, et seulement celle-là', () => {
+  for (const request of [
+    'fais-moi une liste de courses pour des crêpes',
+    'Fais une LISTE DE COURSES',
+    'tu peux me faire la liste des courses pour la semaine ?',
+    'une liste de choses à faire avant de partir',
+    'liste des tâches pour le déménagement',
+    'fais une checklist pour ma valise',
+    'make me a shopping list',
+    'my to-do list for today'
+  ]) {
+    assert.equal(uiBlocks.wantsChecklist(request), true, request)
+  }
+  for (const request of [
+    'quels sont les avantages des crêpes ?',
+    'liste les capitales d’Europe',
+    'comment faire des courses moins chères ?',
+    'explique-moi la liste des présidents'
+  ]) {
+    assert.equal(uiBlocks.wantsChecklist(request), false, request)
+  }
+})

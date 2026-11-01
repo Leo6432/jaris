@@ -26,6 +26,9 @@ const entryPath = join(projectRoot, 'tmp-reply-blocks-entry.tsx')
 const fence = (json) => '\n```jaris-ui\n' + JSON.stringify(json) + '\n```\n'
 
 const THREAD = [
+  // Étape 403 : une liste de courses écrite en simples puces par le modèle, sans bloc checklist.
+  { role: 'user', content: 'fais-moi une liste de courses pour des crêpes' },
+  { role: 'assistant', content: 'Il te faut :\n- Farine\n- Œufs\n- Lait' },
   { role: 'user', content: 'une question ?' },
   { role: 'assistant', content: 'Choisis :' + fence({ type: 'choices', options: ['Vieux A', 'Vieux B'] }) },
   { role: 'user', content: 'compare et calcule' },
@@ -64,7 +67,7 @@ import Panel from './src/components/ChatPanel'
 const THREADS = { a: ${JSON.stringify(THREAD)} }
 window.__state = {
   activeId: 'a',
-  conversations: [{ id: 'a', title: 'blocs', createdAt: '', updatedAt: '2026-11-01T10:00:00.000Z', messageCount: 4 }]
+  conversations: [{ id: 'a', title: 'blocs', createdAt: '', updatedAt: '2026-11-01T10:00:00.000Z', messageCount: 6 }]
 }
 window.__calls = []
 window.__sent = []
@@ -253,4 +256,15 @@ test('fenêtre étroite : rien ne déborde, un tableau trop large défile dans s
     assert.ok(card.card <= card.body + 1, 'la carte du tableau sort de la réponse')
     assert.equal(card.scrolls, true, 'le tableau large devrait défiler dans sa carte')
   }, 620)
+})
+
+test('liste de courses en simples puces : chaque ligne se coche quand même ; une liste ordinaire non', options, async () => {
+  await withPage(async (page) => {
+    const list = page.locator('.reply-ui__ticks--inline')
+    assert.equal(await list.count(), 1, 'seule la réponse à la liste de courses devient cochable')
+    await list.locator('.reply-ui__tick', { hasText: 'Œufs' }).click()
+    const deco = await list.locator('.reply-ui__tick--done .reply-ui__tick-text').evaluate((el) => getComputedStyle(el).textDecorationLine)
+    assert.equal(deco, 'line-through')
+    assert.equal(await list.locator('.reply-ui__tick--done').count(), 1)
+  })
 })
