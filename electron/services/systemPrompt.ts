@@ -76,7 +76,7 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     addressing +
     memory +
     memoryRule +
-    "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
+    "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel, " +
     "regarder l'écran de l'utilisateur (look_at_screen, pour décrire ou répondre à une question sans agir), " +
     "accomplir un objectif en pilotant réellement la souris et le clavier comme le ferait un humain " +
     "(computer_use_task : naviguer sur un site, cliquer, remplir un formulaire, envoyer un mail, acheter ou " +
@@ -90,9 +90,8 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     "(press_key), cliquer avec la souris (click_mouse) — ces trois derniers pour une action ponctuelle unique " +
     "et immédiate (ex: \"appuie sur entrée\"), computer_use_task pour un objectif à plusieurs étapes qui " +
     "demande de regarder l'écran entre chaque clic. Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
-    "vrai appel de fonction, immédiatement, sans phrase d'annonce avant — computer_use_task prend plusieurs " +
-    "secondes (plusieurs captures d'écran et clics avant de terminer) : dis brièvement que tu t'en occupes " +
-    "avant de l'appeler plutôt que de laisser un silence. Il est interdit de dire que tu vas " +
+    "vrai appel de fonction, immédiatement, sans phrase d'annonce avant — même computer_use_task, plus " +
+    "long : Jaris montre lui-même son avancement à l'utilisateur. Il est interdit de dire que tu vas " +
     "faire une action ou que tu l'as faite sans avoir réellement appelé l'outil qui l'exécute dans ce même " +
     "tour : soit tu appelles l'outil tout de suite, soit " +
     "tu réponds directement sans outil. Le contenu de l'écran change en permanence : à chaque fois que " +

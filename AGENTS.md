@@ -10548,3 +10548,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   vérifié en changeant la consigne dans la copie, puis en retirant la règle de Jaris : chacun échoue) et
   `scripts/test-voice-wake-notice-ui.mjs` (pas de bouton, modèle centré juste sous la question, orbe au clavier).
   **Non vérifié en usage réel** : la qualité des dernières réponses des petits modèles à la limite.
+
+- **Descriptions des outils relues (v0.40.44, Léo : « les outils qu'on propose au modèle, ils sont bien
+  expliqués ? »).** Trois erreurs : `search_web` disait « moteur local » (faux depuis DuckDuckGo) ;
+  `read_web_page` contenait « (étape 48) », un repère interne sans sens pour le modèle ; et
+  `computer_use_task` disait « préviens l'utilisateur que ça va prendre un instant ». Les consignes système
+  disaient la même chose, juste après « sans phrase d'annonce avant ». Or une annonce sans appel d'outil fait
+  relancer le modèle par Jaris (`PROMISE_WITHOUT_ACTION`). Corrigé dans les deux : appeler l'outil
+  directement, puisque Jaris affiche lui-même l'avancement. Imprécisions corrigées aussi :
+  - `set_reminder` explique comment convertir en minutes (« dans 2 heures », « à 18 h ») et dit de demander
+    quand l'heure manque, au lieu d'inventer un délai. Il ne se dit plus seulement « vocal » (il y a aussi une
+    notification) ;
+  - `click_mouse` clique là où est le curseur ; pour un élément précis, c'est `computer_use_task`, et une
+    position n'est jamais devinée ;
+  - `media_control` : un cran par appel ;
+  - l'exemple de titre de note n'est plus « Léo ».
+
+  **Leçon générale : une description d'outil est une consigne au même titre que le prompt système.** Une
+  phrase qui contredit les consignes (ou un garde-fou de Jaris) pousse le modèle vers l'erreur que Jaris
+  corrige ensuite. Relire les deux ensemble.
+
+  Les copies de `scripts/benchmark-cases.mjs` (TOOLS et SYSTEM_PROMPT_TEMPLATE) ont été régénérées depuis le
+  vrai code. Les scores déjà notés ont été mesurés avec les anciennes descriptions : l'écart est petit, mais
+  ce n'est pas exactement le même test.
+  Régression : `node --test scripts/test-benchmark-cases.mjs` (copies identiques).

@@ -37,12 +37,16 @@ export const TOOLS: OllamaTool[] = [
     type: 'function',
     function: {
       name: 'set_reminder',
-      description: 'Programme un rappel vocal qui sera dit à voix haute dans un certain nombre de minutes.',
+      description:
+        "Programme un rappel : au moment voulu, Jaris le dit à voix haute et l'affiche en notification Windows. " +
+        'Le délai est toujours en minutes, convertis-le toi-même ("dans 2 heures" = 120 ; "à 18 h" = le nombre ' +
+        "de minutes entre l'heure actuelle, donnée au début de la demande, et 18 h). Si l'utilisateur ne dit " +
+        "pas quand, demande-le-lui au lieu d'inventer un délai.",
       parameters: {
         type: 'object',
         properties: {
-          message: { type: 'string', description: 'Le contenu du rappel à dire à voix haute' },
-          delay_minutes: { type: 'number', description: 'Dans combien de minutes déclencher le rappel' }
+          message: { type: 'string', description: 'Le contenu du rappel, tel qu\'il sera dit et affiché' },
+          delay_minutes: { type: 'number', description: 'Dans combien de minutes déclencher le rappel (en minutes, jamais en heures)' }
         },
         required: ['message', 'delay_minutes']
       }
@@ -72,7 +76,7 @@ export const TOOLS: OllamaTool[] = [
     function: {
       name: 'search_web',
       description:
-        "Recherche sur le web (moteur local) pour des informations récentes, actuelles, ou que tu ne " +
+        "Recherche sur internet (DuckDuckGo) pour des informations récentes, actuelles, ou que tu ne " +
         'connais pas avec certitude.',
       parameters: {
         type: 'object',
@@ -88,7 +92,7 @@ export const TOOLS: OllamaTool[] = [
     function: {
       name: 'read_web_page',
       description:
-        "Lit le contenu texte d'une page web précise (étape 48) — à utiliser quand les extraits de " +
+        "Lit le contenu texte d'une page web précise — à utiliser quand les extraits de " +
         "search_web ne suffisent pas (détail précis manquant : adresse exacte, horaire, prix...). " +
         "Prends l'URL parmi celles déjà renvoyées par un précédent appel à search_web dans cette même " +
         "conversation, jamais une URL inventée.",
@@ -113,7 +117,7 @@ export const TOOLS: OllamaTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Titre court de la note (ex: "Léo", "Préférences café")' },
+          title: { type: 'string', description: 'Titre court de la note (ex: "Paul", "Préférences café")' },
           content: { type: 'string', description: 'Le contenu à retenir, en markdown' },
           replace: {
             type: 'boolean',
@@ -188,13 +192,15 @@ export const TOOLS: OllamaTool[] = [
     function: {
       name: 'click_mouse',
       description:
-        "Clique avec la souris. Si l'utilisateur (ou une capture d'écran précédente via look_at_screen) donne " +
-        'une position précise en pixels, clique à cet endroit ; sinon clique à la position actuelle du curseur.',
+        "Clique avec la souris là où se trouve déjà le curseur (ex: \"clique\", \"fais un clic droit\"). Pour " +
+        "cliquer sur un élément précis de l'écran (un bouton, un lien...), utilise computer_use_task, qui regarde " +
+        "l'écran pour le trouver : ne devine jamais une position. N'indique x et y que si l'utilisateur donne " +
+        'lui-même une position en pixels.',
       parameters: {
         type: 'object',
         properties: {
-          x: { type: 'number', description: "Position horizontale en pixels sur l'écran (optionnel)" },
-          y: { type: 'number', description: "Position verticale en pixels sur l'écran (optionnel)" },
+          x: { type: 'number', description: "Position horizontale en pixels, seulement si l'utilisateur la donne" },
+          y: { type: 'number', description: "Position verticale en pixels, seulement si l'utilisateur la donne" },
           button: {
             type: 'string',
             description: 'Type de clic',
@@ -220,7 +226,8 @@ export const TOOLS: OllamaTool[] = [
       description:
         "Contrôle la lecture multimédia ou le volume du système, un cran à la fois (comme une touche " +
         'multimédia physique) : monter/baisser le son, couper/réactiver le son, lecture/pause, piste ' +
-        'suivante/précédente.',
+        "suivante/précédente. Pour le volume, un appel = un seul cran : pour \"monte beaucoup le son\", " +
+        'appelle-le plusieurs fois.',
       parameters: {
         type: 'object',
         properties: {
@@ -244,8 +251,8 @@ export const TOOLS: OllamaTool[] = [
         "envoyer un mail (ouvre le vrai Gmail/client mail déjà connecté sur la machine), acheter/rechercher " +
         "quelque chose sur un site. Décris l'objectif complet en une phrase claire (pas une suite d'étapes " +
         "détaillées : l'agent regarde l'écran et improvise le détail lui-même). Plus lent qu'une réponse " +
-        "directe (plusieurs captures d'écran et clics avant de terminer) : préviens l'utilisateur que ça va " +
-        "prendre un instant plutôt que de rester silencieux pendant l'exécution.",
+        "directe (plusieurs captures d'écran et clics avant de terminer) : appelle-le directement, sans " +
+        "phrase d'annonce, Jaris montre lui-même l'avancement à l'utilisateur.",
       parameters: {
         type: 'object',
         properties: {
