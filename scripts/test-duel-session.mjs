@@ -442,6 +442,64 @@ test('arrêter un modèle : son côté est « arrêté », pas en erreur, et le 
   assert.equal(env.session.getDuelView().round.a.error, null)
 })
 
+test('étape 412 : « Changer de modèle » pour B — B bloqué est arrêté et refait par un AUTRE modèle, A garde sa réponse', async () => {
+  const env = setup({
+    installed: MODELS,
+    converseImpl: (...args) =>
+      // Le premier B « réfléchit » sans fin (capture de Léo : 39 min) ; tous les autres répondent.
+      env.calls.converse.length === 2
+        ? new Promise((_resolve, reject) => args[5].addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
+        : Promise.resolve('fini')
+  })
+  await readySession(env)
+  assert.throws(() => env.session.swapDuelModel('b'), /Aucun duel/, 'rien à remplacer avant la demande')
+  env.session.askDuel('Salut')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A a fini')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'running' && env.calls.converse.length === 2, 'B bloqué')
+  assert.equal(env.session.getDuelView().round.canSwap, true, 'le bouton est proposé')
+  const firstB = env.calls.converse[1][11].model
+  const firstA = env.calls.converse[0][11].model
+  const view = env.session.swapDuelModel('b')
+  assertAnonymous([view], 'après le changement')
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'le nouveau B a fini')
+  assert.equal(env.calls.converse.length, 3, 'seul B est refait, A ne repart pas')
+  const newB = env.calls.converse[2][11].model
+  assert.notEqual(newB, firstB, 'un autre modèle')
+  assert.notEqual(newB, firstA, 'jamais le modèle de A')
+  assert.equal(env.calls.converse[2][0], 'Salut', 'même demande')
+  const round = env.session.getDuelView().round
+  assert.equal(round.a.text, 'fini', 'A garde sa réponse')
+  assert.equal(round.b.text, 'fini')
+  // Le vote compte la NOUVELLE paire.
+  await env.session.voteDuel('b')
+  const revealed = env.session.getDuelView().round.revealed
+  assert.deepEqual([revealed.a, revealed.b], [firstA, newB])
+  assert.equal(env.session.getDuelView().round.canSwap, false, 'après le vote : trop tard')
+  assert.throws(() => env.session.swapDuelModel('b'), /déjà voté/)
+})
+
+test('étape 412 : « Changer de modèle » pour A pendant qu’il tourne — A repart avec un autre modèle, B attend toujours son tour', async () => {
+  const env = setup({
+    installed: MODELS,
+    converseImpl: (...args) =>
+      env.calls.converse.length === 1
+        ? new Promise((_resolve, reject) => args[5].addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
+        : Promise.resolve('fini')
+  })
+  await readySession(env)
+  env.session.askDuel('Salut')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'running' && env.calls.converse.length === 1, 'A bloqué')
+  const firstA = env.calls.converse[0][11].model
+  env.session.swapDuelModel('a')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'le nouveau A a fini')
+  // L'ancien A, arrêté, ne remet pas son « arrêté » par-dessus le nouveau côté.
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(env.session.getDuelView().round.a.status, 'done')
+  assert.notEqual(env.calls.converse[1][11].model, firstA)
+  assert.equal(env.session.getDuelView().round.b.status, 'idle', 'B attend que Léo le lance')
+})
+
 test('une erreur d’Ollama qui nomme le modèle n’est jamais affichée avec son nom', async () => {
   const env = setup({
     installed: MODELS,

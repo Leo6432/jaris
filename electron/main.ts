@@ -96,6 +96,7 @@ import {
   getDuelView,
   planDuel,
   retryDuel,
+  swapDuelModel,
   runDuelB,
   followUpDuel,
   setDuelEnvironment,
@@ -1922,6 +1923,11 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.duelRetry, () => {
     cancelMemoryExtraction()
     return retryDuel()
+  })
+  ipcMain.handle(IPC_CHANNELS.duelSwapModel, (_event, side: unknown) => {
+    if (side !== 'a' && side !== 'b') throw new Error(t('duel.error.badRequest'))
+    cancelMemoryExtraction()
+    return swapDuelModel(side)
   })
   ipcMain.handle(IPC_CHANNELS.duelSkip, () => skipDuel())
   ipcMain.handle(IPC_CHANNELS.duelNext, () => nextDuel())

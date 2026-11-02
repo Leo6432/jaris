@@ -1084,6 +1084,11 @@ export interface DuelRoundView {
   revealed: { a: string; b: string; outcome: DuelOutcome } | null
   /** Étape 379 : les deux modèles travaillent en même temps (duel Code, et assez de mémoire pour les deux). */
   together?: boolean
+  /**
+   * Léo (« si le B bugue on doit tout refaire ») : un côté peut recevoir un autre modèle de la session, même demande,
+   * sans rien refaire de l'autre côté. Faux après le vote, après une réponse de Léo, en série ou avec Claude.
+   */
+  canSwap?: boolean
 }
 
 export interface DuelBatchItemView {
@@ -1477,6 +1482,8 @@ export const IPC_CHANNELS = {
   duelHistoryDelete: 'jaris:duel-history-delete',
   duelSideCode: 'jaris:duel-side-code',
   duelRetry: 'jaris:duel-retry',
+  /** renderer -> main : un autre modèle de la session pour ce côté du duel (même demande). */
+  duelSwapModel: 'jaris:duel-swap-model',
   duelSkip: 'jaris:duel-skip',
   /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */
   duelNext: 'jaris:duel-next',

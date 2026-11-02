@@ -9819,8 +9819,15 @@ ul.reply-list--nested {
   overflow-wrap: anywhere;
 }
 
+.duel-side__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .duel-side__listen,
-.duel-side__stop {
+.duel-side__stop,
+.duel-side__swap {
   align-self: flex-start;
   padding: 6px 14px;
   font-size: 13px;

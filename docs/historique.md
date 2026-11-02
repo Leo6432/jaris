@@ -10804,3 +10804,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pleine (le mode Code réessaie une fois plus grand, étape 159 ; la conversation au palier suivant, étape 409). Dans
   le cas de Léo, l'arrêt serait venu après ~32k tokens au lieu de jamais. Régression : `test-model-preload.mjs`
   (fenêtre imposée et automatique). **Non vérifié en usage réel.**
+
+- **Étape 412 (v0.41.10), Léo : « ajoute un bouton, par exemple si le B buguait on doit tout refaire — mets un bouton
+  changer de modèle pour le B ».** Chaque carte du duel (A ou B, dès qu'elle a démarré) a « Changer de modèle » à
+  côté d'« Arrêter » (`swapDuelModel`, duelSession.ts, canal `duelSwapModel`) : ce qui tournait de ce côté est arrêté,
+  le côté reçoit un autre modèle de la session (jamais celui de l'autre côté ; la paire la moins jouée avec le modèle
+  gardé d'abord, comme pour un duel ordinaire), sur la même demande, et repart ; l'autre côté garde sa réponse. Le
+  vote compte la NOUVELLE paire, le nouveau modèle reste anonyme. Refusé (et bouton absent, `canSwap` calculé par le
+  moteur, une seule source) après le vote, après une réponse de Léo (le nouveau modèle n'aurait pas la conversation
+  d'avant), en juge Claude et en série. Bouton aussi absent quand l'autre côté travaille et que les deux modèles ne
+  tiennent pas ensemble en mémoire (le moteur le refuse aussi). Une session compte au moins 4 modèles : il y a
+  toujours un remplaçant. Régression : `test-duel-session.mjs` (B bloqué remplacé, A pas refait, nouvelle paire
+  votée ; A remplacé pendant qu'il tourne, l'ancien « arrêté » n'écrase pas le nouveau côté) et
+  `test-duel-panel-ui.mjs` (Arrêter + Changer de modèle sur B, rien sur A pendant que B tourne, à 760 px les
+  boutons restent dans la carte, absent quand le moteur ne le permet pas). **Non vérifié en usage réel.**

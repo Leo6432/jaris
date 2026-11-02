@@ -820,9 +820,12 @@ interface SideCardProps {
   followUps: readonly string[]
   /** Étape 401 : B pas encore lancé pour ce tour (ses réponses d'avant restent affichées au-dessus). */
   waiting?: ReactNode
+  /** Étape 412 : remplace le modèle de ce côté par un autre de la session (même demande) ; absent = pas de bouton. */
+  onSwap?: () => void
+  swapDisabled?: boolean
 }
 
-function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting }: SideCardProps): JSX.Element {
+function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting, onSwap, swapDisabled }: SideCardProps): JSX.Element {
   const running = side.status === 'running'
   const final = finished(side)
   const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
@@ -912,10 +915,19 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model,
         </div>
       )}
 
-      {running && (
-        <button type="button" className="duel-btn duel-side__stop" onClick={onStop}>
-          {t('common.stop')}
-        </button>
+      {(running || (onSwap && side.status !== 'idle')) && (
+        <div className="duel-side__controls">
+          {running && (
+            <button type="button" className="duel-btn duel-side__stop" onClick={onStop}>
+              {t('common.stop')}
+            </button>
+          )}
+          {onSwap && side.status !== 'idle' && (
+            <button type="button" className="duel-btn duel-side__swap" onClick={onSwap} disabled={swapDisabled} title={t('duel.swap.title')}>
+              {t('duel.swap')}
+            </button>
+          )}
+        </div>
       )}
     </section>
   )
@@ -1463,7 +1475,7 @@ export default function DuelPanel(): JSX.Element {
   const [reply, setReply] = useState('')
   const [error, setError] = useState<string | null>(null)
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
-  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'followUp' | 'vote' | 'next' | 'retry' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
+  const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'followUp' | 'vote' | 'next' | 'retry' | 'swap' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   // Étape 381 : l'éditeur « plusieurs demandes d'un coup » (Code seulement).
   const [batchEditing, setBatchEditing] = useState(false)
@@ -1687,6 +1699,15 @@ export default function DuelPanel(): JSX.Element {
   const retry = (): void => {
     stopAudio()
     void run('retry', async () => setView(await window.jaris.duelRetry()))
+  }
+
+  // Étape 412 : un côté qui bloque ou plante est remplacé par un autre modèle, sans refaire l'autre côté. Pas quand
+  // l'autre côté travaille et que les deux modèles ne tiennent pas ensemble en mémoire (le moteur le refuserait).
+  const canSwapSide = (side: DuelSide): boolean =>
+    !!round?.canSwap && (round.together === true || round[side === 'a' ? 'b' : 'a'].status !== 'running')
+  const swap = (side: DuelSide): void => {
+    stopAudio()
+    void run('swap', async () => setView(await window.jaris.duelSwapModel(side)))
   }
 
   const skip = (): void => {
@@ -2283,6 +2304,8 @@ export default function DuelPanel(): JSX.Element {
                   onListen={() => void play('a')}
                   model={round.revealed?.a ?? null}
                   followUps={followUps}
+                  onSwap={canSwapSide('a') ? () => swap('a') : undefined}
+                  swapDisabled={pending !== null}
                 />
                 {round.b.status === 'idle' && !(round.b.earlier ?? []).length ? (
                   <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
@@ -2309,6 +2332,8 @@ export default function DuelPanel(): JSX.Element {
                     model={round.revealed?.b ?? null}
                     followUps={followUps}
                     waiting={waitingB}
+                    onSwap={canSwapSide('b') ? () => swap('b') : undefined}
+                    swapDisabled={pending !== null}
                   />
                 )}
               </div>

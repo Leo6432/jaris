@@ -118,6 +118,10 @@ window.jaris = {
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
   duelHistoryCode: async (id, side) => { window.__calls.push(['historyCode', id, side]); return '<html>\\n<body>serpent</body>\\n</html>' },
   duelSideCode: async (side) => { window.__calls.push(['sideCode', side]); return '<html>\\n<body>\\n<h1>Compteur</h1>\\n</body>\\n</html>' },
+  duelSwapModel: async (which) => {
+    window.__calls.push(['swap', which])
+    return ready({ ...window.__view.round, [which]: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' } }) })
+  },
   duelRetry: async () => {
     window.__calls.push('retry')
     return ready({ ...window.__view.round, a: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' } }), b: side() })
@@ -553,6 +557,50 @@ test('outil de Jaris en panne : le côté le dit, le vote disparaît, « Rejouer
     await page.waitForFunction(() => window.__calls.includes('retry'))
     await page.waitForSelector('.duel-side--running')
     assert.equal((await page.$('.duel-vote--trouble')) === null, true, 'pendant le nouvel essai, plus de panneau')
+  }, init)
+})
+
+test('étape 412 : B bloqué — « Changer de modèle » à côté d’« Arrêter », relance seulement B, rien de A ne bouge', options, async () => {
+  const init = `
+    window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 1, prompt: 'Salut', canSwap: true,
+        a: { status: 'done', text: 'Réponse de A', activity: null, startedAt: 1, durationMs: 4000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null },
+        b: { status: 'running', text: '', activity: { kind: 'thinking' }, startedAt: Date.now() - 39 * 60000, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-side--running .duel-side__swap')
+    const bButtons = await page.$$eval('.duel-side--running .duel-side__controls button', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(bButtons, ['Arrêter', 'Changer de modèle'])
+    assert.equal(await page.$$eval('.duel-side--done .duel-side__swap', (els) => els.length), 0, 'pas A pendant que B occupe la mémoire')
+    assert.match(await page.getAttribute('.duel-side--running .duel-side__swap', 'title'), /même demande/)
+    const box = await page.$eval('.duel-side--running .duel-side__swap', (el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height } })
+    assert.ok(box.w > 60 && box.h >= 28, 'un vrai bouton, visible')
+    await page.click('.duel-side--running .duel-side__swap')
+    await page.waitForFunction(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'swap'))
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'swap'))
+    assert.deepEqual(call, ['swap', 'b'])
+    assert.match(await page.textContent('.duel-side--done'), /Réponse de A/, 'A garde sa réponse')
+  }, init)
+  // Fenêtre étroite : les deux boutons restent dans la carte de B.
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-side--running .duel-side__swap')
+    const inside = await page.$eval('.duel-side--running', (card) => {
+      const c = card.getBoundingClientRect()
+      return [...card.querySelectorAll('.duel-side__controls button')].every((b) => { const r = b.getBoundingClientRect(); return r.left >= c.left && r.right <= c.right })
+    })
+    assert.equal(inside, true)
+    if (process.env.JARIS_SHOT) await page.screenshot({ path: process.env.JARIS_SHOT })
+  }, init, { width: 760, height: 860 })
+})
+
+test('étape 412 : pas de « Changer de modèle » quand le moteur ne le permet pas (après une réponse de Léo, après le vote)', options, async () => {
+  const init = `
+    window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 1, prompt: 'Salut', canSwap: false,
+        a: { status: 'done', text: 'Réponse de A', activity: null, startedAt: 1, durationMs: 4000, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null },
+        b: { status: 'running', text: '', activity: { kind: 'thinking' }, startedAt: Date.now(), durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-side__stop')
+    assert.equal(await page.$$eval('.duel-side__swap', (els) => els.length), 0)
   }, init)
 })
 

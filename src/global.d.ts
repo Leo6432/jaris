@@ -247,6 +247,7 @@ declare global {
       duelHistoryCode: (voteId: string, side: DuelSide) => Promise<string | null>
       duelSideCode: (side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
+      duelSwapModel: (side: DuelSide) => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>
       duelNext: () => Promise<DuelSessionView>
       duelBatchStart: (prompts: string[]) => Promise<DuelSessionView>

@@ -298,6 +298,7 @@ const api = {
   duelHistoryCode: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryCode, voteId, side),
   duelSideCode: (side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelSideCode, side),
   duelRetry: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRetry),
+  duelSwapModel: (side: DuelSide): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSwapModel, side),
   duelSkip: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSkip),
   duelNext: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelNext),
   duelBatchStart: (prompts: string[]): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelBatchStart, prompts),

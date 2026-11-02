@@ -338,7 +338,16 @@ export function getDuelView(): DuelSessionView | null {
     dropReason: session.dropReason,
     votes: session.history.length,
     round: round
-      ? { number: round.number, prompt: round.prompt, followUps: round.followUps, a: sideView(round.sides.a), b: sideView(round.sides.b), revealed: round.revealed, together: round.together }
+      ? {
+          number: round.number,
+          prompt: round.prompt,
+          followUps: round.followUps,
+          a: sideView(round.sides.a),
+          b: sideView(round.sides.b),
+          revealed: round.revealed,
+          together: round.together,
+          canSwap: swapCandidates(session, round).length > 0 && swapAllowed(session, round)
+        }
       : null,
     batch: session.batch
       ? session.batch.map((r) => ({
@@ -1632,6 +1641,57 @@ export function nextDuel(): DuelSessionView {
     return getDuelView() as DuelSessionView
   }
   nextRound(current)
+  emitNow()
+  return getDuelView() as DuelSessionView
+}
+
+/** Modèles de la session qui peuvent remplacer un côté : ni A ni B. */
+function swapCandidates(current: Session, round: RoundState): string[] {
+  return current.models.filter((model) => !round.pair.includes(model))
+}
+
+function swapAllowed(current: Session, round: RoundState): boolean {
+  // Après une réponse de Léo, un nouveau modèle n'aurait pas la conversation d'avant ; après le vote, c'est trop tard.
+  return !current.judge && !current.series && round.prompt !== null && !round.revealed && round.followUps.length === 0
+}
+
+/**
+ * Léo (capture d'un duel où B « réfléchit » depuis 39 min : « si le B bugue, on doit tout refaire — mets un bouton
+ * changer de modèle pour le B ») : ce côté reçoit un autre modèle de la session, sur la même demande ; l'autre côté
+ * garde sa réponse. Le nouveau modèle reste anonyme comme les autres. Ce qui tournait de ce côté est arrêté.
+ */
+export function swapDuelModel(sideName: DuelSide): DuelSessionView {
+  const current = session
+  const round = current?.round
+  if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
+  if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
+  if (!swapAllowed(current, round)) throw new Error(t('duel.error.notYourTurn'))
+  const candidates = swapCandidates(current, round)
+  if (!candidates.length) throw new Error(t('duel.error.noOtherModel'))
+  const index = sideName === 'a' ? 0 : 1
+  // Comme pour un duel ordinaire, la paire (avec le modèle gardé) la moins jouée passe d'abord.
+  const kept = round.pair[1 - index]
+  const count = (model: string): number => current.played.get(pairKey(model, kept)) ?? 0
+  const least = Math.min(...candidates.map(count))
+  const tied = candidates.filter((model) => count(model) === least)
+  const model = tied[Math.floor(Math.random() * tied.length)]
+  const pair: [string, string] = [...round.pair] as [string, string]
+  pair[index] = model
+  const together = canRunDuelTogether(current.category, [current.sizes.get(pair[0]) ?? NaN, current.sizes.get(pair[1]) ?? NaN], current.vramGb)
+  // Les deux modèles ne tiennent pas ensemble en mémoire : pas de nouveau modèle tant que l'autre côté travaille.
+  if (round.sides[sideName === 'a' ? 'b' : 'a'].status === 'running' && !together) throw new Error(t('duel.error.notYourTurn'))
+  runControllers.get(`${round.number}:${sideName}`)?.abort()
+  round.pair = pair
+  round.sides = { ...round.sides, [sideName]: emptySide() }
+  round.together = together
+  if (current.batch?.includes(round)) {
+    pumpBatch(current)
+    emitNow()
+    return getDuelView() as DuelSessionView
+  }
+  // A repart tout de suite ; B aussi quand A a fini (ou quand les deux travaillent ensemble), sinon il attend son tour.
+  const other = round.sides[sideName === 'a' ? 'b' : 'a']
+  if (sideName === 'a' || sideFinished(other) || round.together) void runSide(current, round, sideName)
   emitNow()
   return getDuelView() as DuelSessionView
 }
