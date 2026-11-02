@@ -104,6 +104,8 @@
   "options.context.group": "Beszélgetési memória",
   "options.context.hint": "Modellenként egy csúszka: mindegyik maximuma ahhoz igazodik, amennyit a videokártyád elbír neki. Több memória = Jaris többre emlékszik, de kicsit lassabban válaszol.",
   "options.context.saving": "(mentés…)",
+  "options.context.room": "Videokártya: {usable} GB használható, modell: {model} GB.",
+  "options.context.unmeasured": "A videokártya memóriája nem mérhető: Jaris óvatos marad.",
   "options.models.group": "Mit futtat a géped",
   "common.loading": "Betöltés...",
   "options.retest.label": "Konfiguráció újratesztelése",

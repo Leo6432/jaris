@@ -27,7 +27,7 @@ import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
 import { migrateLegacyCodeConversations } from '../lib/codeConversations'
 import { selectedInputDevice } from '../lib/inputDeviceChoice'
-import { currentLocale, t, tn } from '../lib/i18n'
+import { currentLocale, formatDecimal, t, tn } from '../lib/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
 
@@ -1124,6 +1124,15 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                       <>
                         <strong>{formatContextLength(options.current)}</strong>
                         {savingContextModel === model ? ` ${t('options.context.saving')}` : ''}
+                        {/* Ce qui limite le maximum : la place sur la carte, ou une mesure qui a manqué. */}
+                        <span className="options-menu__context-room">
+                          {options.room
+                            ? t('options.context.room', {
+                                usable: formatDecimal(options.room.usableGb, 1),
+                                model: formatDecimal(options.room.modelGb, 1)
+                              })
+                            : t('options.context.unmeasured')}
+                        </span>
                       </>
                     }
                   >

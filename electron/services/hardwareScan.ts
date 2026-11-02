@@ -940,11 +940,11 @@ export function computeAvailableSteps(max: number): number[] {
 export async function computeContextLengthOptions(models: string | string[], currentContext: number): Promise<ContextLengthOptions> {
   // Étape 346 : la valeur du profil est TOUJOURS montrée telle quelle (11k restait affiché « 8k » à la réouverture, et
   // un curseur bloqué sur 8k cachait la valeur réellement utilisée par Jaris) — elle fait partie des crans proposés.
-  const withCurrent = (max: number): ContextLengthOptions => {
+  const withCurrent = (max: number, room: ContextLengthOptions['room'] = null): ContextLengthOptions => {
     const steps = computeAvailableSteps(max)
     const current = Math.max(currentContext, CONTEXT_LENGTH_STEPS[0])
     const availableSteps = steps.includes(current) ? steps : [...steps, current].sort((a, b) => a - b)
-    return { current, max, availableSteps }
+    return { current, max, availableSteps, room }
   }
   const fallback = withCurrent(roundDownToContextStep(currentContext))
 
@@ -972,8 +972,12 @@ export async function computeContextLengthOptions(models: string | string[], cur
   // (Élevé sur une petite carte) donnait toujours le plancher, quelle que soit la place réelle des autres.
   const onCard = known.filter((info) => info.weightBytes / 1024 ** 3 + LIVE_SAFETY_MARGIN_GB < usableGb)
   const reference = (onCard.length ? onCard : known).reduce((a, b) => (b.weightBytes > a.weightBytes ? b : a))
-  const maxSafe = roundDownToContextStep(computeMaxSafeContext(reference.arch, reference.weightBytes / 1024 ** 3, usableGb))
-  return withCurrent(Math.max(maxSafe, CONTEXT_LENGTH_STEPS[0]))
+  // Léo (3 curseurs bloqués sur 8k) : arrondi au palier « rond » du dessous, une place pour 14k retombait sur 8k et le
+  // curseur n'avait qu'un cran. Arrondi au k (1024) seulement : computeAvailableSteps ajoute les crans intermédiaires.
+  const maxSafe = Math.floor(computeMaxSafeContext(reference.arch, reference.weightBytes / 1024 ** 3, usableGb) / 1024) * 1024
+  // Ce qui limite, affiché sous le curseur : sans ça, « 8k » seul ne dit pas si c'est la carte, ou une mesure ratée.
+  const room = { usableGb, modelGb: reference.weightBytes / 1024 ** 3 }
+  return withCurrent(Math.max(maxSafe, CONTEXT_LENGTH_STEPS[0]), room)
 }
 
 /**

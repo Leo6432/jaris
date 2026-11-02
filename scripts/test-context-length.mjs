@@ -129,11 +129,12 @@ test('roundDownToContextStep ne descend jamais sous le plancher de 8192 (étape 
 test('computeContextLengthOptions propose un maximum plus grand quand la VRAM/le modèle sont bien identifiés', async () => {
   const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
   const result = await computeContextLengthOptions('qwen3.5:9b', 8192)
-  assert.equal(result.max, 16384, `attendu 16384, reçu ${JSON.stringify(result)}`)
+  // 7,8 Go utilisables - 0,5 de marge - 5 Go de modèle = 2,3 Go = 18 841 tokens, arrondis au k : 18k. Plus arrondis au
+  // palier « rond » du dessous (16k) : Léo voyait ses curseurs bloqués sur 8k quand la place était juste sous 16k.
+  assert.equal(result.max, 18432, `attendu 18432, reçu ${JSON.stringify(result)}`)
   assert.equal(result.current, 8192, 'la valeur déjà en usage ne doit pas bouger toute seule')
-  // 4 paliers minimum (étape 117) : 8192/16384 de l'échelle d'Ollama (plancher relevé à l'étape 118) ne
-  // donnent que 2 valeurs sous 16384, complétées par 2 paliers intermédiaires (multiples de 1024).
-  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384])
+  assert.deepEqual(result.availableSteps, [8192, 11264, 15360, 16384, 18432])
+  assert.equal(JSON.stringify(result.room), JSON.stringify({ usableGb: 7.8, modelGb: 5 }), 'ce qui limite, affiché sous le curseur')
 })
 
 test('computeContextLengthOptions ne propose JAMAIS plus que le palier déjà en usage sans donnée fiable', async () => {
@@ -141,7 +142,7 @@ test('computeContextLengthOptions ne propose JAMAIS plus que le palier déjà en
   const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: null, sizeBytes: null })
   const result = await computeContextLengthOptions('qwen3.5:9b', 8192)
   // max == plancher (8192) : aucune marge du tout, rien à intercaler, un seul choix possible.
-  assert.deepEqual(result, { current: 8192, max: 8192, availableSteps: [8192] })
+  assert.deepEqual(result, { current: 8192, max: 8192, availableSteps: [8192], room: null })
 })
 
 test('étape 346 : la valeur réellement utilisée est toujours montrée, même au-dessus du maximum conseillé', async () => {
@@ -149,9 +150,9 @@ test('étape 346 : la valeur réellement utilisée est toujours montrée, même 
   // 32k (le profil) : l'afficher « 16k » cachait la vraie valeur. Elle reste montrée, et l'on peut redescendre.
   const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
   const result = await computeContextLengthOptions('qwen3.5:9b', 32768)
-  assert.equal(result.max, 16384)
+  assert.equal(result.max, 18432)
   assert.equal(result.current, 32768, `la valeur du profil, reçu ${JSON.stringify(result)}`)
-  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384, 32768])
+  assert.deepEqual(result.availableSteps, [8192, 11264, 15360, 16384, 18432, 32768])
 })
 
 test('étape 346 : un cran intermédiaire (11k) reste 11k à la réouverture, jamais ramené à 8k', async () => {
@@ -166,7 +167,7 @@ test('étape 346 : un cran intermédiaire (11k) reste 11k à la réouverture, ja
 test('étape 346 : la place prise par les modèles de Jaris déjà chargés compte comme libre', async () => {
   // 3 Go libres seulement, mais 5 Go occupés par le modèle de Jaris lui-même : il cède sa place au modèle de référence.
   const busy = loadHardwareScan({ freeVramMib: 3000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3, loaded: [{ model: 'qwen3.5:9b', vramGb: 5 }] })
-  assert.equal((await busy.computeContextLengthOptions('qwen3.5:9b', 8192)).max, 16384)
+  assert.equal((await busy.computeContextLengthOptions('qwen3.5:9b', 8192)).max, 19456)
   const alone = loadHardwareScan({ freeVramMib: 3000, modelInfo: ARCH_8B, sizeBytes: 5 * 1024 ** 3 })
   assert.equal((await alone.computeContextLengthOptions('qwen3.5:9b', 8192)).max, 8192, 'sans modèle chargé : vraiment pleine')
 })
@@ -175,7 +176,7 @@ test('étape 346 : la référence est le plus gros modèle qui tourne SUR la car
   const sizes = { 'petit:3b': 2 * 1024 ** 3, 'moyen:8b': 5 * 1024 ** 3, 'enorme:27b': 17 * 1024 ** 3 }
   const scan = loadHardwareScan({ freeVramMib: 8000, modelInfo: ARCH_8B, sizes })
   const result = await scan.computeContextLengthOptions(['petit:3b', 'moyen:8b', 'enorme:27b'], 8192)
-  assert.equal(result.max, 16384, 'calculé pour moyen:8b (5 Go), le plus gros qui tient sur 8 Go — jamais bloqué à 8k par le 27b')
+  assert.equal(result.max, 18432, 'calculé pour moyen:8b (5 Go), le plus gros qui tient sur 8 Go — jamais bloqué à 8k par le 27b')
 })
 
 test('computeAvailableSteps garantit au moins 4 paliers dès que la VRAM laisse un peu de marge', () => {
@@ -216,4 +217,13 @@ test('modèle hybride (qwen3.5) : seules les couches d’attention comptent, 4 f
   assert.equal(kvCacheBytesPerToken(arch), 32768)
   const withList = parseModelArchInfo({ ...ARCH_QWEN35_9B, 'qwen35.full_attention_interval': undefined, 'qwen35.attention.recurrent_layers': Array.from({ length: 32 }, (_, i) => i % 4 !== 3) })
   assert.equal(withList.attentionLayers, 8)
+})
+
+// Léo, capture des 3 curseurs bloqués sur 8k : la place restante tombait sous 16k, et l'arrondi au palier « rond » du
+// dessous la ramenait à 8k (un seul cran). Cas réaliste : qwen3.5:9b (6,1 Go) sur une carte de 8 Go dont 7,2 Go libres.
+test('carte de 8 Go et qwen3.5:9b : le curseur monte au-dessus de 8k (place juste sous 16k)', async () => {
+  const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 7373, modelInfo: ARCH_QWEN35_9B, sizeBytes: 6.1 * 1024 ** 3 })
+  const result = await computeContextLengthOptions('qwen3.5:9b', 8192)
+  assert.ok(result.max > 8192, JSON.stringify(result))
+  assert.ok(result.availableSteps.length >= 3, JSON.stringify(result))
 })

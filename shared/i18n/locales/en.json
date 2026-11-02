@@ -104,6 +104,8 @@
   "options.context.group": "Conversation memory",
   "options.context.hint": "One slider per model: each one's maximum is limited to what your graphics card can hold for it. More memory = Jaris remembers more, but answers a little more slowly.",
   "options.context.saving": "(saving…)",
+  "options.context.room": "Graphics card: {usable} GB usable, model: {model} GB.",
+  "options.context.unmeasured": "Graphics card memory could not be measured: Jaris stays cautious.",
   "options.models.group": "What your machine runs",
   "common.loading": "Loading…",
   "options.retest.label": "Retest the setup",

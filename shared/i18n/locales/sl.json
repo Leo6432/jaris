@@ -106,6 +106,8 @@
   "options.context.group": "Spomin pogovora",
   "options.context.hint": "En drsnik na model: največja vrednost vsakega je omejena na to, kar tvoja grafična kartica zmore zanj. Več pomnilnika = Jaris si zapomni več, a odgovarja nekoliko počasneje.",
   "options.context.saving": "(shranjevanje…)",
+  "options.context.room": "Grafična kartica: {usable} GB na voljo, model: {model} GB.",
+  "options.context.unmeasured": "Pomnilnika grafične kartice ni mogoče izmeriti: Jaris ostaja previden.",
   "options.models.group": "Kaj poganja tvoj računalnik",
   "common.loading": "Nalaganje...",
   "options.retest.label": "Ponovno preizkusi konfiguracijo",

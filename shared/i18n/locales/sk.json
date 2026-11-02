@@ -105,6 +105,8 @@
   "options.context.group": "Pamäť konverzácie",
   "options.context.hint": "Jeden posúvač pre každý model: maximum každého je obmedzené tým, čo preň tvoja grafická karta udrží. Viac pamäte = Jaris si pamätá viac, ale odpovedá o niečo pomalšie.",
   "options.context.saving": "(ukladanie…)",
+  "options.context.room": "Grafická karta: {usable} GB k dispozícii, model: {model} GB.",
+  "options.context.unmeasured": "Pamäť grafickej karty sa nedá zmerať: Jaris zostáva opatrný.",
   "options.models.group": "Čo tvoj počítač poháňa",
   "common.loading": "Načítava sa...",
   "options.retest.label": "Znova otestovať konfiguráciu",

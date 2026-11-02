@@ -104,6 +104,8 @@
   "options.context.group": "Samtalsminne",
   "options.context.hint": "Ett reglage per modell: varje modells maximum är begränsat till vad ditt grafikkort klarar för den. Mer minne = Jaris minns mer, men svarar lite långsammare.",
   "options.context.saving": "(sparar…)",
+  "options.context.room": "Grafikkort: {usable} GB användbart, modell: {model} GB.",
+  "options.context.unmeasured": "Grafikkortets minne gick inte att mäta: Jaris är försiktig.",
   "options.models.group": "Vad din dator kör",
   "common.loading": "Laddar…",
   "options.retest.label": "Testa konfigurationen igen",

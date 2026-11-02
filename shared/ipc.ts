@@ -228,6 +228,8 @@ export interface ContextLengthOptions {
   max: number
   /** Les crans jusqu'à `max`, plus `current` s'il est au-dessus (la valeur utilisée n'est jamais cachée). */
   availableSteps: number[]
+  /** Mémoire vidéo utilisable et poids du modèle, en Go ; `null` quand une mesure a manqué (repli prudent). */
+  room?: { usableGb: number; modelGb: number } | null
 }
 
 export interface RuntimeSetupStatus {

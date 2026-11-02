@@ -41,7 +41,7 @@ const overrides = {
   patchProfile: async () => null,
   // Léo : un curseur PAR MODÈLE. Le petit modèle peut monter plus haut que le gros.
   getContextLengthOptions: async () => ([
-    { model: 'granite4.2:8b', roles: ['flash', 'medium'], options: ${JSON.stringify(CONTEXT_OPTIONS)} },
+    { model: 'granite4.2:8b', roles: ['flash', 'medium'], options: { ...${JSON.stringify(CONTEXT_OPTIONS)}, room: { usableGb: 7.2, modelGb: 5.1 } } },
     { model: 'qwen3.8:27b', roles: ['large'], options: { current: 8192, max: 8192, availableSteps: [8192] } }
   ]),
   setContextLength: async (value, model) => { window.__setContextLengthCalls.push([value, model]) }
@@ -233,5 +233,9 @@ test('un curseur par modèle : chacun avec son nom, ses rôles et son propre max
     assert.match(labels[1], /qwen3\.8/)
     const maxes = await page.$$eval('.options-menu__context-slider', (els) => els.map((el) => el.getAttribute('max')))
     assert.equal(JSON.stringify(maxes), JSON.stringify(['3', '0']), 'le gros modèle ne peut pas monter, le petit oui')
+    // Ce qui limite chaque curseur est dit en clair : la place sur la carte, ou une mesure qui a manqué.
+    const rooms = await page.$$eval('.options-menu__context-room', (els) => els.map((el) => el.textContent))
+    assert.match(rooms[0], /Carte graphique : 7,2 Go utilisables, modèle : 5,1 Go/)
+    assert.match(rooms[1], /impossible à mesurer/)
   })
 })

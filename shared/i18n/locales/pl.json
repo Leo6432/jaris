@@ -106,6 +106,8 @@
   "options.context.group": "Pamięć rozmowy",
   "options.context.hint": "Jeden suwak na model: maksimum każdego jest ograniczone do tego, co twoja karta graficzna może dla niego utrzymać. Więcej pamięci = Jaris pamięta więcej, ale odpowiada nieco wolniej.",
   "options.context.saving": "(zapisywanie…)",
+  "options.context.room": "Karta graficzna: {usable} GB dostępne, model: {model} GB.",
+  "options.context.unmeasured": "Nie udało się zmierzyć pamięci karty graficznej: Jaris zachowuje ostrożność.",
   "options.models.group": "Co uruchamia twój komputer",
   "common.loading": "Ładowanie...",
   "options.retest.label": "Przetestuj konfigurację ponownie",

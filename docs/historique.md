@@ -10748,3 +10748,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   devenu inutile retiré. Régression : `test-context-length-ui.mjs` (deux curseurs, maximum propre à chacun, valeur ET
   modèle envoyés), `test-assistant-history.mjs` (la demande envoie la fenêtre du modèle qui répond ; échoue sur
   l'ancien code), `test-model-preload.mjs`. **Non vérifié en usage réel.**
+
+- **Étape 408 (v0.41.6), Léo (capture : Faible qwen3.5:9b, Moyen K2-Horizon-7B, Élevé qwen3.5:27b, les trois curseurs
+  bloqués sur 8k, un seul cran) : « normal ? et il manque Code non ? ».** Le maximum calculé était arrondi au palier
+  « rond » du DESSOUS (8k, 16k, 32k…) avant de proposer les crans : une place pour 14k sur la carte retombait sur 8k,
+  et le curseur n'avait plus qu'un cran. Arrondi au k (1024) seulement maintenant, `computeAvailableSteps` ajoute les
+  crans intermédiaires. Et chaque curseur dit ce qui le limite (« Carte graphique : 7,2 Go utilisables, modèle :
+  6,1 Go », ou « impossible à mesurer » quand une mesure a manqué — K2 Horizon a une architecture récente que Jaris ne
+  sait peut-être pas lire) : sans ça, « 8k » ne disait pas si c'était la carte ou une mesure ratée. Pour Élevé
+  (qwen3.5:27b, 17 Go sur une carte de 8 Go), 8k est normal : le modèle ne tient déjà pas sur la carte. Code n'a pas
+  de curseur, à dessein : sa mémoire est calculée à chaque demande selon la taille du code (étape 159). Régression :
+  `test-context-length.mjs` (cas réaliste qwen3.5:9b sur 8 Go au-dessus de 8k ; échoue avec l'ancien arrondi) et
+  `test-context-length-ui.mjs` (limite affichée). **Non vérifié en usage réel** : le maximum exact sur la carte de Léo.

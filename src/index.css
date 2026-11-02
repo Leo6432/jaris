@@ -11248,3 +11248,11 @@ input.reply-ui__field-input {
   border-bottom: none;
   padding-bottom: 0;
 }
+
+/* Mémoire de conversation : ce qui limite le maximum de chaque modèle, sur sa propre ligne, en discret. */
+.options-menu__context-room {
+  display: block;
+  margin-top: 2px;
+  color: var(--hud-text-faint);
+  font-size: 12px;
+}

@@ -104,6 +104,8 @@
   "options.context.group": "Vestluse mälu",
   "options.context.hint": "Iga mudeli jaoks oma liugur: igaühe maksimum on piiratud sellega, mida su graafikakaart talle mahutab. Rohkem mälu = Jaris mäletab rohkem, kuid vastab veidi aeglasemalt.",
   "options.context.saving": "(salvestamine…)",
+  "options.context.room": "Graafikakaart: {usable} GB kasutatav, mudel: {model} GB.",
+  "options.context.unmeasured": "Graafikakaardi mälu ei õnnestunud mõõta: Jaris jääb ettevaatlikuks.",
   "options.models.group": "Mida su arvuti käitab",
   "common.loading": "Laadimine...",
   "options.retest.label": "Testi seadistust uuesti",

@@ -104,6 +104,8 @@
   "options.context.group": "Gesprächsgedächtnis",
   "options.context.hint": "Ein Regler pro Modell: Das Maximum jedes Modells ist auf das begrenzt, was deine Grafikkarte dafür halten kann. Mehr Speicher = Jaris merkt sich mehr, antwortet aber etwas langsamer.",
   "options.context.saving": "(wird gespeichert…)",
+  "options.context.room": "Grafikkarte: {usable} GB nutzbar, Modell: {model} GB.",
+  "options.context.unmeasured": "Speicher der Grafikkarte nicht messbar: Jaris bleibt vorsichtig.",
   "options.models.group": "Was dein Rechner ausführt",
   "common.loading": "Wird geladen…",
   "options.retest.label": "Konfiguration neu testen",

@@ -104,6 +104,8 @@
   "options.context.group": "Samtalehukommelse",
   "options.context.hint": "Én skyder pr. model: hver models maksimum er begrænset til det, dit grafikkort kan rumme til den. Mere hukommelse = Jaris husker mere, men svarer lidt langsommere.",
   "options.context.saving": "(gemmer…)",
+  "options.context.room": "Grafikkort: {usable} GB brugbare, model: {model} GB.",
+  "options.context.unmeasured": "Grafikkortets hukommelse kunne ikke måles: Jaris er forsigtig.",
   "options.models.group": "Hvad din computer kører",
   "common.loading": "Indlæser…",
   "options.retest.label": "Test konfigurationen igen",

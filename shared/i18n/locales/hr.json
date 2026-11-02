@@ -105,6 +105,8 @@
   "options.context.group": "Memorija razgovora",
   "options.context.hint": "Jedan klizač po modelu: maksimum svakoga ograničen je na ono što tvoja grafička kartica može podnijeti za njega. Više memorije = Jaris pamti više, ali odgovara malo sporije.",
   "options.context.saving": "(spremanje…)",
+  "options.context.room": "Grafička kartica: {usable} GB dostupno, model: {model} GB.",
+  "options.context.unmeasured": "Memoriju grafičke kartice nije moguće izmjeriti: Jaris ostaje oprezan.",
   "options.models.group": "Što tvoje računalo pokreće",
   "common.loading": "Učitavanje...",
   "options.retest.label": "Ponovno testiraj konfiguraciju",
