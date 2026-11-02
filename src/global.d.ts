@@ -30,7 +30,7 @@ import type {
   ModelPullProgress,
   ChatMessage,
   WebActivity,
-  ContextLengthOptions,
+  ModelContextLengthOptions,
   ConversationEntry,
   ConversationList,
   CodeActivity,
@@ -111,8 +111,8 @@ declare global {
       openConversationHistoryFile: () => Promise<void>
       openRequestJournal: (reveal: boolean) => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
-      getContextLengthOptions: () => Promise<ContextLengthOptions>
-      setContextLength: (contextLength: number | undefined) => Promise<void>
+      getContextLengthOptions: () => Promise<ModelContextLengthOptions[]>
+      setContextLength: (contextLength: number | undefined, model?: string) => Promise<void>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       onOllamaVersionStatus: (cb: (status: OllamaVersionStatus) => void) => () => void

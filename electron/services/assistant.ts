@@ -421,7 +421,7 @@ async function composeNotepadText(
     model,
     false,
     signal,
-    profile?.contextLength ?? config.ollama.numCtx,
+    profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx,
     undefined,
     undefined,
     (measured) => (metrics = measured)
@@ -730,7 +730,8 @@ async function conversation(
     profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   // Curseur de longueur de contexte (Options -> Modèles) : `undefined` tant que Léo n'y a jamais touché,
   // Jaris garde alors exactement le comportement d'avant ce réglage (OLLAMA_NUM_CTX, config.ts).
-  const numCtx = profile?.contextLength ?? config.ollama.numCtx
+  // Léo : chaque modèle a sa propre mémoire (un curseur par modèle dans Options -> Modèles).
+  const numCtxFor = (name: string): number => profile?.contextLengths?.[name] ?? profile?.contextLength ?? config.ollama.numCtx
   let tier = pickTier(prompt)
 
   // Les paliers (flash/médium/puissant) sont figés par le scan de capacité (VRAM totale, déterministe).
@@ -895,7 +896,7 @@ async function conversation(
       model,
       think,
       signal,
-      numCtx,
+      numCtxFor(model),
       holdKnowledgeStream ? () => {} : onToken,
       undefined,
       (measured) => (metrics = measured)
@@ -1087,7 +1088,7 @@ async function conversation(
     model,
     think,
     signal,
-    numCtx,
+    numCtxFor(model),
     holdKnowledgeStream ? () => {} : onToken,
     undefined,
     (measured) => (metrics = measured)

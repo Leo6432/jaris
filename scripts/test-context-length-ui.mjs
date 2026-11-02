@@ -39,8 +39,12 @@ const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
   patchProfile: async () => null,
-  getContextLengthOptions: async () => (${JSON.stringify(CONTEXT_OPTIONS)}),
-  setContextLength: async (value) => { window.__setContextLengthCalls.push(value) }
+  // Léo : un curseur PAR MODÈLE. Le petit modèle peut monter plus haut que le gros.
+  getContextLengthOptions: async () => ([
+    { model: 'granite4.2:8b', roles: ['flash', 'medium'], options: ${JSON.stringify(CONTEXT_OPTIONS)} },
+    { model: 'qwen3.8:27b', roles: ['large'], options: { current: 8192, max: 8192, availableSteps: [8192] } }
+  ]),
+  setContextLength: async (value, model) => { window.__setContextLengthCalls.push([value, model]) }
 }
 
 window.jaris = new Proxy({}, {
@@ -96,7 +100,7 @@ const options = { skip: chromium ? false : 'Playwright indisponible dans cet env
 
 test('le curseur ne propose QUE les paliers sûrs pour cette machine, jamais les 7 par défaut', options, async () => {
   await withModelesTab(async (page) => {
-    const ticks = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.textContent))
+    const ticks = await page.$eval('.options-menu__context-slider-ticks', (el) => [...el.children].map((span) => span.textContent))
     assert.deepEqual(ticks, ['8k', '16k', '24k', '32k'], `paliers affichés : ${ticks.join(', ')}`)
     const max = await page.getAttribute('.options-menu__context-slider', 'max')
     assert.equal(max, '3', 'le curseur doit avoir 4 positions (index 0 à 3), pas 6')
@@ -115,7 +119,7 @@ test('déplacer le curseur enregistre la bonne valeur en tokens, pas un index br
     })
     await page.waitForFunction(() => window.__setContextLengthCalls.length > 0)
     const calls = await page.evaluate(() => window.__setContextLengthCalls)
-    assert.deepEqual(calls, [24576], `attendu [24576], reçu ${JSON.stringify(calls)}`)
+    assert.equal(JSON.stringify(calls), JSON.stringify([[24576, 'granite4.2:8b']]), `reçu ${JSON.stringify(calls)}`)
     // Le libellé "Actuellement" doit suivre tout de suite (mise à jour optimiste), pas attendre la
     // confirmation du main process.
     const currentLabel = await page.textContent('.options-menu__context-row .options-menu__row-description strong')
@@ -168,7 +172,7 @@ const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
   patchProfile: async () => null,
-  getContextLengthOptions: async () => (${JSON.stringify(TIGHT_OPTIONS)}),
+  getContextLengthOptions: async () => ([{ model: 'qwen3.5:9b', roles: ['medium'], options: ${JSON.stringify(TIGHT_OPTIONS)} }]),
   setContextLength: async () => {}
 }
 window.jaris = new Proxy({}, {
@@ -218,4 +222,16 @@ createRoot(document.getElementById('root')).render(<OptionsMenu />)
   } finally {
     await browser.close()
   }
+})
+
+test('un curseur par modèle : chacun avec son nom, ses rôles et son propre maximum', options, async () => {
+  await withModelesTab(async (page) => {
+    await page.waitForSelector('.options-menu__context-slider')
+    assert.equal(await page.locator('.options-menu__context-slider').count(), 2)
+    const labels = await page.$$eval('.options-menu__context-row .options-menu__row-label', (els) => els.map((el) => el.textContent))
+    assert.match(labels[0], /granite4\.2/)
+    assert.match(labels[1], /qwen3\.8/)
+    const maxes = await page.$$eval('.options-menu__context-slider', (els) => els.map((el) => el.getAttribute('max')))
+    assert.equal(JSON.stringify(maxes), JSON.stringify(['3', '0']), 'le gros modèle ne peut pas monter, le petit oui')
+  })
 })

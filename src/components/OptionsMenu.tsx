@@ -4,7 +4,7 @@ import type {
   AppVersionStatus,
   LaunchAtStartupStatus,
   AudioInputDevice,
-  ContextLengthOptions,
+  ModelContextLengthOptions,
   ConversationEntry,
   MyModelPicks as MyModelPicksData,
   ModelPullProgress,
@@ -223,8 +223,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
    * comme sur ollama... personnalisé à chacun pour que le dernier ne dépasse pas la vram") — `null` tant
    * que non chargé, recalculé à chaque ouverture de l'onglet (voir l'effet plus bas).
    */
-  const [contextLengthOptions, setContextLengthOptions] = useState<ContextLengthOptions | null>(null)
-  const [savingContextLength, setSavingContextLength] = useState(false)
+  /** Léo : un curseur PAR MODÈLE de conversation, chacun limité à ce qui tient pour lui. */
+  const [contextLengthOptions, setContextLengthOptions] = useState<ModelContextLengthOptions[] | null>(null)
+  const [savingContextModel, setSavingContextModel] = useState<string | null>(null)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -368,15 +369,17 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     })
   }, [])
 
-  const handleContextLengthChange = (value: number): void => {
+  const handleContextLengthChange = (model: string, value: number): void => {
     // Optimiste : le curseur bouge tout de suite, l'enregistrement se fait en tâche de fond. `current`
     // est le seul champ qui change ; `max`/`availableSteps` restent ceux déjà calculés pour cette machine.
-    setContextLengthOptions((prev) => (prev ? { ...prev, current: value } : prev))
-    setSavingContextLength(true)
+    setContextLengthOptions((prev) =>
+      prev ? prev.map((entry) => (entry.model === model ? { ...entry, options: { ...entry.options, current: value } } : entry)) : prev
+    )
+    setSavingContextModel(model)
     window.jaris
-      .setContextLength(value)
+      .setContextLength(value, model)
       .catch(() => {})
-      .finally(() => setSavingContextLength(false))
+      .finally(() => setSavingContextModel((current) => (current === model ? null : current)))
   }
 
   const handleChooseModelsLocation = (): void => {
@@ -1109,37 +1112,40 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 context au dessus des palier") : les deux parlent de "quel modèle/combien de mémoire pour ce
                 modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
                 retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
-            {contextLengthOptions && (
-              <SettingGroup title={t('options.context.group')}>
-                <SettingRow
-                  stacked
-                  className="options-menu__context-row"
-                  label={t('options.context.label')}
-                  description={
-                    <>
-                      {t('options.context.hint')}{' '}
-                      <strong>{formatContextLength(contextLengthOptions.current)}</strong>
-                      {savingContextLength ? ` ${t('options.context.saving')}` : ''}
-                    </>
-                  }
-                >
-                  <input
-                    type="range"
-                    className="options-menu__context-slider"
-                    min={0}
-                    max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
-                    value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
-                    onChange={(event) => {
-                      const step = contextLengthOptions.availableSteps[Number(event.target.value)]
-                      if (step !== undefined) handleContextLengthChange(step)
-                    }}
-                  />
-                  <div className="options-menu__context-slider-ticks">
-                    {contextLengthOptions.availableSteps.map((step) => (
-                      <span key={step}>{formatContextLength(step)}</span>
-                    ))}
-                  </div>
-                </SettingRow>
+            {contextLengthOptions && contextLengthOptions.length > 0 && (
+              <SettingGroup title={t('options.context.group')} description={t('options.context.hint')}>
+                {contextLengthOptions.map(({ model, roles, options }) => (
+                  <SettingRow
+                    key={model}
+                    stacked
+                    className="options-menu__context-row"
+                    label={`${roles.map((role) => t(`role.${role}`)).join(' · ')} · ${formatModelName(model, { quant: false })}`}
+                    description={
+                      <>
+                        <strong>{formatContextLength(options.current)}</strong>
+                        {savingContextModel === model ? ` ${t('options.context.saving')}` : ''}
+                      </>
+                    }
+                  >
+                    <input
+                      type="range"
+                      className="options-menu__context-slider"
+                      aria-label={t(`role.${roles[0]}`)}
+                      min={0}
+                      max={Math.max(0, options.availableSteps.length - 1)}
+                      value={Math.max(0, options.availableSteps.indexOf(options.current))}
+                      onChange={(event) => {
+                        const step = options.availableSteps[Number(event.target.value)]
+                        if (step !== undefined) handleContextLengthChange(model, step)
+                      }}
+                    />
+                    <div className="options-menu__context-slider-ticks">
+                      {options.availableSteps.map((step) => (
+                        <span key={step}>{formatContextLength(step)}</span>
+                      ))}
+                    </div>
+                  </SettingRow>
+                ))}
               </SettingGroup>
             )}
 

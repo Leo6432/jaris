@@ -223,6 +223,7 @@ import {
   type VoiceTestStartResult,
   type WidgetMode
 } from '../shared/ipc'
+import type { ModelContextLengthOptions } from '../shared/ipc'
 
 /**
  * Sans ce verrou, cliquer plusieurs fois sur le raccourci (ou double-cliquer par erreur) lance autant de
@@ -1381,12 +1382,17 @@ const STARTUP_ENGINE_CONFIRM_MS = 10_000
  * le palier rapide (celui des phrases courtes, et de la correction de ce qui est entendu). Même fenêtre de contexte que
  * les vraies demandes, sinon Ollama le rechargerait à la première question (`needsReload`, server/sched.go).
  */
+/** Mémoire de conversation d'un modèle : son propre réglage (Options -> Modèles), sinon le réglage commun, sinon .env. */
+function contextLengthFor(profile: Profile | null, model: string): number {
+  return profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
+}
+
 async function warmUpConversationModel(): Promise<boolean> {
   const profile = await getProfile()
   // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
   const model = profile?.modelChoices?.voice || (profile?.voiceModels ?? profile?.models)?.flash
   if (!model) return false
-  return preloadModel(model, profile?.contextLength ?? config.ollama.numCtx)
+  return preloadModel(model, contextLengthFor(profile, model))
 }
 
 async function startVoicePipeline(): Promise<void> {
@@ -1978,19 +1984,38 @@ app.whenReady().then(async () => {
   // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
   // PUISSANT (le plus gros modèle de conversation configuré, voir computeContextLengthOptions pour le
   // pourquoi), jamais un modèle choisi par le renderer — recalculé à chaque ouverture de l'onglet.
-  ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async () => {
+  ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async (): Promise<ModelContextLengthOptions[]> => {
     const profile = await getProfile()
-    // Étape 346 : les trois modèles de conversation — la référence est le plus gros qui tourne sur la carte.
-    const models = profile?.models
-      ? [profile.models.flash, profile.models.medium, profile.models.large, ...Object.values(profile.voiceModels ?? {})]
-      : [config.ollama.model]
-    const currentContext = profile?.contextLength ?? config.ollama.numCtx
-    return computeContextLengthOptions(models, currentContext)
+    // Léo : un curseur PAR MODÈLE (Faible, Moyen, Élevé), chacun limité à ce qui tient pour lui — un seul réglage,
+    // limité par le plus gros modèle, bloquait les petits. Un modèle sur deux rôles n'a qu'une ligne.
+    const roles: Array<'flash' | 'medium' | 'large'> = ['flash', 'medium', 'large']
+    const byModel = new Map<string, Array<'flash' | 'medium' | 'large'>>()
+    for (const role of roles) {
+      const model = profile?.models?.[role] ?? config.ollama.model
+      byModel.set(model, [...(byModel.get(model) ?? []), role])
+    }
+    return Promise.all(
+      [...byModel].map(async ([model, modelRoles]) => ({
+        model,
+        roles: modelRoles,
+        options: await computeContextLengthOptions(model, contextLengthFor(profile, model))
+      }))
+    )
   })
-  ipcMain.handle(IPC_CHANNELS.setContextLength, async (_event, contextLength: number | undefined) => {
+  ipcMain.handle(IPC_CHANNELS.setContextLength, async (_event, contextLength: unknown, model?: unknown) => {
     const profile = await getProfile()
     if (!profile) return
-    await saveProfile({ ...profile, contextLength })
+    const value = typeof contextLength === 'number' && Number.isInteger(contextLength) && contextLength > 0 ? contextLength : undefined
+    if (typeof model !== 'string' || !model) {
+      await saveProfile({ ...profile, contextLength: value })
+      return
+    }
+    // Seulement un modèle de conversation de CE profil : rien d'autre ne vient de l'écran.
+    if (!Object.values(profile.models ?? {}).includes(model)) return
+    const contextLengths = { ...(profile.contextLengths ?? {}) }
+    if (value === undefined) delete contextLengths[model]
+    else contextLengths[model] = value
+    await saveProfile({ ...profile, contextLengths })
   })
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : le paquet

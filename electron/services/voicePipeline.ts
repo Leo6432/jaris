@@ -464,7 +464,7 @@ export class VoicePipeline extends EventEmitter {
           const model = await preferLoadedModel(Object.values(voiceModels ?? {}), voiceModels?.flash ?? config.ollama.model)
           // Étape 294 : la fenêtre de la conversation, pour que le modèle rapide reste chargé entre la correction et
           // la réponse — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
-          const numCtx = profile?.contextLength ?? config.ollama.numCtx
+          const numCtx = profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
           const correctionStart = Date.now()
           const corrected = await correctTranscript(
             combined,

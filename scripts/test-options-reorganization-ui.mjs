@@ -47,7 +47,7 @@ const overrides = {
   saveProfile: async () => {},
   patchProfile: async () => null,
   listAudioInputDevices: async () => [],
-  getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }),
+  getContextLengthOptions: async () => ([{ model: 'qwen3.5:9b', roles: ['flash', 'medium', 'large'], options: { current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] } }]),
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
   // Étape 336 : l'installation de l'Ollama de Jaris dure ; le test décide quand elle se termine.
   updateOllama: () => new Promise((resolve) => { window.__finishOllama = resolve }),

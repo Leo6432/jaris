@@ -691,3 +691,27 @@ test('sans annulation, un outil lent va jusqu’au bout comme avant', async () =
   const reply = await converse('rappelle-moi le thé dans 5 minutes', null, () => {}, undefined, [], controller.signal)
   assert.equal(reply, 'C’est noté, je te le rappelle dans 5 minutes.')
 })
+
+// Léo : un curseur de mémoire PAR MODÈLE. Chaque demande envoie la fenêtre du modèle qui répond.
+test('mémoire par modèle : la demande envoie la fenêtre réglée pour CE modèle, sinon le réglage commun', async () => {
+  const seen = []
+  const converse = setup(
+    async (messages, tools, model, think, signal, numCtx) => {
+      seen.push({ model, numCtx })
+      return { role: 'assistant', content: 'Réponse.' }
+    },
+    async () => assert.fail('aucun outil attendu'),
+    undefined,
+    {
+      installed: ['test', 'petit:4b', 'gros:27b'],
+      profile: {
+        models: { flash: 'petit:4b', medium: 'petit:4b', large: 'gros:27b' },
+        contextLength: 12288,
+        contextLengths: { 'petit:4b': 32768 }
+      }
+    }
+  )
+  await converse('Raconte-moi une histoire', null, () => {})
+  assert.ok(seen.length >= 1)
+  for (const call of seen) assert.equal(call.numCtx, call.model === 'petit:4b' ? 32768 : 12288, JSON.stringify(call))
+})

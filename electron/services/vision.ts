@@ -138,7 +138,8 @@ export function localizeReplyLanguage(prompt: string): string {
  * différente obligeait Ollama à le recharger entièrement à chaque regard sur l'écran (étape 294).
  */
 async function sharedNumCtx(model: string): Promise<number> {
-  const wanted = (await getProfile().catch(() => null))?.contextLength ?? config.ollama.numCtx
+  const profile = await getProfile().catch(() => null)
+  const wanted = profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
   try {
     return await fitToModelContext(model, wanted)
   } catch {

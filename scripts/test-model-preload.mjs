@@ -115,11 +115,16 @@ test('correction de la transcription : la fenêtre demandée est bien envoyée �
 
 test('toutes les demandes au modèle de conversation utilisent LA MÊME fenêtre (sinon Ollama le recharge)', () => {
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
-  const same = 'profile?.contextLength ?? config.ollama.numCtx'
-  assert.ok(read('electron/services/assistant.ts').includes(`const numCtx = ${same}`), 'la conversation')
+  // Léo : une fenêtre PAR MODÈLE (Options -> Modèles), mais toujours la même pour un même modèle.
+  const same = 'profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'
+  const assistant = read('electron/services/assistant.ts')
+  assert.ok(assistant.includes('numCtxFor = (name: string): number => profile?.contextLengths?.[name] ?? profile?.contextLength ?? config.ollama.numCtx'), 'la conversation')
+  assert.ok(!/\n\s+numCtx,\n/.test(assistant), 'aucune demande de la conversation sans le modèle')
   assert.ok(read('electron/services/voicePipeline.ts').includes(same), 'la correction de ce qui est entendu')
   assert.ok(read('electron/services/memoryExtractor.ts').includes(same), 'la mémoire automatique')
-  assert.ok(read('electron/main.ts').includes(`preloadModel(model, ${same})`), 'le préchargement au démarrage')
+  const main = read('electron/main.ts')
+  assert.ok(main.includes('preloadModel(model, contextLengthFor(profile, model))'), 'le préchargement au démarrage')
+  assert.ok(main.includes('profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'), 'le réglage du modèle')
 })
 
 // Étape 346 : le modèle de vision est souvent aussi celui de la conversation — une autre fenêtre le faisait recharger.
@@ -131,7 +136,7 @@ test('regarder l’écran et piloter utilisent la même fenêtre que la conversa
     // vision.ts passe par chatWithOllama (annulable, en streaming) : la fenêtre y est le dernier argument.
     assert.ok(source.includes('num_ctx: await sharedNumCtx(model)') || /chatWithOllama\([\s\S]{0,400}?await sharedNumCtx\(model\)\s*\)/.test(source), path)
     const helper = source.slice(source.indexOf('async function sharedNumCtx'), source.indexOf('async function sharedNumCtx') + 400)
-    assert.ok(helper.includes('getProfile()') && helper.includes('contextLength ?? config.ollama.numCtx'), path)
+    assert.ok(helper.includes('getProfile()') && helper.includes('profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'), path)
     assert.ok(helper.includes('fitToModelContext(model, wanted)'), path)
   }
 })

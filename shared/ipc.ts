@@ -205,6 +205,19 @@ export interface Profile {
    * comme avant l'ajout de ce réglage.
    */
   contextLength?: number
+  /**
+   * Léo (« des gros modèles je peux pas monter, des petits je pourrais augmenter ») : un réglage PAR MODÈLE (nom
+   * Ollama), choisi dans Options -> Modèles. Absent pour un modèle : `contextLength`, sinon OLLAMA_NUM_CTX. Rangé par
+   * modèle et pas par rôle : un même modèle sur deux rôles garde ainsi une seule fenêtre (sinon Ollama le recharge).
+   */
+  contextLengths?: Record<string, number>
+}
+
+/** Une ligne du réglage de mémoire (Options -> Modèles) : un modèle de conversation et les rôles qu'il tient. */
+export interface ModelContextLengthOptions {
+  model: string
+  roles: Array<'flash' | 'medium' | 'large'>
+  options: ContextLengthOptions
 }
 
 /** Résultat de getContextLengthOptions (hardwareScan.ts) : voir son commentaire pour le calcul du plafond. */

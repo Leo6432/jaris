@@ -10735,3 +10735,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-format-reply.mjs`, `test-ui-blocks.mjs`, `test-context-length.mjs` (vrais chiffres de
   qwen3.5:9b), chacun vérifié en retirant son correctif. **Non vérifié en usage réel** : le nouveau maximum du curseur
   sur la machine de Léo (dépend de la mémoire vidéo libre) et le suivi de la consigne par ses modèles.
+
+- **Étape 407 (v0.41.5), Léo : « Context length prend automatique mais on peut pas choisir par modèle : des gros
+  modèles je peux pas monter au-dessus, des petits je pourrais augmenter ».** Choix de Léo (question à choix) : un
+  curseur PAR MODÈLE. Options -> Modèles -> « Mémoire de conversation » montre une ligne par modèle de conversation
+  (Faible / Moyen / Élevé ; un modèle qui tient deux rôles n'a qu'une ligne), chacune limitée à ce qui tient pour LUI
+  (`computeContextLengthOptions(model)`). Rangé par NOM de modèle (`Profile.contextLengths`), pas par rôle : un même
+  modèle sur deux rôles garde une seule fenêtre, sinon Ollama le recharge (étape 294). Tous les endroits qui lisaient
+  `profile.contextLength` (conversation à chaque tour, correction de la voix, mémoire automatique, préchargement,
+  vision, pilotage) lisent d'abord le réglage du modèle utilisé, puis l'ancien réglage commun, puis .env. Le main
+  n'accepte un réglage que pour un modèle de conversation du profil. Texte d'aide réécrit (24 langues), libellé
+  devenu inutile retiré. Régression : `test-context-length-ui.mjs` (deux curseurs, maximum propre à chacun, valeur ET
+  modèle envoyés), `test-assistant-history.mjs` (la demande envoie la fenêtre du modèle qui répond ; échoue sur
+  l'ancien code), `test-model-preload.mjs`. **Non vérifié en usage réel.**
