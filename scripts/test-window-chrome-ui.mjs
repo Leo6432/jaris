@@ -259,16 +259,20 @@ test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas d
     const rail0 = await page.locator('.app-rail').boundingBox()
     assert.ok(rail0.width <= 64, `barre d’icônes trop large : ${rail0.width}px`)
     // Étape 273 (Léo : « enlève le bouton widget en bas à gauche ») : Cerveau et Options seulement, en bas.
-    // Étape 355 : le Duel rejoint les modes (Léo : « pas dans Options, directement à gauche »).
-    assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 6 modes et les 2 outils sont dans la barre d’icônes')
+    // Étape 355 : le Duel rejoint les modes ; Léo : Duel et Classement derrière « … ».
+    assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 5 modes, « … » et les 2 outils sont dans la barre d’icônes')
     assert.equal(await page.locator('.app-rail .rail__item[title*="widget" i]').count(), 0, 'bouton Widget revenu')
     assert.equal(await page.locator('.app-rail .rail__item').first().getAttribute('title'), 'Agent vocal', 'Vocal n’est pas en premier')
     assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
     await page.click('.rail__item:has-text("Chat")')
     const list0 = await page.locator('.app-sidebar').boundingBox()
     assert.ok(list0, 'pas de liste dans le Chat')
-    for (const [label, listed] of [['Vocal', false], ['Chat', true], ['Code', true], ['Image', true], ['Duel', false], ['Options', true], ['Cerveau', false], ['Vocal', false], ['Chat', true]]) {
-      await page.click(`.rail__item:has-text("${label}")`)
+    for (const [label, listed] of [['Vocal', false], ['Chat', true], ['Code', true], ['Image', true], ['Duel', false], ['Classement', false], ['Options', true], ['Cerveau', false], ['Vocal', false], ['Chat', true]]) {
+      // Léo : Duel et Classement sont derrière « … » (petit menu).
+      if (label === 'Duel' || label === 'Classement') {
+        await page.click('.rail__more .rail__item')
+        await page.click(`.rail__menu-item:has-text("${label}")`)
+      } else await page.click(`.rail__item:has-text("${label}")`)
       await page.waitForTimeout(250)
       assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0, `barre d’icônes changée sur l’écran ${label}`)
       if (listed) {
@@ -343,5 +347,30 @@ test("étape 392 : l'orbe de la barre de titre est animée et prend la couleur d
       return n
     }, orb)
     assert.ok(lit > 20, `orbe dessinée (${lit} pixels)`)
+  })
+})
+
+// Léo : « à la place de Duel, mets "…" pour ouvrir et pouvoir cliquer sur Duel ou Classement ».
+test('« … » ouvre un menu Duel / Classement ; le Classement montre le tableau de tous les modèles', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    assert.equal(await page.locator('.app-rail .rail__item:has-text("Duel")').count(), 0, 'Duel ne doit plus être directement dans la barre')
+    assert.equal(await page.$('.rail__menu'), null, 'menu fermé au départ')
+    await page.click('.rail__more .rail__item')
+    const items = await page.$$eval('.rail__menu-item', (els) => els.map((el) => el.textContent?.trim()))
+    assert.deepEqual(items, ['Duel', 'Classement'])
+    // Le menu sort de la barre (qui coupe ce qui la dépasse) : il doit être entièrement visible, à droite d'elle.
+    const rail = await page.locator('.app-rail').boundingBox()
+    const menu = await page.locator('.rail__menu').boundingBox()
+    assert.ok(menu.x >= rail.x + rail.width - 1 && menu.width > 100, JSON.stringify({ rail, menu }))
+    // Échap ferme sans rien choisir.
+    await page.keyboard.press('Escape')
+    assert.equal(await page.$('.rail__menu'), null)
+    await page.click('.rail__more .rail__item')
+    await page.click('.rail__menu-item:has-text("Classement")')
+    await page.waitForSelector('.options-page--models')
+    assert.equal(await page.$('.rail__menu'), null, 'le menu se ferme après le choix')
+    assert.equal(await page.getAttribute('.rail__more .rail__item', 'aria-expanded'), 'false')
+    assert.ok(await page.$('.rail__more .rail__item--active'), '« … » marqué actif sur le Classement')
   })
 })

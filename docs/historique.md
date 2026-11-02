@@ -10780,3 +10780,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-model-preload.mjs` (grandit avec la demande, ne redescend pas, préchargement et vision sur la
   même fenêtre, nouvel essai au palier suivant), `test-assistant-history.mjs`, `test-memory-extractor.mjs`,
   `test-benchmark-scenarios.mjs`. **Non vérifié en usage réel.**
+
+- **Étape 410 (v0.41.8), Léo : « à la place d'avoir le classement dans les Options, mets … à la place de Duel, pour
+  ensuite ouvrir et pouvoir cliquer sur Duel ou Classement ».** Question à choix posée d'abord : le « classement »
+  visé était « Tous les modèles » (Options → Modèles), pas la liste « Classement de tes votes » de l'accueil du Duel.
+  Dans la barre d'icônes, l'icône Duel devient « … » (`RailMoreMenu`, App.tsx) : un petit menu Duel / Classement,
+  fermé par un clic ailleurs ou Échap, posé en position FIXE à côté du bouton — la barre d'icônes coupe ce qui la
+  dépasse (elle défile), un menu en position absolue y aurait été coupé. « … » est marqué actif sur Duel comme sur
+  Classement. « Tous les modèles » devient l'écran « Classement » (nouveau mode `ranking`, `ModelsRanking`,
+  AllModelsOverview.tsx) : même tableau, posé dans la zone principale comme Options (`options-page--embedded`), relu à
+  chaque ouverture ; plus de page plein écran ni de bouton dans les Options. Pas de widget sur cet écran (comme le Duel).
+  4 textes ajoutés dans 24 langues. Régression : `test-window-chrome-ui.mjs` (menu à droite de la barre et entièrement
+  visible, Échap, choix qui ferme le menu, « … » actif, Duel plus dans la barre — échoue si Duel y revient) et
+  `test-options-reorganization-ui.mjs` (plus de « Tous les modèles » dans les Options, tableau sur l'écran Classement).
+  **Non vérifié en usage réel.**

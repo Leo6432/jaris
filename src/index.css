@@ -779,13 +779,6 @@ body.body--splash {
   overflow-x: auto;
 }
 
-/* Bouton "Tous les modèles" (AllModelsOverview.tsx) sous les paliers de configuration : un peu d'air avant.
-   Le tableau lui-même vit maintenant dans sa propre page plein écran (.options-page--models), plus dans ce
-   conteneur — voir la règle .options-page--models plus bas dans ce fichier, juste après .options-page__body. */
-.options-menu__all-models {
-  margin-top: 14px;
-}
-
 /* Test des modèles sans score (étape 168), en tête de la page « Tous les modèles ». */
 .options-menu__unscored {
   display: flex;
@@ -11200,4 +11193,45 @@ input.reply-ui__field-input {
 .reply-ui__question:last-of-type {
   border-bottom: none;
   padding-bottom: 0;
+}
+
+/* Léo : Duel et Classement derrière « … » dans la barre d'icônes. Le menu sort de la barre (qui coupe ce qui la
+   dépasse) : position fixe, placée par App.tsx à côté du bouton. */
+.rail__more {
+  position: relative;
+}
+
+.rail__menu {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.rail__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rail__menu-item:hover,
+.rail__menu-item--active {
+  background: var(--jv-hover-strong);
 }

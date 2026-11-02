@@ -1,5 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
@@ -249,23 +248,33 @@ function SortBar({
   )
 }
 
-export default function AllModelsOverview(): JSX.Element {
-  const [open, setOpen] = useState(false)
+/**
+ * Léo : « Tous les modèles » quitte les Options et devient l'écran « Classement », ouvert depuis le menu « … » de la
+ * barre d'icônes (avec le Duel). Même tableau, posé dans la zone principale comme les autres écrans. Relu à chaque
+ * ouverture (`active`) : un vote de duel ou un test fini depuis la dernière fois change les chiffres.
+ */
+export default function ModelsRanking({ active = true }: { active?: boolean }): JSX.Element {
   const [overview, setOverview] = useState<ModelOverviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState<SortState>(null)
   const [query, setQuery] = useState('')
 
-  const openPage = async (): Promise<void> => {
-    setOpen(true)
-    if (overview) return
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
     setLoading(true)
-    try {
-      setOverview(await window.jaris.getModelOverview())
-    } finally {
-      setLoading(false)
+    window.jaris
+      .getModelOverview()
+      .then((result) => {
+        if (!cancelled) setOverview(result)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [active])
 
   const toggleSort = (key: SortKey): void => {
     setSort((current) => {
@@ -282,21 +291,7 @@ export default function AllModelsOverview(): JSX.Element {
   const futureEntries = useMemo(() => filterModels(FUTURE_MODELS, query), [query])
 
   return (
-    <div className="options-menu__all-models">
-      <button className="options-menu__action" onClick={() => void openPage()}>
-        {t('models.all')}
-      </button>
-      {open &&
-        createPortal(
-          <div className="options-page options-page--models" role="dialog" aria-modal="true" aria-label={t('models.all.label')}>
-            <header className="options-page__header">
-              <div>
-                <h2>{t('models.all')}</h2>
-              </div>
-              <button className="options-page__close" onClick={() => setOpen(false)}>
-                {t('common.close')}
-              </button>
-            </header>
+          <div className="options-page options-page--embedded options-page--models" aria-label={t('models.all.label')}>
             <div className="options-page__body options-page__body--models">
               <main className="options-page__workspace">
                 <div className="options-page__content">
@@ -410,9 +405,6 @@ export default function AllModelsOverview(): JSX.Element {
                 </div>
               </main>
             </div>
-          </div>,
-          document.body
-        )}
-    </div>
+          </div>
   )
 }

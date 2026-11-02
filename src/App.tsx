@@ -7,6 +7,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import ImagePanel from '@/components/ImagePanel'
 import VideoPanel from '@/components/VideoPanel'
 import DuelPanel from '@/components/DuelPanel'
+import ModelsRanking from '@/components/AllModelsOverview'
 import KeepAlive from '@/components/KeepAlive'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb, { setVoiceOutputDevice } from '@/components/JarisOrb'
@@ -32,7 +33,7 @@ const STATUS_LABEL: Record<JarisEmotion, MessageKey> = {
 }
 
 /** Les modes de la barre latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200 ; Duel, étape 355). */
-type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel'
+type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel' | 'ranking'
 
 /**
  * Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : un rail d'icônes à gauche, libellé court sous
@@ -46,8 +47,14 @@ const MODES: Array<{ id: AppMode; label: MessageKey; title: MessageKey; panel?: 
   { id: 'image', label: 'app.mode.image', title: 'app.mode.image', panel: 'app.mode.image.panel', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
   { id: 'video', label: 'app.mode.video', title: 'app.mode.video', panel: 'app.mode.video.panel', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' },
   // Étape 355 (Léo : « pas dans option, directement à gauche, duel ») : deux épées croisées. Pas de liste à côté.
-  { id: 'duel', label: 'app.mode.duel', title: 'app.mode.duel.title', icon: 'M4 4l12 12M13.5 18.5l5-5M16 16l3.5 3.5M20 4L8 16M5.5 13.5l5 5M8 16l-3.5 3.5' }
+  { id: 'duel', label: 'app.mode.duel', title: 'app.mode.duel.title', icon: 'M4 4l12 12M13.5 18.5l5-5M16 16l3.5 3.5M20 4L8 16M5.5 13.5l5 5M8 16l-3.5 3.5' },
+  // Léo : « Tous les modèles » quitte les Options et devient cet écran, rangé avec le Duel derrière « … ».
+  { id: 'ranking', label: 'app.mode.ranking', title: 'app.mode.ranking.title', icon: 'M5 20V11M12 20V5M19 20v-6M3 20h18' }
 ]
+
+/** Léo : Duel et Classement derrière un seul bouton « … » de la barre d'icônes, qui ouvre un petit menu. */
+const MORE_MODES: AppMode[] = ['duel', 'ranking']
+const ICON_MORE = 'M5 12h.01M12 12h.01M19 12h.01'
 
 const ICON_BRAIN =
   'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
@@ -100,6 +107,65 @@ function PanelToggleIcon(): JSX.Element {
 }
 
 /** Une entrée de navigation : icône et libellé, avec un état actif discret. */
+/** « … » : un petit menu à côté du bouton, fermé par un clic ailleurs ou Échap. */
+function RailMoreMenu({ active, current, onSelect }: { active: boolean; current: AppMode; onSelect: (id: AppMode) => void }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  // La barre d'icônes coupe ce qui la dépasse (elle défile) : le menu est posé en position fixe, à côté du bouton.
+  const [place, setPlace] = useState<{ top: number; left: number } | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return (
+    <div className="rail__more" ref={rootRef}>
+      <button
+        className={`rail__item${active ? ' rail__item--active' : ''}`}
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect()
+          setPlace({ top: rect.top, left: rect.right + 8 })
+          setOpen((value) => !value)
+        }}
+        title={t('app.mode.more')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <LineIcon d={ICON_MORE} size={22} />
+        <span className="rail__label">{t('app.mode.more')}</span>
+      </button>
+      {open && (
+        <div className="rail__menu" role="menu" style={place ?? undefined}>
+          {MODES.filter((mode) => MORE_MODES.includes(mode.id)).map((mode) => (
+            <button
+              key={mode.id}
+              role="menuitem"
+              className={`rail__menu-item${active && current === mode.id ? ' rail__menu-item--active' : ''}`}
+              onClick={() => {
+                setOpen(false)
+                onSelect(mode.id)
+              }}
+            >
+              <LineIcon d={mode.icon} size={16} />
+              <span>{t(mode.label)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RailButton({ label, icon, active, onClick, title }: {
   label: string
   icon: string
@@ -632,7 +698,7 @@ export default function App(): JSX.Element {
               colonne de liste à côté se replie à la demande et garde la même place sur tous les écrans. */}
           <nav className="app-rail" aria-label={t('app.rail.label')}>
             <div className="app-rail__group">
-              {MODES.map(({ id, label, title, icon }) => (
+              {MODES.filter(({ id }) => !MORE_MODES.includes(id)).map(({ id, label, title, icon }) => (
                 <RailButton
                   key={id}
                   label={t(label)}
@@ -642,6 +708,7 @@ export default function App(): JSX.Element {
                   onClick={() => selectMode(id)}
                 />
               ))}
+              <RailMoreMenu active={!screenShown && MORE_MODES.includes(appMode)} current={appMode} onSelect={selectMode} />
             </div>
             <div className="app-rail__group app-rail__group--end">
               <RailButton label={t('app.brain')} title={t('app.brain.title')} icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
@@ -826,6 +893,11 @@ export default function App(): JSX.Element {
             <KeepAlive active={!screenShown && appMode === 'duel'}>
               <ErrorBoundary label={t('app.boundary.duel')}>
                 <DuelPanel />
+              </ErrorBoundary>
+            </KeepAlive>
+            <KeepAlive active={!screenShown && appMode === 'ranking'}>
+              <ErrorBoundary label={t('app.boundary.ranking')}>
+                <ModelsRanking active={!screenShown && appMode === 'ranking'} />
               </ErrorBoundary>
             </KeepAlive>
           </main>

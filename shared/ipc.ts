@@ -10,7 +10,7 @@ export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surpri
 
 /** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
  * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
-export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel'
+export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video' | 'duel' | 'ranking'
 
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :

@@ -15,7 +15,6 @@ import type {
   WakeTestHeardPayload
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
-import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import AnywhereSettings from './AnywhereSettings'
@@ -1091,10 +1090,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               {myPicks === null ? (
                 <p className="capacity-scan__status">{t('common.loading')}</p>
               ) : (
-                <>
-                  <MyModelPicks picks={myPicks} onDeleteUnused={handleDeleteUnusedModel} />
-                  <AllModelsOverview />
-                </>
+                // Léo : « Tous les modèles » est devenu l'écran « Classement » (menu « … » de la barre d'icônes).
+                <MyModelPicks picks={myPicks} onDeleteUnused={handleDeleteUnusedModel} />
               )}
               <SettingRow
                 label={t('options.retest.label')}

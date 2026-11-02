@@ -914,7 +914,8 @@ function hasWidgetToShow(): boolean {
 /** Code, Image et Vidéo (étapes 200 et 203) n'ont pas de widget : ce sont des écrans de travail. */
 function modeWithoutWidget(): boolean {
   // Étape 355 : le Duel non plus — on y compare des modèles, Jaris n'y répond pas lui-même.
-  return activeMode === 'code' || activeMode === 'image' || activeMode === 'video' || activeMode === 'duel'
+  // Le Classement non plus : un tableau à lire.
+  return activeMode === 'code' || activeMode === 'image' || activeMode === 'video' || activeMode === 'duel' || activeMode === 'ranking'
 }
 
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */

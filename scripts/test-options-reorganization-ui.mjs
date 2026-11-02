@@ -33,7 +33,9 @@ const entryPath = join(projectRoot, 'tmp-options-reorg-entry.tsx')
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
+import { useState } from 'react'
 import OptionsMenu from './src/components/OptionsMenu'
+import ModelsRanking from './src/components/AllModelsOverview'
 import { FUTURE_MODELS } from './shared/futureModels'
 
 // Étape 347 : la vraie liste des futurs modèles est vide (Bonsai 2 retiré) ; un faux modèle, ajouté ici seulement,
@@ -135,7 +137,15 @@ window.jaris = new Proxy({}, {
 })
 
 const root = createRoot(document.getElementById('root'))
-root.render(<OptionsMenu />)
+// Léo : « Tous les modèles » est devenu l'écran « Classement » (menu « … » de la barre d'icônes) — le test l'ouvre
+// à la place des Options, comme le fait App.tsx.
+function Root() {
+  const [ranking, setRanking] = useState(false)
+  window.__openRanking = () => setRanking(true)
+  window.__closeRanking = () => setRanking(false)
+  return ranking ? <ModelsRanking /> : <OptionsMenu />
+}
+root.render(<Root />)
 `
 
 let pageHtml = null
@@ -173,6 +183,12 @@ async function withOptions(run) {
 }
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
+
+/** Écran « Classement » (ex-« Tous les modèles » des Options), comme si on le choisissait dans le menu « … ». */
+async function openRanking(page) {
+  await page.evaluate(() => window.__openRanking())
+  await page.waitForSelector('.options-page--models')
+}
 
 // Étape 214 : « Téléphone » revient, pour parler à Jaris depuis son téléphone (Tailscale) — sans rapport avec
 // l'ancien onglet Mobile connecté retiré à l'étape 116, qui, lui, ne doit jamais revenir.
@@ -363,34 +379,17 @@ test('les cartes de réglages ont de l\'air entre le titre et le contenu, et ent
 // un page entierement pour ça") : un clic n'ouvre plus une liste dépliée EN PLACE dans la petite carte des
 // paliers, mais une vraie page plein écran (.options-page--models, empilée par-dessus la page Options),
 // avec son propre bouton "Fermer" qui revient sur la page Options — sans perdre l'onglet Modèles en cours.
-test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste dépliée sur place', options, async () => {
+test('« Tous les modèles » a quitté les Options : c’est l’écran « Classement », un seul tableau', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.waitForSelector('.options-menu__all-models')
-    assert.equal(await page.$('.options-page--models'), null, 'la page plein écran ne doit pas exister avant le clic')
+    await page.waitForSelector('.options-menu__section-title')
+    assert.equal(await page.$('.options-menu__all-models'), null, 'plus de bouton « Tous les modèles » dans les Options')
+    assert.ok(!(await page.textContent('.options-page__content')).includes('Tous les modèles'))
 
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
-
-    // "Page entièrement" vérifié pour de vrai (rectangle mesuré), pas juste un nom de classe : elle doit
-    // recouvrir tout le viewport, exactement comme la page Options qu'elle empile par-dessus.
-    const viewport = page.viewportSize()
-    const box = await page.$eval('.options-page--models', (el) => {
-      const r = el.getBoundingClientRect()
-      return { x: r.x, y: r.y, width: r.width, height: r.height }
-    })
-    assert.equal(box.x, 0, `la page doit toucher le bord gauche : ${box.x}`)
-    assert.equal(box.y, 0, `la page doit toucher le bord haut : ${box.y}`)
-    assert.equal(box.width, viewport.width, `la page doit couvrir toute la largeur : ${box.width} vs ${viewport.width}`)
-    assert.equal(box.height, viewport.height, `la page doit couvrir toute la hauteur : ${box.height} vs ${viewport.height}`)
-
-    // Réellement AU-DESSUS de la page Options (z-index plus élevé), pas juste peinte par-dessus par hasard.
-    const zIndexes = await page.$$eval('.options-page', (els) => els.map((el) => Number(getComputedStyle(el).zIndex)))
-    assert.equal(zIndexes.length, 2, `2 pages .options-page attendues (Options + Tous les modèles) : ${zIndexes.length}`)
-    assert.ok(Math.max(...zIndexes) > Math.min(...zIndexes), `la page des modèles doit avoir un z-index plus élevé : ${zIndexes}`)
-
-    // Sans colonne de navigation de gauche (contrairement à la page Options qu'elle recouvre) : le contenu
-    // doit démarrer près du bord gauche, pas laisser un vide de ~200-250px où vivrait cette colonne absente.
+    // Écran normal de la zone principale (comme Options), sans colonne de navigation à gauche.
+    assert.equal(await page.$eval('.options-page--models', (el) => getComputedStyle(el).position), 'static')
     const contentX = await page.$eval('.options-page--models .options-page__workspace', (el) => el.getBoundingClientRect().x)
     assert.ok(contentX < 50, `le contenu doit occuper toute la largeur, sans gouttière de navigation : x=${contentX}`)
 
@@ -445,10 +444,6 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
 
-    // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
-    await page.click('.options-page--models .options-page__close')
-    await page.waitForFunction(() => document.querySelector('.options-page--models') === null)
-    assert.ok(await page.$('.options-menu__tab--active:has-text("Modèles")'), 'la page Options doit rester ouverte sur Modèles après Fermer')
   })
 })
 
@@ -477,8 +472,7 @@ const LONG_OVERVIEW = [
 async function measureModelsTable(page, width, height) {
   await page.setViewportSize({ width, height })
   await page.evaluate((entries) => { window.__overviewEntries = entries }, LONG_OVERVIEW)
-  await page.click('.options-menu__tab:has-text("Modèles")')
-  await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+  await openRanking(page)
   await page.waitForSelector('.options-page--models tbody tr')
   return page.evaluate(() => {
     const box = (selector) => {
@@ -495,7 +489,7 @@ test('« Tous les modèles » tient en entier sans défiler de côté sur un éc
       const m = await measureModelsTable(page, width, height)
       assert.ok(m.card.width > 880, `${width} px : la page ne doit plus être bloquée à 880 px (carte de ${m.card.width} px)`)
       assert.ok(m.card.scrollWidth <= m.card.clientWidth + 1, `${width} px : le tableau défile encore de côté (${m.card.scrollWidth} > ${m.card.clientWidth})`)
-      await page.click('.options-page--models .options-page__close')
+      await page.evaluate(() => window.__closeRanking())
     }
   })
 })
@@ -528,27 +522,11 @@ test('dans une fenêtre étroite, le tableau défile DANS sa carte : le fond arr
   })
 })
 
-test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris, pas laissé au style du navigateur', options, async () => {
-  await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.waitForSelector('.options-menu__all-models')
-    const style = await page.$eval('.options-menu__all-models button', (el) => {
-      const s = getComputedStyle(el)
-      return { radius: s.borderTopLeftRadius, border: s.borderTopStyle, font: s.fontFamily }
-    })
-    // Refonte « design sobre » : la famille de boutons est une pilule à liseré fin, en Geist.
-    assert.equal(style.radius, '9999px', 'bouton sans la pilule de la famille de Jaris (style ChatGPT, étape 266)')
-    assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
-    assert.match(style.font, /Geist/)
-  })
-})
-
 // Étape 166 (convenu avec Léo : « après je peux te donner les scores et après on va enlever l'analyse ») : son
 // analyse du 25/09/2026 est recopiée dans verified-tool-scores.md, et plus rien ne permet de la relancer.
 test('« Tous les modèles » n’a plus de bouton d’analyse, seulement le tableau des scores', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const buttons = await page.$$eval('.options-page--models button', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!buttons.some((t) => /analyse/i.test(t)), `bouton d'analyse encore présent : ${buttons.join(', ')}`)
@@ -650,8 +628,7 @@ test('« Retester la configuration » : la même barre et la taille que l’écr
 // Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ».
 test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le test modèle par modèle', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-menu__unscored')
     const title = await page.textContent('.options-menu__unscored-title')
     assert.match(title, /\(2\)/)
@@ -699,8 +676,7 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
 // précisément la distinction qui manquait pour attraper le problème avant livraison.
 test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
@@ -729,8 +705,7 @@ test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à devin
 // rapide, le plus inteligent, le plus appelle outils" — un tri (pas un filtre) sur 4 colonnes, cliquables.
 test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le sens', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const models = () =>
@@ -772,8 +747,7 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
 // Étape 341 (Léo : « ajoute-le dans futur, en bas de tous les modèles, mets en rayure futur modèle »).
 test('« Tous les modèles » : un futur modèle reste en bas, rayé, « Futur modèle », quel que soit le tri, et suit la recherche', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const last = () =>
       page.$$eval('.options-page--models tbody tr', (rows) => {
@@ -806,8 +780,7 @@ test('« Tous les modèles » : un futur modèle reste en bas, rayé, « Futur m
 // Étape 226 (Léo : « ajoute une barre de recherche à côté des filtres dans tous les modèles »).
 test('« Tous les modèles » : la recherche est dans la barre des tris et filtre réellement le tableau', options, async () => {
   await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const models = () =>
       page.$$eval('.options-page--models tbody tr:not(.options-menu__model-row--future)', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
