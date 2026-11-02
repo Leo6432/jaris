@@ -1086,53 +1086,6 @@ body.body--splash {
   font-weight: 400;
 }
 
-/* Curseur "comme sur Ollama" (Léo), même famille visuelle que .options-menu__progress-bar juste au-dessus
-   dans ce fichier plutôt qu'un style de curseur générique inventé à côté. */
-.options-menu__context-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  margin: 10px 0 6px;
-  border-radius: 999px;
-  background: rgba(var(--jv-ink-rgb), 0.075);
-  cursor: pointer;
-}
-
-.options-menu__context-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--hud-accent);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.options-menu__context-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: var(--hud-accent);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.options-menu__context-slider::-moz-range-track {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(var(--jv-ink-rgb), 0.075);
-}
-
-.options-menu__context-slider-ticks {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
 .options-menu__models-location-list {
   list-style: none;
   margin: 0 0 4px;
@@ -11247,12 +11200,4 @@ input.reply-ui__field-input {
 .reply-ui__question:last-of-type {
   border-bottom: none;
   padding-bottom: 0;
-}
-
-/* Mémoire de conversation : ce qui limite le maximum de chaque modèle, sur sa propre ligne, en discret. */
-.options-menu__context-room {
-  display: block;
-  margin-top: 2px;
-  color: var(--hud-text-faint);
-  font-size: 12px;
 }

@@ -2,8 +2,7 @@ import { desktopCapturer, screen, type NativeImage } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
-import { chatWithOllama, fitToModelContext, listInstalledModels } from './ollama'
-import { getProfile } from './profileStore'
+import { autoContextFor, chatWithOllama, listInstalledModels } from './ollama'
 import { replyLanguageName, replyLanguageRule, t } from '../../shared/i18n'
 
 const VISION_SYSTEM_PROMPT =
@@ -133,17 +132,16 @@ export function localizeReplyLanguage(prompt: string): string {
  * (conversation déjà chargée, jeu en parallèle...).
  */
 /**
- * Étape 346 : la MÊME fenêtre de contexte que la conversation (réglage d'Options, ramené au maximum du modèle). Le
+ * Étape 346 : la MÊME fenêtre de contexte que la conversation (automatique, ramenée au maximum du modèle). Le
  * modèle de vision est souvent aussi celui de la conversation (qwen3.8:27b : Élevé, Vision et Code) : une fenêtre
  * différente obligeait Ollama à le recharger entièrement à chaque regard sur l'écran (étape 294).
  */
 async function sharedNumCtx(model: string): Promise<number> {
-  const profile = await getProfile().catch(() => null)
-  const wanted = profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
+  // Fenêtre automatique (Léo) : celle avec laquelle le modèle tourne déjà, pour ne jamais le faire recharger.
   try {
-    return await fitToModelContext(model, wanted)
+    return await autoContextFor(model)
   } catch {
-    return wanted
+    return config.ollama.numCtx
   }
 }
 

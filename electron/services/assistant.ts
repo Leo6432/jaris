@@ -421,7 +421,7 @@ async function composeNotepadText(
     model,
     false,
     signal,
-    profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx,
+    undefined, // fenêtre automatique (ollama.ts)
     undefined,
     undefined,
     (measured) => (metrics = measured)
@@ -730,8 +730,9 @@ async function conversation(
     profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   // Curseur de longueur de contexte (Options -> Modèles) : `undefined` tant que Léo n'y a jamais touché,
   // Jaris garde alors exactement le comportement d'avant ce réglage (OLLAMA_NUM_CTX, config.ts).
-  // Léo : chaque modèle a sa propre mémoire (un curseur par modèle dans Options -> Modèles).
-  const numCtxFor = (name: string): number => profile?.contextLengths?.[name] ?? profile?.contextLength ?? config.ollama.numCtx
+  // Léo (« tout automatique ») : la fenêtre de chaque demande est calculée par ollama.ts (autoContextFor) d'après ce
+  // qu'il y a à lire — plus de réglage ici.
+  const numCtx = undefined
   let tier = pickTier(prompt)
 
   // Les paliers (flash/médium/puissant) sont figés par le scan de capacité (VRAM totale, déterministe).
@@ -896,7 +897,7 @@ async function conversation(
       model,
       think,
       signal,
-      numCtxFor(model),
+      numCtx,
       holdKnowledgeStream ? () => {} : onToken,
       undefined,
       (measured) => (metrics = measured)
@@ -1088,7 +1089,7 @@ async function conversation(
     model,
     think,
     signal,
-    numCtxFor(model),
+    numCtx,
     holdKnowledgeStream ? () => {} : onToken,
     undefined,
     (measured) => (metrics = measured)

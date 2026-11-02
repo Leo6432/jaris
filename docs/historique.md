@@ -10760,3 +10760,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   de curseur, à dessein : sa mémoire est calculée à chaque demande selon la taille du code (étape 159). Régression :
   `test-context-length.mjs` (cas réaliste qwen3.5:9b sur 8 Go au-dessus de 8k ; échoue avec l'ancien arrondi) et
   `test-context-length-ui.mjs` (limite affichée). **Non vérifié en usage réel** : le maximum exact sur la carte de Léo.
+
+- **Étape 409 (v0.41.7), Léo : « on peut faire pareil que Code pour tout ? » puis « tout automatique ».** REMPLACE
+  les curseurs de mémoire des étapes 114-117, 346, 407 et 408 : plus aucun réglage. Pour chaque demande sans fenêtre
+  imposée, `requestChat` (ollama.ts, le seul passage de toutes les demandes) calcule la fenêtre comme le mode Code :
+  ce qu'il y a à lire (messages + outils, 2,5 caractères par token, les images ne comptent pas) + 8192 de réserve
+  pour la réflexion et la réponse, arrondi au palier du dessus (16k, 32k, 64k…), jamais plus que le maximum du
+  modèle. Une fenêtre qui change fait recharger le modèle (`needsReload`, server/sched.go) : elle ne redescend donc
+  pas tant que le modèle est sans doute encore chargé (5 min après sa dernière demande, imposée ou non — un passage
+  par le mode Code laisse sa fenêtre à la conversation suivante). Premier palier 16k pour tout le monde (conversation,
+  correction de la voix, mémoire automatique, préchargement, vision, pilotage) : consignes + outils pèsent déjà
+  ~4 500 tokens, et deux usages d'un même modèle ne se contredisent jamais. Fenêtre remplie par la réflexion : UN
+  nouvel essai au palier suivant (rien n'était affiché). Le mode Code garde ses fenêtres calculées, et le test des
+  modèles garde 8192 (les scores ont été mesurés ainsi). Retirés : curseurs, canaux IPC
+  `getContextLengthOptions`/`setContextLength`, `Profile.contextLength(s)` (ignorés s'ils restent dans un profil),
+  `computeContextLengthOptions` et le calcul de mémoire par couche (parseModelArchInfo, kvCacheBytesPerToken…),
+  `getInstalledModelSizeBytes`, `formatContextLength`, 5 textes dans 24 langues et leurs tests. **Limite assumée** :
+  au-delà de ce qui tient sur la carte, Ollama fait déborder sur la RAM (plus lent) plutôt que d'échouer.
+  Régression : `test-model-preload.mjs` (grandit avec la demande, ne redescend pas, préchargement et vision sur la
+  même fenêtre, nouvel essai au palier suivant), `test-assistant-history.mjs`, `test-memory-extractor.mjs`,
+  `test-benchmark-scenarios.mjs`. **Non vérifié en usage réel.**

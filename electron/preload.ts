@@ -30,7 +30,6 @@ import {
   type CapacityScanResult,
   type ModelPullProgress,
   type ChatMessage,
-  type ModelContextLengthOptions,
   type ConversationEntry,
   type ConversationList,
   type CodeActivity,
@@ -137,9 +136,6 @@ const api = {
   openConversationHistoryFile: (): Promise<void> => invoke(IPC_CHANNELS.openConversationHistoryFile),
   openRequestJournal: (reveal: boolean): Promise<void> => invoke(IPC_CHANNELS.openRequestJournal, reveal),
   getModelOverview: (): Promise<ModelOverviewResult> => invoke(IPC_CHANNELS.getModelOverview),
-  getContextLengthOptions: (): Promise<ModelContextLengthOptions[]> => invoke(IPC_CHANNELS.getContextLengthOptions),
-  setContextLength: (contextLength: number | undefined, model?: string): Promise<void> =>
-    invoke(IPC_CHANNELS.setContextLength, contextLength, model),
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> =>
     invoke(IPC_CHANNELS.updateOllama),

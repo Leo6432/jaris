@@ -340,7 +340,8 @@ test('une nouvelle demande arrête l’extraction en cours : rien d’affiché, 
   const m = load((messages, signal) => answer(messages, signal))
   const first = m.extractMemoryFromExchange("ma sœur s'appelle Emma", 'Joli prénom !', m.onLog)
   await waitFor(() => m.calls.length === 1, 'appel à Ollama')
-  assert.equal(m.calls[0].numCtx, 16384, 'même fenêtre que la conversation')
+  // Fenêtre automatique (ollama.ts) : rien d'imposé ici, la même règle que la conversation choisit.
+  assert.equal(m.calls[0].numCtx, undefined, 'même fenêtre que la conversation')
   assert.ok(m.calls[0].signal, 'le signal d’arrêt est transmis à Ollama')
 
   m.cancelMemoryExtraction()

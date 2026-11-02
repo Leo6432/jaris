@@ -462,14 +462,13 @@ export class VoicePipeline extends EventEmitter {
           // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
           const voiceModels = profile?.voiceModels ?? profile?.models
           const model = await preferLoadedModel(Object.values(voiceModels ?? {}), voiceModels?.flash ?? config.ollama.model)
-          // Étape 294 : la fenêtre de la conversation, pour que le modèle rapide reste chargé entre la correction et
-          // la réponse — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
-          const numCtx = profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
+          // Étape 294 : fenêtre automatique (ollama.ts), qui garde celle de la conversation tant que le modèle est
+          // chargé — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
           const correctionStart = Date.now()
           const corrected = await correctTranscript(
             combined,
             (system, user, signal) =>
-              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal, numCtx),
+              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal),
             profile?.name ?? null,
             controller.signal
           )

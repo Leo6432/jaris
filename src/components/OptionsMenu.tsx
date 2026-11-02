@@ -4,7 +4,6 @@ import type {
   AppVersionStatus,
   LaunchAtStartupStatus,
   AudioInputDevice,
-  ModelContextLengthOptions,
   ConversationEntry,
   MyModelPicks as MyModelPicksData,
   ModelPullProgress,
@@ -24,10 +23,9 @@ import MyModelPicks from './MyModelPicks'
 import ModelPullBar from './ModelPullBar'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
-import { formatContextLength } from '../lib/formatContextLength'
 import { migrateLegacyCodeConversations } from '../lib/codeConversations'
 import { selectedInputDevice } from '../lib/inputDeviceChoice'
-import { currentLocale, formatDecimal, t, tn } from '../lib/i18n'
+import { currentLocale, t, tn } from '../lib/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
 
@@ -223,9 +221,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
    * comme sur ollama... personnalisé à chacun pour que le dernier ne dépasse pas la vram") — `null` tant
    * que non chargé, recalculé à chaque ouverture de l'onglet (voir l'effet plus bas).
    */
-  /** Léo : un curseur PAR MODÈLE de conversation, chacun limité à ce qui tient pour lui. */
-  const [contextLengthOptions, setContextLengthOptions] = useState<ModelContextLengthOptions[] | null>(null)
-  const [savingContextModel, setSavingContextModel] = useState<string | null>(null)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -331,9 +326,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   useEffect(() => {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
-      // Recalculé à CHAQUE ouverture de l'onglet, jamais mis en cache : la VRAM libre change d'un
-      // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
-      void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
     }
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
@@ -368,19 +360,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
       else setUpdateProgress(progress)
     })
   }, [])
-
-  const handleContextLengthChange = (model: string, value: number): void => {
-    // Optimiste : le curseur bouge tout de suite, l'enregistrement se fait en tâche de fond. `current`
-    // est le seul champ qui change ; `max`/`availableSteps` restent ceux déjà calculés pour cette machine.
-    setContextLengthOptions((prev) =>
-      prev ? prev.map((entry) => (entry.model === model ? { ...entry, options: { ...entry.options, current: value } } : entry)) : prev
-    )
-    setSavingContextModel(model)
-    window.jaris
-      .setContextLength(value, model)
-      .catch(() => {})
-      .finally(() => setSavingContextModel((current) => (current === model ? null : current)))
-  }
 
   const handleChooseModelsLocation = (): void => {
     setModelsLocationMessage(null)
@@ -1108,56 +1087,6 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
-            {/* Longueur de mémoire AU-DESSUS des paliers de configuration (Léo, étape 117 : "met juste le
-                context au dessus des palier") : les deux parlent de "quel modèle/combien de mémoire pour ce
-                modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
-                retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
-            {contextLengthOptions && contextLengthOptions.length > 0 && (
-              <SettingGroup title={t('options.context.group')} description={t('options.context.hint')}>
-                {contextLengthOptions.map(({ model, roles, options }) => (
-                  <SettingRow
-                    key={model}
-                    stacked
-                    className="options-menu__context-row"
-                    label={`${roles.map((role) => t(`role.${role}`)).join(' · ')} · ${formatModelName(model, { quant: false })}`}
-                    description={
-                      <>
-                        <strong>{formatContextLength(options.current)}</strong>
-                        {savingContextModel === model ? ` ${t('options.context.saving')}` : ''}
-                        {/* Ce qui limite le maximum : la place sur la carte, ou une mesure qui a manqué. */}
-                        <span className="options-menu__context-room">
-                          {options.room
-                            ? t('options.context.room', {
-                                usable: formatDecimal(options.room.usableGb, 1),
-                                model: formatDecimal(options.room.modelGb, 1)
-                              })
-                            : t('options.context.unmeasured')}
-                        </span>
-                      </>
-                    }
-                  >
-                    <input
-                      type="range"
-                      className="options-menu__context-slider"
-                      aria-label={t(`role.${roles[0]}`)}
-                      min={0}
-                      max={Math.max(0, options.availableSteps.length - 1)}
-                      value={Math.max(0, options.availableSteps.indexOf(options.current))}
-                      onChange={(event) => {
-                        const step = options.availableSteps[Number(event.target.value)]
-                        if (step !== undefined) handleContextLengthChange(model, step)
-                      }}
-                    />
-                    <div className="options-menu__context-slider-ticks">
-                      {options.availableSteps.map((step) => (
-                        <span key={step}>{formatContextLength(step)}</span>
-                      ))}
-                    </div>
-                  </SettingRow>
-                ))}
-              </SettingGroup>
-            )}
-
             <SettingGroup title={t('options.models.group')}>
               {myPicks === null ? (
                 <p className="capacity-scan__status">{t('common.loading')}</p>

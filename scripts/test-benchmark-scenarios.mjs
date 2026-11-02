@@ -595,7 +595,8 @@ test('le VRAI converse() et la copie du test envoient les mêmes requêtes et do
     // Jaris envoie toujours la fenêtre de contexte du test (8192) et ses outils — sauf la dernière réponse, au
     // plafond d'actions (étape 402), qui part sans aucun outil.
     const finalNote = (messages) => messages.at(-1)?.role === 'system' && /nombre maximal d'actions/.test(messages.at(-1).content)
-    assert.ok(jaris.requests.every((r, i) => r.numCtx === 8192 && (finalNote(jaris.seen[i]) ? r.tools === undefined : r.tools === TOOLS.length)), what)
+    // Jaris laisse ollama.ts calculer la fenêtre (automatique) ; le test des modèles, lui, garde 8192 (scores mesurés ainsi).
+    assert.ok(jaris.requests.every((r, i) => r.numCtx === undefined && (finalNote(jaris.seen[i]) ? r.tools === undefined : r.tools === TOOLS.length)), what)
   }
 })
 

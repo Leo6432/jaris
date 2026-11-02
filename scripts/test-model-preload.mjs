@@ -102,42 +102,71 @@ test('attente du moteur : `true` dès qu’Ollama répond, `false` au délai san
   assert.equal(await ollama.waitForOllama(40, 5), false)
 })
 
-test('correction de la transcription : la fenêtre demandée est bien envoyée à Ollama', async () => {
+test('correction de la transcription : une fenêtre imposée est envoyée telle quelle, sinon la fenêtre automatique', async () => {
   calls.length = 0
   respond = async () => new Response(JSON.stringify({ message: { role: 'assistant', content: '{"text":"ok"}' }, done: true }), { status: 200 })
-  await ollama.structuredChat([{ role: 'user', content: 'x' }], 'qwen3.5:4b', { type: 'object' }, undefined, 8192)
-  assert.equal(calls[0].body.options.num_ctx, 8192)
-  // Sans valeur : l'ancien comportement (2048) pour les autres usages.
+  await ollama.structuredChat([{ role: 'user', content: 'x' }], 'correcteur:4b', { type: 'object' }, undefined, 8192)
+  assert.equal(calls.at(-1).body.options.num_ctx, 8192)
   calls.length = 0
-  await ollama.structuredChat([{ role: 'user', content: 'x' }], 'qwen3.5:4b', { type: 'object' })
-  assert.equal(calls[0].body.options.num_ctx, 2048)
+  await ollama.structuredChat([{ role: 'user', content: 'x' }], 'autre-correcteur:4b', { type: 'object' })
+  assert.equal(calls.at(-1).body.options.num_ctx, 16384)
 })
 
-test('toutes les demandes au modèle de conversation utilisent LA MÊME fenêtre (sinon Ollama le recharge)', () => {
+// Léo (« tout automatique », comme le mode Code) : sans fenêtre imposée, elle est calculée d'après ce qu'il y a à lire,
+// et ne redescend pas tant que le modèle est sans doute encore chargé (sinon Ollama le recharge, étape 294).
+test('fenêtre automatique : grandit avec la demande, ne redescend pas, et reste la même au préchargement', async () => {
+  calls.length = 0
+  respond = async (url) =>
+    url.endsWith('/api/generate')
+      ? new Response('{"done":true}', { status: 200 })
+      : new Response(JSON.stringify({ message: { role: 'assistant', content: 'ok' }, done: true }), { status: 200 })
+  const chat = async (text) => {
+    await ollama.chatWithOllama([{ role: 'user', content: text }], undefined, 'auto:9b', 'low')
+    return calls.filter((call) => call.url.endsWith('/api/chat')).at(-1).body.options.num_ctx
+  }
+  assert.equal(await chat('Bonjour'), 16384, 'une petite demande : le premier palier')
+  // Une longue page lue : ~60 000 caractères -> ~24 000 tokens + la réserve -> 32k.
+  assert.equal(await chat('x'.repeat(60_000)), 32768)
+  assert.equal(await chat('Merci'), 32768, 'ne redescend pas : le modèle est encore chargé à 32k')
+  assert.equal(await ollama.preloadModel('auto:9b'), true)
+  assert.equal(calls.at(-1).body.options.num_ctx, 32768, 'le préchargement reprend la même fenêtre')
+  assert.equal(await ollama.autoContextFor('jamais-vu:4b'), 16384)
+})
+
+test('fenêtre automatique remplie par la réflexion : un seul nouvel essai au palier suivant', async () => {
+  calls.length = 0
+  let first = true
+  respond = async (url) => {
+    if (!url.endsWith('/api/chat')) return new Response('{}', { status: 200 })
+    if (first) {
+      first = false
+      return new Response(JSON.stringify({ message: { role: 'assistant', content: '' }, done: true, done_reason: 'length' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ message: { role: 'assistant', content: 'Réponse.' }, done: true }), { status: 200 })
+  }
+  const reply = await ollama.chatWithOllama([{ role: 'user', content: 'Explique-moi' }], undefined, 'pense:9b', 'low')
+  assert.equal(reply.content, 'Réponse.')
+  const sent = calls.filter((call) => call.url.endsWith('/api/chat')).map((call) => call.body.options.num_ctx)
+  assert.deepEqual(sent, [16384, 32768])
+})
+
+test('toutes les demandes au modèle de conversation passent par la fenêtre automatique (une seule règle, ollama.ts)', () => {
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
-  // Léo : une fenêtre PAR MODÈLE (Options -> Modèles), mais toujours la même pour un même modèle.
-  const same = 'profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'
   const assistant = read('electron/services/assistant.ts')
-  assert.ok(assistant.includes('numCtxFor = (name: string): number => profile?.contextLengths?.[name] ?? profile?.contextLength ?? config.ollama.numCtx'), 'la conversation')
-  assert.ok(!/\n\s+numCtx,\n/.test(assistant), 'aucune demande de la conversation sans le modèle')
-  assert.ok(read('electron/services/voicePipeline.ts').includes(same), 'la correction de ce qui est entendu')
-  assert.ok(read('electron/services/memoryExtractor.ts').includes(same), 'la mémoire automatique')
-  const main = read('electron/main.ts')
-  assert.ok(main.includes('preloadModel(model, contextLengthFor(profile, model))'), 'le préchargement au démarrage')
-  assert.ok(main.includes('profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'), 'le réglage du modèle')
+  assert.ok(assistant.includes('const numCtx = undefined'), 'la conversation')
+  assert.ok(!/contextLength/.test(assistant + read('electron/services/voicePipeline.ts') + read('electron/services/memoryExtractor.ts')))
+  assert.ok(read('electron/main.ts').includes('return preloadModel(model)'), 'le préchargement au démarrage')
 })
 
 // Étape 346 : le modèle de vision est souvent aussi celui de la conversation — une autre fenêtre le faisait recharger.
-test('regarder l’écran et piloter utilisent la même fenêtre que la conversation, ramenée au modèle', () => {
+test('regarder l’écran et piloter reprennent la fenêtre automatique du modèle', () => {
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
   for (const path of ['electron/services/vision.ts', 'electron/services/computerUse.ts']) {
     const source = read(path)
     assert.ok(!source.includes('num_ctx: config.ollama.numCtx'), `${path} : plus de fenêtre fixe`)
-    // vision.ts passe par chatWithOllama (annulable, en streaming) : la fenêtre y est le dernier argument.
     assert.ok(source.includes('num_ctx: await sharedNumCtx(model)') || /chatWithOllama\([\s\S]{0,400}?await sharedNumCtx\(model\)\s*\)/.test(source), path)
     const helper = source.slice(source.indexOf('async function sharedNumCtx'), source.indexOf('async function sharedNumCtx') + 400)
-    assert.ok(helper.includes('getProfile()') && helper.includes('profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx'), path)
-    assert.ok(helper.includes('fitToModelContext(model, wanted)'), path)
+    assert.ok(helper.includes('autoContextFor(model)'), path)
   }
 })
 

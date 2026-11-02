@@ -198,38 +198,6 @@ export interface Profile {
   activationKeyEnabled?: boolean
   activationWakeWordEnabled?: boolean
   activationOrbClickEnabled?: boolean
-  /**
-   * Longueur de contexte choisie manuellement dans Options -> Modèles (curseur "comme sur Ollama", étape
-   * suivante) — toujours l'un de CONTEXT_LENGTH_STEPS (hardwareScan.ts), jamais une valeur arbitraire tapée
-   * à la main. `undefined` = jamais touché, Jaris garde OLLAMA_NUM_CTX (.env, 8192 par défaut) exactement
-   * comme avant l'ajout de ce réglage.
-   */
-  contextLength?: number
-  /**
-   * Léo (« des gros modèles je peux pas monter, des petits je pourrais augmenter ») : un réglage PAR MODÈLE (nom
-   * Ollama), choisi dans Options -> Modèles. Absent pour un modèle : `contextLength`, sinon OLLAMA_NUM_CTX. Rangé par
-   * modèle et pas par rôle : un même modèle sur deux rôles garde ainsi une seule fenêtre (sinon Ollama le recharge).
-   */
-  contextLengths?: Record<string, number>
-}
-
-/** Une ligne du réglage de mémoire (Options -> Modèles) : un modèle de conversation et les rôles qu'il tient. */
-export interface ModelContextLengthOptions {
-  model: string
-  roles: Array<'flash' | 'medium' | 'large'>
-  options: ContextLengthOptions
-}
-
-/** Résultat de getContextLengthOptions (hardwareScan.ts) : voir son commentaire pour le calcul du plafond. */
-export interface ContextLengthOptions {
-  /** Valeur réellement utilisée (profil ou repli .env), toujours montrée telle quelle (étape 346). */
-  current: number
-  /** Palier maximum sûr pour la VRAM libre actuelle et le modèle du palier Puissant. */
-  max: number
-  /** Les crans jusqu'à `max`, plus `current` s'il est au-dessus (la valeur utilisée n'est jamais cachée). */
-  availableSteps: number[]
-  /** Mémoire vidéo utilisable et poids du modèle, en Go ; `null` quand une mesure a manqué (repli prudent). */
-  room?: { usableGb: number; modelGb: number } | null
 }
 
 export interface RuntimeSetupStatus {
@@ -1574,14 +1542,6 @@ export const IPC_CHANNELS = {
   getWindowChrome: 'jaris:get-window-chrome',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
-  /**
-   * renderer <-> main : calcule le curseur de longueur de contexte (Options -> Modèles) pour la VRAM
-   * ACTUELLEMENT libre et le modèle du palier Puissant — jamais mis en cache, recalculé à chaque ouverture
-   * de l'onglet (voir computeContextLengthOptions, hardwareScan.ts).
-   */
-  getContextLengthOptions: 'jaris:get-context-length-options',
-  /** renderer -> main : enregistre la longueur de contexte choisie dans le profil (Profile.contextLength). */
-  setContextLength: 'jaris:set-context-length',
   /** renderer <-> main : état réel de l'entrée de démarrage de Windows (voir launchAtStartup.ts). */
   getLaunchAtStartup: 'jaris:get-launch-at-startup',
   /** renderer <-> main : active/désactive le lancement de Jaris au démarrage de Windows. */

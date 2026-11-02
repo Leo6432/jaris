@@ -47,7 +47,6 @@ const overrides = {
   saveProfile: async () => {},
   patchProfile: async () => null,
   listAudioInputDevices: async () => [],
-  getContextLengthOptions: async () => ([{ model: 'qwen3.5:9b', roles: ['flash', 'medium', 'large'], options: { current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] } }]),
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
   // Étape 336 : l'installation de l'Ollama de Jaris dure ; le test décide quand elle se termine.
   updateOllama: () => new Promise((resolve) => { window.__finishOllama = resolve }),
@@ -286,7 +285,8 @@ test('Modèles regroupe VRAIMENT mémoire et matériel, sans fichiers/moteur loc
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
     // Titres alignés sur la copie exacte de la maquette (étape 119) : "Mémoire de conversation" et "Ce que
     // ta machine fait tourner" au lieu de "Longueur de mémoire"/"Les paliers de configuration".
-    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner'])
+    // Léo (« tout automatique ») : plus de réglage de mémoire, Jaris la calcule pour chaque demande.
+    assert.deepEqual(titles, ['Ce que ta machine fait tourner'])
     const content = await page.textContent('.options-page__content')
     assert.ok(!content.includes('Dossier de Jaris'), 'le dossier de Jaris ne doit pas être dans Modèles')
     assert.ok(!(await page.$('.options-menu__models-location-list')), 'la liste des emplacements ne doit plus être dans Modèles')

@@ -178,8 +178,8 @@ async function runExtraction(signal: AbortSignal, onLog?: (message: string) => v
     // Vérifié non-undefined au chargement du module (throw ci-dessus sinon) : le cast est sûr ici.
     // Étape 294 : la fenêtre de la conversation (réglage Options → Modèles), pas celle par défaut — une autre valeur
     // ferait recharger le modèle médium par Ollama après chaque échange, juste avant la question suivante.
-    const numCtx = profile?.contextLengths?.[model] ?? profile?.contextLength ?? config.ollama.numCtx
-    const message = await chatWithOllama(messages, [REMEMBER_TOOL!], model, 'low', signal, numCtx)
+    // Fenêtre automatique (ollama.ts) : la même que la conversation tant que le modèle est chargé.
+    const message = await chatWithOllama(messages, [REMEMBER_TOOL!], model, 'low', signal)
     answered = true
     // Le modèle a répondu : ces échanges sont lus, une note en sorte ou non. Les notes s'écrivent même si une
     // nouvelle demande arrive maintenant (plus rien n'occupe Ollama).

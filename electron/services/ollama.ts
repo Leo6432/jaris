@@ -158,9 +158,84 @@ export function visibleReplySoFar(content: string): string {
  * construits token par token). Sans `onToken` (comportement historique, voix comprise), tout reste identique
  * — un seul appel non-streamé, la réponse complète d'un bloc.
  */
+/**
+ * Léo (« tout automatique », comme le mode Code) : sans fenêtre imposée par l'appelant, Jaris la calcule pour CHAQUE
+ * demande d'après ce qu'il y a à lire (conversation, outils, pages web), plus une réserve pour la réflexion et la
+ * réponse, arrondie au palier du dessus. Ollama recharge un modèle dont la fenêtre change (server/sched.go) : la
+ * fenêtre ne redescend donc pas tant que le modèle est encore en mémoire (5 min, sa durée de garde par défaut) — elle
+ * ne change qu'en franchissant un palier, rarement. Jamais plus que ce que le modèle accepte.
+ */
+// Premier palier 16k : consignes + outils de Jaris pèsent déjà ~4 500 tokens, plus la réflexion et la réponse —
+// presque toute demande de conversation y arrive. Le même plancher pour le préchargement, la vision et la correction
+// de la voix évite qu'un modèle partagé soit rechargé entre deux usages (8k pour l'un, 16k pour l'autre).
+export const AUTO_CONTEXT_STEPS = [16384, 32768, 65536, 131072, 262144]
+/** Réflexion + réponse : qwen3.5:9b a rempli 8192 tokens à réfléchir (capture de Léo). */
+const AUTO_REPLY_RESERVE = 8192
+/** Prudent, comme le mode Code (étape 159) : mieux vaut un palier de trop qu'une fenêtre pleine. */
+const AUTO_CHARS_PER_TOKEN = 2.5
+const AUTO_STICKY_MS = 5 * 60_000
+const recentWindows = new Map<string, { numCtx: number; at: number }>()
+
+/** Tokens estimés d'une demande ; les images (base64) ne comptent pas, elles ne sont pas du texte. */
+export function estimateRequestTokens(payload: unknown): number {
+  const text = JSON.stringify(payload ?? '', (key, value) => (key === 'images' ? undefined : value)) ?? ''
+  return Math.ceil(text.length / AUTO_CHARS_PER_TOKEN)
+}
+
+/** Le plus petit palier qui contient `needTokens`. */
+export function autoContextStep(needTokens: number): number {
+  return AUTO_CONTEXT_STEPS.find((step) => step >= needTokens) ?? AUTO_CONTEXT_STEPS[AUTO_CONTEXT_STEPS.length - 1]
+}
+
+/** Fenêtre avec laquelle le modèle est sans doute encore chargé (0 si aucune demande récente). */
+function stickyWindow(model: string): number {
+  const recent = recentWindows.get(model)
+  return recent && Date.now() - recent.at < AUTO_STICKY_MS ? recent.numCtx : 0
+}
+
+function rememberWindow(model: string, numCtx: number): void {
+  recentWindows.set(model, { numCtx, at: Date.now() })
+}
+
+/**
+ * Fenêtre automatique pour `model` : sans `payload`, celle avec laquelle il tourne déjà (ou le premier palier) — pour
+ * la vision ou le préchargement, qui ne doivent jamais faire recharger un modèle partagé avec la conversation.
+ */
+export async function autoContextFor(model: string, payload?: unknown): Promise<number> {
+  const need = payload === undefined ? 0 : estimateRequestTokens(payload) + AUTO_REPLY_RESERVE
+  return fitToModelContext(model, Math.max(autoContextStep(need), stickyWindow(model)))
+}
+
 async function requestChat(
   body: Record<string, unknown>,
   model: string,
+  signal?: AbortSignal,
+  onToken?: (delta: string) => void,
+  onThinking?: (delta: string) => void,
+  onMetrics?: (metrics: ChatMetrics) => void
+): Promise<OllamaMessage> {
+  const options = body.options as { num_ctx?: number } | undefined
+  const auto = options?.num_ctx === undefined
+  // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
+  const numCtx = auto
+    ? await autoContextFor(model, { messages: body.messages, tools: body.tools })
+    : await fitToModelContext(model, options.num_ctx as number)
+  try {
+    return await requestChatWith(body, model, numCtx, signal, onToken, onThinking, onMetrics)
+  } catch (err) {
+    // Fenêtre automatique remplie (souvent par la réflexion) : un seul nouvel essai au palier suivant, que le modèle
+    // garde ensuite. Rien n'a été affiché (la fenêtre pleine n'est signalée que sans texte ni outil).
+    if (!auto || (err as { name?: string } | null)?.name !== 'ContextFullError') throw err
+    const bigger = await fitToModelContext(model, autoContextStep(numCtx + 1))
+    if (bigger <= numCtx) throw err
+    return requestChatWith(body, model, bigger, signal, onToken, onThinking, onMetrics)
+  }
+}
+
+async function requestChatWith(
+  body: Record<string, unknown>,
+  model: string,
+  numCtx: number,
   signal?: AbortSignal,
   onToken?: (delta: string) => void,
   onThinking?: (delta: string) => void,
@@ -171,8 +246,8 @@ async function requestChat(
   // connexion et Jaris affirmait à tort qu'Ollama n'était pas lancé. En flux, chaque fragment garde la connexion vivante.
   const relays = Boolean(onToken || onThinking)
   const options = body.options as { num_ctx?: number } | undefined
-  // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
-  const numCtx = await fitToModelContext(model, options?.num_ctx ?? config.ollama.numCtx)
+  // Ollama charge le modèle avec cette fenêtre : la suivante en tiendra compte pour ne pas le recharger.
+  rememberWindow(model, numCtx)
   // Étape 387 : toujours la même valeur pour un même modèle (Ollama le recharge sinon, comme pour num_ctx).
   const numThread = config.ollama.threadsFor?.(model)
   let response: Response
@@ -319,7 +394,8 @@ export async function chatWithOllama(
   // Surcharge ponctuelle de la fenêtre de contexte : la conversation normale tient largement dans la
   // valeur par défaut (OLLAMA_NUM_CTX), mais la génération de code (étape 30) produit un fichier complet
   // puis le relit en entier pour le corriger, ce qui dépasse nettement 4096 tokens.
-  numCtx: number = config.ollama.numCtx,
+  // Léo (« tout automatique ») : absent = fenêtre calculée pour cette demande (voir autoContextFor).
+  numCtx?: number,
   // Étape 48 : présent uniquement côté Chat (jamais à la voix, qui attend le texte complet avant de le lire
   // à voix haute) — voir requestChat ci-dessus. Un tour qui appelle un outil ne "raconte" en général rien
   // (content vide, tout est dans tool_calls) : ce callback ne reçoit donc quelque chose de visible que sur
@@ -385,7 +461,7 @@ export async function structuredChat(
    * modèle dont la fenêtre demandée change (`needsReload`, server/sched.go) : la correction en 2048 puis la réponse
    * en 8192 rechargeaient le modèle rapide deux fois par phrase dite à Jaris.
    */
-  numCtx = 2048
+  numCtx?: number
 ): Promise<string> {
   const body = { model, messages, format: schema, options: { temperature: 0, num_ctx: numCtx } }
   try {
@@ -418,10 +494,11 @@ export async function waitForOllama(timeoutMs: number, intervalMs = 500): Promis
  * que la première question n'attende pas son chargement. `numCtx` doit être EXACTEMENT celui des vraies demandes :
  * une autre valeur ferait recharger le modèle à la première question, préchargement perdu. `true` si chargé.
  */
-export async function preloadModel(model: string, numCtx: number, timeoutMs = 120_000): Promise<boolean> {
+export async function preloadModel(model: string, numCtx?: number, timeoutMs = 120_000): Promise<boolean> {
   try {
-    // La même fenêtre plafonnée que les vraies demandes (requestChat) : sinon Ollama rechargerait le modèle.
-    const fitted = await fitToModelContext(model, numCtx)
+    // La même fenêtre que les vraies demandes (requestChat) : sinon Ollama rechargerait le modèle.
+    const fitted = numCtx === undefined ? await autoContextFor(model) : await fitToModelContext(model, numCtx)
+    rememberWindow(model, fitted)
     const response = await fetch(`${config.ollama.host}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -475,27 +552,8 @@ export async function listInstalledModels(): Promise<string[]> {
 }
 
 /**
- * Taille réelle sur disque (octets) d'un modèle déjà installé, telle que rapportée par `/api/tags` (champ
- * `size`) — sert d'approximation de son poids en VRAM (curseur de longueur de contexte, hardwareScan.ts).
- * Préférée à la table `vramGb` maintenue à la main dans hardwareScan.ts (ModelCandidate) : cette dernière
- * s'est déjà révélée fausse une fois (qwen3.6:35b recopié d'un autre modèle faute de mieux) et ne couvre de
- * toute façon que les modèles CANDIDATS de Jaris, jamais un modèle installé manuellement en dehors de ces
- * listes. `null` si le modèle n'est pas installé (jamais une taille inventée).
- */
-export async function getInstalledModelSizeBytes(model: string): Promise<number | null> {
-  const response = await fetch(`${config.ollama.host}/api/tags`)
-  if (!response.ok) throw new Error(t('ollama.listFailed', { status: response.status }))
-  const data = (await response.json()) as OllamaTagsResponse
-  const entry = (data.models ?? []).find((m) => m.name === model)
-  return typeof entry?.size === 'number' ? entry.size : null
-}
-
-/**
- * Métadonnées d'architecture d'un modèle (`POST /api/show`), pour calculer le poids réel du cache K/V par
- * token de contexte (curseur de longueur de contexte, hardwareScan.ts). Les clés de `model_info` sont
- * préfixées par l'architecture du modèle ("llama.block_count", "qwen3.attention.head_count_kv",
- * "gemma3.embedding_length"...) — jamais un nom fixe, donc lues par SUFFIXE dans parseModelArchInfo
- * (hardwareScan.ts) plutôt que par une liste d'architectures connues à maintenir à la main.
+ * Métadonnées d'architecture d'un modèle (`POST /api/show`). Les clés de `model_info` sont préfixées par
+ * l'architecture du modèle ("llama.block_count", "qwen3.attention.head_count_kv"...) — jamais un nom fixe.
  */
 export async function getModelInfo(model: string): Promise<Record<string, unknown> | null> {
   const response = await fetch(`${config.ollama.host}/api/show`, {
