@@ -10794,3 +10794,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   visible, Échap, choix qui ferme le menu, « … » actif, Duel plus dans la barre — échoue si Duel y revient) et
   `test-options-reorganization-ui.mjs` (plus de « Tous les modèles » dans les Options, tableau sur l'écran Classement).
   **Non vérifié en usage réel.**
+
+- **Étape 411 (v0.41.9), Léo, capture d'un duel Code : modèle B « Réfléchit… 39 min 41 · Caractères de réflexion :
+  671 122 » (« c'est normal ? »).** Non : un modèle qui tourne en rond. Aucune demande ne fixait `num_predict` ; sans
+  limite, Ollama fait glisser la fenêtre d'un modèle classique (pas hybride) quand elle est pleine, et il continue
+  indéfiniment (déjà vu à l'étape 159 : « 11 000 tokens générés sans fin »). `requestChatWith` (ollama.ts, par où
+  passent toutes les demandes) fixe maintenant `num_predict` = la fenêtre quand l'appelant ne l'a pas fait : une
+  réponse, réflexion comprise, ne dépasse jamais sa fenêtre, et arrivée au bout elle est signalée comme une fenêtre
+  pleine (le mode Code réessaie une fois plus grand, étape 159 ; la conversation au palier suivant, étape 409). Dans
+  le cas de Léo, l'arrêt serait venu après ~32k tokens au lieu de jamais. Régression : `test-model-preload.mjs`
+  (fenêtre imposée et automatique). **Non vérifié en usage réel.**

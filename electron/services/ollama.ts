@@ -255,7 +255,24 @@ async function requestChatWith(
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx, ...(numThread ? { num_thread: numThread } : {}) } } : {}), stream: true }),
+      body: JSON.stringify({
+        ...body,
+        ...(options
+          ? {
+              options: {
+                ...options,
+                num_ctx: numCtx,
+                // Léo (capture d'un duel Code : « Réfléchit… 39 min 41 · 671 122 caractères de réflexion ») : sans
+                // limite, Ollama fait glisser la fenêtre d'un modèle qui tourne en rond et il réfléchit SANS FIN. Une
+                // réponse (réflexion comprise) ne dépasse jamais sa fenêtre ; arrivée au bout, elle est signalée
+                // comme une fenêtre pleine (ContextFullError) au lieu de tourner des heures.
+                num_predict: (options as { num_predict?: number }).num_predict ?? numCtx,
+                ...(numThread ? { num_thread: numThread } : {})
+              }
+            }
+          : {}),
+        stream: true
+      }),
       signal,
       ...(chatDispatcher ? { dispatcher: chatDispatcher } : {})
     } as RequestInit)

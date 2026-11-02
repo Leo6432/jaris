@@ -218,3 +218,16 @@ test('fils de calcul : envoyés quand le travail en cours en demande pour ce mod
   await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'petit:4b', 'low', undefined, 32768)
   assert.equal('num_thread' in calls.at(-1).body.options, false, 'hors duel distant : rien')
 })
+
+// Léo (duel Code : un modèle « réfléchit » 39 min, 671 122 caractères) : une réponse ne dépasse jamais sa fenêtre —
+// sinon Ollama fait glisser la fenêtre d'un modèle qui tourne en rond, et il réfléchit sans fin.
+test('une réponse ne peut jamais dépasser sa fenêtre (num_predict), imposée ou automatique', async () => {
+  calls.length = 0
+  respond = async () => new Response(JSON.stringify({ message: { role: 'assistant', content: 'ok' }, done: true }), { status: 200 })
+  await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'boucle:9b', 'low', undefined, 32768)
+  const imposed = calls.filter((call) => call.url.endsWith('/api/chat')).at(-1).body.options
+  assert.equal(imposed.num_predict, imposed.num_ctx)
+  await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'boucle2:9b', 'low')
+  const auto = calls.filter((call) => call.url.endsWith('/api/chat')).at(-1).body.options
+  assert.equal(auto.num_predict, auto.num_ctx)
+})
