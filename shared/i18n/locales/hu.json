@@ -329,6 +329,8 @@
   "code.issues.reopened": "Ezt az alkalmazást javítani kell:",
   "code.placeholder.repo": "Mit szeretnél megváltoztatni ebben: {name}?",
   "code.placeholder.app": "Mit szeretnél megváltoztatni? (pl. adj hozzá sötét módot…)",
+  "code.writeNow": "Írd meg most a kódot",
+  "code.writeNow.title": "A modell abbahagyja a gondolkodást, és azonnal ír azzal, amit már végiggondolt.",
   "code.placeholder.new": "Írd le a létrehozandó alkalmazást…",
   "common.send": "Küldés",
   "code.submit.modify": "Módosítás",

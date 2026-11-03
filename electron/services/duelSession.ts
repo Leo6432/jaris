@@ -152,6 +152,8 @@ interface SideState extends DuelSideView {
    * modifie (même chemin que « modifier l'application » du mode Code). `null` : rien à modifier.
    */
   baseHtml: string | null
+  /** Étape 416 : « Écrire le code maintenant » pour la génération en cours de ce côté (`null` hors génération). */
+  writeNow: AbortController | null
 }
 
 interface RoundState {
@@ -321,12 +323,13 @@ function emptySide(): SideState {
     retries: 0,
     toolLog: [],
     baseHtml: null,
+    writeNow: null,
     earlier: []
   }
 }
 
 function sideView(side: SideState): DuelSideView {
-  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, ...view } = side
+  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, writeNow: _hurry, ...view } = side
   return view
 }
 
@@ -1560,7 +1563,18 @@ export function codeAsk(round: Pick<RoundState, 'prompt' | 'followUps'>, side: P
 }
 
 async function runCode(_current: Session, side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
+  const hurry = new AbortController()
+  side.writeNow = hurry
+  try {
+    await writeCode(side, model, prompt, think, signal, hurry.signal)
+  } finally {
+    if (side.writeNow === hurry) side.writeNow = null
+  }
+}
+
+async function writeCode(side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal, writeNow: AbortSignal): Promise<void> {
   const app = await generateApp(prompt, () => {}, side.baseHtml ?? undefined, undefined, {
+    writeNow,
     model,
     think,
     persist: false,
@@ -1574,6 +1588,22 @@ async function runCode(_current: Session, side: SideState, model: string, prompt
   side.html = app.html
   side.previewUrl = createGeneratedAppPreview(app.html)
   side.text = app.issues.length ? app.issues.join('\n') : ''
+}
+
+/**
+ * Étape 416 (Léo : « un bouton : arrête ta réflexion et écris le code ») : le modèle de ce côté arrête de réfléchir et
+ * écrit tout de suite (codeGenerator.ts, `writeNow`). Seulement en Code, pendant qu'il travaille, une fois par tour.
+ */
+export function writeNowDuel(sideName: DuelSide): DuelSessionView {
+  const current = session
+  const side = current?.round?.sides[sideName]
+  if (!current || !side) throw new Error(t('duel.error.noRound'))
+  // L'écran ne montre le bouton que dans ce cas : une autre demande ne vient pas de lui.
+  if (current.category !== 'code' || side.status !== 'running' || !side.writeNow) throw new Error(t('duel.error.badRequest'))
+  side.hurried = true
+  side.writeNow.abort()
+  emitNow()
+  return getDuelView() as DuelSessionView
 }
 
 /** La réponse lue d'un côté (duel Vocal), pour que l'écran la joue. */

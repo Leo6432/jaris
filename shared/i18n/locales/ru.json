@@ -343,6 +343,8 @@
   "code.issues.reopened": "Это приложение нужно исправить:",
   "code.placeholder.repo": "Что хочешь изменить в {name}?",
   "code.placeholder.app": "Что хочешь изменить? (напр.: добавь тёмную тему…)",
+  "code.writeNow": "Написать код сейчас",
+  "code.writeNow.title": "Модель перестаёт размышлять и сразу пишет, опираясь на уже продуманное.",
   "code.placeholder.new": "Опиши приложение, которое нужно создать…",
   "common.send": "Отправить",
   "code.submit.modify": "Изменить",

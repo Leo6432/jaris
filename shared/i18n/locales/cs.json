@@ -336,6 +336,8 @@
   "code.issues.reopened": "Tato aplikace potřebuje opravu:",
   "code.placeholder.repo": "Co chceš změnit v aplikaci {name}?",
   "code.placeholder.app": "Co chceš změnit? (např. přidej tmavý režim…)",
+  "code.writeNow": "Napsat kód hned",
+  "code.writeNow.title": "Model přestane přemýšlet a hned píše s tím, co už promyslel.",
   "code.placeholder.new": "Popiš aplikaci, kterou chceš vytvořit…",
   "common.send": "Odeslat",
   "code.submit.modify": "Upravit",

@@ -329,6 +329,8 @@
   "code.issues.reopened": "Това приложение има нужда от поправка:",
   "code.placeholder.repo": "Какво искаш да промениш в {name}?",
   "code.placeholder.app": "Какво искаш да промениш? (напр.: добави тъмен режим…)",
+  "code.writeNow": "Напиши кода сега",
+  "code.writeNow.title": "Моделът спира да мисли и пише веднага, с това, което вече е обмислил.",
   "code.placeholder.new": "Опиши приложението, което да се създаде…",
   "common.send": "Изпрати",
   "code.submit.modify": "Промени",

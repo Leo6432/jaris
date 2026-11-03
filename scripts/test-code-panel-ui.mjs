@@ -121,6 +121,9 @@ window.jaris = {
       window.__finishGen = () => resolve({ ...APP, ...(window.__genExtra ?? {}) })
       window.__failGen = (err) => reject(err)
     }),
+  codeGenWriteNow: () => {
+    window.__writeNow = (window.__writeNow ?? 0) + 1
+  },
   cancelCodeGen: () => {
     window.__cancelled = true
     window.__failGen?.(new Error('aborted'))
@@ -1249,5 +1252,38 @@ test('une application ROUVERTE avec une erreur : en-tête neutre, jamais « gén
     assert.equal(box.header, "Cette application a besoin d'une correction :")
     assert.doesNotMatch(box.text, /générée|Relance la génération/)
     assert.match(box.text, /corrige l'erreur/)
+  })
+})
+
+// Étape 416 (Léo : « un bouton : arrête ta réflexion et écris le code »).
+test('étape 416 : « Écrire le code maintenant » seulement pendant qu’il réfléchit, une fois par génération', options, async () => {
+  const step = { label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true, idleMs: 1_000 }
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 3_000, phase: 'loading' }), step)
+    assert.equal(await page.locator('.code-panel__write-now').count(), 0, 'pas pendant le chargement')
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 9 * 60_000, phase: 'thinking', thinkingText: 'Je réfléchis…' }), step)
+    const button = page.getByRole('button', { name: 'Écrire le code maintenant' })
+    assert.equal(await button.count(), 1)
+    // Habillé par le CSS de Jaris (contour arrondi), placé sous la ligne « Réfléchit… ».
+    const look = await page.$eval('.code-panel__write-now', (el) => {
+      const style = getComputedStyle(el)
+      const live = document.querySelector('.code-chat__live').getBoundingClientRect()
+      return { radius: parseFloat(style.borderTopLeftRadius), cursor: style.cursor, below: el.getBoundingClientRect().top >= live.bottom - 1 }
+    })
+    assert.ok(look.radius >= 16 && look.cursor === 'pointer' && look.below, JSON.stringify(look))
+    if (process.env.JARIS_SHOT) await page.screenshot({ path: process.env.JARIS_SHOT })
+    await button.click()
+    assert.equal(await page.evaluate(() => window.__writeNow), 1)
+    assert.equal(await page.locator('.code-panel__write-now').count(), 0, 'demandé : le bouton disparaît')
+    // Le modèle repart (lecture, puis écriture) : le bouton ne revient pas, même s'il réfléchit encore un peu.
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 1_000, phase: 'thinking', thinkingText: 'ok' }), step)
+    assert.equal(await page.locator('.code-panel__write-now').count(), 0)
+    await page.evaluate(() => window.__finishGen())
+    // Génération suivante : le bouton est de nouveau proposé quand il réfléchit.
+    await page.waitForFunction(() => !document.querySelector('.code-chat__live'))
+    await startGeneration(page)
+    await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 2_000, phase: 'thinking' }), step)
+    assert.equal(await page.locator('.code-panel__write-now').count(), 1)
   })
 })

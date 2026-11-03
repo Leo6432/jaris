@@ -336,6 +336,8 @@
   "code.issues.reopened": "Această aplicație are nevoie de o corectare:",
   "code.placeholder.repo": "Ce vrei să schimbi în {name}?",
   "code.placeholder.app": "Ce vrei să schimbi? (ex: adaugă un mod întunecat…)",
+  "code.writeNow": "Scrie codul acum",
+  "code.writeNow.title": "Modelul se oprește din gândit și scrie imediat, cu ce a gândit deja.",
   "code.placeholder.new": "Descrie aplicația de creat…",
   "common.send": "Trimite",
   "code.submit.modify": "Modifică",

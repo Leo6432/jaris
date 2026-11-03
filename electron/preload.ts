@@ -221,6 +221,7 @@ const api = {
   onCodeGenNarration: (cb: (narration: CodeNarration) => void) => subscribe(IPC_CHANNELS.codeGenNarration, cb),
   onCodeGenLive: (cb: (live: CodeLiveWrite | null) => void) => subscribe(IPC_CHANNELS.codeGenLive, cb),
   cancelCodeGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelCodeGen),
+  codeGenWriteNow: (): void => ipcRenderer.send(IPC_CHANNELS.codeGenWriteNow),
   // Étape 277 : GitHub dans le mode Code. L'arrêt d'un travail en cours passe par cancelCodeGen.
   githubStatus: (): Promise<GithubStatus> => invoke(IPC_CHANNELS.githubStatus),
   githubStartLogin: (): Promise<GithubDeviceCode> => invoke(IPC_CHANNELS.githubStartLogin),
@@ -299,6 +300,7 @@ const api = {
   duelSideCode: (side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelSideCode, side),
   duelRetry: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRetry),
   duelSwapModel: (side: DuelSide): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSwapModel, side),
+  duelWriteNow: (side: DuelSide): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelWriteNow, side),
   duelSkip: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSkip),
   duelNext: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelNext),
   duelBatchStart: (prompts: string[]): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelBatchStart, prompts),

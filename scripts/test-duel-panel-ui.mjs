@@ -118,6 +118,11 @@ window.jaris = {
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
   duelHistoryCode: async (id, side) => { window.__calls.push(['historyCode', id, side]); return '<html>\\n<body>serpent</body>\\n</html>' },
   duelSideCode: async (side) => { window.__calls.push(['sideCode', side]); return '<html>\\n<body>\\n<h1>Compteur</h1>\\n</body>\\n</html>' },
+  duelWriteNow: async (which) => {
+    window.__calls.push(['writeNow', which])
+    const r = window.__view.round
+    return ready({ ...r, [which]: { ...r[which], hurried: true } })
+  },
   duelSwapModel: async (which) => {
     window.__calls.push(['swap', which])
     return ready({ ...window.__view.round, [which]: side({ status: 'running', startedAt: Date.now(), activity: { kind: 'thinking' } }) })
@@ -1393,6 +1398,28 @@ test('étape 401 : un modèle demande la ville — Léo répond aux deux avant d
     await page.click('.duel-round__sides > section:nth-child(2) .duel-btn--primary')
     assert.ok((await page.evaluate(() => window.__calls)).includes('runB'))
   }, init)
+})
+
+test('étape 416 : duel Code — « Écrire le code maintenant » sur le côté qui réfléchit, seulement là, et il disparaît une fois demandé', options, async () => {
+  const init = `
+    var __s = (p) => Object.assign({ status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, p)
+    window.__category = 'code'
+    window.__view = { id: 'session-1', category: 'code', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null,
+      round: { number: 1, prompt: 'Un compteur', followUps: [], revealed: null, together: true,
+        a: __s({ status: 'running', startedAt: Date.now() - 60000, activity: { kind: 'writing', code: { step: 1, steps: 2, charsWritten: 900, thinkingChars: 0, idleMs: 0, elapsedMs: 60000 } } }),
+        b: __s({ status: 'running', startedAt: Date.now() - 39 * 60000, activity: { kind: 'thinking', code: { step: 1, steps: 2, charsWritten: 0, thinkingChars: 671122, idleMs: 0, elapsedMs: 39 * 60000 } } }) } }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-side__write-now')
+    assert.equal(await page.locator('.duel-side__write-now').count(), 1, 'seulement le côté qui réfléchit (A écrit déjà)')
+    const owner = await page.$eval('.duel-side__write-now', (el) => el.closest('.duel-side').getAttribute('aria-label'))
+    assert.equal(owner, 'Modèle B')
+    const buttons = await page.$$eval('.duel-side[aria-label="Modèle B"] .duel-side__controls button', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(buttons, ['Arrêter', 'Écrire le code maintenant'])
+    await page.click('.duel-side__write-now')
+    await page.waitForFunction(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'writeNow'))
+    assert.deepEqual(await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'writeNow')), ['writeNow', 'b'])
+    await page.waitForFunction(() => !document.querySelector('.duel-side__write-now'))
+  }, init, { width: 760, height: 900 })
 })
 
 test('étape 415 : en duel Code, un champ pour demander une modification aux deux modèles, puis la version d’avant reste citée', options, async () => {

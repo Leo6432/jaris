@@ -1644,6 +1644,33 @@ test('étape 415 : en Code avec assez de mémoire pour les deux, le deuxième me
   assert.equal(env.calls.generate.length, 4)
 })
 
+test('étape 416 : « Écrire le code maintenant » — le côté en cours reçoit le signal, une fois ; jamais hors Code ni à l’arrêt', async () => {
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const env = setup({ installed: MODELS, category: 'code', generateGate: gate })
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  assert.throws(() => env.session.writeNowDuel('a'), /invalide/, 'rien ne tourne')
+  env.session.askDuel('Un compteur')
+  await waitFor(() => env.calls.generate.length === 1, 'A écrit')
+  const signal = env.calls.generate[0].options.writeNow
+  assert.equal(signal.aborted, false)
+  const view = env.session.writeNowDuel('a')
+  assert.equal(signal.aborted, true, 'le générateur de A est prévenu')
+  assert.equal(view.round.a.hurried, true, 'le bouton ne revient pas pendant ce tour')
+  assertAnonymous([view], 'après « Écrire maintenant »')
+  assert.throws(() => env.session.writeNowDuel('b'), /invalide/, 'B ne tourne pas')
+  release()
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A fini')
+  assert.throws(() => env.session.writeNowDuel('a'), /invalide/, 'plus rien à presser une fois fini')
+
+  const chat = setup({ installed: MODELS, converseImpl: () => new Promise(() => {}) })
+  await readySession(chat)
+  chat.session.askDuel('Salut')
+  await waitFor(() => chat.session.getDuelView().round.a.status === 'running', 'A tourne')
+  assert.throws(() => chat.session.writeNowDuel('a'), /invalide/, 'pas en Conversation')
+})
+
 test('étape 415 : sans application à modifier, le modèle reçoit toute la demande, pas seulement « ajoute un bouton »', () => {
   const code415 = setup().session.codeAsk
   const round = { prompt: 'Un compteur', followUps: ['Ajoute un bouton', 'En vert'] }

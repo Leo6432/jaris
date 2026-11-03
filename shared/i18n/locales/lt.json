@@ -336,6 +336,8 @@
   "code.issues.reopened": "Šią programą reikia pataisyti:",
   "code.placeholder.repo": "Ką nori pakeisti programėlėje {name}?",
   "code.placeholder.app": "Ką nori pakeisti? (pvz., pridėk tamsųjį režimą…)",
+  "code.writeNow": "Rašyti kodą dabar",
+  "code.writeNow.title": "Modelis nustoja galvoti ir iškart rašo, remdamasis tuo, ką jau apgalvojo.",
   "code.placeholder.new": "Aprašyk kuriamą programėlę…",
   "common.send": "Siųsti",
   "code.submit.modify": "Keisti",

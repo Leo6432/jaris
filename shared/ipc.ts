@@ -1059,6 +1059,8 @@ export type DuelActivity =
 
 export interface DuelSideView {
   status: 'idle' | 'running' | 'done' | 'error' | 'stopped'
+  /** Étape 416 : Léo a demandé « Écrire le code maintenant » pendant ce tour (le bouton ne revient pas). */
+  hurried?: boolean
   /** La réponse, partielle pendant qu'elle s'écrit. */
   text: string
   activity: DuelActivity | null
@@ -1366,6 +1368,8 @@ export const IPC_CHANNELS = {
   codeGenProgress: 'jaris:code-gen-progress',
   /** renderer -> main : arrête la génération en cours (bouton "Arrêter", étape 99). */
   cancelCodeGen: 'jaris:cancel-code-gen',
+  /** Étape 416 : « Écrire le code maintenant » pendant que le modèle du mode Code réfléchit. */
+  codeGenWriteNow: 'jaris:code-gen-write-now',
   /** Étape 277 : connexion GitHub et travail sur les dépôts depuis le mode Code (voir GithubStatus). L'arrêt d'un
    * travail en cours passe par `cancelCodeGen`, comme une génération : un seul travail à la fois dans le mode Code. */
   githubStatus: 'jaris:github-status',
@@ -1490,6 +1494,7 @@ export const IPC_CHANNELS = {
   duelRetry: 'jaris:duel-retry',
   /** renderer -> main : un autre modèle de la session pour ce côté du duel (même demande). */
   duelSwapModel: 'jaris:duel-swap-model',
+  duelWriteNow: 'jaris:duel-write-now',
   duelSkip: 'jaris:duel-skip',
   /** renderer -> main, étape 358 : après la révélation des noms, le duel suivant. */
   duelNext: 'jaris:duel-next',

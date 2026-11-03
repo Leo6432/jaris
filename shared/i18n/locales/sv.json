@@ -329,6 +329,8 @@
   "code.issues.reopened": "Den här appen behöver rättas:",
   "code.placeholder.repo": "Vad vill du ändra i {name}?",
   "code.placeholder.app": "Vad vill du ändra? (t.ex. lägg till ett mörkt läge…)",
+  "code.writeNow": "Skriv koden nu",
+  "code.writeNow.title": "Modellen slutar tänka och skriver direkt, utifrån det den redan har tänkt ut.",
   "code.placeholder.new": "Beskriv appen du vill skapa…",
   "common.send": "Skicka",
   "code.submit.modify": "Ändra",

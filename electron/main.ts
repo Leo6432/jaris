@@ -97,6 +97,7 @@ import {
   planDuel,
   retryDuel,
   swapDuelModel,
+  writeNowDuel,
   runDuelB,
   followUpDuel,
   setDuelEnvironment,
@@ -329,6 +330,8 @@ let onboardingDone = false
  * (étape 99) — `null` quand rien ne tourne. Avant, une génération partie ne pouvait plus être arrêtée
  * autrement qu'en fermant Jaris. */
 let codeGenAbort: AbortController | null = null
+/** Étape 416 : « Écrire le code maintenant » de la génération du mode Code en cours (`null` sinon). */
+let codeGenWriteNow: AbortController | null = null
 /** Même rôle pour le mode Image (étape 200) : le dessin en cours, que « Arrêter » interrompt. */
 let imageStudioAbort: AbortController | null = null
 /** Et pour le mode Vidéo (étape 203). */
@@ -1929,6 +1932,10 @@ app.whenReady().then(async () => {
     cancelMemoryExtraction()
     return swapDuelModel(side)
   })
+  ipcMain.handle(IPC_CHANNELS.duelWriteNow, (_event, side: unknown) => {
+    if (side !== 'a' && side !== 'b') throw new Error(t('duel.error.badRequest'))
+    return writeNowDuel(side)
+  })
   ipcMain.handle(IPC_CHANNELS.duelSkip, () => skipDuel())
   ipcMain.handle(IPC_CHANNELS.duelNext, () => nextDuel())
   ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => displayedWidgetMode)
@@ -2346,6 +2353,9 @@ app.whenReady().then(async () => {
       cancelMemoryExtraction()
       const controller = new AbortController()
       codeGenAbort = controller
+      // Étape 416 : « Écrire le code maintenant », propre à CETTE génération (comme l'arrêt).
+      const hurry = new AbortController()
+      codeGenWriteNow = hurry
       try {
         const generated = await generateApp(
           description,
@@ -2356,16 +2366,19 @@ app.whenReady().then(async () => {
             onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
             onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
             onLive: (live) => event.sender.send(IPC_CHANNELS.codeGenLive, live),
-            signal: controller.signal
+            signal: controller.signal,
+            writeNow: hurry.signal
           }
         )
         return { ...generated, previewUrl: createGeneratedAppPreview(generated.html) }
       } finally {
         if (codeGenAbort === controller) codeGenAbort = null
+        if (codeGenWriteNow === hurry) codeGenWriteNow = null
       }
     }
   )
   ipcMain.on(IPC_CHANNELS.cancelCodeGen, () => codeGenAbort?.abort())
+  ipcMain.on(IPC_CHANNELS.codeGenWriteNow, () => codeGenWriteNow?.abort())
 
   // Étape 277 : GitHub dans le mode Code. Le jeton reste ici (githubSession.ts) ; l'écran ne reçoit que des
   // descriptions. Le travail de l'agent partage le contrôleur d'arrêt et l'avancement d'une génération : un seul

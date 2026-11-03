@@ -321,6 +321,8 @@ export default function CodePanel(): JSX.Element {
   const [progress, setProgress] = useState<CodeGenProgress | null>(null)
   // Étape 326 : la réflexion en direct reste dépliée d'une étape à l'autre si on l'a ouverte.
   const [showThinking, setShowThinking] = useState(false)
+  // Étape 416 : « Écrire le code maintenant » déjà demandé pour la génération en cours (le bouton ne revient pas).
+  const [hurried, setHurried] = useState(false)
   /** Étape 288 : le fichier que Jaris écrit en ce moment, ligne par ligne (`null` : il n'écrit pas de fichier). */
   const [live, setLive] = useState<CodeLiveWrite | null>(null)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
@@ -651,6 +653,7 @@ export default function CodePanel(): JSX.Element {
     clearGenerationFeedback()
     setGenerating(true)
     setProgress(null)
+    setHurried(false)
     stoppedRef.current = false
     const startedAt = Date.now()
     const previousHtml = appResult?.html ?? null
@@ -1031,6 +1034,21 @@ export default function CodePanel(): JSX.Element {
                   showThinking={showThinking}
                   onToggleThinking={() => setShowThinking((open) => !open)}
                 />
+              )}
+              {/* Étape 416 (Léo : « un bouton : arrête ta réflexion et écris le code ») : seulement pendant qu'il réfléchit
+                  à une application (pas sur un dépôt), une fois par génération. */}
+              {generating && !repo && !hurried && progress?.phase === 'thinking' && (
+                <button
+                  type="button"
+                  className="code-panel__write-now"
+                  title={t('code.writeNow.title')}
+                  onClick={() => {
+                    setHurried(true)
+                    window.jaris.codeGenWriteNow()
+                  }}
+                >
+                  {t('code.writeNow')}
+                </button>
               )}
 
               {error && <p className="code-panel__error">{error}</p>}

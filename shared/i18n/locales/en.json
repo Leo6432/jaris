@@ -329,6 +329,8 @@
   "code.issues.reopened": "This app needs a fix:",
   "code.placeholder.repo": "What do you want to change in {name}?",
   "code.placeholder.app": "What do you want to change? (e.g. add a dark mode…)",
+  "code.writeNow": "Write the code now",
+  "code.writeNow.title": "The model stops thinking and writes right away, using what it has already worked out.",
   "code.placeholder.new": "Describe the app to create…",
   "common.send": "Send",
   "code.submit.modify": "Edit",

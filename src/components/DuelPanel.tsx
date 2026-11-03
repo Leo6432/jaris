@@ -898,9 +898,11 @@ interface SideCardProps {
   /** Étape 412 : remplace le modèle de ce côté par un autre de la session (même demande) ; absent = pas de bouton. */
   onSwap?: () => void
   swapDisabled?: boolean
+  /** Étape 416 : « Écrire le code maintenant » (duel Code, pendant que ce modèle réfléchit). */
+  onWriteNow?: () => void
 }
 
-function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting, onSwap, swapDisabled }: SideCardProps): JSX.Element {
+function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting, onSwap, swapDisabled, onWriteNow }: SideCardProps): JSX.Element {
   const running = side.status === 'running'
   const final = finished(side)
   const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
@@ -995,6 +997,11 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model,
           {running && (
             <button type="button" className="duel-btn duel-side__stop" onClick={onStop}>
               {t('common.stop')}
+            </button>
+          )}
+          {running && onWriteNow && category === 'code' && side.activity?.kind === 'thinking' && !side.hurried && (
+            <button type="button" className="duel-btn duel-side__write-now" onClick={onWriteNow} title={t('code.writeNow.title')}>
+              {t('code.writeNow')}
             </button>
           )}
           {onSwap && side.status !== 'idle' && (
@@ -1785,6 +1792,14 @@ export default function DuelPanel(): JSX.Element {
   // l'autre côté travaille et que les deux modèles ne tiennent pas ensemble en mémoire (le moteur le refuserait).
   const canSwapSide = (side: DuelSide): boolean =>
     !!round?.canSwap && (round.together === true || round[side === 'a' ? 'b' : 'a'].status !== 'running')
+  // Étape 416 : ce modèle arrête de réfléchir et écrit le code tout de suite.
+  const writeNow = (side: DuelSide): void => {
+    void window.jaris
+      .duelWriteNow(side)
+      .then(setView)
+      .catch((err) => setError(ipcErrorMessage(err)))
+  }
+
   const swap = (side: DuelSide): void => {
     stopAudio()
     void run('swap', async () => setView(await window.jaris.duelSwapModel(side)))
@@ -2396,6 +2411,7 @@ export default function DuelPanel(): JSX.Element {
                   followUps={followUps}
                   onSwap={canSwapSide('a') ? () => swap('a') : undefined}
                   swapDisabled={pending !== null}
+                  onWriteNow={() => writeNow('a')}
                 />
                 {round.b.status === 'idle' && !(round.b.earlier ?? []).length ? (
                   <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
@@ -2424,6 +2440,7 @@ export default function DuelPanel(): JSX.Element {
                     waiting={waitingB}
                     onSwap={canSwapSide('b') ? () => swap('b') : undefined}
                     swapDisabled={pending !== null}
+                    onWriteNow={() => writeNow('b')}
                   />
                 )}
               </div>

@@ -329,6 +329,8 @@
   "code.issues.reopened": "Deze app moet worden gecorrigeerd:",
   "code.placeholder.repo": "Wat wil je veranderen aan {name}?",
   "code.placeholder.app": "Wat wil je veranderen? (bijv. voeg een donkere modus toe…)",
+  "code.writeNow": "Schrijf de code nu",
+  "code.writeNow.title": "Het model stopt met nadenken en schrijft meteen, met wat het al heeft bedacht.",
   "code.placeholder.new": "Beschrijf de app die je wilt maken…",
   "common.send": "Verzenden",
   "code.submit.modify": "Wijzigen",

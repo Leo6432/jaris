@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
 import { chatWithOllama, getModelInfo, getModelThinking, isModelLoaded, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
-import { chosenThink, type ThinkValue } from '../../shared/effort'
+import { chosenThink, equivalentThink, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
@@ -128,6 +128,8 @@ export interface GenerateAppOptions {
   think?: ThinkLevel | ThinkValue
   /** Étape 386 (Duel) : même fenêtre de contexte pour toutes les étapes (voir ModelStepRunnerOptions.minNumCtx). */
   minNumCtx?: number
+  /** Étape 416 : « Écrire le code maintenant » (voir ModelStepRunnerOptions.writeNow). */
+  writeNow?: AbortSignal
 }
 
 /** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
@@ -158,6 +160,28 @@ export interface ModelStepRunnerOptions {
   onStatus: (message: string) => void
   onProgress?: (progress: CodeGenProgress) => void
   signal?: AbortSignal
+  /**
+   * Étape 416 (Léo : « un bouton : arrête ta réflexion et écris le code ») : déclenché pendant que le modèle réfléchit,
+   * il coupe cette réflexion et relance la même étape SANS réflexion, avec la fin de ce que le modèle avait pensé, pour
+   * qu'il écrive tout de suite. Les étapes suivantes de la même génération partent aussi sans réflexion. Sans effet
+   * une fois que le modèle écrit (couper l'écriture ferait perdre du code).
+   */
+  writeNow?: AbortSignal
+}
+
+/** Étape 416 : ce qu'on garde de la réflexion coupée pour le nouvel essai (la fin : là où le modèle en était). */
+export const WRITE_NOW_NOTES_CHARS = 6000
+
+/** Étape 416 : la demande, avec ce que le modèle avait déjà pensé et la consigne d'écrire maintenant. */
+export function withWriteNowNote(messages: OllamaMessage[], notes: string): OllamaMessage[] {
+  const lastUser = messages.map((m) => m.role).lastIndexOf('user')
+  if (lastUser < 0) return messages
+  const trimmed = notes.trim()
+  const note =
+    '\n\n---\nTu as déjà réfléchi à cette demande' +
+    (trimmed ? ` ; voici la fin de ta réflexion :\n<<<\n${trimmed}\n>>>\n` : '.\n') +
+    "Ne réfléchis plus : écris MAINTENANT directement ta réponse complète, dans le format demandé."
+  return messages.map((m, i) => (i === lastUser ? { ...m, content: `${m.content}${note}` } : m))
 }
 
 /**
@@ -183,7 +207,14 @@ function contextTooSmallError(numCtx: number): Error {
  * Un appel au modèle de code avec avancement et arrêt (extrait à l'étape 189 pour le Montage, retiré à l'étape
  * 200 ; reste utilisé par le mode Code).
  */
-export function createModelStepRunner({ model, think = 'high', modelMaxContext, minNumCtx, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
+export function createModelStepRunner({ model, think = 'high', modelMaxContext, minNumCtx, steps, onStatus, onProgress, signal, writeNow }: ModelStepRunnerOptions) {
+  // Étape 416 : une fois « Écrire le code maintenant » demandé, toute la suite de la génération part sans réflexion.
+  let hurried = false
+  let noThink: Promise<ThinkLevel | ThinkValue> | null = null
+  const thinkOff = (): Promise<ThinkLevel | ThinkValue> =>
+    (noThink ??= getModelThinking(model)
+      .catch(() => null)
+      .then((meta) => equivalentThink('off', meta)))
   /**
    * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
    *
@@ -264,36 +295,74 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
       if (phase === 'loading') checkLoaded()
       emit()
     }, PROGRESS_HEARTBEAT_MS)
-    const call = (numCtx: number): Promise<OllamaMessage> =>
-      chatWithOllama(
-        messages,
-        tools,
-        model,
-        think,
-        signal,
-        numCtx,
-        (delta) => {
-          // Étape 325 : un changement de phase part tout de suite (jamais étranglé) — c'est lui qui fait passer la ligne
-          // de « Réfléchit… » à « Écrit index.html », annoncé juste après par `onDelta`.
-          const changed = phase !== 'writing'
-          thinking = false
-          phase = 'writing'
-          charsWritten += delta.length
-          lastActivity = Date.now()
-          emit(!changed)
-          onDelta?.(delta)
-        },
-        // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
-        // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
-        (delta) => {
-          const changed = phase !== 'writing' && phase !== 'thinking'
-          if (phase !== 'writing') phase = 'thinking'
-          thoughts = (thoughts + delta).slice(-THINKING_TAIL_CHARS)
-          thinkingChars += delta.length
-          lastActivity = Date.now()
-          emit(!changed)
-        }
-      )
+    if (writeNow?.aborted) hurried = true
+    let stepThink: ThinkLevel | ThinkValue = hurried ? await thinkOff() : think
+    let stepMessages = messages
+    // Étape 416 : la fin de la réflexion de CETTE étape, assez longue pour servir de notes au nouvel essai.
+    let notes = ''
+    let hurryNow = false
+    const onToken = (delta: string): void => {
+      // Étape 325 : un changement de phase part tout de suite (jamais étranglé) — c'est lui qui fait passer la ligne
+      // de « Réfléchit… » à « Écrit index.html », annoncé juste après par `onDelta`.
+      const changed = phase !== 'writing'
+      thinking = false
+      phase = 'writing'
+      charsWritten += delta.length
+      lastActivity = Date.now()
+      emit(!changed)
+      onDelta?.(delta)
+    }
+    // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
+    // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
+    const onThinking = (delta: string): void => {
+      const changed = phase !== 'writing' && phase !== 'thinking'
+      if (phase !== 'writing') phase = 'thinking'
+      thoughts = (thoughts + delta).slice(-THINKING_TAIL_CHARS)
+      notes = (notes + delta).slice(-WRITE_NOW_NOTES_CHARS)
+      thinkingChars += delta.length
+      lastActivity = Date.now()
+      emit(!changed)
+    }
+    const ask = (numCtx: number): Promise<OllamaMessage> => {
+      // Sans bouton « Écrire le code maintenant » (ou déjà utilisé), l'appel reste exactement celui d'avant.
+      if (!writeNow || hurried) return chatWithOllama(stepMessages, tools, model, stepThink, signal, numCtx, onToken, onThinking)
+      const inner = new AbortController()
+      const stop = (): void => inner.abort()
+      const hurry = (): void => {
+        if (phase === 'writing' || hurried) return
+        hurryNow = true
+        inner.abort()
+      }
+      if (signal?.aborted) inner.abort()
+      signal?.addEventListener('abort', stop)
+      writeNow.addEventListener('abort', hurry)
+      // Déjà demandé avant cet appel (pendant la lecture d'une étape précédente) : coupé tout de suite.
+      if (writeNow.aborted) hurry()
+      return chatWithOllama(stepMessages, tools, model, stepThink, inner.signal, numCtx, onToken, onThinking).finally(() => {
+        signal?.removeEventListener('abort', stop)
+        writeNow.removeEventListener('abort', hurry)
+      })
+    }
+    const call = async (numCtx: number): Promise<OllamaMessage> => {
+      try {
+        return await ask(numCtx)
+      } catch (err) {
+        if (!hurryNow || signal?.aborted) throw err
+        // « Écrire le code maintenant » : même étape, sans réflexion, avec ce qu'il avait déjà pensé.
+        hurryNow = false
+        hurried = true
+        stepThink = await thinkOff()
+        stepMessages = withWriteNowNote(messages, notes)
+        notes = ''
+        charsWritten = 0
+        thinking = true
+        thoughts = ''
+        phase = 'reading'
+        lastActivity = Date.now()
+        emit()
+        return ask(numCtx)
+      }
+    }
     try {
       const computed = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
       const floor = minNumCtx ? Math.min(minNumCtx, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX) : 0
@@ -901,7 +970,7 @@ export async function generateApp(
   const modelMaxContext = await readModelMaxContext(model)
 
   const think = options.think ?? (options.model ? 'high' : await resolveCodeThink(profile, model))
-  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, minNumCtx: options.minNumCtx, steps, onStatus, onProgress, signal })
+  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, minNumCtx: options.minNumCtx, steps, onStatus, onProgress, signal, writeNow: options.writeNow })
 
   const withImage = (base: string): string => withImageDescription(base, imageDescription)
 

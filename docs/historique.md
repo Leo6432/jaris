@@ -10867,3 +10867,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   version réussie après un échec, A et B ensemble sur une grosse carte, `codeAsk`) — échoue si l'application d'avant
   n'est plus transmise ; `test-duel-panel-ui.mjs` (champ et aide en Code, Entrée n'envoie pas, « Envoyer » envoie,
   version d'avant citée ; capture à 760 px). **Non vérifié en usage réel.**
+
+- **Étape 416 (v0.41.14), Léo : « c'est possible d'ajouter un bouton : arrête ta réflexion et écris le code ? »**
+  (après le duel où B réfléchissait depuis 39 min). Bouton **« Écrire le code maintenant »**, visible seulement pendant
+  que le modèle RÉFLÉCHIT (pas pendant le chargement ni l'écriture), une fois par génération : dans le mode Code (sous
+  la ligne « Réfléchit… », pas sur un dépôt GitHub) et sur chaque carte d'un duel Code (à côté d'« Arrêter »).
+  Mécanique, à un seul endroit (`createModelStepRunner`, codeGenerator.ts, option `writeNow`) : la réflexion en cours
+  est coupée (l'appel à Ollama est interrompu), puis la MÊME étape repart sans réflexion (`equivalentThink('off')` :
+  `false` si le modèle sait couper, sinon son plus petit niveau, ex. « low » pour gpt-oss), avec la fin de ce qu'il
+  avait pensé (6 000 caractères, `withWriteNowNote`) et la consigne d'écrire maintenant ; les étapes suivantes de la
+  même génération (relecture) partent aussi sans réflexion. Sans effet une fois qu'il écrit (on ne jette pas du code
+  déjà écrit). Sans bouton, l'appel est exactement celui d'avant (aucun contrôleur ajouté). « Arrêter » reste un
+  arrêt. Duel : `writeNowDuel` (refusé hors Code ou si le côté ne tourne pas), `hurried` dans la vue du côté pour que
+  le bouton ne revienne pas ; mode Code : canal `codeGenWriteNow`, propre à la génération en cours (comme l'arrêt).
+  2 textes dans 24 langues. Régression : `test-codegen-write-now.mjs` (relance sans réflexion avec les notes, niveau
+  le plus bas pour un modèle à niveaux, rien pendant l'écriture, « Arrêter » ne relance rien, notes),
+  `test-duel-session.mjs` (signal reçu par le générateur du bon côté, refus hors Code/à l'arrêt),
+  `test-duel-panel-ui.mjs` et `test-code-panel-ui.mjs` (bouton seulement pendant la réflexion, disparaît une fois
+  demandé, revient à la génération suivante ; capture). **Non vérifié en usage réel** (qualité du code écrit sans
+  réflexion selon les modèles).

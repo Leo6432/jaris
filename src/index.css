@@ -8366,6 +8366,26 @@ button.changes-card__file:hover {
   }
 }
 
+/* Étape 416 : « Écrire le code maintenant », sous la ligne « Réfléchit… », à gauche comme elle ; discret (contour). */
+.code-panel__write-now {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 14px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.code-panel__write-now:hover {
+  background: var(--jv-hover);
+}
+
 /* Étape 309 : « Se connecter à GitHub » juste sous l'erreur qui l'explique, à gauche comme le message. */
 .code-panel__reconnect {
   align-self: flex-start;
@@ -9868,7 +9888,8 @@ ul.reply-list--nested {
 
 .duel-side__listen,
 .duel-side__stop,
-.duel-side__swap {
+.duel-side__swap,
+.duel-side__write-now {
   align-self: flex-start;
   padding: 6px 14px;
   font-size: 13px;

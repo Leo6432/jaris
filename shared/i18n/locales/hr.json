@@ -336,6 +336,8 @@
   "code.issues.reopened": "Ova aplikacija treba ispravak:",
   "code.placeholder.repo": "Što želiš promijeniti u aplikaciji {name}?",
   "code.placeholder.app": "Što želiš promijeniti? (npr. dodaj tamni način…)",
+  "code.writeNow": "Napiši kod sada",
+  "code.writeNow.title": "Model prestaje razmišljati i odmah piše, s onim što je već smislio.",
   "code.placeholder.new": "Opiši aplikaciju koju želiš izraditi…",
   "common.send": "Pošalji",
   "code.submit.modify": "Izmijeni",

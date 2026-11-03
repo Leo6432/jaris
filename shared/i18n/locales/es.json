@@ -329,6 +329,8 @@
   "code.issues.reopened": "Esta aplicación necesita una corrección:",
   "code.placeholder.repo": "¿Qué quieres cambiar en {name}?",
   "code.placeholder.app": "¿Qué quieres cambiar? (p. ej.: añade un modo oscuro…)",
+  "code.writeNow": "Escribir el código ya",
+  "code.writeNow.title": "El modelo deja de pensar y escribe enseguida, con lo que ya ha pensado.",
   "code.placeholder.new": "Describe la aplicación que quieres crear…",
   "common.send": "Enviar",
   "code.submit.modify": "Modificar",

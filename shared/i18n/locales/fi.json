@@ -329,6 +329,8 @@
   "code.issues.reopened": "Tämä sovellus tarvitsee korjauksen:",
   "code.placeholder.repo": "Mitä haluat muuttaa? ({name})",
   "code.placeholder.app": "Mitä haluat muuttaa? (esim. lisää tumma tila…)",
+  "code.writeNow": "Kirjoita koodi nyt",
+  "code.writeNow.title": "Malli lopettaa pohtimisen ja kirjoittaa heti sen perusteella, mitä se on jo miettinyt.",
   "code.placeholder.new": "Kuvaile luotava sovellus…",
   "common.send": "Lähetä",
   "code.submit.modify": "Muokkaa",

@@ -336,6 +336,8 @@
   "code.issues.reopened": "Šo lietotni nepieciešams izlabot:",
   "code.placeholder.repo": "Ko vēlies mainīt lietotnē {name}?",
   "code.placeholder.app": "Ko vēlies mainīt? (piem., pievieno tumšo režīmu…)",
+  "code.writeNow": "Rakstīt kodu tagad",
+  "code.writeNow.title": "Modelis beidz domāt un uzreiz raksta, izmantojot to, ko jau ir izdomājis.",
   "code.placeholder.new": "Apraksti izveidojamo lietotni…",
   "common.send": "Sūtīt",
   "code.submit.modify": "Mainīt",

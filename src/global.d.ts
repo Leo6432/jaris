@@ -187,6 +187,7 @@ declare global {
       onCodeGenNarration: (cb: (narration: CodeNarration) => void) => () => void
       onCodeGenLive: (cb: (live: CodeLiveWrite | null) => void) => () => void
       cancelCodeGen: () => void
+      codeGenWriteNow: () => void
       // Étape 277 : GitHub dans le mode Code (le jeton ne quitte jamais le main).
       githubStatus: () => Promise<GithubStatus>
       githubStartLogin: () => Promise<GithubDeviceCode>
@@ -248,6 +249,7 @@ declare global {
       duelSideCode: (side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
       duelSwapModel: (side: DuelSide) => Promise<DuelSessionView>
+      duelWriteNow: (side: DuelSide) => Promise<DuelSessionView>
       duelSkip: () => Promise<DuelSessionView>
       duelNext: () => Promise<DuelSessionView>
       duelBatchStart: (prompts: string[]) => Promise<DuelSessionView>

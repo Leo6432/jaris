@@ -339,6 +339,8 @@ export const fr = {
   "code.issues.reopened": "Cette application a besoin d'une correction :",
   "code.placeholder.repo": "Que veux-tu changer dans {name} ?",
   "code.placeholder.app": "Que veux-tu changer ? (ex: ajoute un mode sombre…)",
+  "code.writeNow": "Écrire le code maintenant",
+  "code.writeNow.title": "Le modèle arrête de réfléchir et écrit tout de suite, avec ce qu'il a déjà pensé.",
   "code.placeholder.new": "Décris l'application à créer…",
   "common.send": "Envoyer",
   "code.submit.modify": "Modifier",
