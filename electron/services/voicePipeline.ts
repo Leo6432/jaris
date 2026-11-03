@@ -23,10 +23,41 @@ const ERROR_IDLE_DELAY_MS = 2500
 const IDLE_SETTLE_DELAY_MS = 400
 /**
  * Filet de sécurité si le renderer ne prévient jamais que la lecture audio est finie (fenêtre fermée,
- * lecture bloquée...) : évite de rester bloqué indéfiniment sur "happy" plutôt que de dépendre d'un
- * minuteur fixe déconnecté de la durée réelle de la phrase.
+ * lecture bloquée...) : évite de rester bloqué indéfiniment sur "happy". Étape 413 : ce filet était fixé à 20 s,
+ * si bien qu'une longue réponse repassait en « repos » (et rouvrait l'écoute du nom) en pleine phrase. Il vaut
+ * maintenant la DURÉE RÉELLE du son, plus cette marge (démarrage de la lecture), jamais moins de 20 s.
  */
-const AUDIO_FALLBACK_IDLE_MS = 20000
+const AUDIO_FALLBACK_MIN_MS = 20000
+const AUDIO_FALLBACK_MARGIN_MS = 5000
+/** Son illisible : durée estimée d'après le texte, au débit le plus lent d'une voix (~10 caractères par seconde). */
+const SPOKEN_CHARS_PER_SECOND = 10
+
+/** Durée d'un WAV en millisecondes, lue dans ses en-têtes (`fmt ` puis `data`) ; `null` si ce n'est pas un WAV lisible. */
+export function wavDurationMs(audio: Uint8Array): number | null {
+  const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength)
+  const tag = (at: number): string => String.fromCharCode(audio[at], audio[at + 1], audio[at + 2], audio[at + 3])
+  if (audio.byteLength < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return null
+  let byteRate = 0
+  for (let at = 12; at + 8 <= audio.byteLength; ) {
+    const id = tag(at)
+    const size = view.getUint32(at + 4, true)
+    if (id === 'fmt ' && at + 20 <= audio.byteLength) byteRate = view.getUint32(at + 16, true)
+    if (id === 'data') {
+      if (!byteRate) return null
+      // Une taille de données absente ou fausse (écrite en flux) : ce qui suit réellement dans le fichier.
+      const bytes = Math.min(size, audio.byteLength - at - 8)
+      return (bytes / byteRate) * 1000
+    }
+    at += 8 + size + (size % 2)
+  }
+  return null
+}
+
+/** Combien attendre la fin de lecture avant de repasser au repos de toute façon. */
+export function speechFallbackIdleMs(audio: Uint8Array, text: string): number {
+  const spoken = wavDurationMs(audio) ?? (text.length / SPOKEN_CHARS_PER_SECOND) * 1000
+  return Math.max(AUDIO_FALLBACK_MIN_MS, Math.ceil(spoken) + AUDIO_FALLBACK_MARGIN_MS)
+}
 
 /** Laisse le temps à Jaris de dire l'avertissement d'arrêt (this.speak) avant de vraiment fermer l'appli. */
 const SHUTDOWN_DELAY_MS = 4000
@@ -606,7 +637,7 @@ export class VoicePipeline extends EventEmitter {
 
       const payload: VoiceReplyPayload = { transcript, reply, audio: audioBuffer }
       // Étape 346 : l'écoute du nom est coupée pendant que Jaris parle (sa propre voix dit parfois « Jaris »). Reprise
-      // au retour au repos, juste après la fin de la lecture (notifyAudioEnded) ou par le filet de 20 s.
+      // au retour au repos, juste après la fin de la lecture (notifyAudioEnded) ou par le filet (durée du son + marge).
       this.setSpeaking(true)
       this.emit('reply', payload)
       this.setEmotion('happy')
@@ -623,7 +654,7 @@ export class VoicePipeline extends EventEmitter {
         this.emit('exchange', { transcript, reply })
       }
 
-      this.scheduleIdle(AUDIO_FALLBACK_IDLE_MS)
+      this.scheduleIdle(speechFallbackIdleMs(audio, reply))
     } catch (err) {
       this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
       this.setEmotion('surprised')

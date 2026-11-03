@@ -10818,3 +10818,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   votée ; A remplacé pendant qu'il tourne, l'ancien « arrêté » n'écrase pas le nouveau côté) et
   `test-duel-panel-ui.mjs` (Arrêter + Changer de modèle sur B, rien sur A pendant que B tourne, à 760 px les
   boutons restent dans la carte, absent quand le moteur ne le permet pas). **Non vérifié en usage réel.**
+
+- **Étape 413 (v0.41.11), Léo : « quand Jaris parle longtemps, il se met en inactif avant d'avoir terminé, mais il
+  parle toujours ».** Cause : après une réponse parlée, `speak()` (voicePipeline.ts) armait un filet FIXE de 20 s
+  (`AUDIO_FALLBACK_IDLE_MS`) au cas où l'écran ne signalerait jamais la fin de lecture. Toute réponse de plus de
+  20 s repassait donc au repos en pleine phrase — et rouvrait l'écoute du nom (étape 346), pendant que Jaris parlait
+  encore. Le filet vaut maintenant la DURÉE RÉELLE du son, lue dans l'en-tête du WAV (`wavDurationMs` : blocs `fmt `
+  puis `data`, taille plafonnée à ce que contient vraiment le fichier), plus 5 s, jamais moins de 20 s ; son
+  illisible : estimée d'après le texte (10 caractères/s). Le vrai signal reste la fin de lecture envoyée par l'écran
+  (`notifyAudioEnded`). Vérifié : `wavDurationMs` donne exactement la durée d'ffprobe sur de vrais WAV de Supertonic.
+  Régression : `test-voice-pipeline-346.mjs` (réponse d'une minute toujours « en train de parler » à 30 s et 55 s,
+  écoute du nom toujours coupée, repos juste après la fin de lecture ; sans signal, repos à durée + 5 s ; WAV avec
+  bloc `LIST`, taille fausse, pas un WAV) — les deux tests de durée échouent avec l'ancien filet de 20 s.
+  **Non vérifié en usage réel.**

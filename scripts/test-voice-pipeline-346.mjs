@@ -32,15 +32,15 @@ class FakeVoiceClient extends EventEmitter {
 }
 
 const noop = () => {}
-const harness = { converse: async () => 'Réponse.', exchanges: [] }
-const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck } = loadTsModule('electron/services/voicePipeline.ts', {
+const harness = { converse: async () => 'Réponse.', exchanges: [], audio: null }
+const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck, wavDurationMs, speechFallbackIdleMs } = loadTsModule('electron/services/voicePipeline.ts', {
   events: { EventEmitter },
   crypto: { randomUUID: () => 'id' },
   './voiceClient': {
     VoiceClient: FakeVoiceClient,
     listeningUnavailableReason: (status) => (status.state === 'ready' ? null : `écoute ${status.state}`)
   },
-  './tts': { synthesizeSpeech: async () => Buffer.from([1, 2, 3, 4]) },
+  './tts': { synthesizeSpeech: async () => harness.audio ?? Buffer.from([1, 2, 3, 4]) },
   './conversationStore': { appendConversationEntry: async () => {}, getActiveConversationId: async () => 'conv' },
   './assistant': { converse: (...args) => harness.converse(...args), LOOKUP_TOOLS: new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats']) },
   './conversationSession': { VOICE_CONTEXT_MAX_AGE_MS: 1, clearSessionHistory: noop, getSessionHistory: async () => [], pushSessionExchange: noop },
@@ -228,4 +228,100 @@ test('programme d’écoute arrêté tout seul après avoir marché : « crashed
   const handler = main.slice(main.indexOf("pipeline.on('crashed'"), main.indexOf("pipeline.on('crashed'") + 600)
   assert.match(handler, /VOICE_RESTART_MIN_INTERVAL_MS/, 'au plus une relance par minute')
   assert.match(handler, /startVoicePipeline\(\)/)
+})
+
+/** Un WAV PCM 8 bits mono à 1 000 Hz (petit, mais d'une durée réelle de `ms`), avec un bloc `LIST` avant les données comme en écrivent certains outils. */
+function wav(ms, { list = false, lyingSize = false } = {}) {
+  const rate = 1000
+  const data = Math.round((ms / 1000) * rate)
+  const extra = list ? 8 + 4 : 0
+  const b = Buffer.alloc(44 + extra + data, 128)
+  b.write('RIFF', 0, 'ascii')
+  b.writeUInt32LE(36 + extra + data, 4)
+  b.write('WAVE', 8, 'ascii')
+  b.write('fmt ', 12, 'ascii')
+  b.writeUInt32LE(16, 16)
+  b.writeUInt16LE(1, 20)
+  b.writeUInt16LE(1, 22)
+  b.writeUInt32LE(rate, 24)
+  b.writeUInt32LE(rate, 28)
+  b.writeUInt16LE(1, 32)
+  b.writeUInt16LE(8, 34)
+  let at = 36
+  if (list) {
+    b.write('LIST', at, 'ascii')
+    b.writeUInt32LE(4, at + 4)
+    b.write('INFO', at + 8, 'ascii')
+    at += 12
+  }
+  b.write('data', at, 'ascii')
+  b.writeUInt32LE(lyingSize ? 0xffffffff : data, at + 4)
+  return b
+}
+
+test('étape 413 : la durée d’un WAV est lue dans ses en-têtes (bloc en plus, taille fausse d’un fichier écrit en flux, pas un WAV)', () => {
+  assert.equal(wavDurationMs(wav(61_500)), 61_500)
+  assert.equal(wavDurationMs(wav(3_000, { list: true })), 3_000)
+  assert.equal(wavDurationMs(wav(2_000, { lyingSize: true })), 2_000)
+  assert.equal(wavDurationMs(Buffer.from([1, 2, 3, 4])), null)
+  assert.equal(wavDurationMs(Buffer.from('RIFF....WAVEdata')), null)
+  // Filet : la durée du son + 5 s, jamais moins de 20 s ; son illisible → estimée d'après le texte.
+  assert.equal(speechFallbackIdleMs(wav(61_500), ''), 66_500)
+  assert.equal(speechFallbackIdleMs(wav(4_000), ''), 20_000)
+  assert.equal(speechFallbackIdleMs(Buffer.from([1]), 'x'.repeat(600)), 65_000)
+})
+
+test('étape 413 : une réponse parlée d’une minute ne repasse PAS au repos au bout de 20 s, seulement à la fin de la lecture', async (t) => {
+  harness.audio = wav(60_000)
+  harness.converse = async () => 'Une très longue réponse.'
+  try {
+    const { pipeline, voice, emotions } = await started()
+    t.mock.timers.enable({ apis: ['setTimeout'] })
+    const replied = new Promise((done) => pipeline.once('reply', done))
+    voice.emit('transcript', 'Raconte-moi une longue histoire')
+    for (let i = 0; i < 50 && !voice.paused; i++) {
+      t.mock.timers.tick(100)
+      await new Promise((done) => setImmediate(done))
+    }
+    await replied
+    for (let i = 0; i < 5; i++) await new Promise((done) => setImmediate(done))
+    assert.equal(voice.paused, true, 'l’écoute du nom est coupée pendant que Jaris parle')
+    const spoken = emotions.length
+    t.mock.timers.tick(30_000)
+    assert.ok(!emotions.slice(spoken).includes('idle'), 'toujours en train de parler à 30 s')
+    assert.equal(voice.paused, true, 'l’écoute du nom ne se rouvre pas en pleine phrase')
+    t.mock.timers.tick(25_000)
+    assert.ok(!emotions.slice(spoken).includes('idle'), 'ni à 55 s')
+    // La vraie fin de lecture arrive du renderer : retour au repos juste après.
+    pipeline.notifyAudioEnded()
+    t.mock.timers.tick(500)
+    assert.equal(emotions.at(-1), 'idle')
+    assert.equal(voice.paused, false, 'écoute du nom rouverte après la phrase')
+  } finally {
+    harness.audio = null
+  }
+})
+
+test('étape 413 : sans signal de fin de lecture (fenêtre fermée), le filet attend la durée du son + 5 s', async (t) => {
+  harness.audio = wav(45_000)
+  harness.converse = async () => 'Réponse longue.'
+  try {
+    const { pipeline, voice, emotions } = await started()
+    t.mock.timers.enable({ apis: ['setTimeout'] })
+    const replied = new Promise((done) => pipeline.once('reply', done))
+    voice.emit('transcript', 'Explique-moi tout')
+    for (let i = 0; i < 50 && !voice.paused; i++) {
+      t.mock.timers.tick(100)
+      await new Promise((done) => setImmediate(done))
+    }
+    await replied
+    for (let i = 0; i < 5; i++) await new Promise((done) => setImmediate(done))
+    const spoken = emotions.length
+    t.mock.timers.tick(49_000)
+    assert.ok(!emotions.slice(spoken).includes('idle'), 'pas avant la fin du son + marge')
+    t.mock.timers.tick(1_500)
+    assert.equal(emotions.at(-1), 'idle')
+  } finally {
+    harness.audio = null
+  }
 })
