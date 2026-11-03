@@ -147,6 +147,11 @@ interface SideState extends DuelSideView {
    * (pas seulement ce que le modèle affirme). Sans noms de modèles, raccourcis ; jamais montrés à l'écran.
    */
   toolLog: string[]
+  /**
+   * Étape 415 : duel Code, deuxième message de Léo — l'application que CE modèle a écrite au tour d'avant, qu'il
+   * modifie (même chemin que « modifier l'application » du mode Code). `null` : rien à modifier.
+   */
+  baseHtml: string | null
 }
 
 interface RoundState {
@@ -315,12 +320,13 @@ function emptySide(): SideState {
     html: null,
     retries: 0,
     toolLog: [],
+    baseHtml: null,
     earlier: []
   }
 }
 
 function sideView(side: SideState): DuelSideView {
-  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, ...view } = side
+  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, ...view } = side
   return view
 }
 
@@ -784,8 +790,9 @@ export function sideConversation(round: Pick<RoundState, 'prompt' | 'followUps'>
 /**
  * Étape 401 (Léo : « des fois il me demande ma localisation, mais je peux pas renvoyer un message, là on a direct le
  * vote ») : Léo répond aux DEUX modèles avec le même message avant de voter. Chacun garde sa conversation ; A répond
- * d'abord, puis B quand Léo a vérifié ce que A a fait, comme pour la demande. Pas en Code (une demande = une
- * application), ni dans une file, ni avec Claude comme juge.
+ * d'abord, puis B quand Léo a vérifié ce que A a fait, comme pour la demande. Ni dans une file, ni avec Claude comme
+ * juge. Étape 415 (Léo : « un bouton pour envoyer un deuxième prompt, en Code aussi ») : en Code, le message est une
+ * modification de l'application que CHAQUE modèle a écrite (la sienne, jamais celle de l'autre).
  */
 export function followUpDuel(message: unknown): DuelSessionView {
   const current = session
@@ -793,7 +800,7 @@ export function followUpDuel(message: unknown): DuelSessionView {
   const round = current?.round
   if (!current || current.phase !== 'ready' || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   // L'écran ne propose jamais de répondre dans ces cas : une telle demande ne vient pas de lui.
-  if (current.category === 'code' || current.batch?.includes(round)) throw new Error(t('duel.error.badRequest'))
+  if (current.batch?.includes(round)) throw new Error(t('duel.error.badRequest'))
   if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
   if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
@@ -804,10 +811,13 @@ export function followUpDuel(message: unknown): DuelSessionView {
   for (const name of ['a', 'b'] as const) {
     const side = round.sides[name]
     const earlier = [...side.earlier, { text: side.text, actions: side.actions, error: side.error, durationMs: side.durationMs }]
-    Object.assign(side, emptySide(), { earlier })
+    // Un tour raté en Code (rien d'écrit) : le modèle repart de sa dernière application réussie.
+    Object.assign(side, emptySide(), { earlier, baseHtml: side.html ?? side.baseHtml })
   }
   round.followUps.push(text)
   void runSide(current, round, 'a')
+  // Étape 379 : quand les deux tiennent ensemble en mémoire (Code), B repart aussi tout de suite, comme pour la demande.
+  if (round.together) void runSide(current, round, 'b')
   return getDuelView() as DuelSessionView
 }
 
@@ -1400,7 +1410,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
         current.remote,
         () =>
           current.category === 'code'
-            ? runCode(current, side, model, prompt, think, controller.signal)
+            ? runCode(current, side, model, codeAsk(round, side, prompt), think, controller.signal)
             : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
         current.sizes
       )
@@ -1539,8 +1549,18 @@ function codeActivity(progress: CodeGenProgress): DuelActivity {
   }
 }
 
+/**
+ * Étape 415 : ce que le modèle reçoit en Code. Avec une application à modifier, seulement le dernier message (le
+ * fichier lui-même donne le contexte, comme dans le mode Code) ; sans (premier tour, ou rien n'a jamais marché), toute
+ * la demande, message après message, pour qu'il n'écrive pas une application à partir du seul « ajoute un bouton ».
+ */
+export function codeAsk(round: Pick<RoundState, 'prompt' | 'followUps'>, side: Pick<SideState, 'baseHtml'>, ask: string): string {
+  if (side.baseHtml || !round.followUps.length) return ask
+  return [round.prompt ?? '', ...round.followUps].filter((part) => part.trim()).join('\n\n')
+}
+
 async function runCode(_current: Session, side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
-  const app = await generateApp(prompt, () => {}, undefined, undefined, {
+  const app = await generateApp(prompt, () => {}, side.baseHtml ?? undefined, undefined, {
     model,
     think,
     persist: false,
@@ -1706,7 +1726,9 @@ export function retryDuel(): DuelSessionView {
   if (round.sides.a.status === 'running' || round.sides.b.status === 'running') throw new Error(t('duel.error.notFinished'))
   if (!round.sides.a.trouble && !round.sides.b.trouble) throw new Error(t('duel.error.badRequest'))
   // Étape 401 : seul le tour en cours est refait ; les réponses d'avant (Léo a répondu aux modèles) restent.
-  round.sides = { a: { ...emptySide(), earlier: round.sides.a.earlier }, b: { ...emptySide(), earlier: round.sides.b.earlier } }
+  // Étape 415 : en Code, l'application à modifier reste celle du tour d'avant.
+  const again = (side: SideState): SideState => ({ ...emptySide(), earlier: side.earlier, baseHtml: side.baseHtml })
+  round.sides = { a: again(round.sides.a), b: again(round.sides.b) }
   // Relus au nouveau tour de A : le modèle d'images a peut-être été installé entre-temps.
   round.tools = null
   if (current.batch?.includes(round)) {

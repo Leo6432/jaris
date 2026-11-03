@@ -10849,3 +10849,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-duel-panel-ui.mjs` (ordre, « ≈ », 6 grisé et en pointillés, 4 coché quand seulement 4 sont connus, ce qui part
   au lancement, message sous 4, autre machine, vitesse dans « Je choisis » ; capture à 760 px). Tests vérifiés en
   cassant le tri et le filtre. **Non vérifié en usage réel.**
+
+- **Étape 415 (v0.41.13), Léo : « mets un bouton pour toujours pouvoir envoyer un deuxième prompt dans les duels » —
+  précisé par une question à choix : il manquait EN CODE.** Le champ de l'étape 401 (répondre aux deux modèles avant
+  de voter) existait en Conversation et Vocal ; il apparaît maintenant aussi en Code, tant que le duel n'est pas voté
+  (au plus 5 messages). En Code, le message est une MODIFICATION : chaque modèle reçoit SA propre application du tour
+  d'avant (`baseHtml`, jamais celle de l'autre) et la modifie par le même chemin que « modifier l'application » du mode
+  Code (`generateApp(…, currentHtml)`), avec seulement le nouveau message (le fichier donne le contexte). Un tour raté
+  (rien d'écrit) : la modification suivante repart de la dernière application réussie ; jamais aucune application :
+  le modèle reçoit toute la demande, message après message (`codeAsk`), pas seulement « ajoute un bouton ». « Rejouer »
+  garde l'application à modifier. Quand A et B tiennent ensemble en mémoire (étape 379), les deux repartent ensemble,
+  sinon B attend « Au tour du modèle B » comme pour la demande. À l'écran : texte d'aide et champ propres au Code
+  (« Demander une modification aux deux modèles… », bouton « Envoyer », Entrée = retour à la ligne comme pour la
+  demande Code), et chaque version d'avant est citée « Version N de l'application » au lieu de « Aucune réponse ».
+  Le vote garde la dernière application. Pas dans une file (étape 381) ni avec Claude comme juge, comme avant.
+  4 textes dans 24 langues. Régression : `test-duel-session.mjs` (chaque modèle modifie la sienne, message seul,
+  version réussie après un échec, A et B ensemble sur une grosse carte, `codeAsk`) — échoue si l'application d'avant
+  n'est plus transmise ; `test-duel-panel-ui.mjs` (champ et aide en Code, Entrée n'envoie pas, « Envoyer » envoie,
+  version d'avant citée ; capture à 760 px). **Non vérifié en usage réel.**

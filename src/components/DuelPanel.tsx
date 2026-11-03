@@ -861,10 +861,12 @@ function EarlierTurns({ turns, followUps, category }: { turns: readonly DuelTurn
               ))}
             </ul>
           )}
+          {/* Étape 415 : en Code, un tour d'avant est une version de l'application, remplacée par la modification suivante. */}
+          {category === 'code' && !turn.error && <p className="duel-side__muted">{t('duel.followUp.codeVersion', { number: index + 1 })}</p>}
           {turn.text.trim() ? (
             <div className="duel-side__text">{category === 'voice' ? turn.text : renderFormattedText(turn.text)}</div>
           ) : (
-            !turn.error && <p className="duel-side__muted">{t('duel.noReply')}</p>
+            !turn.error && category !== 'code' && <p className="duel-side__muted">{t('duel.noReply')}</p>
           )}
           {turn.error && <p className="duel-side__error">{turn.error}</p>}
           {followUps[index] !== undefined && (
@@ -2315,8 +2317,10 @@ export default function DuelPanel(): JSX.Element {
     const trouble = Boolean(round.a.trouble || round.b.trouble)
     const noneRunning = round.a.status !== 'running' && round.b.status !== 'running'
     const followUps = round.followUps ?? []
-    // Étape 401 : Léo peut répondre aux deux modèles (une question sur sa ville…) avant de voter.
-    const canFollowUp = bothDone && !trouble && !round.revealed && view.category !== 'code' && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS
+    // Étape 401 : Léo peut répondre aux deux modèles (une question sur sa ville…) avant de voter. Étape 415 : en Code
+    // aussi — une modification que chaque modèle apporte à SON application.
+    const canFollowUp = bothDone && !trouble && !round.revealed && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS
+    const code = view.category === 'code'
     const waitingB = (
       <>
         {finished(round.a) && round.a.trouble ? (
@@ -2464,7 +2468,7 @@ export default function DuelPanel(): JSX.Element {
                   <h2 id="duel-vote-title" className="duel-vote__title">
                     {t('duel.vote.title')}
                   </h2>
-                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t('duel.followUp.hint')}</p>}
+                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t(code ? 'duel.followUp.hintCode' : 'duel.followUp.hint')}</p>}
                   <div className="duel-vote__buttons">
                     {OUTCOMES.map(({ outcome, label }) => (
                       <button
@@ -2508,15 +2512,15 @@ export default function DuelPanel(): JSX.Element {
             value={reply}
             onChange={setReply}
             onSubmit={followUp}
-            placeholder={t('duel.followUp.placeholder')}
-            submitLabel={t('duel.followUp.submit')}
+            placeholder={t(code ? 'duel.followUp.placeholderCode' : 'duel.followUp.placeholder')}
+            submitLabel={t(code ? 'duel.followUp.submitCode' : 'duel.followUp.submit')}
             busyLabel={t('common.loading')}
             busy={pending === 'followUp'}
             attachment={null}
             onAttachmentChange={() => {}}
             onError={setError}
             imagesAllowed={false}
-            submitOnEnter
+            submitOnEnter={!code}
             rows={2}
           />
         )}

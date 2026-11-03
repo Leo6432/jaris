@@ -111,8 +111,8 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       }
     },
     './codeGenerator': {
-      generateApp: async (prompt, _onStatus, _current, _image, options) => {
-        calls.generate.push({ prompt, options })
+      generateApp: async (prompt, _onStatus, current, _image, options) => {
+        calls.generate.push({ prompt, options, current })
         // Modèles différents qui écrivent en même temps (un même modèle n'est chargé qu'une fois par Ollama).
         calls.active.set(options.model, (calls.active.get(options.model) ?? 0) + 1)
         calls.mostModels = Math.max(calls.mostModels, calls.active.size)
@@ -1576,16 +1576,83 @@ test('étape 401 : Léo répond aux deux modèles avant de voter, chacun garde S
   assert.throws(() => env.session.followUpDuel('Paris'), /déjà voté/, 'plus de réponse une fois les noms connus')
 })
 
-test('étape 401 : pas de réponse aux modèles en Code, ni au-delà de la limite', async () => {
-  const code = setup({ installed: MODELS, category: 'code' })
+test('étape 415 : en Code, le deuxième message modifie l’application de CHAQUE modèle (la sienne, jamais celle de l’autre)', async () => {
+  let failB = false
+  const code = setup({
+    installed: MODELS,
+    category: 'code',
+    generateImpl: (prompt, options) => {
+      if (failB && options.model === code.calls.generate[1].options.model) throw new Error('génération ratée')
+      return { html: `<p>${options.model}|${prompt}</p>`, issues: [], dir: '' }
+    }
+  })
   await code.session.startDuel('code', 4)
   await waitFor(() => code.session.getDuelView()?.phase === 'ready', 'prête')
   code.session.askDuel('Un compteur')
   await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
   code.session.runDuelB()
   await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B')
-  assert.throws(() => code.session.followUpDuel('Plus grand'), /invalide/)
+  const [first, second] = code.calls.generate
+  const modelA = first.options.model
+  const modelB = second.options.model
+  assert.equal(first.current, undefined, 'premier tour : une application neuve')
 
+  const view = code.session.followUpDuel('Ajoute un bouton remise à zéro')
+  assertAnonymous([view], 'après le deuxième message')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A modifie')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B modifie')
+  const [, , editA, editB] = code.calls.generate
+  assert.equal(editA.options.model, modelA)
+  assert.equal(editA.prompt, 'Ajoute un bouton remise à zéro', 'le message seul : le fichier donne le contexte')
+  assert.equal(editA.current, `<p>${modelA}|Un compteur</p>`, 'A modifie SON application')
+  assert.equal(editB.current, `<p>${modelB}|Un compteur</p>`, 'B modifie la sienne, jamais celle de A')
+  const round = code.session.getDuelView().round
+  assert.equal(round.a.earlier.length, 1, 'la version d’avant est gardée comme tour précédent')
+  assert.match(round.a.previewUrl, /^jaris-preview:/, 'l’aperçu montre la nouvelle version')
+
+  // Un tour raté (rien d'écrit) : la modification suivante repart de la dernière application réussie.
+  failB = true
+  code.session.followUpDuel('Mets-le en vert')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'error', 'B échoue')
+  failB = false
+  code.session.followUpDuel('Et plus grand')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B')
+  const lastB = code.calls.generate.at(-1)
+  assert.equal(lastB.options.model, modelB)
+  assert.equal(lastB.current, `<p>${modelB}|Ajoute un bouton remise à zéro</p>`, 'la dernière version réussie de B')
+  // Le vote garde la dernière application.
+  await code.session.voteDuel('a')
+})
+
+test('étape 415 : en Code avec assez de mémoire pour les deux, le deuxième message fait repartir A ET B ensemble', async () => {
+  const env = setup({ installed: MODELS, category: 'code', vramGb: 80 })
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'session prête')
+  assert.equal(env.session.getDuelView().round.together, true)
+  env.session.askDuel('Un compteur')
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done' && env.session.getDuelView().round.a.status === 'done', 'les deux')
+  const view = env.session.followUpDuel('Ajoute un bouton')
+  assert.equal(view.round.a.status, 'running')
+  assert.equal(view.round.b.status, 'running', 'B n’attend pas A')
+  assert.throws(() => env.session.runDuelB(), /finir/i, 'pas de second lancement de B')
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done' && env.session.getDuelView().round.a.status === 'done', 'les deux modifient')
+  assert.equal(env.calls.generate.length, 4)
+})
+
+test('étape 415 : sans application à modifier, le modèle reçoit toute la demande, pas seulement « ajoute un bouton »', () => {
+  const code415 = setup().session.codeAsk
+  const round = { prompt: 'Un compteur', followUps: ['Ajoute un bouton', 'En vert'] }
+  assert.equal(code415(round, { baseHtml: null }, 'En vert'), 'Un compteur\n\nAjoute un bouton\n\nEn vert')
+  assert.equal(code415(round, { baseHtml: '<p>x</p>' }, 'En vert'), 'En vert')
+  assert.equal(code415({ prompt: 'Un compteur', followUps: [] }, { baseHtml: null }, 'Un compteur'), 'Un compteur')
+})
+
+test('étape 401 : pas de réponse aux modèles au-delà de la limite', async () => {
   const env = setup({ installed: MODELS })
   await readySession(env)
   env.session.askDuel('Salut')

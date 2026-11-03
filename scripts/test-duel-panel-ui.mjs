@@ -1395,7 +1395,7 @@ test('étape 401 : un modèle demande la ville — Léo répond aux deux avant d
   }, init)
 })
 
-test('étape 401 : pas de champ de réponse en duel Code', options, async () => {
+test('étape 415 : en duel Code, un champ pour demander une modification aux deux modèles, puis la version d’avant reste citée', options, async () => {
   const init = `
     var __s = (p) => Object.assign({ status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, p)
     window.__category = 'code'
@@ -1405,7 +1405,24 @@ test('étape 401 : pas de champ de réponse en duel Code', options, async () => 
         b: __s({ status: 'done', durationMs: 5000, previewUrl: 'data:text/html,<p>B</p>' }) } }`
   await withPage(async (page) => {
     await page.waitForSelector('.duel-vote')
-    assert.equal(await page.locator('.composer').count(), 0)
-    assert.equal(await page.locator('.duel-vote__follow-hint').count(), 0)
-  }, init)
+    assert.match(await page.textContent('.duel-vote__follow-hint'), /chaque modèle modifie SON application/)
+    const field = page.getByPlaceholder('Demander une modification aux deux modèles…')
+    assert.equal(await field.count(), 1, 'le champ est là, tout le temps avant le vote')
+    // En Code, Entrée fait un retour à la ligne (une demande de modification tient souvent sur plusieurs lignes).
+    await field.fill('Ajoute un bouton')
+    await field.press('Enter')
+    assert.equal(await page.evaluate(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'followUp')), false)
+    await field.fill('Ajoute un bouton remise à zéro')
+    await page.getByRole('button', { name: 'Envoyer' }).click()
+    await page.waitForFunction(() => window.__calls.some((c) => Array.isArray(c) && c[0] === 'followUp'))
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'followUp'))
+    assert.deepEqual(call, ['followUp', 'Ajoute un bouton remise à zéro'])
+    // Pendant la modification : la version d'avant est citée, avec le message de Léo dessous.
+    await page.waitForSelector('.duel-side__turn-earlier')
+    const earlier = await page.textContent('.duel-side__turn-earlier')
+    assert.match(earlier, /Version 1 de l'application/)
+    if (process.env.JARIS_SHOT) await page.screenshot({ path: process.env.JARIS_SHOT, fullPage: true })
+    assert.match(earlier, /Ajoute un bouton remise à zéro/)
+    assert.doesNotMatch(earlier, /Aucune réponse/, 'une application n’est pas « aucune réponse »')
+  }, init, { width: 760, height: 900 })
 })
