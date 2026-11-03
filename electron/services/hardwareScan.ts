@@ -2162,7 +2162,11 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
 export async function getDuelModelList(category: DuelCategory, profile?: Profile | null, machine?: DuelMachineOverride): Promise<DuelModelOption[]> {
   const { assessed } = await assessDuelModels(category, profile, machine)
   return assessed
-    .map(({ c, reason }) => ({ model: c.model, vramGb: c.vramGb, reason }))
+    .map(({ c, reason }) => {
+      // Étape 414 : la vitesse de CE PC ; sur une autre machine, elle ne dirait rien (même carte ou pas).
+      const speed = machine ? { speed: null, kind: null } : localSpeedOf(c.model)
+      return { model: c.model, vramGb: c.vramGb, reason, speed: speed.speed, speedKind: speed.kind }
+    })
     .sort((a, b) => Number(a.reason !== null) - Number(b.reason !== null) || a.vramGb - b.vramGb || a.model.localeCompare(b.model))
 }
 

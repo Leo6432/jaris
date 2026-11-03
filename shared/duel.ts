@@ -24,6 +24,22 @@ export const DUEL_MIN_CHOSEN = 4
 export const DUEL_DEFAULT_SIZE = 5
 
 /**
+ * Étape 414 (Léo : « filtrer les plus rapides, pour choisir des modèles qui répondent vite quand on n'a pas trop le
+ * temps ») : les `count` modèles disponibles les plus rapides sur ce PC. Un modèle de vitesse inconnue n'est jamais
+ * pris (il pourrait être le plus lent) ; à vitesse égale, le plus léger d'abord. Moins de `count` connus : ceux-là.
+ */
+export function fastestDuelModels(
+  models: readonly { model: string; vramGb: number; reason: unknown; speed?: number | null }[],
+  count: number
+): string[] {
+  return models
+    .filter((m) => m.reason === null && typeof m.speed === 'number' && Number.isFinite(m.speed) && m.speed > 0)
+    .sort((a, b) => (b.speed as number) - (a.speed as number) || a.vramGb - b.vramGb || a.model.localeCompare(b.model))
+    .slice(0, Math.max(0, count))
+    .map((m) => m.model)
+}
+
+/**
  * Ce qu'un modèle a fait pendant un duel, gardé avec le vote pour l'historique (Léo : « voir tous les combats, un
  * historique complet »). La réponse est coupée à DUEL_HISTORY_TEXT_MAX caractères ; l'application d'un duel Code est
  * rangée à part (duelStore.ts), `app` dit seulement qu'elle existe.

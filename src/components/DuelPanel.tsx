@@ -23,6 +23,8 @@ import {
   DUEL_SERIES_DEFAULT,
   DUEL_SERIES_MAX,
   DUEL_SERIES_MIN,
+  DUEL_SESSION_SIZES,
+  fastestDuelModels,
   planDuelSeries,
   baseModelTag,
   type DuelAction,
@@ -526,6 +528,72 @@ function unavailableText(option: DuelModelOption): string {
   }
 }
 
+/** Étape 414 : « 42 tok/s », « ≈ » devant une vitesse estimée (modèle jamais lancé sur ce PC), comme « Tous les modèles ». */
+function formatSpeed(option: DuelModelOption): string {
+  return option.speed == null ? '—' : `${option.speedKind === 'estimated' ? '≈ ' : ''}${formatDecimal(Math.round(option.speed))} tok/s`
+}
+
+const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
+  measured: 'speed.kind.measured',
+  estimated: 'speed.kind.estimated',
+  published: 'speed.kind.published'
+}
+
+function speedTitle(option: DuelModelOption): string | undefined {
+  return option.speedKind ? t(SPEED_KIND_LABELS[option.speedKind]) : undefined
+}
+
+/**
+ * Étape 414 (Léo : « filtrer les plus rapides, si on n'a pas trop le temps ») : Jaris prend lui-même les N modèles qui
+ * écrivent le plus vite sur ce PC ; Léo choisit seulement combien. Un modèle de vitesse inconnue n'est jamais pris.
+ */
+function FastPicks({ plan, size, known, onSize, chosen }: { plan: DuelPlan; size: number; known: number; onSize: (n: number) => void; chosen: string[] }): JSX.Element {
+  const models = plan.models ?? []
+  const byName = new Map(models.map((m) => [m.model, m]))
+  if (plan.remote) return <p className="duel-home__note duel-home__note--warn">{t('duel.pick.fast.remote')}</p>
+  return (
+    <>
+      <p className="duel-home__note">{t('duel.pick.fast.lead')}</p>
+      <div className="duel-sizes" role="radiogroup" aria-label={t('duel.pick.fast')}>
+        {DUEL_SESSION_SIZES.map((count) => (
+          <button
+            key={count}
+            type="button"
+            role="radio"
+            aria-checked={size === count}
+            disabled={count > known}
+            className={`duel-size${size === count ? ' duel-size--selected' : ''}`}
+            onClick={() => onSize(count)}
+          >
+            {count}
+          </button>
+        ))}
+      </div>
+      {chosen.length > 0 && (
+        <ol className="duel-picks duel-fast" aria-label={t('duel.pick.fast')}>
+          {chosen.map((model) => {
+            const option = byName.get(model) as DuelModelOption
+            return (
+              <li key={model} className="duel-pick duel-pick--checked duel-fast__item" title={model}>
+                <span className="duel-pick__name">{formatModelName(model)}</span>
+                <span className="duel-pick__speed" title={speedTitle(option)}>
+                  {formatSpeed(option)}
+                </span>
+                <span className="duel-pick__meta">{option.installed ? t('duel.pick.installed') : gb(option.vramGb)}</span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {chosen.length < DUEL_MIN_CHOSEN && (
+        <p className="duel-home__note duel-home__note--warn" role="status">
+          {t('duel.pick.fast.tooFew', { count: known, min: DUEL_MIN_CHOSEN })}
+        </p>
+      )}
+    </>
+  )
+}
+
 interface ModelPickerProps {
   plan: DuelPlan
   picked: string[]
@@ -706,6 +774,11 @@ function ModelPicker({ plan, picked, onToggle, onSetAll, seriesPerModel }: Model
                       done: option.duels ?? 0,
                       todo: Math.max(0, seriesPerModel - (option.duels ?? 0))
                     })}
+                  </span>
+                )}
+                {available && option.speed != null && (
+                  <span className="duel-pick__speed" title={speedTitle(option)}>
+                    {formatSpeed(option)}
                   </span>
                 )}
                 <span className="duel-pick__meta">
@@ -1456,7 +1529,7 @@ export default function DuelPanel(): JSX.Element {
   const [planVersion, setPlanVersion] = useState(0)
   const [size, setSize] = useState<number>(DUEL_DEFAULT_SIZE)
   /** Étape 363 : modèles au hasard, ou choisis à la main. */
-  const [pickMode, setPickMode] = useState<'random' | 'manual'>('random')
+  const [pickMode, setPickMode] = useState<'random' | 'fast' | 'manual'>('random')
   const [picked, setPicked] = useState<string[]>([])
   /** Étape 382 : une série de duels Code (Jaris enchaîne tout seul), et le nombre de duels par modèle. */
   const [seriesMode, setSeriesMode] = useState(false)
@@ -1647,6 +1720,10 @@ export default function DuelPanel(): JSX.Element {
   // l'être en Code).
   const availableModels = new Set((plan?.models ?? []).filter((m) => m.reason === null).map((m) => m.model))
   const pickedNow = picked.filter((m) => availableModels.has(m))
+  // Étape 414 : « Les plus rapides » — jamais plus que de modèles de vitesse connue (le nombre coché reste possible).
+  const fastKnown = fastestDuelModels(plan?.models ?? [], Number.MAX_SAFE_INTEGER).length
+  const fastSize = Math.max(DUEL_MIN_CHOSEN, Math.min(size, fastKnown))
+  const fastest = fastestDuelModels(plan?.models ?? [], fastSize)
   const toggle = (model: string): void =>
     setPicked((current) => (current.includes(model) ? current.filter((m) => m !== model) : [...current, model]))
 
@@ -1656,7 +1733,8 @@ export default function DuelPanel(): JSX.Element {
       setDeleted(null)
       const series = category === 'code' && seriesMode ? perModel : undefined
       const judged = category === 'conversation' && judgeMode ? perModel : undefined
-      setView(await window.jaris.duelStart(category, pickMode === 'manual' ? pickedNow : size, series, judged, judged !== undefined && judgeScreens))
+      const pick = pickMode === 'random' ? size : pickMode === 'fast' ? fastest : pickedNow
+      setView(await window.jaris.duelStart(category, pick, series, judged, judged !== undefined && judgeScreens))
     })
   }
 
@@ -1778,8 +1856,10 @@ export default function DuelPanel(): JSX.Element {
     const ranking = rankings?.find((r) => r.category === category) ?? null
     const chosen = plan?.sizes.find((s) => s.count === size) ?? null
     const tooFew = plan !== null && plan.sizes.length === 0
-    const manual = pickMode === 'manual'
-    const pickedMissing = (plan?.models ?? []).filter((m) => pickedNow.includes(m.model) && !m.installed)
+    // Étape 414 : « Les plus rapides » est une liste comme « Je choisis », sauf que Jaris la remplit.
+    const manual = pickMode !== 'random'
+    const chosenList = pickMode === 'fast' ? fastest : pickedNow
+    const pickedMissing = (plan?.models ?? []).filter((m) => chosenList.includes(m.model) && !m.installed)
     const pickedDownloadGb = pickedMissing.reduce((sum, m) => sum + m.vramGb, 0)
     const pickedFitsDisk = plan?.downloadBudgetGb == null || pickedDownloadGb <= plan.downloadBudgetGb
     const remoteDown = Boolean(plan?.remote?.error)
@@ -1788,7 +1868,7 @@ export default function DuelPanel(): JSX.Element {
     const series = category === 'code' && seriesMode
     // Étape 399 : duels Conversation jugés par Claude — même calcul « au moins N duels par modèle » qu'une série.
     const judged = category === 'conversation' && judgeMode
-    const seriesCount = manual ? pickedNow.length : size
+    const seriesCount = manual ? chosenList.length : size
     const seriesMissing = manual ? pickedMissing : (plan?.models ?? []).filter((m) => m.reason === null && !m.installed)
     const seriesFitsDisk =
       plan?.downloadBudgetGb == null || seriesMissing.every((m) => m.vramGb <= (plan.downloadBudgetGb as number))
@@ -1799,14 +1879,14 @@ export default function DuelPanel(): JSX.Element {
     // Étape 384 : en « Je choisis », les duels déjà votés de chaque modèle sont déduits (« au moins N » au total).
     const doneByModel = new Map((plan?.models ?? []).map((m) => [baseModelTag(m.model), m.duels ?? 0]))
     const seriesTotal = manual
-      ? planDuelSeries(pickedNow, perModel, () => 0, doneByModel).length
+      ? planDuelSeries(chosenList, perModel, () => 0, doneByModel).length
       : planDuelSeries(Array.from({ length: seriesCount }, (_, i) => `m${i}`), perModel, () => 0).length
-    const seriesAllDone = (series || judged) && manual && pickedNow.length >= DUEL_MIN_CHOSEN && seriesTotal === 0
+    const seriesAllDone = (series || judged) && manual && chosenList.length >= DUEL_MIN_CHOSEN && seriesTotal === 0
     const canStart =
       !remoteDown &&
       (!judged || Boolean(claudeKey?.saved) && !seriesAllDone) &&
       (manual
-        ? pickedNow.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk && !seriesAllDone : pickedFitsDisk)
+        ? chosenList.length >= DUEL_MIN_CHOSEN && (series ? seriesFitsDisk && !seriesAllDone : pickedFitsDisk)
         : Boolean(chosen && (series ? seriesFitsDisk : chosen.fitsDisk)))
     content = (
       <div className="duel__scroll">
@@ -1844,7 +1924,7 @@ export default function DuelPanel(): JSX.Element {
               {t('duel.size.title')}
             </h2>
             <div className="duel-sizes duel-pickmode" role="radiogroup" aria-label={t('duel.pick.title')}>
-              {(['random', 'manual'] as const).map((mode) => (
+              {(['random', 'fast', 'manual'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -1853,7 +1933,7 @@ export default function DuelPanel(): JSX.Element {
                   className={`duel-size${pickMode === mode ? ' duel-size--selected' : ''}`}
                   onClick={() => setPickMode(mode)}
                 >
-                  {t(mode === 'random' ? 'duel.pick.random' : 'duel.pick.manual')}
+                  {t(mode === 'random' ? 'duel.pick.random' : mode === 'fast' ? 'duel.pick.fast' : 'duel.pick.manual')}
                 </button>
               ))}
             </div>
@@ -1861,11 +1941,17 @@ export default function DuelPanel(): JSX.Element {
               <p className="duel-home__note">{t('duel.size.searching')}</p>
             ) : manual ? (
               <>
-                <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} onSetAll={setPicked} seriesPerModel={series ? perModel : null} />
-                <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
-                  {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
-                </p>
-                {pickedNow.length > 0 && !series && (
+                {pickMode === 'fast' ? (
+                  <FastPicks plan={plan} size={fastSize} known={fastKnown} onSize={setSize} chosen={fastest} />
+                ) : (
+                  <>
+                    <ModelPicker plan={plan} picked={pickedNow} onToggle={toggle} onSetAll={setPicked} seriesPerModel={series ? perModel : null} />
+                    <p className={`duel-home__note${pickedNow.length >= DUEL_MIN_CHOSEN ? '' : ' duel-home__note--warn'}`} role="status">
+                      {t('duel.pick.chosen', { count: pickedNow.length, min: DUEL_MIN_CHOSEN })}
+                    </p>
+                  </>
+                )}
+                {chosenList.length > 0 && !series && (
                   <p className={`duel-home__note${pickedFitsDisk ? '' : ' duel-home__note--warn'}`}>
                     {pickedMissing.length === 0
                       ? t('duel.size.installed')

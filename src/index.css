@@ -9126,6 +9126,15 @@ ul.reply-list--nested {
   border-color: transparent;
 }
 
+/* Étape 414 : un nombre impossible (pas assez de modèles de vitesse connue) se voit grisé, et le survol n'y change rien. */
+.duel-size:disabled,
+.duel-size:disabled:hover {
+  color: var(--hud-text-faint);
+  background: transparent;
+  border-style: dashed;
+  cursor: default;
+}
+
 /* Étape 377 : la machine qui fait tourner les modèles des duels (adresse d'Ollama, carte, RAM). */
 .duel-remote__fields {
   display: grid;
@@ -9267,6 +9276,38 @@ ul.reply-list--nested {
 
 .duel-pick:disabled .duel-pick__meta {
   color: var(--hud-text-faint);
+}
+
+/* Étape 414 : la vitesse de chaque modèle sur ce PC, et la liste « Les plus rapides » (pas cliquable, rien à cocher). */
+.duel-pick__speed {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--hud-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.duel-fast {
+  counter-reset: duel-fast;
+}
+
+.duel-fast__item {
+  cursor: default;
+  counter-increment: duel-fast;
+}
+
+.duel-fast__item:hover {
+  background: transparent;
+}
+
+.duel-fast__item::before {
+  content: counter(duel-fast);
+  flex: 0 0 18px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--hud-text-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .duel-home__note {

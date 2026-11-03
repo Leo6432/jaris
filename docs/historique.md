@@ -10831,3 +10831,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   écoute du nom toujours coupée, repos juste après la fin de lecture ; sans signal, repos à durée + 5 s ; WAV avec
   bloc `LIST`, taille fausse, pas un WAV) — les deux tests de durée échouent avec l'ancien filet de 20 s.
   **Non vérifié en usage réel.**
+
+- **Étape 414 (v0.41.12), Léo : « un truc pour filtrer les plus rapides dans Duel, pour choisir des modèles qui
+  répondent vite si on n'a pas trop le temps ».** Troisième choix à côté de « Au hasard » et « Je choisis » :
+  **« Les plus rapides »**. Jaris prend lui-même les N modèles disponibles qui écrivent le plus vite sur CE PC (vitesse
+  de l'étape 367 : mesurée, sinon estimée pour ce PC, sinon publiée), Léo choisit seulement N (4, 5 ou 6) ; la liste
+  numérotée montre chaque modèle avec ses tok/s (« ≈ » = estimée, infobulle qui dit d'où vient le chiffre) et ce qu'il
+  faut télécharger. Règles (`fastestDuelModels`, shared/duel.ts, pur) : un modèle de vitesse inconnue n'est JAMAIS pris
+  (il pourrait être le plus lent), ni un modèle grisé ; à vitesse égale, le plus léger. Pas assez de vitesses connues :
+  le nombre impossible est grisé (bordure en pointillés), le nombre coché descend à ce qui est possible, et sous 4 un
+  message dit pourquoi (« fais d'abord quelques duels Au hasard : chaque réponse mesure la vitesse »). Sur une autre
+  machine (étape 377) la vitesse de ce PC ne dit rien : pas de vitesse (`getDuelModelList` la laisse à `null`) et le
+  choix explique quoi faire. La liste part au moteur comme « Je choisis » (même vérification côté main). « Je
+  choisis » affiche aussi la vitesse de chaque modèle. 4 textes dans 24 langues (les boutons cités avec leur vrai
+  libellé dans chaque langue). Régression : `test-duel.mjs` (tri, inconnus et grisés exclus, égalité),
+  `test-local-speed.mjs` (vitesse mesurée/estimée dans la liste du Duel, `null` sur une autre machine),
+  `test-duel-panel-ui.mjs` (ordre, « ≈ », 6 grisé et en pointillés, 4 coché quand seulement 4 sont connus, ce qui part
+  au lancement, message sous 4, autre machine, vitesse dans « Je choisis » ; capture à 760 px). Tests vérifiés en
+  cassant le tri et le filtre. **Non vérifié en usage réel.**

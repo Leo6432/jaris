@@ -1010,6 +1010,12 @@ export interface DuelModelOption {
   installed?: boolean
   /** Étape 384 : duels déjà votés dans cette catégorie (rempli par planDuel). */
   duels?: number
+  /**
+   * Étape 414 : vitesse de génération sur CE PC en tokens/s (étape 367 : mesurée, estimée ou publiée), `null` si
+   * inconnue ou si les modèles tournent sur une autre machine (la vitesse de ce PC n'y dirait rien).
+   */
+  speed?: number | null
+  speedKind?: 'measured' | 'estimated' | 'published' | null
 }
 
 export interface DuelPlan {

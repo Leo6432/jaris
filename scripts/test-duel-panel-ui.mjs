@@ -789,6 +789,122 @@ test('étape 363 : « Je choisis » montre tous les modèles, grise ceux que le 
   })
 })
 
+test('étape 414 : « Les plus rapides » — Jaris prend les N modèles les plus rapides sur ce PC, Léo choisit seulement combien', options, async () => {
+  const init = `window.__plan = { category: 'conversation', available: 5, freeDiskGb: 120, downloadBudgetGb: 115,
+      sizes: [{ count: 4, toDownload: 1, downloadGb: 5.2, fitsDisk: true }, { count: 5, toDownload: 2, downloadGb: 9.8, fitsDisk: true }],
+      models: [
+        { model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true, speed: 81.4, speedKind: 'measured' },
+        { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true, speed: 42, speedKind: 'measured' },
+        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'estimated' },
+        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'estimated' },
+        { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true, speed: 12, speedKind: 'measured' },
+        { model: 'phi4-mini', vramGb: 3, reason: null, installed: false, speed: null, speedKind: null },
+        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'estimated' }
+      ] }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    const modes = await page.$$eval('.duel-pickmode [role=radio]', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(modes, ['Au hasard', 'Les plus rapides', 'Je choisis'])
+    await page.getByRole('radio', { name: 'Les plus rapides' }).click()
+    await page.waitForSelector('.duel-fast__item')
+    // 5 par défaut ; du plus rapide au plus lent ; ni le modèle de vitesse inconnue, ni le trop gros.
+    const rows = await page.$$eval('.duel-fast__item', (els) => els.map((el) => el.textContent))
+    assert.equal(rows.length, 5)
+    assert.match(rows[0], /95 tok\/s/)
+    assert.match(rows[0], /≈/, 'une vitesse estimée le dit')
+    assert.match(rows[1], /81 tok\/s/)
+    assert.doesNotMatch(rows[1], /≈/)
+    assert.match(rows[4], /12 tok\/s/)
+    assert.ok(!rows.some((r) => /phi4|Phi/i.test(r) || /devstral/i.test(r)))
+    assert.match(await page.getAttribute('.duel-fast__item .duel-pick__speed', 'title'), /Estimée/)
+    // Pas de 6 : seulement 5 modèles ont une vitesse connue.
+    const six = page.locator('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', { hasText: '6' })
+    assert.equal(await six.isDisabled(), true)
+    await page.locator('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', { hasText: '4' }).click()
+    assert.equal(await page.$$eval('.duel-fast__item', (els) => els.length), 4)
+    assert.match(await page.textContent('.duel-home'), /Modèles à télécharger : 2/)
+    // Lisible : la vitesse reste dans sa ligne, rien ne déborde.
+    const fits = await page.$$eval('.duel-fast__item', (els) => els.every((el) => {
+      const r = el.getBoundingClientRect()
+      return [...el.children].every((c) => { const b = c.getBoundingClientRect(); return b.left >= r.left - 0.5 && b.right <= r.right + 0.5 })
+    }))
+    assert.equal(fits, true)
+    // Le bouton 4 est vraiment celui choisi (couleur d'accent), 6 grisé.
+    const looks = await page.$$eval('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', (els) =>
+      els.map((el) => ({ checked: el.getAttribute('aria-checked'), disabled: el.disabled })))
+    assert.deepEqual(looks.map((l) => l.checked), ['true', 'false', 'false'])
+    const style = (n) => page.$eval(`.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]:nth-child(${n})`, (el) => getComputedStyle(el).borderTopStyle)
+    assert.equal(await style(3), 'dashed', '6 se voit impossible')
+    assert.equal(await style(2), 'solid')
+    if (process.env.JARIS_SHOT) {
+      await page.mouse.move(0, 0)
+      await page.waitForTimeout(400)
+      await page.screenshot({ path: process.env.JARIS_SHOT })
+    }
+    await page.locator('.duel-home__start').click()
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+    assert.deepEqual(call, ['start', 'conversation', ['ministral-3:8b', 'granite4.2:8b', 'qwen3.5:9b', 'gemma4:12b']])
+  }, init, { width: 760, height: 1100 })
+})
+
+test('étape 414 : « Les plus rapides » sans assez de vitesses connues, ou sur une autre machine — on sait pourquoi, rien ne part', options, async () => {
+  const few = `window.__plan = { category: 'conversation', available: 5, freeDiskGb: 120, downloadBudgetGb: 115,
+      sizes: [{ count: 4, toDownload: 0, downloadGb: 0, fitsDisk: true }],
+      models: ['a:1b', 'b:2b', 'c:3b', 'd:4b', 'e:5b'].map((model, i) => ({ model, vramGb: 2, reason: null, installed: true, speed: i < 2 ? 50 : null, speedKind: i < 2 ? 'measured' : null })) }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    await page.getByRole('radio', { name: 'Les plus rapides' }).click()
+    await page.waitForSelector('.duel-home__note--warn')
+    assert.match(await page.textContent('.duel-home'), /au moins 4 modèles dont la vitesse est connue sur ton PC \(ici : 2\)/)
+    assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
+  }, few)
+  // Exactement 4 vitesses connues alors que 5 était choisi : c'est 4 qui est coché (jamais un nombre grisé coché), et ça part.
+  const four = few.replace('i < 2 ? 50 : null', 'i < 4 ? 50 - i : null').replace("i < 2 ? 'measured' : null", "i < 4 ? 'measured' : null")
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    await page.getByRole('radio', { name: 'Les plus rapides' }).click()
+    await page.waitForSelector('.duel-fast__item')
+    const looks = await page.$$eval('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', (els) =>
+      els.map((el) => `${el.textContent}:${el.getAttribute('aria-checked')}:${el.disabled}`))
+    assert.deepEqual(looks, ['4:true:false', '5:false:true', '6:false:true'])
+    await page.locator('.duel-home__start').click()
+    const call = await page.evaluate(() => window.__calls.find((c) => Array.isArray(c) && c[0] === 'start'))
+    assert.deepEqual(call, ['start', 'conversation', ['a:1b', 'b:2b', 'c:3b', 'd:4b']])
+  }, four)
+  const away = `window.__plan = { category: 'conversation', available: 5, freeDiskGb: null, sizes: [{ count: 4, toDownload: 0, downloadGb: 0, fitsDisk: true }],
+      machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod-11434.proxy.runpod.net', version: '0.40.10', error: null },
+      models: ['a:1b', 'b:2b', 'c:3b', 'd:4b'].map((model) => ({ model, vramGb: 2, reason: null, installed: true, speed: null, speedKind: null })) }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    await page.getByRole('radio', { name: 'Les plus rapides' }).click()
+    await page.waitForSelector('.duel-home__note--warn')
+    assert.match(await page.textContent('.duel-home'), /pour une autre machine, choisis « Au hasard » ou « Je choisis »/)
+    assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
+  }, away)
+})
+
+test('étape 414 : « Je choisis » montre aussi la vitesse de chaque modèle sur ce PC', options, async () => {
+  const init = `window.__plan = { category: 'conversation', available: 5, freeDiskGb: 120, downloadBudgetGb: 115,
+      sizes: [{ count: 4, toDownload: 1, downloadGb: 5.2, fitsDisk: true }, { count: 5, toDownload: 2, downloadGb: 9.8, fitsDisk: true }],
+      models: [
+        { model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true, speed: 81.4, speedKind: 'measured' },
+        { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true, speed: 42, speedKind: 'measured' },
+        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'estimated' },
+        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'estimated' },
+        { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true, speed: 12, speedKind: 'measured' },
+        { model: 'phi4-mini', vramGb: 3, reason: null, installed: false, speed: null, speedKind: null },
+        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'estimated' }
+      ] }`
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-pickmode')
+    await page.getByRole('radio', { name: 'Je choisis' }).click()
+    await page.waitForSelector('.duel-pick')
+    const granite = page.locator('.duel-pick', { hasText: /granite/i })
+    assert.match(await granite.textContent(), /81 tok\/s/)
+    assert.equal(await page.locator('.duel-pick', { hasText: /phi4/i }).locator('.duel-pick__speed').count(), 0, 'vitesse inconnue : rien d’inventé')
+  }, init)
+})
+
 test('étape 363 : « Au hasard » garde le nombre de modèles comme avant', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.duel-pickmode')

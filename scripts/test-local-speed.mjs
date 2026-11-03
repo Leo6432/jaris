@@ -170,3 +170,14 @@ test('« Tous les modèles » dit d’où vient chaque vitesse', async () => {
   assert.equal(byModel.get('ministral-3:3b').localSpeed, 60)
   assert.equal(byModel.get('granite4.2:8b').localSpeedKind, 'estimated')
 })
+
+test('étape 414 : la liste des modèles du Duel dit la vitesse de CE PC (mesurée, estimée), jamais sur une autre machine', async () => {
+  const exports = scan({ 'granite4.2:8b': 81 })
+  const list = await exports.getDuelModelList('conversation', null)
+  const granite = list.find((o) => o.model === 'granite4.2:8b')
+  assert.equal(granite.speed, 81, 'la vitesse mesurée sur ce PC')
+  assert.equal(granite.speedKind, 'measured')
+  assert.ok(list.some((o) => o.speedKind === 'estimated' && o.speed > 0), 'les autres : estimés pour ce PC')
+  const away = await exports.getDuelModelList('conversation', null, { vramGb: 288, ramGb: 188, ollamaVersion: '0.40.10' })
+  assert.ok(away.every((o) => o.speed === null && o.speedKind === null), 'autre machine : la vitesse de ce PC ne dit rien')
+})

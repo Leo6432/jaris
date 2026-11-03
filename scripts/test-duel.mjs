@@ -474,3 +474,19 @@ test('étape 382 : nombre de duels par modèle accepté de 1 à 50, entier seule
   for (const ok of [1, 10, 50]) assert.equal(duel.isDuelSeriesCount(ok), true)
   for (const bad of [0, 51, 2.5, '10', null, Number.NaN]) assert.equal(duel.isDuelSeriesCount(bad), false)
 })
+
+test('étape 414 : « Les plus rapides » — les N plus rapides disponibles, jamais un modèle de vitesse inconnue ou grisé', () => {
+  const models = [
+    { model: 'lent:8b', vramGb: 5, reason: null, speed: 20 },
+    { model: 'rapide:4b', vramGb: 3, reason: null, speed: 95 },
+    { model: 'inconnu:2b', vramGb: 2, reason: null, speed: null },
+    { model: 'sans-mesure:3b', vramGb: 2, reason: null },
+    { model: 'trop-gros:70b', vramGb: 40, reason: { kind: 'tooBig', needGb: 40, budgetGb: 8 }, speed: 500 },
+    { model: 'moyen-b:7b', vramGb: 6, reason: null, speed: 50 },
+    { model: 'moyen-a:6b', vramGb: 4, reason: null, speed: 50 },
+    { model: 'zero:1b', vramGb: 1, reason: null, speed: 0 }
+  ]
+  assert.equal(duel.fastestDuelModels(models, 3).join(), 'rapide:4b,moyen-a:6b,moyen-b:7b', 'à vitesse égale, le plus léger')
+  assert.equal(duel.fastestDuelModels(models, 10).join(), 'rapide:4b,moyen-a:6b,moyen-b:7b,lent:8b', 'seulement les vitesses connues')
+  assert.equal(duel.fastestDuelModels(models, 0).length, 0)
+})
