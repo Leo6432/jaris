@@ -18,6 +18,7 @@ import { CAPABILITIES } from '../../shared/capabilities'
 import AppUpdateProgress from './AppUpdateProgress'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import AnywhereSettings from './AnywhereSettings'
+import McpSettings from './McpSettings'
 import MyModelPicks from './MyModelPicks'
 import ModelPullBar from './ModelPullBar'
 import JarisOrb from './JarisOrb'
@@ -120,7 +121,7 @@ export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
 // même onglet chez ChatGPT/Claude (thème, langue, effacer les discussions...). 9 onglets -> 5.
 // Étape 214 : « Téléphone » revient (Léo : « on va faire parler depuis son téléphone »), cette fois pour
 // parler à Jaris depuis le téléphone — rien à voir avec l'ancien onglet Mobile connecté retiré à l'étape 116.
-type Tab = 'capacites' | 'voix' | 'modeles' | 'telephone' | 'general'
+type Tab = 'capacites' | 'voix' | 'modeles' | 'telephone' | 'mcp' | 'general'
 
 /**
  * Titre + sous-titre en tête de chaque page de réglages (design importé, "Options Jaris.dc.html") —
@@ -134,6 +135,7 @@ const TAB_META: Partial<Record<Tab, { title: MessageKey; subtitle: MessageKey }>
   voix: { title: 'options.tab.voice', subtitle: 'options.tab.voice.subtitle' },
   modeles: { title: 'options.tab.models', subtitle: 'options.tab.models.subtitle' },
   telephone: { title: 'options.tab.phone', subtitle: 'options.tab.phone.subtitle' },
+  mcp: { title: 'options.tab.mcp', subtitle: 'options.tab.mcp.subtitle' },
   general: { title: 'options.tab.general', subtitle: 'options.tab.general.subtitle' }
 }
 
@@ -775,6 +777,10 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
           {t('options.tab.phone')}
         </button>
+        {/* Étape 418 : les serveurs MCP de Léo (McpSettings.tsx). */}
+        <button className={`options-menu__tab${tab === 'mcp' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('mcp')}>
+          {t('options.tab.mcp')}
+        </button>
         <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
           {t('options.tab.general')}
         </button>
@@ -1119,6 +1125,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         )}
 
         {tab === 'telephone' && <AnywhereSettings />}
+
+        {tab === 'mcp' && <McpSettings />}
 
         {tab === 'general' && (
           <div className="options-menu__section">

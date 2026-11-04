@@ -1,7 +1,7 @@
 import { resolveChosenModel } from './modelChoice'
 import { notepadRequest, openNotepadText } from './notepad'
 import { config } from '../config'
-import { chatWithOllama, getModelThinking, listInstalledModels, loadedOllamaModels, type ChatMetrics, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelThinking, listInstalledModels, loadedOllamaModels, type ChatMetrics, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
@@ -573,6 +573,30 @@ function leakPattern(name: string, english: boolean): string {
 }
 
 /**
+ * Étape 418 : outils venus d'ailleurs (serveurs MCP de Léo, mcpHub.ts), branchés par main.ts. Un SETTER plutôt qu'un
+ * import : une dizaine de tests chargent ce module avec leur propre liste de modules (piège déjà noté).
+ */
+export interface ExtraToolSource {
+  /** Les outils utiles à CETTE demande, et leur exécution (seuls ceux-là peuvent être appelés). */
+  toolsFor(prompt: string): { tools: OllamaTool[]; call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string> }
+}
+let extraToolSource: ExtraToolSource | null = null
+export function setExtraToolSource(source: ExtraToolSource | null): void {
+  extraToolSource = source
+}
+
+/** Les outils MCP d'une demande ; une panne de la source n'empêche jamais Jaris de répondre avec ses propres outils. */
+function extraToolsFor(prompt: string, onLog?: (message: string) => void): ReturnType<ExtraToolSource['toolsFor']> | null {
+  if (!extraToolSource) return null
+  try {
+    return extraToolSource.toolsFor(prompt)
+  } catch (err) {
+    onLog?.(`Outils MCP indisponibles : ${err instanceof Error ? err.message : String(err)}`)
+    return null
+  }
+}
+
+/**
  * Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à
  * dire. `history` porte les derniers échanges (user/assistant) de la session, en amont du nouveau
  * message : sans ça, chaque question repartait de zéro sans aucun souvenir de ce qui venait d'être dit
@@ -660,13 +684,20 @@ async function conversation(
   const profile = await getProfile()
   const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage, onWebActivity)
   const isToolAllowed = (name: string): boolean => !restrictions || restrictions.allowedTools.has(name)
+  // Étape 418 : les outils MCP de Léo, seulement sans restriction (jamais depuis le téléphone ni en duel, où la liste
+  // des outils permis est fixée), au plus quelques-uns par demande (shared/mcp.ts).
+  const extra = restrictions ? null : extraToolsFor(prompt, onLog)
+  const extraNames = new Set((extra?.tools ?? []).map((tool) => tool.function.name))
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
+    if (extra && extraNames.has(name)) return extra.call(name, args, signal)
     if (!isToolAllowed(name)) throw new Error(restrictions?.refusalFor?.(name) ?? restrictions?.refusal ?? t('reply.unavailable'))
     return restrictions?.runTool ? restrictions.runTool(() => runTool(name, args)) : runTool(name, args)
   }
-  const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
+  const ownTools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
+  const tools = extra?.tools.length ? [...ownTools, ...extra.tools] : ownTools
+  if (extra?.tools.length) onLog?.(`Outils MCP proposés : ${[...extraNames].join(', ')}`)
 
   const note = shortcuts ? notepadRequest(prompt) : null
   // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).

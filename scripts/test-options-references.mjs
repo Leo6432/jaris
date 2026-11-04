@@ -36,13 +36,13 @@ const catalogs = [
 test('les onglets d’Options affichent bien les libellés du catalogue', () => {
   const menu = readFileSync(join(root, 'src/components/OptionsMenu.tsx'), 'utf8')
   const tabKeys = [...menu.matchAll(/setTab\('\w+'\)\}>\s*\{t\('([\w.]+)'\)\}\s*<\/button>/g)].map((m) => m[1])
-  assert.deepEqual(tabKeys.sort(), ['options.tab.capabilities', 'options.tab.general', 'options.tab.models', 'options.tab.phone', 'options.tab.voice'])
+  assert.deepEqual(tabKeys.sort(), ['options.tab.capabilities', 'options.tab.general', 'options.tab.mcp', 'options.tab.models', 'options.tab.phone', 'options.tab.voice'])
 })
 
 for (const [code, messages] of catalogs) {
   test(`${code} : chaque « Options → … » désigne un onglet qui existe dans cette langue`, () => {
     const prefix = `${messages['options.title']} → `
-    const labels = ['options.tab.capabilities', 'options.tab.general', 'options.tab.models', 'options.tab.phone', 'options.tab.voice'].map((key) => messages[key])
+    const labels = ['options.tab.capabilities', 'options.tab.general', 'options.tab.mcp', 'options.tab.models', 'options.tab.phone', 'options.tab.voice'].map((key) => messages[key])
     let seen = 0
     const wrong = []
     for (const [key, text] of Object.entries(messages)) {

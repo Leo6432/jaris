@@ -1573,6 +1573,14 @@ export const IPC_CHANNELS = {
   openPhoneAccessLink: 'jaris:open-phone-access-link',
   /** main -> renderer : l'état de l'accès téléphone a changé (connexion Tailscale, adresse prête…). */
   phoneAccessChanged: 'jaris:phone-access-changed',
+  // Étape 418 : serveurs MCP (Options → Outils MCP, mcpHub.ts).
+  mcpList: 'jaris:mcp-list',
+  mcpAdd: 'jaris:mcp-add',
+  mcpRemove: 'jaris:mcp-remove',
+  mcpSetEnabled: 'jaris:mcp-set-enabled',
+  mcpSetToolEnabled: 'jaris:mcp-set-tool-enabled',
+  mcpRestart: 'jaris:mcp-restart',
+  mcpChanged: 'jaris:mcp-changed',
   /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
   chatHistoryChanged: 'jaris:chat-history-changed',
   /**

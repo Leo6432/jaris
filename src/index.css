@@ -11304,3 +11304,256 @@ input.reply-ui__field-input {
 .rail__menu-item--active {
   background: var(--jv-hover-strong);
 }
+
+/* ==========================================================================
+   Étape 418 — Options → Outils MCP (McpSettings.tsx) : même famille que les autres cartes des Options (coins de
+   16 px, panneau, filet), pastille d'état colorée par le sens (vert connecté, rouge erreur, neutre sinon).
+   ========================================================================== */
+.mcp {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mcp-add {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  min-width: 0;
+}
+
+.mcp-add textarea.mcp-add__input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 10px 12px;
+  resize: vertical;
+  font-family: var(--hud-font-mono, ui-monospace, 'Geist Mono', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mcp-add__row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.mcp-add__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.mcp-add__warning,
+.mcp-empty,
+.mcp-tools__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--hud-text-dim);
+}
+
+.mcp-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hud-danger);
+  overflow-wrap: anywhere;
+}
+
+.mcp-btn {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mcp-btn:hover:not(:disabled) {
+  background: var(--jv-hover);
+}
+
+.mcp-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mcp-btn--primary {
+  height: 36px;
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.mcp-btn--primary:hover:not(:disabled) {
+  background: var(--hud-accent);
+  filter: brightness(1.08);
+}
+
+.mcp-btn--danger {
+  color: var(--hud-danger);
+  border-color: var(--hud-danger);
+}
+
+.mcp-server {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
+
+.mcp-server__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mcp-server__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mcp-server__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--hud-text);
+  overflow-wrap: anywhere;
+}
+
+.mcp-status {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 999px;
+  color: var(--hud-text-dim);
+  background: var(--jv-hover);
+  white-space: nowrap;
+}
+
+.mcp-status--ready {
+  color: var(--hud-ok);
+  background: rgba(var(--hud-ok-rgb), 0.12);
+}
+
+.mcp-status--error {
+  color: var(--hud-danger);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hud-danger);
+}
+
+.mcp-server__summary {
+  margin: 0;
+  font-family: var(--hud-font-mono, ui-monospace, 'Geist Mono', monospace);
+  font-size: 12px;
+  color: var(--hud-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-server__secrets {
+  margin: 0;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.mcp-tools > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--hud-text);
+  padding: 4px 0;
+}
+
+.mcp-tools__list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mcp-tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--hud-line);
+  min-width: 0;
+}
+
+.mcp-tool__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mcp-tool__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--hud-font-mono, ui-monospace, 'Geist Mono', monospace);
+  font-size: 12px;
+  color: var(--hud-text);
+  overflow-wrap: anywhere;
+}
+
+.mcp-tool__badge {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--hud-text-dim);
+  background: var(--jv-hover);
+  white-space: nowrap;
+}
+
+.mcp-tool__description {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--hud-text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mcp-server__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mcp-server__confirm {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--hud-text);
+}

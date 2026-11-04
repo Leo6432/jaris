@@ -1,6 +1,7 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
 import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
+import type { McpServerView } from '../shared/mcp'
 import type { LanguageSetting } from '../shared/i18n/languages'
 import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
 import type {
@@ -278,6 +279,13 @@ declare global {
       /** Ouvre dans le navigateur la page Tailscale à visiter (connexion ou autorisation), jamais une autre. */
       openPhoneAccessLink: () => Promise<void>
       onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => () => void
+      mcpList: () => Promise<McpServerView[]>
+      mcpAdd: (pasted: string, name?: string) => Promise<McpServerView[]>
+      mcpRemove: (id: string) => Promise<McpServerView[]>
+      mcpSetEnabled: (id: string, enabled: boolean) => Promise<McpServerView[]>
+      mcpSetToolEnabled: (id: string, tool: string, enabled: boolean) => Promise<McpServerView[]>
+      mcpRestart: (id: string) => Promise<McpServerView[]>
+      onMcpChanged: (cb: (servers: McpServerView[]) => void) => () => void
       onChatHistoryChanged: (cb: () => void) => () => void
       onChatBusy: (cb: (busy: boolean) => void) => () => void
       onStudioGalleryChanged?: (cb: () => void) => () => void

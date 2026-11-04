@@ -10895,3 +10895,45 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   la machine de Léo (8 Go/32 Go). Avec 16 Go de RAM et une carte de 8 à 16 Go, sans modèle Code en service, le modèle
   Code passe d'ornith-1.5:9b à gemma4:e4b (3 victoires en Code), selon la règle « tout part de 0 » (étape 358) ; un
   modèle déjà en service ne change que sur une probabilité de plus de 95 % (étape 360). `test-shared-duel-votes.mjs`.
+
+- **Étape 418 (v0.42.0), Léo : « on peut ajouter les MCP dans Jaris ? » puis « oui fais-le ».** Jaris devient client
+  MCP (Model Context Protocol) : les serveurs de Léo donnent leurs outils au modèle du Chat et du Vocal, à côté de
+  ceux de Jaris. Kit officiel `@modelcontextprotocol/sdk` 1.32.1 (MIT ; 1.32.2 écartée, publiée depuis moins de 2
+  semaines ; `fast-uri`, dépendance d'ajv, montée à 3.1.9 pour 5 failles connues).
+  - **Ajout (Options → Outils MCP, `McpSettings.tsx`)** : Léo colle ce que donne la page d'un serveur — bloc JSON
+    `mcpServers` (Claude Desktop, Cursor), `servers` (VS Code), un seul serveur, un bloc sans accolades, une ligne de
+    commande (`npx -y …`, chemins Windows intacts) ou une adresse https (`parseMcpPaste`, shared/mcp.ts). Un nom tapé
+    l'emporte s'il n'y a qu'un serveur ; un nom déjà pris reçoit un numéro (rien n'est remplacé en silence). Chaque
+    serveur dit son état (Démarre… / Connecté · outils : N / Désactivé / Erreur avec la VRAIE raison), ses outils
+    (décochables un par un, « lecture seule » quand le serveur le dit), Relancer, Supprimer après confirmation dans la
+    page. Les valeurs des clés (env, en-têtes) ne partent jamais à l'écran, seulement leurs noms.
+  - **Moteur (`mcpHub.ts`)** : `mcp-servers.json` (atomicFile, OWNED_ENTRIES, `destination-wins`), serveurs activés
+    branchés au démarrage en arrière-plan, arrêtés avec Jaris. Local : lancé SANS shell (cross-spawn, tableau
+    d'arguments, console cachée sous Windows) ; adresse : HTTP « streamable », puis SSE pour les anciens. Démarrage :
+    3 min au plus (`npx -y` télécharge son paquet la première fois). La commande est cherchée AVANT le lancement comme
+    Windows le ferait (PATH puis PATHEXT : `npx` → `npx.cmd`, `commandExists`) : sinon Windows lançait l'interpréteur
+    de commandes, qui répondait « n'est pas reconnu… ». Messages lisibles : commande absente (« installe
+    Node.js / uv »), ce que le serveur a écrit sur sa sortie d'erreur quand il échoue ou s'arrête, outil en échec avec
+    le message du serveur tel quel, outil sans signe de vie 5 min (le délai repart à chaque progression).
+  - **Modèle (`converse`, assistant.ts)** : branché par un SETTER (`setExtraToolSource`, comme hardwareScan), pas
+    d'import : les tests qui chargent assistant.ts avec leurs propres modules restent intacts. Outils nommés
+    `mcp_<serveur>_<outil>` (propres et uniques, 64 caractères au plus). **Petits modèles** : au plus 12 outils MCP par
+    demande (`pickMcpTools`) — tous s'il y en a peu, sinon ceux qui partagent le plus de mots avec la demande (un
+    serveur nommé, « sur GitHub », compte triple ; « GitHub » donne aussi « github » entier). Seuls les outils proposés
+    pour CETTE demande peuvent être appelés. **Jamais en duel ni depuis le téléphone** (restrictions : la source n'est
+    même pas consultée). Une source en panne n'empêche jamais Jaris de répondre avec ses propres outils. Un échec
+    d'outil MCP part tel quel, sans repasser par le modèle (règle des échecs d'outils). Résultat coupé à 20 000
+    caractères, et c'est dit.
+  - 33 textes dans 24 langues (pas de pluriel : « outils : N »). Onglet ajouté dans 3 tests qui listaient les onglets.
+  - **Régression** : `test-mcp.mjs` (formats collés, noms, choix des outils, résultats, fichier abîmé),
+    `test-mcp-hub.mjs` (un VRAI serveur MCP, `scripts/fixtures/mcp-test-server.mjs` : outils, appels, clé transmise
+    au serveur mais jamais à l'écran, échec signalé, plantage avec son dernier message puis Relancer, échec au
+    démarrage, commande absente, désactiver/supprimer/relire), `test-assistant-history.mjs` (proposés, appelés,
+    échec, source en panne, jamais en duel — échoue sans la garde), `test-mcp-settings-ui.mjs` (navigateur, CSS
+    compilé : ajout, erreur réelle, états, outil décoché, suppression confirmée, 760 px sans débordement ; capture).
+    **Piège attrapé par le test d'écran** : la règle générale `textarea:not(.composer__input)` (0,1,1) gagnait sur
+    `.mcp-add__input` (0,1,0) et imposait sa police : sélecteur renforcé.
+  - **Vérifié dans le VRAI Jaris** (Electron sous Xvfb, profil neuf, `mcp-servers.json` posé) : serveur lancé au
+    démarrage, `mcpList()` le dit connecté avec ses 5 outils sans la clé, et il s'arrête avec Jaris. **Non vérifié en
+    usage réel** : Windows (`npx.cmd` via cross-spawn), un vrai serveur public (GitHub, fichiers…) et la façon dont les
+    petits modèles locaux choisissent ces outils.

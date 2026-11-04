@@ -53,6 +53,8 @@ import { engineModelsDir } from './services/ollamaEngine'
 import { Agent as UndiciAgent } from 'undici'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
 import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services/speedStore'
+import { addMcpServers, listMcpServers, mcpToolsFor, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
+import { setExtraToolSource } from './services/assistant'
 import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
@@ -1802,6 +1804,16 @@ app.whenReady().then(async () => {
   void restoreDuelSeries().catch((err) => console.error('[jaris] Série de duels non reprise :', err))
   void loadSharedDuelVotes(join(resourcesRoot(), 'scripts', 'shared-duel-votes.json'))
   void loadModelSpeeds()
+  // Étape 418 : les serveurs MCP de Léo, branchés en arrière-plan (un serveur lent ne retarde jamais Jaris).
+  setMcpChangeListener(() => void listMcpServers().then((servers) => broadcast(IPC_CHANNELS.mcpChanged, servers)))
+  setExtraToolSource({ toolsFor: (prompt) => mcpToolsFor(prompt) })
+  void startMcpHub().catch((err) => console.error('[jaris] MCP : serveurs non démarrés —', err))
+  ipcMain.handle(IPC_CHANNELS.mcpList, () => listMcpServers())
+  ipcMain.handle(IPC_CHANNELS.mcpAdd, (_event, pasted: unknown, name: unknown) => addMcpServers(pasted, name))
+  ipcMain.handle(IPC_CHANNELS.mcpRemove, (_event, id: unknown) => removeMcpServer(id))
+  ipcMain.handle(IPC_CHANNELS.mcpSetEnabled, (_event, id: unknown, enabled: unknown) => setMcpServerEnabled(id, enabled))
+  ipcMain.handle(IPC_CHANNELS.mcpSetToolEnabled, (_event, id: unknown, tool: unknown, enabled: unknown) => setMcpToolEnabled(id, tool, enabled))
+  ipcMain.handle(IPC_CHANNELS.mcpRestart, (_event, id: unknown) => restartMcpServer(id))
   const duelCategory = (value: unknown): DuelCategory => {
     if (!isDuelCategory(value)) throw new Error(t('duel.error.badRequest'))
     return value
@@ -2700,6 +2712,8 @@ app.on('before-quit', () => {
   pipeline?.stop()
   ttsClient.stop()
   void phoneAccess?.disable()
+  // Étape 418 : les serveurs MCP lancés par Jaris s'arrêtent avec lui.
+  void stopMcpHub()
 })
 
 // Déclenché sur la toute première instance (celle qui a le verrou, voir requestSingleInstanceLock tout en

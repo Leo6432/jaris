@@ -50,6 +50,8 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
   }
   const exports = {}
   vm.runInNewContext(source, { exports, Error, require: withI18n(name => modules[name]) })
+  // Étape 418 : la source des outils MCP (main.ts la branche), pour les tests qui en ont besoin.
+  exports.converse.setExtraToolSource = exports.setExtraToolSource
   return exports.converse
 }
 
@@ -707,4 +709,58 @@ test('fenêtre automatique : la conversation n’impose jamais de fenêtre, mêm
   await converse('Raconte-moi une histoire', null, () => {})
   assert.ok(seen.length >= 1)
   for (const numCtx of seen) assert.equal(numCtx, undefined)
+})
+
+test('étape 418 : les outils MCP sont proposés au modèle et appelés ; jamais en duel ni depuis le téléphone', async () => {
+  const OWN = [{ type: 'function', function: { name: 'open_app', description: '', parameters: {} } }]
+  const mcpTool = { type: 'function', function: { name: 'mcp_fichiers_list_files', description: '[MCP fichiers] List files', parameters: { type: 'object', properties: {} } } }
+  const asked = []
+  const called = []
+  const source = {
+    toolsFor: (prompt) => {
+      asked.push(prompt)
+      return { tools: [mcpTool], call: async (name, args) => (called.push([name, args]), 'notes.txt, photo.jpg') }
+    }
+  }
+  const seen = []
+  let round = 0
+  const converse = setup(
+    async (_messages, tools) => {
+      seen.push(tools.map((t) => t.function.name))
+      round++
+      if (round === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_fichiers_list_files', arguments: { folder: 'Documents' } } }] }
+      return { role: 'assistant', content: 'Tu as notes.txt et photo.jpg.' }
+    },
+    async () => assert.fail('les outils de Jaris ne doivent pas être appelés'),
+    undefined,
+    { tools: OWN }
+  )
+  converse.setExtraToolSource(source)
+  assert.equal(await converse('Liste mes fichiers dans Documents', null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Tu as notes.txt et photo.jpg.')
+  assert.deepEqual(asked, ['Liste mes fichiers dans Documents'])
+  assert.equal(seen[0].join(), 'open_app,mcp_fichiers_list_files', 'ses outils, puis ceux du serveur MCP')
+  assert.deepEqual(JSON.parse(JSON.stringify(called)), [['mcp_fichiers_list_files', { folder: 'Documents' }]])
+
+  // Un échec d'outil MCP : son vrai message, sans repasser par le modèle.
+  round = 0
+  source.toolsFor = () => ({ tools: [mcpTool], call: async () => { throw new Error("L'outil « list_files » du serveur MCP « fichiers » a échoué : dossier introuvable") } })
+  const failed = await converse('Liste mes fichiers', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.match(failed, /dossier introuvable/)
+
+  // Une source en panne n'empêche jamais Jaris de répondre avec ses propres outils.
+  round = 1
+  seen.length = 0
+  source.toolsFor = () => { throw new Error('hub cassé') }
+  assert.equal(await converse('Bonjour, une question', null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Tu as notes.txt et photo.jpg.')
+  assert.equal(seen[0].join(), 'open_app')
+
+  // Duel et téléphone (restrictions) : la source n'est même pas consultée.
+  asked.length = 0
+  seen.length = 0
+  round = 1
+  source.toolsFor = (prompt) => (asked.push(prompt), { tools: [mcpTool], call: async () => assert.fail('jamais en duel') })
+  await converse('Liste mes fichiers', null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, { ...duelRestrictions('test'), allowedTools: new Set(['open_app']) })
+  assert.deepEqual(asked, [])
+  assert.equal(seen[0].join(), 'open_app')
+  converse.setExtraToolSource(null)
 })

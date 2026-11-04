@@ -118,6 +118,8 @@ export const OWNED_ENTRIES = [
   'duel-series',
   // Étape 367 : vitesses des modèles mesurées sur ce PC (speedStore.ts).
   'model-speeds.json',
+  // Étape 418 : les serveurs MCP de Léo (mcpHub.ts).
+  'mcp-servers.json',
   'journal-demandes.txt',
   'github-connection.json',
   'github-token.bin',
@@ -219,6 +221,7 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   'duel-series': 'keep-both',
   // Les vitesses de CE PC : celles de la racine gagnent, une session sur C n'en mesure que quelques-unes.
   'model-speeds.json': 'destination-wins',
+  'mcp-servers.json': 'destination-wins',
   'journal-demandes.txt': 'append-journal',
   [CODE_CONVERSATIONS_FILE]: 'merge-code-conversations',
   [CODE_CONVERSATIONS_ASIDE_DIR]: 'keep-both',

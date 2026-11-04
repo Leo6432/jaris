@@ -28,6 +28,8 @@ dépôt GitHub), Image (FLUX.2 klein), Vidéo (FastWan 2.2), Duel (votes à l'av
   (Faible/Moyen/Élevé, Vision, Code, Image, Vidéo, pilotage) : `hardwareScan.ts`, scores dans
   `scripts/verified-tool-scores.md`, tests des modèles `scripts/benchmark-*.mjs`, duels `duelSession.ts`/`shared/duel.ts`.
 - Web : `webSearch.ts` (DuckDuckGo puis Startpage dans une fenêtre cachée, plus de Docker), `webPage.ts`.
+- Outils MCP (serveurs de Léo, Options → Outils MCP) : `mcpHub.ts`, `shared/mcp.ts`, `McpSettings.tsx` ; branchés à
+  `converse()` par `setExtraToolSource` (jamais en duel ni depuis le téléphone).
 - Pilotage d'écran : `computerUse.ts`, `uiAutomation.ts`, `backgroundControl.ts`, viseur MAI-UI (`maiUi.ts`).
 - Code : `codeGenerator.ts`, `generatedAppPreview.ts` (protocole `jaris-preview:`), GitHub `github.ts`,
   `githubSession.ts`, `repoAgent.ts`. Image/Vidéo : `imageGenerator.ts`, `videoGenerator.ts` (stable-diffusion.cpp).

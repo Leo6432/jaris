@@ -1,6 +1,7 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
 import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
+import type { McpServerView } from '../shared/mcp'
 import { contextBridge, ipcRenderer } from 'electron'
 import { ipcErrorMessage } from '../shared/ipcError'
 import {
@@ -332,6 +333,14 @@ const api = {
   logoutPhoneAccess: (): Promise<PhoneAccessStatus> => invoke(IPC_CHANNELS.logoutPhoneAccess),
   openPhoneAccessLink: (): Promise<void> => invoke(IPC_CHANNELS.openPhoneAccessLink),
   onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => subscribe(IPC_CHANNELS.phoneAccessChanged, cb),
+  // Étape 418 : serveurs MCP.
+  mcpList: (): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpList),
+  mcpAdd: (pasted: string, name?: string): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpAdd, pasted, name),
+  mcpRemove: (id: string): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpRemove, id),
+  mcpSetEnabled: (id: string, enabled: boolean): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpSetEnabled, id, enabled),
+  mcpSetToolEnabled: (id: string, tool: string, enabled: boolean): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpSetToolEnabled, id, tool, enabled),
+  mcpRestart: (id: string): Promise<McpServerView[]> => invoke(IPC_CHANNELS.mcpRestart, id),
+  onMcpChanged: (cb: (servers: McpServerView[]) => void) => subscribe(IPC_CHANNELS.mcpChanged, cb),
   onChatHistoryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.chatHistoryChanged, cb),
   onChatBusy: (cb: (busy: boolean) => void) => subscribe<boolean>(IPC_CHANNELS.chatBusy, cb),
   onStudioGalleryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.studioGalleryChanged, cb),

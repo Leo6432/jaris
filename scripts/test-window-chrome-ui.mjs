@@ -288,7 +288,7 @@ test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas d
     // Options met ses sections dans la colonne, au lieu d'une seconde colonne dans la page qui écrasait les réglages.
     await page.click('.rail__item:has-text("Options")')
     assert.equal((await page.textContent('.app-sidebar__title')).trim(), 'Options')
-    assert.equal(await page.locator('.app-sidebar .options-menu__tab').count(), 5)
+    assert.equal(await page.locator('.app-sidebar .options-menu__tab').count(), 6)
     assert.equal(await page.locator('.options-page .options-page__navigation').count(), 0, 'les sections sont aussi dans la page')
     await page.click('.app-sidebar .options-menu__tab:has-text("Modèles")')
     assert.match(await page.textContent('.options-page__tab-header h3'), /Modèles/)
