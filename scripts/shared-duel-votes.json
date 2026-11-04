@@ -88,5 +88,77 @@
     "modelA": "qwen3.8:27b",
     "modelB": "ministral-3:8b",
     "outcome": "a"
+  },
+  {
+    "id": "f0cf9106-2808-49a4-a123-9558eaac1c10",
+    "category": "code",
+    "at": 1793649286315,
+    "sessionId": "f7826d57-e080-4707-833e-7dba92b48c6e",
+    "modelA": "qwen2.5-coder:7b",
+    "modelB": "qwen3.6:27b",
+    "outcome": "b"
+  },
+  {
+    "id": "b9b3e18c-0826-424d-9c27-db9879b3b749",
+    "category": "code",
+    "at": 1793706741004,
+    "sessionId": "52a0312d-c039-4094-af65-15a077b19c86",
+    "modelA": "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M",
+    "modelB": "ministral-3:8b",
+    "outcome": "b"
+  },
+  {
+    "id": "a72eab93-f38d-468f-8ca5-ae4463e872e0",
+    "category": "code",
+    "at": 1793727233442,
+    "sessionId": "c3aa50f4-b554-48ba-9767-66cb2ee7285d",
+    "modelA": "hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M",
+    "modelB": "gemma4:e4b",
+    "outcome": "b"
+  },
+  {
+    "id": "9024b76c-1bde-4960-ac3c-7aa4eea3f0a0",
+    "category": "code",
+    "at": 1793728493346,
+    "sessionId": "c3aa50f4-b554-48ba-9767-66cb2ee7285d",
+    "modelA": "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M",
+    "modelB": "hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "2aa10159-31a9-4a45-a1d6-52dba2998784",
+    "category": "code",
+    "at": 1793735487971,
+    "sessionId": "c3aa50f4-b554-48ba-9767-66cb2ee7285d",
+    "modelA": "hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M",
+    "modelB": "qwen3.5:0.8b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "138b5a66-608b-4f83-9912-53bef678d05e",
+    "category": "code",
+    "at": 1793795401010,
+    "sessionId": "ff8daaa7-a626-4bf2-b057-53e122d48875",
+    "modelA": "hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M",
+    "modelB": "hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "946b4667-6ff8-4110-b1c6-d507bb045e17",
+    "category": "code",
+    "at": 1793800978699,
+    "sessionId": "5f979a80-38e6-4a91-9a44-9988334aff6b",
+    "modelA": "gemma4:e4b",
+    "modelB": "qwen2.5-coder:7b",
+    "outcome": "a"
+  },
+  {
+    "id": "3ea79af3-85a7-4bc1-a4f2-bd662852f4d9",
+    "category": "code",
+    "at": 1793805372202,
+    "sessionId": "5f979a80-38e6-4a91-9a44-9988334aff6b",
+    "modelA": "gemma4:e4b",
+    "modelB": "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M",
+    "outcome": "a"
   }
 ]

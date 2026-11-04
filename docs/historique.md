@@ -10886,3 +10886,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-duel-panel-ui.mjs` et `test-code-panel-ui.mjs` (bouton seulement pendant la réflexion, disparaît une fois
   demandé, revient à la génération suivante ; capture). **Non vérifié en usage réel** (qualité du code écrit sans
   réflexion selon les modèles).
+
+- **Étape 417 (v0.41.15), Léo envoie un nouvel export des votes (04/11/2026).** 8 votes Code, tous nouveaux :
+  `node scripts/import-duel-votes.mjs` les ajoute à `scripts/shared-duel-votes.json` (total 18, toujours sans demande
+  ni réponses). Choix des modèles calculé avant/après sur 24 machines types (carte 0 à 24 Go, RAM 16/32/64 Go), en
+  comparant TOUT le résultat (piège attrapé : comparer seulement `models` ignorait `codeModel`, alors que les 8 votes
+  sont en Code — une comparaison qui ne bouge pas même contre « aucun vote » doit être soupçonnée). Rien ne change sur
+  la machine de Léo (8 Go/32 Go). Avec 16 Go de RAM et une carte de 8 à 16 Go, sans modèle Code en service, le modèle
+  Code passe d'ornith-1.5:9b à gemma4:e4b (3 victoires en Code), selon la règle « tout part de 0 » (étape 358) ; un
+  modèle déjà en service ne change que sur une probabilité de plus de 95 % (étape 360). `test-shared-duel-votes.mjs`.
