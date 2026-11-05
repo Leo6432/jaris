@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * Étape 418 : shared/mcp.ts — ce que Léo colle (les formats que donnent les pages des serveurs MCP), les noms d'outils
@@ -128,7 +131,14 @@ const CANVA_DESCRIPTIONS = {
   'generate-design': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE. If create-design is in the tool list, you MUST NOT call this tool. The generated designs are design candidates for users to select from. Ask for a preferred design and use \'create-design-from-candidate\' tool to add the design to users\' account.',
   'generate-design-structured': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.',
   'create-design-from-candidate': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE. Create a new Canva design from a generation job candidate ID.',
-  'get-create-design-async-job': 'Get the result of a create-design job.'
+  'get-create-design-async-job': 'Get the result of a create-design job.',
+  // Étape 421 : descriptions réelles (premières phrases) des outils qui disputent les places (« page », « Canva »).
+  'copy-design': 'Duplicate an existing Canva design, or copy selected pages from it, into a new design. Use to make a separate working copy, create an independent cloned, forked, or backup version, or preserve the original before making changes.',
+  'edit-design': 'Make changes to the content or layout of an existing Canva design within an active editing transaction. Use to revise wording or text styles; replace, crop, position, or resize images and videos on a page; restyle page colors, shapes, and graphics; add or reorder pages.',
+  'export-design': 'Export an existing Canva design as a downloadable file to save and use outside Canva. Use when a selected design needs to be printed, attached to an email, sent or shared as a file outside Canva, converted to another file type, or downloaded as selected pages.',
+  'get-assets': 'Get names, tags, types, creation dates, and thumbnails for images and videos in a Canva design. Use when you need to check which image or video is the target on a page.',
+  'create-folder': 'Create a Canva folder to organise related work.',
+  'comment-on-design': 'Leave a new comment on an existing Canva design as a note to self or for collaborators to read.'
 }
 const canvaTools = () =>
   CANVA_TOOLS.map((toolName) => ({ name: `mcp_canva_${toolName}`, serverName: 'Canva', toolName, description: CANVA_DESCRIPTIONS[toolName] ?? `Canva tool ${toolName}` }))
@@ -180,4 +190,46 @@ test('étape 421 : isServerNamed — le service doit être nommé en entier, san
   assert.equal(isServerNamed('un visage souriant (face)', 'Hugging Face'), false)
   assert.equal(isServerNamed('Fais une affiche', 'Canva'), false)
   assert.equal(isServerNamed('Fais une affiche', 'X'), false, 'un nom trop court ne compte jamais')
+})
+
+// Étape 421 : les 45 vrais outils de Canva (noms, paramètres obligatoires, descriptions de Canva).
+const REAL_CANVA = JSON.parse(readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'canva-tools.json'), 'utf8')).tools
+const realCanva = (without = []) =>
+  REAL_CANVA.filter((tool) => !without.includes(tool.name)).map((tool) => ({ name: `mcp_canva_${tool.name}`, serverName: 'Canva', toolName: tool.name, description: tool.description, required: tool.required }))
+const LEO = 'utilise le mcp de canva, et prend une page a4 et met un texte bonjour en gros'
+
+test('étape 421 : vrais outils de Canva SANS create-design (ce que Jaris reçoit chez Léo) — generate-design et l’outil qui met le design dans le compte', () => {
+  const picked = mcp.pickMcpTools(LEO, realCanva(['create-design'])).map((t) => t.toolName)
+  assert.ok(picked.includes('generate-design'), picked.join())
+  assert.ok(picked.includes('create-design-from-candidate'), 'l’outil qui met la proposition dans le compte suit')
+})
+
+test('étape 421 : vrais outils de Canva AVEC create-design — create-design et son suivi, jamais les anciens', () => {
+  const picked = mcp.pickMcpTools(LEO, realCanva()).map((t) => t.toolName)
+  assert.ok(picked.includes('create-design') && picked.includes('get-create-design-async-job'), picked.join())
+  assert.ok(!picked.includes('generate-design') && !picked.includes('create-design-from-candidate'), picked.join())
+})
+
+test('étape 421 : un outil qui exige un identifiant passe après, sauf si la demande en contient un', () => {
+  assert.equal(mcp.needsPriorId(['design_id']), true)
+  assert.equal(mcp.needsPriorId(['jobId']), true)
+  assert.equal(mcp.needsPriorId(['asset_ids']), true)
+  assert.equal(mcp.needsPriorId(['brief']), false)
+  assert.equal(mcp.needsPriorId(['valid', 'paid']), false, 'un mot finissant par « id » sans séparateur ne compte pas')
+  assert.equal(mcp.hasIdLikeToken('exporte le design DAGk3x9LmQ2 en PDF'), true)
+  assert.equal(mcp.hasIdLikeToken('https://www.canva.com/design/x'), true)
+  assert.equal(mcp.hasIdLikeToken(LEO), false, '« a4 » n’est pas un identifiant')
+  const withId = mcp.pickMcpTools('exporte le design DAGk3x9LmQ2 en PDF', realCanva()).map((t) => t.toolName)
+  assert.ok(withId.includes('export-design'), withId.join())
+})
+
+test('étape 421 : legacyReplacement — le remplaçant nommé par la description, sinon rien', () => {
+  assert.equal(mcp.legacyReplacement(CANVA_DESCRIPTIONS['generate-design']), 'create-design')
+  assert.equal(mcp.legacyReplacement('Deprecated: use v2 instead.'), null)
+  assert.equal(mcp.legacyReplacement('Do not use when `search_v2` is available.'), 'search_v2')
+  // Sans remplaçant nommé, un outil « deprecated » passe toujours après les autres.
+  const tool = (toolName, description) => ({ name: `mcp_s_${toolName}`, serverName: 's', toolName, description })
+  const many = Array.from({ length: 12 }, (_, i) => tool(`t${i}`, 'list items'))
+  const picked = mcp.pickMcpTools('list items', [tool('old', 'Deprecated. list items'), ...many]).map((t) => t.toolName)
+  assert.ok(!picked.includes('old'), picked.join())
 })

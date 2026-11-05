@@ -263,6 +263,22 @@ export interface McpToolCandidate {
   serverName: string
   toolName: string
   description: string
+  /** Étape 421 : les paramètres obligatoires de l'outil (`inputSchema.required`). */
+  required?: readonly string[]
+}
+
+/**
+ * Étape 421 : un outil qui ne peut pas être le PREMIER pas d'une demande — il exige l'identifiant d'une chose déjà
+ * obtenue (`design_id`, `job_id`, `transaction_id`, `jobId`, `asset_ids`…). Patron des noms de paramètres, jamais une
+ * liste d'outils.
+ */
+export function needsPriorId(required: readonly string[] | undefined): boolean {
+  return (required ?? []).some((param) => /(?:^|_)ids?$|[a-z]Ids?$/.test(param))
+}
+
+/** Étape 421 : la demande contient-elle un identifiant ou une adresse à réutiliser (« DAF3x9kLm2 », https://…) ? */
+export function hasIdLikeToken(text: string): boolean {
+  return /https?:\/\//i.test(text) || /(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])/.test(text)
 }
 
 /** Étape 420 : outils ajoutés en plus de `max` parce qu'un outil choisi les nomme (voir pickMcpTools). */
@@ -274,6 +290,16 @@ export const MCP_COMPANION_TOOLS_MAX = 4
  */
 export function isLegacyTool(description: string): boolean {
   return /\b(legacy|deprecated|obsolete)\b/i.test(description) || /\bdo not (call|use)\b[^.\n]{0,40}\bwhen\b/i.test(description)
+}
+
+/**
+ * Étape 421 : l'outil qui remplace un outil ancien, quand sa description le nomme (« DO NOT CALL WHEN create-design IS
+ * AVAILABLE »). Si ce remplaçant n'est PAS proposé par le serveur (Canva ne donne pas `create-design` à Jaris), l'outil
+ * ancien redevient le bon : le serveur le dit lui-même (« All instructions below apply when create-design is absent »).
+ */
+export function legacyReplacement(description: string): string | null {
+  const match = /\bdo not (?:call|use)\b[^.\n]{0,40}?\bwhen\s+[`'"]?([A-Za-z0-9_.-]+?)[`'"]?\s+is\s+(?:available|present|listed|in the tool list)\b/i.exec(description)
+  return match ? match[1] : null
 }
 
 /** Un nom d'outil cité tel quel dans un texte (`create-design` ne compte pas dans `create-design-from-candidate`). */
@@ -312,13 +338,23 @@ function mentions(text: string, toolName: string): boolean {
 export function pickMcpTools<T extends McpToolCandidate>(prompt: string, tools: readonly T[], max = MCP_MAX_TOOLS_PER_REQUEST): T[] {
   if (tools.length <= max) return [...tools]
   const asked = new Set(words(prompt))
+  const idInPrompt = hasIdLikeToken(prompt)
+  // Étape 421 : un outil ancien ne passe après les autres que si son remplaçant nommé est là (même serveur).
+  const demoted = (tool: T): boolean => {
+    if (!isLegacyTool(tool.description)) return false
+    const replacement = legacyReplacement(tool.description)
+    return !replacement || tools.some((other) => other.serverName === tool.serverName && other.toolName.toLowerCase() === replacement.toLowerCase())
+  }
   const score = (tool: T): number => {
     const server = words(tool.serverName).filter((word) => asked.has(word)).length
     const own = new Set([...words(tool.toolName), ...words(tool.description)])
     let shared = 0
     for (const word of own) if (asked.has(word)) shared++
     // Un serveur nommé dans la demande (« sur GitHub ») compte plus qu'un mot commun ; un outil ancien, moins.
-    return server * 3 + shared - (isLegacyTool(tool.description) ? 2 : 0)
+    // Étape 421 : sans identifiant dans la demande, un outil qui en exige un passe après ceux qui peuvent commencer
+    // (une demande en français partage peu de mots avec des descriptions en anglais : sans ça, l'ordre du serveur
+    // décidait, et Canva donnait 12 outils pour modifier un design existant, aucun pour en créer un).
+    return server * 3 + shared - (demoted(tool) ? 2 : 0) - (!idInPrompt && needsPriorId(tool.required) ? 2 : 0)
   }
   const ranked = tools.map((tool, index) => ({ tool, index, score: score(tool) })).sort((a, b) => b.score - a.score || a.index - b.index)
   const chosen = new Set(ranked.slice(0, max).map((entry) => entry.index))

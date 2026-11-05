@@ -11017,3 +11017,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-assistant-history.mjs` (outils d'écran absents, appel inventé ramené vers Canva, raison dite
   telle quelle ; échoue sans chacune des deux règles), `test-mcp-hub.mjs` (vrai serveur à connecter puis connecté),
   `test-mcp.mjs` (`isServerNamed`). **Non vérifié en usage réel** : la même demande sur le PC de Léo.
+
+- **Étape 422 (v0.43.3), Léo, capture (même phrase « utilise le mcp de canva, et prend une page a4 et met un texte
+  bonjour en gros ») : « je n'ai pas la possibilité de créer un nouveau design de zéro avec les outils actuels »** —
+  la liste qu'il cite (trouver, modifier, dossiers, extraire) ne contient AUCUN outil de création. Vérifié sur la
+  source primaire (les 45 outils réels du serveur de Canva, noms, paramètres obligatoires et descriptions, copiés dans
+  `scripts/fixtures/canva-tools.json`) : le test de l'étape 420 n'avait les vraies descriptions que de 5 outils ;
+  avec les 45, deux défauts apparaissent.
+  - L'étape 420 faisait passer « LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE » après les autres
+    même quand `create-design` n'est PAS proposé — or Canva ne le donne visiblement pas à Jaris (sinon il aurait été
+    choisi) et dit lui-même que l'ancien outil redevient le bon dans ce cas. Règle : un outil ancien ne passe après
+    que si le remplaçant nommé par sa description est là (`legacyReplacement`).
+  - Une demande en français partage presque aucun mot avec des descriptions en anglais : l'ordre du serveur décidait,
+    et donnait surtout des outils qui travaillent sur un design EXISTANT. Règle structurelle : sans identifiant ni
+    adresse dans la demande (`hasIdLikeToken`), un outil qui exige un identifiant (`design_id`, `job_id`, `jobId`,
+    `asset_ids`… : `needsPriorId`, patron des noms de paramètres) passe après ceux qui peuvent commencer.
+  - « Laquelle tu préfères ? » puis « le 2 » (Canva propose des designs à choisir) : l'historique ne garde que le
+    texte, les identifiants étaient perdus. Les résultats MCP du dernier tour sont redonnés au modèle (note avant la
+    demande) et les outils sont choisis avec la demande d'avant aussi — seulement si le dernier message de Jaris
+    dans l'historique est bien cette réponse (même fil), moins de 30 min, jamais en duel ni depuis le téléphone.
+  Régression : `test-mcp.mjs` (les 45 vrais outils : sans `create-design` → `generate-design` +
+  `create-design-from-candidate` ; avec → `create-design` + `get-create-design-async-job`, jamais les anciens ;
+  identifiant dans la demande → `export-design` ; chaque règle retirée fait échouer le test),
+  `test-assistant-history.mjs` (« le 2 » réutilise `cand-bbb222` ; autre fil : rien). **Non vérifié en usage réel** :
+  la même phrase chez Léo.

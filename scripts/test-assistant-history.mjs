@@ -815,3 +815,55 @@ test("étape 421 : un service connecté nommé dans la demande — ses outils, j
   assert.ok(seen[0].includes('computer_use_task'))
   converse.setExtraToolSource(null)
 })
+
+test('étape 421 : « lequel tu préfères ? » puis « le 2 » — les résultats MCP du tour d’avant (identifiants) sont redonnés au modèle', async () => {
+  const gen = { type: 'function', function: { name: 'mcp_canva_generate_design', description: '[MCP Canva] Generate', parameters: { type: 'object', properties: {} } } }
+  const fromCandidate = { type: 'function', function: { name: 'mcp_canva_create_design_from_candidate', description: '[MCP Canva] From candidate', parameters: { type: 'object', properties: {} } } }
+  const asked = []
+  const called = []
+  const source = {
+    toolsFor: (prompt) => (asked.push(prompt), {
+      tools: [gen, fromCandidate],
+      named: ['Canva'],
+      call: async (name, args) => {
+        called.push([name, JSON.stringify(args)])
+        return name === 'mcp_canva_generate_design'
+          ? 'job_id: JOB42abc ; candidates: 1) cand-aaa111 2) cand-bbb222'
+          : 'Design créé dans ton compte : https://canva.com/d/DAG2'
+      }
+    })
+  }
+  const fed = []
+  let step = 0
+  const converse = setup(
+    async (messages) => {
+      step++
+      fed.push(messages.map((m) => `${m.role}:${m.content}`).join('\n'))
+      if (step === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_generate_design', arguments: { query: 'A4 bonjour' } } }] }
+      if (step === 2) return { role: 'assistant', content: 'Voici 2 propositions. Laquelle tu préfères ?' }
+      if (step === 3) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_create_design_from_candidate', arguments: { job_id: 'JOB42abc', candidate_id: 'cand-bbb222' } } }] }
+      return { role: 'assistant', content: 'C’est fait, il est dans ton compte.' }
+    },
+    async (n) => assert.fail(`outil de Jaris appelé : ${n}`),
+    undefined,
+    { tools: [] }
+  )
+  converse.setExtraToolSource(source)
+  const first = 'Fais une page A4 bonjour sur Canva'
+  const reply = await converse(first, null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(reply, 'Voici 2 propositions. Laquelle tu préfères ?')
+
+  const history = [{ role: 'user', content: first }, { role: 'assistant', content: reply }]
+  assert.equal(await converse('le 2', null, () => {}, undefined, history, undefined, undefined, 'chat'), 'C’est fait, il est dans ton compte.')
+  assert.equal(asked[1], `${first}\nle 2`, 'les outils sont choisis avec la demande d’avant aussi')
+  assert.match(fed[2], /system:Résultats des outils MCP du tour précédent[\s\S]*cand-bbb222/)
+  assert.ok(fed[2].indexOf('cand-bbb222') < fed[2].lastIndexOf('le 2'), 'la note précède la demande')
+  assert.equal(called[1][0], 'mcp_canva_create_design_from_candidate')
+
+  // Autre fil (le dernier message de Jaris n'est pas cette réponse) : rien n'est redonné.
+  step = 3
+  fed.length = 0
+  await converse('le 2', null, () => {}, undefined, [{ role: 'user', content: 'salut' }, { role: 'assistant', content: 'Bonjour !' }], undefined, undefined, 'chat')
+  assert.ok(!/Résultats des outils MCP/.test(fed[0]))
+  converse.setExtraToolSource(null)
+})

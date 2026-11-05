@@ -535,7 +535,15 @@ function availableTools(): OfferedTool[] {
       if (server.disabledTools.includes(tool.name)) continue
       const name = mcpToolName(server.name, tool.name, taken)
       taken.add(name)
-      out.push({ name, serverName: server.name, toolName: tool.name, description: tool.description, serverId: server.id, tool })
+      out.push({
+        name,
+        serverName: server.name,
+        toolName: tool.name,
+        description: tool.description,
+        required: Array.isArray(tool.inputSchema?.required) ? (tool.inputSchema.required as string[]) : [],
+        serverId: server.id,
+        tool
+      })
     }
   }
   return out

@@ -599,6 +599,39 @@ export function setExtraToolSource(source: ExtraToolSource | null): void {
   extraToolSource = source
 }
 
+/**
+ * Étape 421 : les résultats des outils MCP du dernier tour (identifiants compris : un design proposé par Canva, son
+ * job_id…). L'historique ne garde que le TEXTE des échanges : sans ça, « lequel tu préfères ? » puis « le 2 » laissait
+ * le modèle sans aucun moyen de retrouver le design choisi. Gardés en mémoire seulement, et réutilisés seulement si le
+ * dernier message de Jaris dans l'historique est bien la réponse de ce tour (même fil, rien entre les deux).
+ */
+interface McpTurn {
+  prompt: string
+  reply: string
+  results: string[]
+  at: number
+}
+let lastMcpTurn: McpTurn | null = null
+const MCP_CARRY_MAX_AGE_MS = 30 * 60_000
+const MCP_CARRY_RESULT_CHARS = 3_000
+const MCP_CARRY_TOTAL_CHARS = 9_000
+
+function carriedMcpTurn(history: readonly OllamaMessage[], now = Date.now()): McpTurn | null {
+  if (!lastMcpTurn || now - lastMcpTurn.at > MCP_CARRY_MAX_AGE_MS) return null
+  const last = [...history].reverse().find((message) => message.role === 'assistant')
+  // La réponse peut avoir été précédée d'un avertissement (GPU chaude…) avant d'être enregistrée.
+  return last && last.content.trim().endsWith(lastMcpTurn.reply.trim()) ? lastMcpTurn : null
+}
+
+function mcpCarryNote(turn: McpTurn): string {
+  let text = turn.results.join('\n\n')
+  if (text.length > MCP_CARRY_TOTAL_CHARS) text = text.slice(-MCP_CARRY_TOTAL_CHARS)
+  return (
+    "Résultats des outils MCP du tour précédent (« " + turn.prompt.slice(0, 200) + " »). Si la demande y fait suite " +
+    "(un choix, « le 2 », « celui-là »…), réutilise exactement leurs identifiants avec l'outil qui convient :\n" + text
+  )
+}
+
 /** Les outils MCP d'une demande ; une panne de la source n'empêche jamais Jaris de répondre avec ses propres outils. */
 function extraToolsFor(prompt: string, onLog?: (message: string) => void): ReturnType<ExtraToolSource['toolsFor']> | null {
   if (!extraToolSource) return null
@@ -700,7 +733,11 @@ async function conversation(
   const isToolAllowed = (name: string): boolean => !restrictions || restrictions.allowedTools.has(name)
   // Étape 418 : les outils MCP de Léo, seulement sans restriction (jamais depuis le téléphone ni en duel, où la liste
   // des outils permis est fixée), au plus quelques-uns par demande (shared/mcp.ts).
-  const extra = restrictions ? null : extraToolsFor(prompt, onLog)
+  // Étape 421 : une suite d'un tour qui a utilisé des outils MCP (« le 2 ») reçoit les outils choisis avec la demande
+  // d'avant aussi — « le 2 » seul ne nomme ni Canva ni aucun outil.
+  const carried = restrictions ? null : carriedMcpTurn(history)
+  const extra = restrictions ? null : extraToolsFor(carried ? `${carried.prompt}\n${prompt}` : prompt, onLog)
+  const mcpResults: string[] = []
   const extraNames = new Set((extra?.tools ?? []).map((tool) => tool.function.name))
   // Étape 421 : un service connecté nommé dans la demande — ses outils à lui, jamais le pilotage de l'écran.
   const namedServices = extra?.tools.length ? extra.named ?? [] : []
@@ -878,7 +915,14 @@ async function conversation(
     const fallback = t('reply.empty')
     const normalized = normalizeAssistantText(trimmed || fallback, prompt) || fallback
     const cleaned = channel === 'voice' ? stripMarkdownForVoice(normalized) : normalized
-    return withOverloadWarning(cleaned)
+    const out = withOverloadWarning(cleaned)
+    // Étape 421 : gardé pour le tour suivant (voir carriedMcpTurn) ; une suite sans nouvel outil garde ceux d'avant.
+    if (!restrictions && (mcpResults.length || carried)) {
+      lastMcpTurn = mcpResults.length
+        ? { prompt, reply: out, results: mcpResults, at: Date.now() }
+        : { ...carried!, reply: out, at: Date.now() }
+    }
+    return out
   }
 
   // Étape 293 : la réponse dans la langue choisie dans Jaris (Options → Général), quelle que soit celle des consignes.
@@ -905,6 +949,7 @@ async function conversation(
         !isHallucinatedThinkReply(message, history[index - 1]) &&
         !(message.role === 'user' && isHallucinatedThinkReply(history[index + 1], message))
     }),
+    ...(carried ? [{ role: 'system' as const, content: mcpCarryNote(carried) }] : []),
     // La date ici et non dans les consignes : elles restent identiques d'une demande à l'autre, et Ollama n'a pas
     // à les relire (voir dateTimeNote). L'historique garde la question seule, sans la date.
     { role: 'user', content: `${dateTimeNote(new Date(), currentLocale())} ${prompt}` }
@@ -1142,6 +1187,9 @@ async function conversation(
         return finalize(result)
       }
 
+      if (extraNames.has(call.function.name)) {
+        mcpResults.push(`${call.function.name}(${JSON.stringify(call.function.arguments)}) → ${result.slice(0, MCP_CARRY_RESULT_CHARS)}`)
+      }
       messages.push({ role: 'tool', content: result })
     }
   }

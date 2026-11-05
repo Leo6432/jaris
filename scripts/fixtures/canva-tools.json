@@ -1,0 +1,332 @@
+{
+ "source": "Étape 421 : les 45 outils du serveur MCP de Canva (mcp.canva.com), noms et paramètres obligatoires exacts, descriptions abrégées à leurs premières phrases (texte d'origine de Canva, novembre 2026).",
+ "tools": [
+  {
+   "name": "comment-on-design",
+   "required": [
+    "design_id",
+    "message_plaintext"
+   ],
+   "description": "Leave a new comment on an existing Canva design as a note to self or for collaborators to read. Use to give feedback, ask a question about a design, flag an issue, or add context for people working on it. The comment is visible to everyone who has access to the design. Returns the created comment and its comment_id."
+  },
+  {
+   "name": "copy-design",
+   "required": [
+    "design_id"
+   ],
+   "description": "Duplicate an existing Canva design, or copy selected pages from it, into a new design. Use to make a separate working copy, create an independent cloned, forked, or backup version, or preserve the original before making changes. For a single source design only. Not for combining pages from more than one design. Creates a new design. The source design remains unchanged. Returns the new design's design_id."
+  },
+  {
+   "name": "create-brand-template-draft",
+   "required": [
+    "brand_template_id"
+   ],
+   "description": "Creates an editable draft design from a brand template. If a draft already exists for this brand template, the existing draft is returned. Use this tool to get a design that can be edited and later published back as the updated brand template."
+  },
+  {
+   "name": "create-design",
+   "required": [
+    "brief"
+   ],
+   "description": "Generate a new Canva design from a written brief, with any supplied content folded in. Use to turn a brief, presentation outline, or draft copy into a presentation, doc, sheet, website, poster, flyer, social post, resume, or another text-and-image layout; or to make a first design for a new project. Use this tool only when the requested output itself is an editable Canva page or layout, such as \"create an infographic\". Creates a newly generated design rather than editing one that already exists. Returns a job_id and continuation_token for the generation job. Only when no widget is shown, poll get-create-design-async-job with both, waiting the number of seconds each response's polling_policy.wait_seconds gives before the next call, until the job completes, then share the design link with the user."
+  },
+  {
+   "name": "create-design-from-brand-template",
+   "required": [
+    "brand_template_id"
+   ],
+   "description": "Create a new Canva design from a brand template. Optionally select specific pages to include. If the user has already provided a brand template ID (a string starting with \"BTM\"), call this tool directly with that ID — do NOT call `search-brand-templates` first."
+  },
+  {
+   "name": "create-design-from-candidate",
+   "required": [
+    "job_id",
+    "candidate_id"
+   ],
+   "description": "LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.\nIf create-design is in the tool list, you MUST NOT call this tool. Call create-design instead.\nAll instructions below apply when create-design is absent from the tool list, and whenever the request is an on-brand one.\n\nCreate a new Canva design from a generation job candidate ID. This converts an AI-generated design candidate into an editable Canva design. If successful, returns a design summary containing a design ID that can be used with the `editing_transaction_tools`."
+  },
+  {
+   "name": "create-folder",
+   "required": [
+    "name",
+    "parent_folder_id"
+   ],
+   "description": "Create a Canva folder to organise related work. Use to set up a project folder, add a subfolder within an existing folder, or keep designs, images, and folders together. Returns the new folder, including its folder_id."
+  },
+  {
+   "name": "create-upload-url",
+   "required": [],
+   "description": "Uploads a file (image, video, audio, PDF, or other document) into Canva. Use when the user wants to add, upload, import, or send a file they have — a chat attachment, a local file, or generated content — to Canva, or wants to use such a file in a design, presentation, or their Canva library."
+  },
+  {
+   "name": "create-video",
+   "required": [
+    "video_generation_confirmed",
+    "production_spec",
+    "video_title"
+   ],
+   "description": "Produces a Canva video from a complete production specification. Use when a production guide has been selected and its required inputs and assets are available. Returns a job_id and polling_policy for tracking generation to completion."
+  },
+  {
+   "name": "edit-design",
+   "required": [
+    "transaction_id"
+   ],
+   "description": "Make changes to the content or layout of an existing Canva design within an active editing transaction. Use to revise wording or text styles; replace, crop, position, or resize images and videos on a page; restyle page colors, shapes, and graphics; add or reorder pages; update speaker notes; or label fixed-page elements for autofill. Returns the updated draft page state."
+  },
+  {
+   "name": "export-design",
+   "required": [
+    "design_id",
+    "format"
+   ],
+   "description": "Export an existing Canva design as a downloadable file to save and use outside Canva. Use when a selected design needs to be printed, attached to an email, sent or shared as a file outside Canva, converted to another file type, or downloaded as selected pages. Returns a download URL for the exported file."
+  },
+  {
+   "name": "generate-design",
+   "required": [
+    "query",
+    "design_type"
+   ],
+   "description": "LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.\nIf create-design is in the tool list, you MUST NOT call this tool. Call create-design instead.\nAll instructions below apply when create-design is absent from the tool list, and whenever the request is an on-brand one.\n\nGenerate professionally designed content in Canva including visual designs (posters, social media posts, flyers) and text-based documents (memos, articles, newsletters, proposals, reports, business plans, requirements documents). The generated designs are design candidates for users to select from. Ask for a preferred design and use 'create-design-from-candidate' tool to add the design to users' account."
+  },
+  {
+   "name": "generate-design-structured",
+   "required": [
+    "topic",
+    "audience",
+    "style",
+    "length",
+    "design_type",
+    "presentation_outlines"
+   ],
+   "description": "LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.\nIf create-design is in the tool list, you MUST NOT call this tool. Call create-design instead.\n\nGenerate a structured presentation design from a user-reviewed and approved outline."
+  },
+  {
+   "name": "generate-image",
+   "required": [
+    "prompt"
+   ],
+   "description": "Generate a standalone image from a text prompt, or edit/restyle images supplied as references. If the user explicitly asks for an image, picture, photo, illustration, artwork, sticker, icon, graphic, or 2d vector, use this tool. Do not use when the requested output itself is a designed page or layout, such as an infographic, poster, wallpaper, flyer, presentation, or social media post; use create-design."
+  },
+  {
+   "name": "get-assets",
+   "required": [
+    "asset_ids"
+   ],
+   "description": "Get names, tags, types, creation dates, and thumbnails for images and videos in a Canva design. Use when you need to check which image or video is the target on a page, look up its details, or preview it before changing it."
+  },
+  {
+   "name": "get-brand-template-dataset",
+   "required": [
+    "template_id"
+   ],
+   "description": "Determine whether a Canva Brand Template has fillable data fields and, if so, list their names and types. A Brand Template is a reusable, on-brand layout."
+  },
+  {
+   "name": "get-create-design-async-job",
+   "required": [
+    "job_id",
+    "continuation_token"
+   ],
+   "description": "Gets the status and result of a design generation job started by create-design. Pass the job_id and continuation_token from the previous create-design or get-async-job response. When the job completes, share the design link with them."
+  },
+  {
+   "name": "get-design-dataset",
+   "required": [
+    "design_id"
+   ],
+   "description": "Verify whether a selected existing Canva design has fillable data fields and, if so, list their names and types."
+  },
+  {
+   "name": "get-export-formats",
+   "required": [
+    "design_id"
+   ],
+   "description": "Check which export file types an existing Canva design supports, and which of its pages are available in each type."
+  },
+  {
+   "name": "get-generate-image-job",
+   "required": [
+    "jobId"
+   ],
+   "description": "Check an image generation job started by generate-image. Only when no widget is shown, pass the jobId returned by generate-image."
+  },
+  {
+   "name": "get-motion-import-job-status",
+   "required": [
+    "job_id"
+   ],
+   "description": "Check the status and result of a Claude Motion import started by import-claude-motion-from-url."
+  },
+  {
+   "name": "get-separate-image-layers-job",
+   "required": [
+    "job_id",
+    "continuation_token"
+   ],
+   "description": "Check the status and result of an image layer-separation job started by separate-image-layers."
+  },
+  {
+   "name": "get-video-generation-status",
+   "required": [
+    "job_id",
+    "continuation_token"
+   ],
+   "description": "Gets the status and result of a video generation job started by create-video."
+  },
+  {
+   "name": "get-video-production-guide",
+   "required": [],
+   "description": "Provides production guides for videos such as try-ons, unboxings, product demos, comparisons, showcases, and ads."
+  },
+  {
+   "name": "help",
+   "required": [
+    "prompt"
+   ],
+   "description": "Retrieve current, official answers to Canva product questions from the Canva Help Center. Not for creating, changing, or assessing a design."
+  },
+  {
+   "name": "import-claude-motion-from-url",
+   "required": [
+    "url"
+   ],
+   "description": "Import a Claude Motion video into the user's Canva account so they can keep working with it in Canva."
+  },
+  {
+   "name": "import-design-from-url",
+   "required": [
+    "url",
+    "name"
+   ],
+   "description": "Convert content at a public URL into a new Canva design. Use to turn a publicly hosted PDF, slide deck (PowerPoint or Keynote), document (Word, Pages, or Markdown), spreadsheet (Excel, CSV, or Numbers), webpage or HTML, or design file (Photoshop or Illustrator) into a Canva design."
+  },
+  {
+   "name": "list-brand-kits",
+   "required": [],
+   "description": "Find or browse the Canva Brand Kits available to the user. A Brand Kit is an organisation's high-level home for brand styles and assets, such as colors, fonts, and logos."
+  },
+  {
+   "name": "list-comments",
+   "required": [
+    "design_id"
+   ],
+   "description": "Browse all comments or threads attached to an existing Canva design."
+  },
+  {
+   "name": "list-folder-items",
+   "required": [
+    "folder_id"
+   ],
+   "description": "Browse the contents of a Canva folder to find designs, folders, and images stored in it."
+  },
+  {
+   "name": "list-replies",
+   "required": [
+    "design_id",
+    "comment_id"
+   ],
+   "description": "Read the replies in a specific comment thread on a Canva design."
+  },
+  {
+   "name": "merge-designs",
+   "required": [
+    "type",
+    "operations"
+   ],
+   "description": "Restructure a Canva design by combining designs, inserting or removing whole pages, or changing page order. Use to make a new presentation from selected pages, add slides from another design, merge separate designs together, rearrange a design's flow, or remove entire pages."
+  },
+  {
+   "name": "move-item-to-folder",
+   "required": [
+    "item_id",
+    "to_folder_id"
+   ],
+   "description": "Relocate an existing Canva design, folder, or image into a destination Canva folder."
+  },
+  {
+   "name": "publish-brand-template",
+   "required": [
+    "design_id"
+   ],
+   "description": "Publishes a Canva design as a brand template, making it reusable across the organization."
+  },
+  {
+   "name": "read-design",
+   "required": [
+    "design_id"
+   ],
+   "description": "Read a Canva design: its text and wording, page count, title and metadata, page preview thumbnails, and presenter notes. Use this tool to summarize the contents of a Canva design; get the text on a particular slide or page; look up a design's details; view its pages; or retrieve its speaker notes."
+  },
+  {
+   "name": "remove-background",
+   "required": [
+    "sourceMedia"
+   ],
+   "description": "Strip the background out of an image already in the user's Canva account, leaving only the subject on a transparent backdrop."
+  },
+  {
+   "name": "reply-to-comment",
+   "required": [
+    "design_id",
+    "comment_id",
+    "message_plaintext"
+   ],
+   "description": "Add a response to an existing comment in a Canva design."
+  },
+  {
+   "name": "request-outline-review",
+   "required": [
+    "topic",
+    "pages"
+   ],
+   "description": "LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.\nIf create-design is in the tool list, you MUST NOT call this tool. Call create-design instead.\n\nCall this tool first whenever the user expresses wanting to plan or create a presentation, pitch, deck, or slides."
+  },
+  {
+   "name": "resize-design",
+   "required": [
+    "design_id",
+    "design_type"
+   ],
+   "description": "Adapt a Canva design to a different canvas size, keeping its content while rearranging and resizing its layout."
+  },
+  {
+   "name": "resolve-shortlink",
+   "required": [
+    "shortlink_id"
+   ],
+   "description": "Turn a Canva shortlink into the full Canva design URL it points to."
+  },
+  {
+   "name": "search-brand-templates",
+   "required": [],
+   "description": "Find or browse the user's Canva Brand Templates: reusable, on-brand layouts. Some include data fields that can be autofilled."
+  },
+  {
+   "name": "search-designs",
+   "required": [],
+   "description": "Locate or browse the user's existing Canva designs. Find specific design documents they own or that have been shared with them."
+  },
+  {
+   "name": "search-folders",
+   "required": [],
+   "description": "Find or browse Canva folders the user owns or that are shared with them."
+  },
+  {
+   "name": "separate-image-layers",
+   "required": [
+    "asset_id"
+   ],
+   "description": "Turn a flat image already stored in the user's Canva account into a new Canva design in which the text, objects, and background become separate elements that can each be edited on their own."
+  },
+  {
+   "name": "upload-asset-from-url",
+   "required": [
+    "url",
+    "name"
+   ],
+   "description": "Import media from an existing public URL into Canva."
+  }
+ ]
+}
