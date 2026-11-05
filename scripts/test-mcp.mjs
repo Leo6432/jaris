@@ -116,7 +116,7 @@ test('étape 419 : le catalogue — services en ligne officiels (https), connexi
     assert.equal(transport.kind, 'http', entry.id)
     assert.match(transport.url, /^https:\/\//, entry.id)
     assert.deepEqual(transport.headers, {}, `${entry.id} : pas de clé collée, la connexion se fait par le compte`)
-    assert.match(entry.color, /^#[0-9a-f]{6}$/i)
+    assert.ok(catalog.MCP_CATEGORIES.includes(entry.category), `${entry.id} : rubrique ${entry.category}`)
   }
   assert.equal(catalog.catalogEntry('nope'), null)
   const file = mcp.parseMcpConfigFile({ servers: [{ id: '1', name: 'Canva', catalogId: 'canva', transport: { kind: 'http', url: 'https://x.fr/mcp' } }] })
@@ -248,4 +248,26 @@ test('étape 421 : legacyReplacement — le remplaçant nommé par la descriptio
   const many = Array.from({ length: 12 }, (_, i) => tool(`t${i}`, 'list items'))
   const picked = mcp.pickMcpTools('list items', [tool('old', 'Deprecated. list items'), ...many]).map((t) => t.toolName)
   assert.ok(!picked.includes('old'), picked.join())
+})
+
+test('étape 424 : chaque service de « Découvrir » a son vrai logo (PNG 64 px, livré avec Jaris) et chaque rubrique ses services', () => {
+  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const logosDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'assets', 'mcp-logos')
+  const index = readFileSync(path.join(logosDir, 'index.ts'), 'utf8')
+  for (const entry of catalog.MCP_CATALOG) {
+    const logo = entry.logo ?? entry.id
+    const png = readFileSync(path.join(logosDir, `${logo}.png`))
+    assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG', `${entry.id} : un PNG`)
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [64, 64], `${entry.id} : 64 × 64`)
+    assert.ok(png.length < 8 * 1024, `${entry.id} : ${png.length} octets`)
+    assert.match(index, new RegExp(`^  '${logo}': `, 'm'), `${logo} : listé dans src/assets/mcp-logos/index.ts`)
+  }
+  for (const category of catalog.MCP_CATEGORIES) {
+    assert.ok(catalog.MCP_CATALOG.some((entry) => entry.category === category), `rubrique ${category} vide`)
+  }
+  // La liste de Léo (étape 424), sauf les services écartés faute de connexion possible (voir mcpCatalog.ts).
+  const ids = new Set(catalog.MCP_CATALOG.map((entry) => entry.id))
+  for (const id of ['fastmail', 'superhuman', 'paperoffice', 'adobe', 'canva', 'moda', 'cloudinary', 'orshot', 'higgsfield', 'metricool', 'typefully', 'windsor', 'supermetrics', 'adspirer', 'motion', 'cloudflare', 'macaly', 'cpln', 'codewords', 'nutshell', 'salesflare', 'salesloft', 'mychatbot', 'fourthwall', 'pinelabs', 'airwallex', 'plaid', 'polar', 'omni', 'adobe-cja', 'datarails', 'morningstar', 'ringcentral']) {
+    assert.ok(ids.has(id), id)
+  }
 })

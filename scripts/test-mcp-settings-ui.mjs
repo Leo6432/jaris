@@ -95,7 +95,7 @@ function buildPage() {
   const bundlePath = join(outDir, 'bundle.js')
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath })
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -131,13 +131,22 @@ test('rien d’ajouté : on arrive sur « Découvrir » ; les services en cartes
   await withPage(async (page) => {
     await page.waitForSelector('.mcp-card')
     assert.equal(await page.getByRole('tab', { name: 'Découvrir' }).getAttribute('aria-selected'), 'true')
-    const names = await page.$$eval('.mcp-card__name', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(names, ['Canva', 'Notion', 'Zapier', 'Figma', 'Atlassian', 'Linear', 'Todoist', 'Airtable', 'Dropbox', 'Miro', 'monday.com', 'Supabase', 'Hugging Face'])
+    // Étape 424 : par rubrique, dans l'ordre de la liste de Léo.
+    const titles = await page.$$eval('.mcp-discover__title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(titles, ['Productivité, mail et agenda', 'Design, vidéo et image', 'Réseaux sociaux et marketing', 'Dev et hébergement', 'CRM et ventes', 'E-commerce et paiements', 'Analytics et finance', 'Messagerie'])
+    const design = await page.$$eval('section[aria-label="Design, vidéo et image"] .mcp-card__name', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(design.slice(0, 3), ['Canva', 'Adobe', 'Moda'])
+    assert.equal(await page.locator('.mcp-card').count(), 45)
     assert.match(await page.textContent('.mcp-card[aria-label="Canva"]'), /designs Canva.*Avec ton compte · En ligne/)
     assert.match(await page.textContent('.mcp-card[aria-label="Zapier"]'), /Gmail/)
-    // Pastille : l'initiale du service sur sa couleur (pas son logo).
-    const badge = await page.$eval('.mcp-card[aria-label="Canva"] .mcp-icon', (el) => ({ text: el.textContent, bg: getComputedStyle(el).backgroundColor, color: getComputedStyle(el).color }))
-    assert.deepEqual(badge, { text: 'C', bg: 'rgb(125, 42, 232)', color: 'rgb(255, 255, 255)' })
+    // Étape 424 (Léo : « les logos des entreprises, pas des lettres ») : le vrai logo, affiché, sur une tuile claire.
+    const badge = await page.$eval('.mcp-card[aria-label="Canva"] .mcp-icon', (el) => {
+      const img = el.querySelector('img')
+      return { text: el.textContent, bg: getComputedStyle(el).backgroundColor, loaded: img?.complete && img.naturalWidth, width: img?.getBoundingClientRect().width }
+    })
+    assert.deepEqual(badge, { text: '', bg: 'rgb(255, 255, 255)', loaded: 64, width: 26 })
+    const unloaded = await page.$$eval('.mcp-icon img', (imgs) => imgs.filter((img) => !(img.complete && img.naturalWidth === 64)).length)
+    assert.equal(unloaded, 0, 'tous les logos chargés')
     await shot(page, 'decouvrir.png')
     await page.getByRole('button', { name: 'Ajouter Canva' }).click()
     await page.waitForSelector('.mcp-row')

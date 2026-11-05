@@ -208,7 +208,14 @@ async function connect(server: McpServerConfig): Promise<void> {
     // En arrière-plan, jamais de page de connexion ouverte : seulement les clés déjà reçues (renouvelées au besoin).
     const provider = usesAccountSignIn(server) ? await mcpAuthProvider(server.id, null) : undefined
     const client = new Client({ name: 'jaris', version: '1' })
-    await client.connect(makeTransport(server, connection, legacySse, provider), { timeout: CONNECT_TIMEOUT_MS })
+    const transport = makeTransport(server, connection, legacySse, provider)
+    try {
+      await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS })
+    } catch (err) {
+      // Étape 424 : un essai raté est fermé — un flux SSE refusé se reconnecterait sinon tout seul, sans fin.
+      await transport.close().catch(() => {})
+      throw err
+    }
     return client
   }
   try {
@@ -287,7 +294,8 @@ export async function cancelMcpSignIn(id: unknown): Promise<McpServerView[]> {
 }
 
 async function runSignIn(server: McpServerConfig, retryPort: boolean): Promise<void> {
-  if (server.transport.kind !== 'http') return
+  const remote = server.transport
+  if (remote.kind !== 'http') return
   signIns.get(server.id)?.controller.abort()
   const run = { controller: new AbortController(), cancelled: false }
   signIns.set(server.id, run)
@@ -304,16 +312,31 @@ async function runSignIn(server: McpServerConfig, retryPort: boolean): Promise<v
     const { code } = await listenForMcpCallback(port, state, server.name, run.controller.signal)
     code.catch(() => {})
     const provider = await mcpAuthProvider(server.id, { open: true, state })
-    const transport = new StreamableHTTPClientTransport(new URL(server.transport.url), { requestInit: { headers: server.transport.headers }, authProvider: provider })
-    const client = new Client({ name: 'jaris', version: '1' })
+    const init = { requestInit: { headers: remote.headers }, authProvider: provider }
+    const signInWith = async (legacySse: boolean): Promise<void> => {
+      const url = new URL(remote.url)
+      const transport = legacySse ? new SSEClientTransport(url, init) : new StreamableHTTPClientTransport(url, init)
+      const client = new Client({ name: 'jaris', version: '1' })
+      try {
+        // Déjà connecté (clé encore valable) : rien à demander.
+        await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS })
+        await client.close().catch(() => {})
+        run.controller.abort()
+      } catch (err) {
+        if (!isUnauthorized(err)) throw err
+        await transport.finishAuth(await code)
+      } finally {
+        // Étape 424 : jamais un flux laissé ouvert (un flux SSE refusé se reconnecterait tout seul, sans fin).
+        await transport.close().catch(() => {})
+      }
+    }
     try {
-      // Déjà connecté (clé encore valable) : rien à demander.
-      await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS })
-      await client.close().catch(() => {})
-      run.controller.abort()
+      await signInWith(false)
     } catch (err) {
-      if (!isUnauthorized(err)) throw err
-      await transport.finishAuth(await code)
+      // Étape 424 : un service qui ne parle que l'ancien SSE (Windsor.ai : POST → 404) — le même second essai qu'au
+      // démarrage (connect), jamais après une page de connexion déjà ouverte ou un abandon.
+      if (isUnauthorized(err) || err instanceof McpSignInError || run.controller.signal.aborted || !mine()) throw err
+      await signInWith(true)
     }
   } catch (err) {
     if ((err as { code?: string } | null)?.code === 'EADDRINUSE' && retryPort) {

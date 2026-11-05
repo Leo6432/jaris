@@ -3,7 +3,8 @@ import { t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { Toggle } from './SettingsLayout'
 import { MCP_MAX_TOOLS_PER_REQUEST, type McpServerView } from '../../shared/mcp'
-import { MCP_CATALOG, catalogEntry, type McpCatalogEntry } from '../../shared/mcpCatalog'
+import { MCP_CATALOG, MCP_CATEGORIES, catalogEntry, type McpCatalogEntry } from '../../shared/mcpCatalog'
+import { MCP_LOGOS } from '@/assets/mcp-logos'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -23,15 +24,16 @@ type View = 'mine' | 'discover'
 const CUSTOM_ICON = 'M9 3v6M15 3v6M7 9h10v3a5 5 0 0 1-10 0zM12 17v4'
 
 /**
- * Pastille d'un service : son initiale sur la couleur du service (pas son logo : une marque ne se recopie pas), ou une
- * prise pour un serveur ajouté à la main.
+ * Pastille d'un service : son logo (étape 424, Léo : « les logos des entreprises, pas des lettres ») sur une tuile
+ * claire — certains logos sont sombres sur fond transparent —, ou une prise pour un serveur ajouté à la main.
  */
 function McpIcon({ id }: { id: string | null }): JSX.Element {
   const entry = catalogEntry(id)
-  if (entry) {
+  const logo = entry ? MCP_LOGOS[entry.logo ?? entry.id] : undefined
+  if (logo) {
     return (
-      <span className="mcp-icon mcp-icon--brand" style={{ background: entry.color }} aria-hidden="true">
-        {entry.name.charAt(0).toUpperCase()}
+      <span className="mcp-icon mcp-icon--logo" aria-hidden="true">
+        <img src={logo} alt="" width={26} height={26} draggable={false} />
       </span>
     )
   }
@@ -331,12 +333,25 @@ function MineList({ servers, act, onDiscover }: { servers: McpServerView[] | nul
 /** « Découvrir » : les services proposés par Jaris, en cartes ; « + » ajoute et ouvre la connexion avec ton compte. */
 function Discover({ servers, onAdd }: { servers: McpServerView[]; onAdd: (id: string) => Promise<boolean> }): JSX.Element {
   const added = new Set(servers.map((server) => server.catalogId).filter(Boolean))
+  // Étape 424 : par rubrique, dans l'ordre de la liste de Léo.
   return (
-    <ul className="mcp-catalog" aria-label={t('mcp.tab.discover')}>
-      {MCP_CATALOG.map((entry) => (
-        <CatalogCard key={entry.id} entry={entry} added={added.has(entry.id)} onAdd={onAdd} />
-      ))}
-    </ul>
+    <div className="mcp-discover">
+      {MCP_CATEGORIES.map((category) => {
+        const entries = MCP_CATALOG.filter((entry) => entry.category === category)
+        if (!entries.length) return null
+        const title = t(`mcp.category.${category}` as MessageKey)
+        return (
+          <section key={category} className="mcp-discover__section" aria-label={title}>
+            <h3 className="mcp-discover__title">{title}</h3>
+            <ul className="mcp-catalog">
+              {entries.map((entry) => (
+                <CatalogCard key={entry.id} entry={entry} added={added.has(entry.id)} onAdd={onAdd} />
+              ))}
+            </ul>
+          </section>
+        )
+      })}
+    </div>
   )
 }
 

@@ -11078,3 +11078,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : un test par constat (`test-mcp.mjs`, `test-assistant-history.mjs`, `test-mcp-hub.mjs` avec trois vrais
   serveurs pour `mcp_more_tools`) ; chaque règle retirée fait échouer son test (le report sans fin est bloqué deux
   fois : par « un tour seulement » et par la correspondance exacte de l'échange).
+
+- **Étape 424 (v0.44.0), Léo : « ajoute ça et aussi ajoute les logos des entreprises Canva etc., pas des lettres »,
+  avec sa liste de 45 services en huit rubriques.** Une demande explicite récente : GitHub, écarté à l'étape 419 (« enlève
+  tout »), est redemandé — il reste écarté, mais faute de connexion possible, pas par choix.
+  - **Vérifié pour chaque service** (05/11/2026), jamais sur une liste de tiers : l'adresse officielle dans la
+    documentation de l'entreprise ou le registre officiel MCP (espace de noms vérifié par domaine), puis sur le serveur
+    lui-même — réponse 401 et serveur d'autorisation qui publie une inscription dynamique avec PKCE S256 (lecture
+    publique des métadonnées, aucune inscription faite). **32 ajoutés** (Fastmail, Superhuman Mail, PaperOffice, Adobe,
+    Moda, Cloudinary, Orshot, Higgsfield, Metricool, Typefully, Windsor.ai, Supermetrics, Adspirer, Motion, Cloudflare,
+    Macaly Cloud, Control Plane, CodeWords, Nutshell, Salesflare, Salesloft, MyChatBot, Fourthwall, Pine Labs, Airwallex,
+    Plaid, Polar Analytics, Omni, Adobe CJA, Datarails, Morningstar, RingCentral Chat ; Canva y était). **12 écartés**,
+    raison dans `shared/mcpCatalog.ts` : Gmail et Google Agenda (serveurs officiels de Google sans inscription
+    dynamique : projet Google Cloud à créer), D&B et GitHub (pas d'inscription dynamique), Vercel (connexion refusée aux
+    applis non validées, bug connu), Goodnotes (adresse réservée à Claude), Salesforce (application à créer dans
+    Salesforce), Hive (clé dans l'adresse), ActiveCampaign, Zoho CRM et Bigin (adresse propre à chaque compte : « +
+    Ajouter »), Ample Computer (introuvable). Un essai avec un vrai modèle n'est pas possible ici (téléchargement refusé).
+  - **Logos** : l'icône d'application de chaque entreprise, prise sur SON site (apple-touch-icon, manifeste, sinon icône
+    rendue par Chromium), réduite à 64 px, 52 Ko pour 44 logos, livrée avec Jaris (`src/assets/mcp-logos`, imports
+    écrits un par un : le test de l'écran construit avec esbuild) — rien n'est téléchargé pendant l'usage. Sur une tuile
+    claire : certains logos sont sombres sur fond transparent. Vérifiés à l'œil sur une planche, fond clair et sombre.
+  - « Découvrir » par rubrique, dans l'ordre de la liste de Léo ; textes dans les 24 langues.
+  - **Deux vrais défauts trouvés en ajoutant Windsor.ai** (qui ne parle que l'ancien SSE : POST → 404, mesuré) :
+    « Se connecter » n'essayait que le nouveau protocole (le démarrage, lui, se rabattait déjà sur SSE) ; et un essai
+    de connexion raté n'était jamais fermé — un flux SSE refusé se reconnecte tout seul, sans fin (le fichier de test
+    ne se terminait plus). Les deux corrigés ; le faux service de test reproduit maintenant le vrai (404 au POST).
+  Régression : `test-mcp.mjs` (chaque entrée : logo PNG 64 px listé, rubrique, https, sans clé ; la liste de Léo),
+  `test-mcp-hub.mjs` (service SSE seul : « Se connecter » de bout en bout ; échoue sans le correctif),
+  `test-mcp-settings-ui.mjs` (rubriques dans l'ordre, 45 cartes, logos tous chargés, tuile claire ; captures 1000 et
+  760 px). **Non vérifié en usage réel** : la connexion à chacun de ces services avec les comptes de Léo.

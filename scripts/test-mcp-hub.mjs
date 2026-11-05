@@ -247,7 +247,9 @@ test('étape 419 : un serveur en ligne qui refuse la clé (401) le dit clairemen
 async function startOAuthService() {
   const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js')
   const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
+  const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js')
   const { createHash } = require('crypto')
+  const sseSessions = new Map()
   const seen = { registrations: [], tokens: 0, authorize: [] }
   const codes = new Map()
   let base = ''
@@ -264,6 +266,30 @@ async function startOAuthService() {
     const url = new URL(req.url, base)
     if (url.pathname === '/.well-known/oauth-protected-resource/mcp' || url.pathname === '/.well-known/oauth-protected-resource') {
       return json(res, 200, { resource: `${base}/mcp`, authorization_servers: [base] })
+    }
+    if (url.pathname === '/.well-known/oauth-protected-resource/sse') {
+      return json(res, 200, { resource: `${base}/sse`, authorization_servers: [base] })
+    }
+    // Étape 424 : un service qui ne parle que l'ancien SSE (Windsor.ai) — même connexion par compte.
+    if (url.pathname === '/sse' || url.pathname === '/messages') {
+      // Comme le vrai (mesuré : POST sur https://mcp.windsor.ai/sse → 404, même sans clé) : seul GET y répond.
+      if (url.pathname === '/sse' && req.method !== 'GET') return res.writeHead(404).end()
+      if (req.headers.authorization !== 'Bearer tok-valide') {
+        res.writeHead(401, { 'WWW-Authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/sse"` })
+        return res.end()
+      }
+      if (url.pathname === '/sse' && req.method === 'GET') {
+        const mcp = new McpServer({ name: 'service-sse', version: '1' })
+        mcp.registerTool('mes_rapports', { description: 'List my reports' }, async () => ({ content: [{ type: 'text', text: 'Rapport Meta Ads' }] }))
+        const transport = new SSEServerTransport('/messages', res)
+        sseSessions.set(transport.sessionId, transport)
+        res.on('close', () => sseSessions.delete(transport.sessionId))
+        await mcp.connect(transport)
+        return
+      }
+      const transport = sseSessions.get(url.searchParams.get('sessionId'))
+      if (!transport) return res.writeHead(404).end()
+      return transport.handlePostMessage(req, res, JSON.parse(await readBody(req)))
     }
     if (url.pathname === '/.well-known/oauth-authorization-server') {
       return json(res, 200, {
@@ -320,7 +346,7 @@ async function startOAuthService() {
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${server.address().port}`
-  return { url: `${base}/mcp`, seen, close: () => server.close() }
+  return { url: `${base}/mcp`, sseUrl: `${base}/sse`, seen, close: () => { server.closeAllConnections?.(); server.close() } }
 }
 
 /** Le « navigateur » du test : suit la page d'autorisation, puis le retour vers Jaris. */
@@ -458,5 +484,23 @@ test('étape 423 : plus d’outils que de places — « mcp_more_tools » liste 
     assert.equal(await offered.call(missing, { a: 1, b: 2 }), '3', 'chargé : appelable, sur le vrai serveur')
   } finally {
     await env.done()
+  }
+})
+
+test('étape 424 : un service qui ne parle que l’ancien SSE (Windsor.ai) — « Se connecter » marche aussi, puis ses outils', async () => {
+  const service = await startOAuthService()
+  const env = setup()
+  try {
+    const [added] = await env.hub.addMcpServers(service.sseUrl, 'Windsor test')
+    const signin = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'signin' || s.status === 'error'), 'à connecter')
+    assert.equal(signin.status, 'signin', signin.error)
+    env.auth.setMcpBrowserOpener((url) => void followInBrowser(url))
+    await env.hub.signInMcpServer(added.id)
+    const connected = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'ready' || s.status === 'error'), 'connecté')
+    assert.equal(connected.status, 'ready', connected.error)
+    assert.equal(await env.hub.mcpToolsFor('').call('mcp_windsor_test_mes_rapports', {}), 'Rapport Meta Ads')
+  } finally {
+    await env.done()
+    service.close()
   }
 })

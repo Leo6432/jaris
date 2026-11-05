@@ -11595,11 +11595,41 @@ input.reply-ui__field-input {
   background: var(--hud-panel-raised);
 }
 
-.mcp-icon--brand {
+/* Étape 424 : le logo du service sur une tuile claire (certains logos sont sombres sur fond transparent). */
+.mcp-icon--logo {
   border: none;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+  background: #fff;
+  overflow: hidden;
+}
+
+.mcp-icon--logo img {
+  display: block;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.mcp-discover {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.mcp-discover__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mcp-discover__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
 }
 
 .mcp-status--signin {
