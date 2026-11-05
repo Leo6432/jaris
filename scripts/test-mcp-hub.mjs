@@ -341,6 +341,12 @@ test('étape 419 : connexion par compte de bout en bout — « À connecter », 
     assert.equal(signin.status, 'signin', signin.error)
     assert.equal(signin.error, null)
     assert.deepEqual(opened, [])
+    // Étape 421 : nommé dans une demande alors qu'il est à connecter — la raison, avec quoi faire, et aucun outil.
+    const asked = env.hub.mcpToolsFor('Fais-moi une affiche sur Canva test')
+    assert.equal(asked.tools.length, 0)
+    assert.deepEqual(asked.named, [])
+    assert.match(asked.unavailable, /« Canva test » n'est pas encore connecté à ton compte\. Ouvre Options → Outils MCP, clique sur « Se connecter »/)
+    assert.equal(env.hub.mcpToolsFor('Quel temps fait-il ?').unavailable, undefined, 'pas nommé : rien à dire')
 
     // « Se connecter » : la page s'ouvre (le test la suit comme un navigateur), puis tout se fait seul.
     env.auth.setMcpBrowserOpener((url) => {
@@ -358,6 +364,9 @@ test('étape 419 : connexion par compte de bout en bout — « À connecter », 
     assert.equal(service.seen.registrations[0].client_name, 'Jaris')
     assert.equal(service.seen.tokens, 1)
     assert.equal(await env.hub.mcpToolsFor('').call('mcp_canva_test_mes_designs', {}), 'Affiche du concert')
+    const named = env.hub.mcpToolsFor('Montre mes designs Canva test')
+    assert.deepEqual(named.named, ['Canva test'], 'connecté et nommé')
+    assert.equal(named.unavailable, undefined)
 
     // La clé est gardée chiffrée sur le disque, et jamais montrée à l'écran.
     const file = readFileSync(path.join(env.root, 'mcp-auth', `${added.id}.bin`), 'utf8')

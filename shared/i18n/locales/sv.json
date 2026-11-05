@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP-servern ”{name}” har stoppats.",
   "mcp.error.stoppedSaid": "MCP-servern ”{name}” har stoppats. Dess sista meddelande: {detail}",
   "mcp.error.notReady": "MCP-servern ”{name}” är inte redo: {error}",
+  "mcp.reply.signin": "”{name}” är inte anslutet till ditt konto än. Öppna {options} → {tab}, klicka på ”{button}” bredvid ”{name}” och fråga mig igen.",
+  "mcp.reply.connecting": "”{name}” ansluter fortfarande. Fråga mig igen om en stund.",
   "mcp.error.toolFailed": "Verktyget ”{tool}” i MCP-servern ”{name}” misslyckades: {error}",
   "mcp.error.timeout": "Verktyget ”{tool}” i MCP-servern ”{name}” gav inga livstecken på {seconds} s: avbrutet.",
   "mcp.error.nothing": "Inget kändes igen. Klistra in konfigurationen från serverns sida (blocket ”mcpServers”), ett kommando som ”npx -y …” eller en adress https://…",

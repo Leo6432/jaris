@@ -578,8 +578,22 @@ function leakPattern(name: string, english: boolean): string {
  */
 export interface ExtraToolSource {
   /** Les outils utiles à CETTE demande, et leur exécution (seuls ceux-là peuvent être appelés). */
-  toolsFor(prompt: string): { tools: OllamaTool[]; call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string> }
+  toolsFor(prompt: string): {
+    tools: OllamaTool[]
+    call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>
+    /** Étape 421 : les services NOMMÉS dans la demande et prêts (« sur Canva ») — l'écran n'est alors pas proposé. */
+    named?: string[]
+    /** Étape 421 : un service nommé mais pas prêt (à connecter, en erreur…) — dit tel quel à Léo. */
+    unavailable?: string
+  }
 }
+
+/**
+ * Étape 421 : les outils qui pilotent l'écran. Quand la demande nomme un service connecté par MCP (« fais-moi une affiche
+ * sur Canva »), ils ne sont pas proposés au modèle : il cliquait sinon dans la fenêtre au premier plan (Gmail) au lieu
+ * d'utiliser le compte Canva déjà connecté. Les raccourcis explicites (« ouvre Canva », « clique sur… ») restent.
+ */
+const SCREEN_TOOLS = new Set(['open_app', 'look_at_screen', 'type_text', 'press_key', 'click_mouse', 'computer_use_task'])
 let extraToolSource: ExtraToolSource | null = null
 export function setExtraToolSource(source: ExtraToolSource | null): void {
   extraToolSource = source
@@ -688,6 +702,9 @@ async function conversation(
   // des outils permis est fixée), au plus quelques-uns par demande (shared/mcp.ts).
   const extra = restrictions ? null : extraToolsFor(prompt, onLog)
   const extraNames = new Set((extra?.tools ?? []).map((tool) => tool.function.name))
+  // Étape 421 : un service connecté nommé dans la demande — ses outils à lui, jamais le pilotage de l'écran.
+  const namedServices = extra?.tools.length ? extra.named ?? [] : []
+  const modelMayUse = (name: string): boolean => isToolAllowed(name) && !(namedServices.length && SCREEN_TOOLS.has(name))
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
@@ -695,9 +712,10 @@ async function conversation(
     if (!isToolAllowed(name)) throw new Error(restrictions?.refusalFor?.(name) ?? restrictions?.refusal ?? t('reply.unavailable'))
     return restrictions?.runTool ? restrictions.runTool(() => runTool(name, args)) : runTool(name, args)
   }
-  const ownTools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
+  const ownTools = restrictions || namedServices.length ? TOOLS.filter((tool) => modelMayUse(tool.function.name)) : TOOLS
   const tools = extra?.tools.length ? [...ownTools, ...extra.tools] : ownTools
   if (extra?.tools.length) onLog?.(`Outils MCP proposés : ${[...extraNames].join(', ')}`)
+  if (namedServices.length) onLog?.(`Service nommé (${namedServices.join(', ')}) : pilotage de l'écran non proposé.`)
 
   const note = shortcuts ? notepadRequest(prompt) : null
   // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).
@@ -754,6 +772,13 @@ async function conversation(
     } catch (err) {
       return toolFailure(err)
     }
+  }
+
+  // Étape 421 : « fais-moi une affiche sur Canva » alors que Canva est à connecter — le dire, plutôt que laisser le
+  // modèle chercher Canva à l'écran.
+  if (extra?.unavailable) {
+    onLog?.(`Service nommé mais pas prêt : ${extra.unavailable}`)
+    return extra.unavailable
   }
 
   // Étape 355 : la voix a ses propres modèles quand les votes des duels « Vocal » en ont choisi d'autres.
@@ -893,7 +918,7 @@ async function conversation(
   // Sans computer_use_task (téléphone), relancer vers lui pousserait le modèle vers un outil absent.
   // Étape 346 : ces deux filets lisent du français ; dans une autre langue, ils se tromperaient.
   const french = currentLanguage() === 'fr'
-  const wantsEmailSent = french && isToolAllowed('computer_use_task') && hasUnnegatedMailIntent(prompt)
+  const wantsEmailSent = french && modelMayUse('computer_use_task') && hasUnnegatedMailIntent(prompt)
   const writingRequest = isWritingRequest(prompt)
   // Contrairement à wantsEmailSent (recalculé sur la seule phrase actuelle, jamais l'historique), cette
   // relance n'a de sens que pour la question posée à CE tour : sinon une conversation qui a déjà cherché une
@@ -984,8 +1009,9 @@ async function conversation(
             "Tu viens de décrire une action (\"je vais faire...\", \"un instant...\", ou même \"j'ai déjà " +
             "fait...\") sans appeler le moindre outil dans ce tour : ni une promesse ni une affirmation " +
             "d'action déjà faite ne remplacent jamais l'appel réel à l'outil, qui n'a pas eu lieu. Si une " +
-            "action est encore à faire, appelle MAINTENANT l'outil correspondant (computer_use_task, " +
-            "open_app, type_text, etc.) — ne dis jamais qu'une action est faite avant que l'outil ait " +
+            "action est encore à faire, appelle MAINTENANT l'outil correspondant (" +
+            (namedServices.length ? `un outil [MCP ${namedServices.join(', ')}]` : 'computer_use_task, open_app, type_text, etc.') +
+            ") — ne dis jamais qu'une action est faite avant que l'outil ait " +
             "réellement été appelé et ait réussi. Si en y réfléchissant aucune action n'est vraiment " +
             "nécessaire (par exemple une simple question à laquelle tu as déjà la réponse), réponds " +
             "directement et uniquement à la question d'origine de l'utilisateur, sans mentionner cette " +
@@ -1026,6 +1052,17 @@ async function conversation(
       if (restrictions && !isToolAllowed(call.function.name)) {
         onLog?.(`Outil refusé : ${call.function.name}`)
         return finalize(restrictions.refusalFor?.(call.function.name) ?? restrictions.refusal)
+      }
+      // Étape 421 : un outil d'écran inventé alors qu'un service nommé est connecté — jamais exécuté, le modèle est
+      // ramené vers les outils du service.
+      if (!modelMayUse(call.function.name) && namedServices.length && SCREEN_TOOLS.has(call.function.name)) {
+        onLog?.(`Outil refusé (service ${namedServices.join(', ')} connecté) : ${call.function.name}`)
+        messages.push({
+          role: 'tool',
+          content: `Le pilotage de l'écran n'est pas disponible pour cette demande : ${namedServices.join(', ')} est connecté à ` +
+            `ton compte, utilise ses outils [MCP ${namedServices.join(', ')}] directement.`
+        })
+        continue
       }
 
       let result: string

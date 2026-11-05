@@ -67,6 +67,8 @@
   "mcp.error.stopped": "Сервер MCP «{name}» зупинився.",
   "mcp.error.stoppedSaid": "Сервер MCP «{name}» зупинився. Його останнє повідомлення: {detail}",
   "mcp.error.notReady": "Сервер MCP «{name}» не готовий: {error}",
+  "mcp.reply.signin": "«{name}» ще не підключено до твого облікового запису. Відкрий {options} → {tab}, натисни «{button}» поруч із «{name}» і попроси мене знову.",
+  "mcp.reply.connecting": "«{name}» ще підключається. Попроси мене знову за хвилину.",
   "mcp.error.toolFailed": "Інструмент «{tool}» сервера MCP «{name}» не спрацював: {error}",
   "mcp.error.timeout": "Інструмент «{tool}» сервера MCP «{name}» не подавав ознак життя {seconds} с: перервано.",
   "mcp.error.nothing": "Нічого не розпізнано. Встав конфігурацію зі сторінки сервера (блок «mcpServers»), команду на кшталт «npx -y …» або адресу https://…",

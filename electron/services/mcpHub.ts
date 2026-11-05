@@ -17,6 +17,7 @@ import {
   mcpToolName,
   parseMcpConfigFile,
   parseMcpPaste,
+  isServerNamed,
   pickMcpTools,
   secretNames,
   serverRequestedWaitMs,
@@ -545,8 +546,21 @@ function availableTools(): OfferedTool[] {
  * MCP_MAX_TOOLS_PER_REQUEST, shared/mcp.ts), et leur exécution. Seuls les outils proposés pour cette demande peuvent
  * être appelés : un modèle peut inventer un nom d'outil qu'on ne lui a pas donné.
  */
-export function mcpToolsFor(prompt: string): { tools: OllamaTool[]; call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string> } {
-  const offered = pickMcpTools(prompt, availableTools())
+export function mcpToolsFor(prompt: string): {
+  tools: OllamaTool[]
+  call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>
+  named: string[]
+  unavailable?: string
+} {
+  // Étape 421 (Léo, « fais-moi un design sur Canva » → Jaris pilotait l'écran, Gmail devant) : un serveur NOMMÉ dans la
+  // demande et prêt reçoit seul les places d'outils ; nommé mais pas prêt, la demande dit pourquoi au lieu de laisser
+  // le modèle se rabattre sur l'écran.
+  const named = config.servers.filter((server) => server.enabled && isServerNamed(prompt, server.name))
+  const ready = named.filter((server) => connections.get(server.id)?.status === 'ready')
+  const all = availableTools()
+  const readyIds = new Set(ready.map((server) => server.id))
+  const pool = ready.length ? all.filter((tool) => readyIds.has(tool.serverId)) : all
+  const offered = pickMcpTools(prompt, pool)
   const byName = new Map(offered.map((tool) => [tool.name, tool]))
   return {
     tools: offered.map((tool) => ({
@@ -561,8 +575,18 @@ export function mcpToolsFor(prompt: string): { tools: OllamaTool[]; call: (name:
       const tool = byName.get(name)
       if (!tool) throw new Error(t('mcp.error.unknownTool', { tool: name }))
       return callTool(tool, args, signal)
-    }
+    },
+    named: ready.map((server) => server.name),
+    unavailable: ready.length || !named.length ? undefined : unavailableReason(named[0])
   }
+}
+
+/** Pourquoi un serveur nommé dans la demande ne peut pas servir maintenant, dit à Léo avec ce qu'il peut faire. */
+function unavailableReason(server: McpServerConfig): string {
+  const connection = connections.get(server.id)
+  if (connection?.status === 'signin') return t('mcp.reply.signin', { name: server.name, options: t('options.title'), tab: t('options.tab.mcp'), button: t('mcp.server.signin') })
+  if (connection?.status === 'error') return t('mcp.error.notReady', { name: server.name, error: connection.error ?? t('mcp.status.error') })
+  return t('mcp.reply.connecting', { name: server.name })
 }
 
 async function callTool(tool: OfferedTool, args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {

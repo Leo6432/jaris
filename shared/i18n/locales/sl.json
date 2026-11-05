@@ -67,6 +67,8 @@
   "mcp.error.stopped": "Strežnik MCP »{name}« se je ustavil.",
   "mcp.error.stoppedSaid": "Strežnik MCP »{name}« se je ustavil. Njegovo zadnje sporočilo: {detail}",
   "mcp.error.notReady": "Strežnik MCP »{name}« ni pripravljen: {error}",
+  "mcp.reply.signin": "»{name}« še ni povezan s tvojim računom. Odpri {options} → {tab}, klikni »{button}« ob »{name}« in me vprašaj znova.",
+  "mcp.reply.connecting": "»{name}« se še povezuje. Vprašaj me znova čez trenutek.",
   "mcp.error.toolFailed": "Orodje »{tool}« strežnika MCP »{name}« ni uspelo: {error}",
   "mcp.error.timeout": "Orodje »{tool}« strežnika MCP »{name}« {seconds} s ni dalo znaka življenja: prekinjeno.",
   "mcp.error.nothing": "Nič ni prepoznano. Prilepi nastavitve s strani strežnika (blok »mcpServers«), ukaz, kot je »npx -y …«, ali naslov https://…",

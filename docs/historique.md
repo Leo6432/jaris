@@ -10998,3 +10998,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   cours » (serveur de test) attendu 1 s, et « Arrêter » coupe l'attente. **Non vérifié en usage réel** : la même
   demande sur le compte Canva de Léo avec cette version. **Reste** : une réponse en deux temps (« lequel tu
   préfères ? » puis « le 2 ») perd les identifiants du premier tour (seul le texte des échanges est gardé).
+
+- **Étape 421 (v0.43.2), Léo : « il me dit : Échec de l'outil : La fenêtre Gmail est toujours au premier plan ; Canva
+  n'est pas accessible. Il faut d'abord quitter Gmail puis ouvrir Canva via le menu Démarrer. Mais faut pas que
+  j'ouvre Canva, lui il fait lui-même non ? »** Le message vient du pilotage de l'écran (`computer_use_task`) : le
+  modèle avait, en plus des outils MCP de Canva, tous les outils d'écran (et les relances « mail jamais envoyé » /
+  « action annoncée sans outil » le poussaient nommément vers `computer_use_task`). Cause exacte non observable d'ici
+  (le journal est sur le PC de Léo) : soit le modèle a préféré l'écran, soit Canva n'était pas prêt (à reconnecter)
+  et aucun outil Canva n'était proposé. Les deux chemins sont fermés dans le code :
+  - un serveur MCP activé NOMMÉ dans la demande (`isServerNamed` : tous les mots entiers du nom, sans accents ni
+    majuscules) et prêt reçoit seul les places d'outils, et les outils d'écran (`open_app`, `look_at_screen`,
+    `type_text`, `press_key`, `click_mouse`, `computer_use_task`) ne sont pas proposés ; un appel inventé à l'un
+    d'eux n'est jamais exécuté, le modèle est ramené vers les outils du service ; les relances ne citent plus
+    `computer_use_task` dans ce cas ;
+  - nommé mais pas prêt : la réponse dit pourquoi et quoi faire (« Canva n'est pas encore connecté à ton compte.
+    Ouvre Options → Outils MCP, clique sur « Se connecter »… », ou l'erreur du serveur, ou « encore en train de se
+    connecter »), sans modèle ni écran. Les raccourcis explicites (« ouvre Canva », « clique sur… ») restent.
+  Régression : `test-assistant-history.mjs` (outils d'écran absents, appel inventé ramené vers Canva, raison dite
+  telle quelle ; échoue sans chacune des deux règles), `test-mcp-hub.mjs` (vrai serveur à connecter puis connecté),
+  `test-mcp.mjs` (`isServerNamed`). **Non vérifié en usage réel** : la même demande sur le PC de Léo.

@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP-server „{name}“ peatus.",
   "mcp.error.stoppedSaid": "MCP-server „{name}“ peatus. Selle viimane teade: {detail}",
   "mcp.error.notReady": "MCP-server „{name}“ pole valmis: {error}",
+  "mcp.reply.signin": "„{name}“ pole veel sinu kontoga ühendatud. Ava {options} → {tab}, klõpsa „{name}“ kõrval „{button}“ ja küsi minult uuesti.",
+  "mcp.reply.connecting": "„{name}“ alles ühendub. Küsi minult hetke pärast uuesti.",
   "mcp.error.toolFailed": "MCP-serveri „{name}“ tööriist „{tool}“ ebaõnnestus: {error}",
   "mcp.error.timeout": "MCP-serveri „{name}“ tööriist „{tool}“ ei andnud {seconds} s jooksul elumärki: katkestatud.",
   "mcp.error.nothing": "Midagi ei tuvastatud. Kleebi serveri lehelt saadud seadistus (plokk „mcpServers“), käsk nagu „npx -y …“ või aadress https://…",

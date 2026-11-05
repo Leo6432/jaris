@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP-palvelin ”{name}” pysähtyi.",
   "mcp.error.stoppedSaid": "MCP-palvelin ”{name}” pysähtyi. Sen viimeinen viesti: {detail}",
   "mcp.error.notReady": "MCP-palvelin ”{name}” ei ole valmis: {error}",
+  "mcp.reply.signin": "”{name}” ei ole vielä yhdistetty tiliisi. Avaa {options} → {tab}, napsauta ”{button}” kohdan ”{name}” vieressä ja kysy minulta uudelleen.",
+  "mcp.reply.connecting": "”{name}” yhdistää vielä. Kysy minulta uudelleen hetken päästä.",
   "mcp.error.toolFailed": "MCP-palvelimen ”{name}” työkalu ”{tool}” epäonnistui: {error}",
   "mcp.error.timeout": "MCP-palvelimen ”{name}” työkalu ”{tool}” ei antanut elonmerkkejä {seconds} s aikana: keskeytetty.",
   "mcp.error.nothing": "Mitään ei tunnistettu. Liitä palvelimen sivun antama määritys (lohko ”mcpServers”), komento kuten ”npx -y …” tai osoite https://…",

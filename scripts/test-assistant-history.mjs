@@ -764,3 +764,54 @@ test('étape 418 : les outils MCP sont proposés au modèle et appelés ; jamais
   assert.equal(seen[0].join(), 'open_app')
   converse.setExtraToolSource(null)
 })
+
+test("étape 421 : un service connecté nommé dans la demande — ses outils, jamais le pilotage de l'écran", async () => {
+  const name = (n) => ({ type: 'function', function: { name: n, description: '', parameters: {} } })
+  const OWN = ['open_app', 'computer_use_task', 'click_mouse', 'type_text', 'press_key', 'look_at_screen', 'search_web'].map(name)
+  const canvaTool = { type: 'function', function: { name: 'mcp_canva_generate_design', description: '[MCP Canva] Generate a design', parameters: { type: 'object', properties: {} } } }
+  const called = []
+  const source = {
+    toolsFor: () => ({ tools: [canvaTool], named: ['Canva'], call: async (n) => (called.push(n), 'Design créé : https://canva.com/d/1') })
+  }
+  const seen = []
+  const fed = []
+  let round = 0
+  const converse = setup(
+    async (messages, tools) => {
+      seen.push(tools.map((t) => t.function.name))
+      round++
+      // Le modèle invente quand même un pilotage d'écran : jamais exécuté, il est ramené vers Canva.
+      if (round === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'computer_use_task', arguments: { goal: 'ouvrir Canva' } } }] }
+      if (round === 2) {
+        fed.push(messages.at(-1))
+        return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_generate_design', arguments: {} } }] }
+      }
+      return { role: 'assistant', content: 'Ton affiche est dans ton compte Canva.' }
+    },
+    async (n) => assert.fail(`outil de Jaris appelé : ${n}`),
+    undefined,
+    { tools: OWN }
+  )
+  converse.setExtraToolSource(source)
+  const reply = await converse('Fais-moi une affiche sur Canva pour un concert', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(reply, 'Ton affiche est dans ton compte Canva.')
+  assert.equal(seen[0].join(), 'search_web,mcp_canva_generate_design', "aucun outil d'écran proposé")
+  assert.equal(fed[0].role, 'tool')
+  assert.match(fed[0].content, /Canva est connecté/)
+  assert.equal(called.join(), 'mcp_canva_generate_design')
+
+  // Service nommé mais à connecter : la raison est dite telle quelle, sans modèle ni écran.
+  round = 0
+  seen.length = 0
+  source.toolsFor = () => ({ tools: [], named: [], unavailable: '« Canva » n\'est pas encore connecté à ton compte.', call: async () => assert.fail('rien à appeler') })
+  assert.equal(await converse('Fais-moi une affiche sur Canva', null, () => {}, undefined, [], undefined, undefined, 'chat'), '« Canva » n\'est pas encore connecté à ton compte.')
+  assert.equal(seen.length, 0, 'le modèle ne doit pas être appelé')
+
+  // Aucun service nommé : les outils d'écran restent proposés, comme avant.
+  round = 2
+  seen.length = 0
+  source.toolsFor = () => ({ tools: [canvaTool], named: [], call: async () => 'ok' })
+  await converse('Ouvre mes mails et lis le dernier', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.ok(seen[0].includes('computer_use_task'))
+  converse.setExtraToolSource(null)
+})

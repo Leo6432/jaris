@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP serveris „{name}“ sustojo.",
   "mcp.error.stoppedSaid": "MCP serveris „{name}“ sustojo. Paskutinis jo pranešimas: {detail}",
   "mcp.error.notReady": "MCP serveris „{name}“ neparuoštas: {error}",
+  "mcp.reply.signin": "„{name}“ dar neprijungtas prie tavo paskyros. Atidaryk {options} → {tab}, spustelėk „{button}“ šalia „{name}“ ir paklausk manęs dar kartą.",
+  "mcp.reply.connecting": "„{name}“ dar jungiasi. Paklausk manęs dar kartą po akimirkos.",
   "mcp.error.toolFailed": "MCP serverio „{name}“ įrankis „{tool}“ nepavyko: {error}",
   "mcp.error.timeout": "MCP serverio „{name}“ įrankis „{tool}“ {seconds} s nedavė gyvybės ženklų: nutraukta.",
   "mcp.error.nothing": "Nieko neatpažinta. Įklijuok serverio puslapyje pateiktą konfigūraciją (bloką „mcpServers“), komandą, pvz., „npx -y …“, arba adresą https://…",

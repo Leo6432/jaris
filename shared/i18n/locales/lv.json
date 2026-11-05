@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP serveris “{name}” apstājās.",
   "mcp.error.stoppedSaid": "MCP serveris “{name}” apstājās. Tā pēdējais ziņojums: {detail}",
   "mcp.error.notReady": "MCP serveris “{name}” nav gatavs: {error}",
+  "mcp.reply.signin": "“{name}” vēl nav savienots ar tavu kontu. Atver {options} → {tab}, noklikšķini “{button}” blakus “{name}” un pajautā man vēlreiz.",
+  "mcp.reply.connecting": "“{name}” vēl savienojas. Pajautā man vēlreiz pēc brīža.",
   "mcp.error.toolFailed": "MCP servera “{name}” rīks “{tool}” neizdevās: {error}",
   "mcp.error.timeout": "MCP servera “{name}” rīks “{tool}” {seconds} s nedeva dzīvības pazīmes: pārtraukts.",
   "mcp.error.nothing": "Nekas netika atpazīts. Ielīmē servera lapā norādīto konfigurāciju (bloku “mcpServers”), komandu, piemēram, “npx -y …”, vai adresi https://…",

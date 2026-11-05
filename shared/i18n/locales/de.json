@@ -67,6 +67,8 @@
   "mcp.error.stopped": "Der MCP-Server „{name}“ wurde beendet.",
   "mcp.error.stoppedSaid": "Der MCP-Server „{name}“ wurde beendet. Seine letzte Meldung: {detail}",
   "mcp.error.notReady": "Der MCP-Server „{name}“ ist nicht bereit: {error}",
+  "mcp.reply.signin": "„{name}“ ist noch nicht mit deinem Konto verbunden. Öffne {options} → {tab}, klicke neben „{name}“ auf „{button}“ und frag mich dann noch einmal.",
+  "mcp.reply.connecting": "„{name}“ verbindet sich noch. Frag mich gleich noch einmal.",
   "mcp.error.toolFailed": "Das Werkzeug „{tool}“ des MCP-Servers „{name}“ ist fehlgeschlagen: {error}",
   "mcp.error.timeout": "Das Werkzeug „{tool}“ des MCP-Servers „{name}“ hat {seconds} s lang kein Lebenszeichen gegeben: abgebrochen.",
   "mcp.error.nothing": "Nichts erkannt. Füge die Konfiguration von der Seite des Servers ein (den Block „mcpServers“), einen Befehl wie „npx -y …“ oder eine Adresse https://…",

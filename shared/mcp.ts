@@ -277,6 +277,19 @@ export function isLegacyTool(description: string): boolean {
 }
 
 /** Un nom d'outil cité tel quel dans un texte (`create-design` ne compte pas dans `create-design-from-candidate`). */
+/**
+ * Étape 421 : la demande NOMME-t-elle ce serveur (« fais-moi une affiche sur Canva ») ? Tous les mots du nom (3 lettres
+ * et plus, sans accents ni majuscules) doivent s'y trouver ; un nom sans tel mot ne compte jamais comme nommé.
+ */
+export function isServerNamed(prompt: string, serverName: string): boolean {
+  // Les mots ENTIERS du nom : « GitHub » demande « github », pas « git » et « hub » (que words() ajoute aussi).
+  const plain = serverName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const needed = [...new Set(plain.split(/[^a-z0-9]+/).filter((word) => word.length >= 3))]
+  if (!needed.length) return false
+  const asked = new Set(words(prompt))
+  return needed.every((word) => asked.has(word))
+}
+
 function mentions(text: string, toolName: string): boolean {
   const escaped = toolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}($|[^A-Za-z0-9_-])`).test(text)

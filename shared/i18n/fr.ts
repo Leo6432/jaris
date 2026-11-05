@@ -77,6 +77,8 @@ export const fr = {
   "mcp.error.stopped": "Le serveur MCP « {name} » s'est arrêté.",
   "mcp.error.stoppedSaid": "Le serveur MCP « {name} » s'est arrêté. Son dernier message : {detail}",
   "mcp.error.notReady": "Le serveur MCP « {name} » n'est pas prêt : {error}",
+  "mcp.reply.signin": "« {name} » n'est pas encore connecté à ton compte. Ouvre {options} → {tab}, clique sur « {button} » à côté de « {name} », puis redemande-moi.",
+  "mcp.reply.connecting": "« {name} » est encore en train de se connecter. Redemande-moi dans un instant.",
   "mcp.error.toolFailed": "L'outil « {tool} » du serveur MCP « {name} » a échoué : {error}",
   "mcp.error.timeout": "L'outil « {tool} » du serveur MCP « {name} » n'a donné aucun signe de vie pendant {seconds} s : abandonné.",
   "mcp.error.nothing": "Rien de reconnu. Colle la configuration donnée par la page du serveur (le bloc « mcpServers »), une commande comme « npx -y … » ou une adresse https://…",

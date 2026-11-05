@@ -67,6 +67,8 @@
   "mcp.error.stopped": "Server MCP „{name}“ se zastavil.",
   "mcp.error.stoppedSaid": "Server MCP „{name}“ se zastavil. Jeho poslední zpráva: {detail}",
   "mcp.error.notReady": "Server MCP „{name}“ není připraven: {error}",
+  "mcp.reply.signin": "„{name}“ ještě není propojen s tvým účtem. Otevři {options} → {tab}, klikni na „{button}“ u „{name}“ a zeptej se mě znovu.",
+  "mcp.reply.connecting": "„{name}“ se ještě připojuje. Zeptej se mě znovu za chvíli.",
   "mcp.error.toolFailed": "Nástroj „{tool}“ serveru MCP „{name}“ selhal: {error}",
   "mcp.error.timeout": "Nástroj „{tool}“ serveru MCP „{name}“ nedal {seconds} s známku života: ukončeno.",
   "mcp.error.nothing": "Nic nebylo rozpoznáno. Vlož konfiguraci ze stránky serveru (blok „mcpServers“), příkaz jako „npx -y …“ nebo adresu https://…",

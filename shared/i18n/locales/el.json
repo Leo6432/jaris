@@ -67,6 +67,8 @@
   "mcp.error.stopped": "Ο διακομιστής MCP «{name}» σταμάτησε.",
   "mcp.error.stoppedSaid": "Ο διακομιστής MCP «{name}» σταμάτησε. Το τελευταίο του μήνυμα: {detail}",
   "mcp.error.notReady": "Ο διακομιστής MCP «{name}» δεν είναι έτοιμος: {error}",
+  "mcp.reply.signin": "Το «{name}» δεν έχει συνδεθεί ακόμη με τον λογαριασμό σου. Άνοιξε {options} → {tab}, πάτησε «{button}» δίπλα στο «{name}» και ρώτα με ξανά.",
+  "mcp.reply.connecting": "Το «{name}» συνδέεται ακόμη. Ρώτα με ξανά σε λίγο.",
   "mcp.error.toolFailed": "Το εργαλείο «{tool}» του διακομιστή MCP «{name}» απέτυχε: {error}",
   "mcp.error.timeout": "Το εργαλείο «{tool}» του διακομιστή MCP «{name}» δεν έδωσε σημάδι ζωής για {seconds} s: διακόπηκε.",
   "mcp.error.nothing": "Δεν αναγνωρίστηκε τίποτα. Επικόλλησε τη ρύθμιση από τη σελίδα του διακομιστή (το μπλοκ «mcpServers»), μια εντολή όπως «npx -y …» ή μια διεύθυνση https://…",

@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP-serveren „{name}“ er stoppet.",
   "mcp.error.stoppedSaid": "MCP-serveren „{name}“ er stoppet. Dens sidste besked: {detail}",
   "mcp.error.notReady": "MCP-serveren „{name}“ er ikke klar: {error}",
+  "mcp.reply.signin": "„{name}“ er endnu ikke forbundet til din konto. Åbn {options} → {tab}, klik på „{button}“ ved „{name}“, og spørg mig igen.",
+  "mcp.reply.connecting": "„{name}“ forbinder stadig. Spørg mig igen om et øjeblik.",
   "mcp.error.toolFailed": "Værktøjet „{tool}“ fra MCP-serveren „{name}“ mislykkedes: {error}",
   "mcp.error.timeout": "Værktøjet „{tool}“ fra MCP-serveren „{name}“ gav intet livstegn i {seconds} s: opgivet.",
   "mcp.error.nothing": "Intet genkendt. Indsæt konfigurationen fra serverens side (blokken „mcpServers“), en kommando som „npx -y …“ eller en adresse https://…",

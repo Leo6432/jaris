@@ -67,6 +67,8 @@
   "mcp.error.stopped": "A(z) „{name}” MCP-szerver leállt.",
   "mcp.error.stoppedSaid": "A(z) „{name}” MCP-szerver leállt. Utolsó üzenete: {detail}",
   "mcp.error.notReady": "A(z) „{name}” MCP-szerver nem áll készen: {error}",
+  "mcp.reply.signin": "A(z) „{name}” még nincs összekapcsolva a fiókoddal. Nyisd meg: {options} → {tab}, kattints a „{button}” gombra a(z) „{name}” mellett, majd kérdezz újra.",
+  "mcp.reply.connecting": "A(z) „{name}” még csatlakozik. Kérdezz újra egy pillanat múlva.",
   "mcp.error.toolFailed": "A(z) „{name}” MCP-szerver „{tool}” eszköze hibát jelzett: {error}",
   "mcp.error.timeout": "A(z) „{name}” MCP-szerver „{tool}” eszköze {seconds} mp-ig nem adott életjelet: megszakítva.",
   "mcp.error.nothing": "Semmi sem ismerhető fel. Illeszd be a szerver oldalán megadott beállítást (a „mcpServers” blokkot), egy parancsot, például „npx -y …”, vagy egy https://… címet",

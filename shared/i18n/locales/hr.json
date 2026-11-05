@@ -67,6 +67,8 @@
   "mcp.error.stopped": "MCP poslužitelj „{name}” se zaustavio.",
   "mcp.error.stoppedSaid": "MCP poslužitelj „{name}” se zaustavio. Njegova zadnja poruka: {detail}",
   "mcp.error.notReady": "MCP poslužitelj „{name}” nije spreman: {error}",
+  "mcp.reply.signin": "„{name}” još nije povezan s tvojim računom. Otvori {options} → {tab}, klikni „{button}” pokraj „{name}” i ponovno me pitaj.",
+  "mcp.reply.connecting": "„{name}” se još povezuje. Pitaj me ponovno za trenutak.",
   "mcp.error.toolFailed": "Alat „{tool}” MCP poslužitelja „{name}” nije uspio: {error}",
   "mcp.error.timeout": "Alat „{tool}” MCP poslužitelja „{name}” nije dao znak života {seconds} s: prekinuto.",
   "mcp.error.nothing": "Ništa nije prepoznato. Zalijepi konfiguraciju sa stranice poslužitelja (blok „mcpServers”), naredbu poput „npx -y …” ili adresu https://…",

@@ -169,3 +169,15 @@ test('étape 420 : un serveur qui demande d’attendre (Canva : polling_policy.w
   assert.equal(mcp.serverRequestedWaitMs([], { polling_policy: { wait_seconds: 600 } }), 0, 'au-delà d’une minute : la main au modèle')
   assert.equal(mcp.serverRequestedWaitMs([], { wait_seconds: -1 }), 0)
 })
+
+test('étape 421 : isServerNamed — le service doit être nommé en entier, sans tenir compte des accents ni des majuscules', async () => {
+  const { isServerNamed } = mcp
+  assert.equal(isServerNamed('Fais-moi une affiche sur Canva', 'Canva'), true)
+  assert.equal(isServerNamed('fais une affiche sur canva', 'Canva'), true)
+  assert.equal(isServerNamed('mets ça dans GitHub', 'GitHub'), true)
+  assert.equal(isServerNamed('mets ça dans git', 'GitHub'), false, 'un morceau du nom ne suffit pas')
+  assert.equal(isServerNamed('cherche sur hugging face', 'Hugging Face'), true)
+  assert.equal(isServerNamed('un visage souriant (face)', 'Hugging Face'), false)
+  assert.equal(isServerNamed('Fais une affiche', 'Canva'), false)
+  assert.equal(isServerNamed('Fais une affiche', 'X'), false, 'un nom trop court ne compte jamais')
+})

@@ -67,6 +67,8 @@
   "mcp.error.stopped": "De MCP-server “{name}” is gestopt.",
   "mcp.error.stoppedSaid": "De MCP-server “{name}” is gestopt. Zijn laatste bericht: {detail}",
   "mcp.error.notReady": "De MCP-server “{name}” is niet klaar: {error}",
+  "mcp.reply.signin": "‘{name}’ is nog niet met je account verbonden. Open {options} → {tab}, klik op ‘{button}’ naast ‘{name}’ en vraag het me dan opnieuw.",
+  "mcp.reply.connecting": "‘{name}’ is nog aan het verbinden. Vraag het me zo opnieuw.",
   "mcp.error.toolFailed": "De tool “{tool}” van de MCP-server “{name}” is mislukt: {error}",
   "mcp.error.timeout": "De tool “{tool}” van de MCP-server “{name}” gaf {seconds} s lang geen teken van leven: afgebroken.",
   "mcp.error.nothing": "Niets herkend. Plak de configuratie van de pagina van de server (het blok “mcpServers”), een opdracht zoals “npx -y …” of een adres https://…",

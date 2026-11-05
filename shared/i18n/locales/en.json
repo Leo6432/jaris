@@ -67,6 +67,8 @@
   "mcp.error.stopped": "The MCP server “{name}” stopped.",
   "mcp.error.stoppedSaid": "The MCP server “{name}” stopped. Its last message: {detail}",
   "mcp.error.notReady": "The MCP server “{name}” is not ready: {error}",
+  "mcp.reply.signin": "“{name}” isn't connected to your account yet. Open {options} → {tab}, click “{button}” next to “{name}”, then ask me again.",
+  "mcp.reply.connecting": "“{name}” is still connecting. Ask me again in a moment.",
   "mcp.error.toolFailed": "The tool “{tool}” of the MCP server “{name}” failed: {error}",
   "mcp.error.timeout": "The tool “{tool}” of the MCP server “{name}” gave no sign of life for {seconds} s: abandoned.",
   "mcp.error.nothing": "Nothing recognized. Paste the configuration given by the server's page (the “mcpServers” block), a command such as “npx -y …” or an https://… address",
