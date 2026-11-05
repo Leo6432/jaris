@@ -5,9 +5,11 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
+import { UnauthorizedError, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { UNREADABLE_DATA_DIR, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
+import { McpSignInError, forgetMcpAuth, listenForMcpCallback, mcpAuthPort, mcpAuthProvider, resetMcpAuthPort } from './mcpAuth'
 import type { OllamaTool } from './ollama'
 import {
   cleanServerName,
@@ -25,6 +27,7 @@ import {
   type McpServerView,
   type McpToolCandidate
 } from '../../shared/mcp'
+import { catalogEntry, catalogTransport } from '../../shared/mcpCatalog'
 import { t } from '../../shared/i18n'
 
 /**
@@ -43,6 +46,8 @@ const CONNECT_TIMEOUT_MS = 180_000
 const TOOL_IDLE_TIMEOUT_MS = 300_000
 /** Les dernières lignes que le serveur a écrites sur sa sortie d'erreur : la vraie raison d'un échec, quand il y en a. */
 const STDERR_TAIL_CHARS = 2000
+/** Étape 419 : le temps laissé à Léo pour se connecter dans son navigateur. */
+const SIGNIN_TIMEOUT_MS = 10 * 60_000
 
 interface ServerTool {
   name: string
@@ -108,6 +113,7 @@ export async function startMcpHub(): Promise<void> {
 
 /** À la fermeture de Jaris : chaque serveur local est arrêté (jamais laissé tourner sans Jaris). */
 export async function stopMcpHub(): Promise<void> {
+  for (const run of signIns.values()) run.controller.abort()
   await Promise.all([...connections.values()].map((connection) => closeConnection(connection)))
   connections.clear()
 }
@@ -125,6 +131,8 @@ export function startFailure(server: McpServerConfig, err: unknown, stderr: stri
   if (code === 'ENOENT' && server.transport.kind === 'stdio') return t('mcp.error.commandNotFound', { command: server.transport.command })
   const said = lastLines(stderr)
   const message = err instanceof Error ? err.message : String(err)
+  // Étape 419 : une clé absente ou refusée (GitHub : « missing required Authorization header », 401, 403) se dit telle quelle.
+  if (server.transport.kind === 'http' && /authori[sz]|\b40[13]\b|forbidden|token/i.test(message)) return t('mcp.error.auth', { name: server.name })
   if (server.transport.kind === 'http') return t('mcp.error.unreachable', { name: server.name, url: server.transport.url, error: message })
   return t('mcp.error.start', { name: server.name, error: said || message })
 }
@@ -152,10 +160,20 @@ export function commandExists(command: string, env: NodeJS.ProcessEnv = process.
   return dirs.some((dir) => candidates(join(dir, command)).some((file) => existsSync(file)))
 }
 
-function makeTransport(server: McpServerConfig, connection: Connection, legacySse = false): Transport {
+/**
+ * Étape 419 : un serveur en ligne SANS clé collée (aucun en-tête `Authorization`) se connecte avec le compte de Léo
+ * (OAuth, mcpAuth.ts) quand il le demande.
+ */
+export function usesAccountSignIn(server: McpServerConfig): boolean {
+  return server.transport.kind === 'http' && !Object.keys(server.transport.headers).some((name) => name.toLowerCase() === 'authorization')
+}
+
+const isUnauthorized = (err: unknown): boolean => err instanceof UnauthorizedError || (err as { name?: string } | null)?.name === 'UnauthorizedError'
+
+function makeTransport(server: McpServerConfig, connection: Connection, legacySse = false, authProvider?: OAuthClientProvider): Transport {
   const transport = server.transport
   if (transport.kind === 'http') {
-    const init = { requestInit: { headers: transport.headers } }
+    const init = { requestInit: { headers: transport.headers }, ...(authProvider ? { authProvider } : {}) }
     return legacySse ? new SSEClientTransport(new URL(transport.url), init) : new StreamableHTTPClientTransport(new URL(transport.url), init)
   }
   const stdio = new StdioClientTransport({ command: transport.command, args: transport.args, env: transport.env, stderr: 'pipe' })
@@ -185,8 +203,10 @@ async function connect(server: McpServerConfig): Promise<void> {
     if (server.transport.kind === 'stdio' && !commandExists(server.transport.command)) {
       throw Object.assign(new Error(`spawn ${server.transport.command} ENOENT`), { code: 'ENOENT' })
     }
+    // En arrière-plan, jamais de page de connexion ouverte : seulement les clés déjà reçues (renouvelées au besoin).
+    const provider = usesAccountSignIn(server) ? await mcpAuthProvider(server.id, null) : undefined
     const client = new Client({ name: 'jaris', version: '1' })
-    await client.connect(makeTransport(server, connection, legacySse), { timeout: CONNECT_TIMEOUT_MS })
+    await client.connect(makeTransport(server, connection, legacySse, provider), { timeout: CONNECT_TIMEOUT_MS })
     return client
   }
   try {
@@ -194,8 +214,9 @@ async function connect(server: McpServerConfig): Promise<void> {
     try {
       client = await attempt(false)
     } catch (err) {
-      // Un ancien serveur par adresse ne parle que SSE : un deuxième essai avant d'abandonner.
-      if (server.transport.kind !== 'http' || !current()) throw err
+      // Un ancien serveur par adresse ne parle que SSE : un deuxième essai avant d'abandonner (jamais quand il demande
+      // simplement à Léo de se connecter).
+      if (server.transport.kind !== 'http' || !current() || isUnauthorized(err)) throw err
       client = await attempt(true)
     }
     if (!current()) {
@@ -218,11 +239,106 @@ async function connect(server: McpServerConfig): Promise<void> {
     changed()
   } catch (err) {
     if (!current()) return
-    connection.status = 'error'
-    connection.error = startFailure(server, err, connection.stderr)
     connection.client = null
+    if (isUnauthorized(err) && usesAccountSignIn(server)) {
+      // Pas encore connecté avec le compte de Léo (ou la connexion a expiré) : « À connecter », sans erreur.
+      connection.status = 'signin'
+      connection.error = null
+    } else {
+      connection.status = 'error'
+      connection.error = startFailure(server, err, connection.stderr)
+    }
     changed()
   }
+}
+
+const signIns = new Map<string, { controller: AbortController; cancelled: boolean }>()
+
+/**
+ * Étape 419 : « Se connecter » — la page de connexion du service s'ouvre dans le navigateur de Léo ; à son retour,
+ * Jaris échange le code contre une clé (gardée chiffrée), puis se connecte au serveur. Renvoie tout de suite : l'état
+ * « Connexion dans ton navigateur… » puis « Connecté » arrive par l'évènement de changement.
+ */
+export async function signInMcpServer(id: unknown): Promise<McpServerView[]> {
+  await loadOnce()
+  const server = findServer(id)
+  if (!usesAccountSignIn(server)) throw new Error(t('mcp.error.unknownServer'))
+  let target = server
+  if (!server.enabled) {
+    target = { ...server, enabled: true }
+    config = { servers: config.servers.map((entry) => (entry === server ? target : entry)) }
+    await save()
+  }
+  void runSignIn(target, true)
+  return config.servers.map(view)
+}
+
+/** « Annuler » pendant la connexion dans le navigateur. */
+export async function cancelMcpSignIn(id: unknown): Promise<McpServerView[]> {
+  await loadOnce()
+  const running = signIns.get(findServer(id).id)
+  if (running) {
+    running.cancelled = true
+    running.controller.abort()
+  }
+  return config.servers.map(view)
+}
+
+async function runSignIn(server: McpServerConfig, retryPort: boolean): Promise<void> {
+  if (server.transport.kind !== 'http') return
+  signIns.get(server.id)?.controller.abort()
+  const run = { controller: new AbortController(), cancelled: false }
+  signIns.set(server.id, run)
+  const timer = setTimeout(() => run.controller.abort(), SIGNIN_TIMEOUT_MS)
+  const previous = connections.get(server.id)
+  if (previous) await closeConnection(previous)
+  const connection: Connection = { config: server, status: 'authorizing', error: null, client: null, tools: [], stderr: '', generation: (previous?.generation ?? 0) + 1 }
+  connections.set(server.id, connection)
+  changed()
+  const mine = (): boolean => connections.get(server.id) === connection
+  try {
+    const state = randomUUID()
+    const port = await mcpAuthPort(server.id)
+    const { code } = await listenForMcpCallback(port, state, server.name, run.controller.signal)
+    code.catch(() => {})
+    const provider = await mcpAuthProvider(server.id, { open: true, state })
+    const transport = new StreamableHTTPClientTransport(new URL(server.transport.url), { requestInit: { headers: server.transport.headers }, authProvider: provider })
+    const client = new Client({ name: 'jaris', version: '1' })
+    try {
+      // Déjà connecté (clé encore valable) : rien à demander.
+      await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS })
+      await client.close().catch(() => {})
+      run.controller.abort()
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err
+      await transport.finishAuth(await code)
+    }
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code === 'EADDRINUSE' && retryPort) {
+      // Le port inscrit est pris par un autre programme : un autre port, une nouvelle inscription, une seule fois.
+      clearTimeout(timer)
+      await resetMcpAuthPort(server.id)
+      if (signIns.get(server.id) === run) signIns.delete(server.id)
+      return runSignIn(server, false)
+    }
+    if (!mine()) return
+    if (run.cancelled) {
+      connection.status = 'signin'
+      connection.error = null
+    } else {
+      connection.status = 'error'
+      const message = err instanceof Error ? err.message : String(err)
+      connection.error = err instanceof McpSignInError ? message : t('mcp.error.signinFailed', { error: message })
+    }
+    changed()
+    return
+  } finally {
+    clearTimeout(timer)
+    // L'adresse de retour locale se ferme dans TOUS les cas (réussite, échec, annulation).
+    run.controller.abort()
+    if (signIns.get(server.id) === run) signIns.delete(server.id)
+  }
+  if (mine()) await connect(server)
 }
 
 async function listAllTools(client: Client): Promise<ServerTool[]> {
@@ -261,6 +377,8 @@ function view(server: McpServerConfig): McpServerView {
     error: server.enabled ? (connection?.error ?? null) : null,
     summary: transportSummary(server.transport),
     secretNames: secretNames(server.transport),
+    kind: server.transport.kind === 'http' ? 'online' : 'local',
+    catalogId: server.catalogId ?? null,
     tools: (connection?.tools ?? []).map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -288,6 +406,10 @@ export async function addMcpServers(pasted: unknown, name: unknown): Promise<Mcp
   if (!parsed.length) throw new Error(t('mcp.error.nothing'))
   // Un nom tapé par Léo l'emporte sur celui du bloc collé (un seul serveur : sans ambiguïté).
   const drafts = chosen && parsed.length === 1 ? [{ ...parsed[0], name: chosen }] : parsed
+  return addServers(drafts)
+}
+
+async function addServers(drafts: readonly { name: string; transport: McpServerConfig['transport']; catalogId?: string }[], connectNow = true): Promise<McpServerView[]> {
   const taken = new Set(config.servers.map((server) => server.name.toLowerCase()))
   const added: McpServerConfig[] = []
   for (const draft of drafts) {
@@ -295,13 +417,27 @@ export async function addMcpServers(pasted: unknown, name: unknown): Promise<Mcp
     let unique = base
     for (let n = 2; taken.has(unique.toLowerCase()); n++) unique = `${base} ${n}`
     taken.add(unique.toLowerCase())
-    added.push({ id: randomUUID(), name: unique, enabled: true, disabledTools: [], transport: draft.transport })
+    added.push({ id: randomUUID(), name: unique, enabled: true, disabledTools: [], transport: draft.transport, ...(draft.catalogId ? { catalogId: draft.catalogId } : {}) })
   }
   config = { servers: [...config.servers, ...added] }
   await save()
-  for (const server of added) void connect(server)
+  if (connectNow) for (const server of added) void connect(server)
   changed()
   return config.servers.map(view)
+}
+
+/**
+ * Étape 419 : un service de « Découvrir ». L'adresse vient du catalogue (shared/mcpCatalog.ts), jamais de l'écran ;
+ * la connexion avec le compte de Léo démarre tout de suite (la page s'ouvre dans son navigateur).
+ */
+export async function addCatalogServer(id: unknown): Promise<McpServerView[]> {
+  await loadOnce()
+  const entry = catalogEntry(id)
+  if (!entry) throw new Error(t('mcp.error.unknownServer'))
+  const views = await addServers([{ name: entry.name, transport: catalogTransport(entry), catalogId: entry.id }], false)
+  const added = config.servers[config.servers.length - 1]
+  void runSignIn(added, true)
+  return views
 }
 
 function findServer(id: unknown): McpServerConfig {
@@ -317,7 +453,10 @@ export async function removeMcpServer(id: unknown): Promise<McpServerView[]> {
   await save()
   const connection = connections.get(server.id)
   connections.delete(server.id)
+  signIns.get(server.id)?.controller.abort()
   if (connection) await closeConnection(connection)
+  // Ce que Jaris avait reçu de ce service (sa clé) est effacé avec lui.
+  await forgetMcpAuth(server.id)
   changed()
   return config.servers.map(view)
 }

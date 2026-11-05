@@ -32,6 +32,8 @@ export interface McpServerConfig {
   /** Outils que Léo a décochés : jamais donnés au modèle. */
   disabledTools: string[]
   transport: McpTransportConfig
+  /** Étape 419 : ajouté depuis « Découvrir » (son icône, et « Ajouté » dans le catalogue). */
+  catalogId?: string
 }
 
 export interface McpConfigFile {
@@ -47,7 +49,8 @@ export interface McpToolView {
   readOnly: boolean
 }
 
-export type McpServerStatus = 'off' | 'connecting' | 'ready' | 'error'
+/** Étape 419 : `signin` = à connecter avec le compte de Léo ; `authorizing` = connexion en cours dans son navigateur. */
+export type McpServerStatus = 'off' | 'connecting' | 'ready' | 'error' | 'signin' | 'authorizing'
 
 /** Ce que l'écran reçoit d'un serveur. Jamais les valeurs des variables d'environnement ni des en-têtes (secrets). */
 export interface McpServerView {
@@ -62,6 +65,9 @@ export interface McpServerView {
   /** Noms des variables d'environnement / en-têtes définis (sans leurs valeurs). */
   secretNames: string[]
   tools: McpToolView[]
+  /** Étape 419 : lancé sur ce PC (`local`) ou joint par une adresse (`online`). */
+  kind: 'local' | 'online'
+  catalogId: string | null
 }
 
 /** Au plus ce nombre d'outils MCP proposés au modèle pour une demande : au-delà, un petit modèle s'y perd. */
@@ -325,7 +331,8 @@ export function parseMcpConfigFile(value: unknown): McpConfigFile | null {
       name: cleanServerName(entry.name) || 'MCP',
       enabled: entry.enabled !== false,
       disabledTools: Array.isArray(entry.disabledTools) ? entry.disabledTools.filter((name): name is string => typeof name === 'string') : [],
-      transport
+      transport,
+      ...(typeof entry.catalogId === 'string' && entry.catalogId ? { catalogId: entry.catalogId } : {})
     })
   }
   return { servers }

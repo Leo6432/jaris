@@ -10937,3 +10937,41 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
     démarrage, `mcpList()` le dit connecté avec ses 5 outils sans la clé, et il s'arrête avec Jaris. **Non vérifié en
     usage réel** : Windows (`npx.cmd` via cross-spawn), un vrai serveur public (GitHub, fichiers…) et la façon dont les
     petits modèles locaux choisissent ces outils.
+
+- **Étape 419 (v0.43.0), Léo, captures des « Connecteurs » de Claude : « mets les MCP actifs ou désactivés, et mets
+  Ajouter avec une base de MCP que tu vas mettre, où ils peuvent ajouter eux-mêmes leur propre MCP ».** Options →
+  Outils MCP refait sur ce modèle (forme seulement, couleurs et coins de Jaris), captures montrées et validées AVANT
+  la publication (deux tours : une première base Fichiers/Navigateur/GitHub/Notion/Documentation a été refusée —
+  « navigateur, c'est par défaut, et GitHub aussi, enlève tout, je veux du Canva, Gmail, comme sur la capture »).
+  - **Écran** : onglets « Les vôtres » / « Découvrir » et bouton « + Ajouter ». « Les vôtres » : un tableau (outil,
+    type Sur ce PC / En ligne, interrupteur Actif), état en pastille, « Se connecter » / « Annuler » quand il le faut,
+    détails dépliables (outils décochables, Relancer, Supprimer confirmé). « Découvrir » : 13 cartes (pastille à
+    l'initiale du service sur sa couleur, jamais son logo), « + » → ✓ une fois ajouté. On arrive sur « Découvrir »
+    tant que rien n'est ajouté. « + Ajouter » : son propre serveur collé (l'ancien formulaire).
+  - **Catalogue** (`shared/mcpCatalog.ts`) : seulement les serveurs MCP OFFICIELS en ligne dont Jaris peut se servir
+    avec le compte de Léo. Vérifié sur chacun le 04/11 (requêtes réelles) : 401 en Streamable HTTP, et un serveur
+    d'autorisation qui publie l'inscription dynamique avec PKCE S256 — Canva, Notion, Zapier, Figma, Atlassian,
+    Linear, Todoist, Airtable, Dropbox, Miro, monday.com, Supabase, Hugging Face. **Écartés après vérification** :
+    Gmail, Drive, Agenda de Google (aperçu développeur : application Google à créer soi-même ; Zapier les donne),
+    Slack, HubSpot, Box (pas d'inscription dynamique), GitHub et un navigateur (Jaris les a déjà). **Non vérifié** :
+    qu'ils acceptent tous une adresse de retour locale — l'essai d'inscription réel a été refusé ici (action chez des
+    tiers) ; c'est la façon de faire prévue par OAuth pour une application de bureau.
+  - **Connexion par compte** (`mcpAuth.ts`, OAuth 2.1 du kit MCP) : Jaris s'inscrit lui-même (« Jaris »), ouvre la
+    page du service dans le navigateur (seulement une adresse web, `isWebUrl`), reçoit le code sur
+    `http://127.0.0.1:<port>/callback` (ouvert AVANT d'ouvrir la page ; port choisi à l'inscription puis réutilisé ;
+    pris par un autre programme → nouveau port et nouvelle inscription, une fois), vérifie le `state`, échange le code
+    (PKCE). Clés chiffrées par Windows (safeStorage) dans `mcp-auth/<serveur>.bin` (OWNED_ENTRIES, `keep-both`),
+    jamais envoyées à l'écran, renouvelées par le kit, effacées seulement quand Léo supprime le serveur. En arrière-plan
+    (démarrage), JAMAIS de page ouverte : sans clé, l'état est « À connecter ». 10 min pour finir dans le navigateur,
+    « Annuler » possible ; l'adresse locale se ferme dans tous les cas (piège attrapé : elle restait ouverte après un
+    échec et empêchait les tests de finir). Un serveur collé SANS en-tête `Authorization` utilise le même chemin.
+  - Retirés avec l'ancienne base : choix de dossier, clé collée, détection de Node.js (et leurs 20 textes).
+    20 nouveaux textes dans 24 langues.
+  - **Régression** : `test-mcp-hub.mjs` — un VRAI mini-service OAuth local (métadonnées, inscription, autorisation,
+    jeton avec vérification PKCE) devant un VRAI serveur MCP du kit : « À connecter » sans page ouverte, connexion de
+    bout en bout, outil appelé, clé chiffrée sur le disque, redémarrage connecté sans nouvelle inscription, suppression
+    qui efface la clé, `state` étranger refusé sans échange de clé, « Annuler » ; catalogue hors ligne (aucun appel
+    réel pendant les tests). `test-mcp.mjs` (catalogue : https, sans clé, ni GitHub ni navigateur),
+    `test-mcp-settings-ui.mjs` (navigateur, CSS compilé : cartes, pastille mesurée, « + » → connexion → ✓,
+    « Se connecter » / « Annuler », 760 px ; captures). **Non vérifié en usage réel** : une vraie connexion à Canva,
+    Notion… avec le compte de Léo, sur Windows.

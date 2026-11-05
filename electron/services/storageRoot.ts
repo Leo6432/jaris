@@ -120,6 +120,8 @@ export const OWNED_ENTRIES = [
   'model-speeds.json',
   // Étape 418 : les serveurs MCP de Léo (mcpHub.ts).
   'mcp-servers.json',
+  // Étape 419 : les clés reçues des services (connexion par compte), chiffrées par Windows (mcpAuth.ts).
+  'mcp-auth',
   'journal-demandes.txt',
   'github-connection.json',
   'github-token.bin',
@@ -222,6 +224,7 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   // Les vitesses de CE PC : celles de la racine gagnent, une session sur C n'en mesure que quelques-unes.
   'model-speeds.json': 'destination-wins',
   'mcp-servers.json': 'destination-wins',
+  'mcp-auth': 'keep-both',
   'journal-demandes.txt': 'append-journal',
   [CODE_CONVERSATIONS_FILE]: 'merge-code-conversations',
   [CODE_CONVERSATIONS_ASIDE_DIR]: 'keep-both',

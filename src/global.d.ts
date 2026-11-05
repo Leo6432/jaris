@@ -285,6 +285,9 @@ declare global {
       mcpSetEnabled: (id: string, enabled: boolean) => Promise<McpServerView[]>
       mcpSetToolEnabled: (id: string, tool: string, enabled: boolean) => Promise<McpServerView[]>
       mcpRestart: (id: string) => Promise<McpServerView[]>
+      mcpCatalogAdd: (id: string) => Promise<McpServerView[]>
+      mcpSignIn: (id: string) => Promise<McpServerView[]>
+      mcpCancelSignIn: (id: string) => Promise<McpServerView[]>
       onMcpChanged: (cb: (servers: McpServerView[]) => void) => () => void
       onChatHistoryChanged: (cb: () => void) => () => void
       onChatBusy: (cb: (busy: boolean) => void) => () => void

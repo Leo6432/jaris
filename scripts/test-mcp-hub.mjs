@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -15,10 +16,20 @@ import { loadTsModule } from './load-ts-module.mjs'
 const require = createRequire(import.meta.url)
 const SERVER = fileURLToPath(new URL('./fixtures/mcp-test-server.mjs', import.meta.url))
 const shared = loadTsModule('shared/mcp.ts')
+const catalog = loadTsModule('shared/mcpCatalog.ts')
 
-function setup() {
-  const root = mkdtempSync(path.join(tmpdir(), 'jaris-mcp-'))
+/** Un faux chiffrement réversible (le vrai est celui de Windows) : le fichier ne contient jamais la clé en clair. */
+const BOX = {
+  encrypt: (text) => Buffer.from(Buffer.from(text, 'utf8').toString('base64').split('').reverse().join(''), 'utf8'),
+  decrypt: (data) => Buffer.from(data.toString('utf8').split('').reverse().join(''), 'base64').toString('utf8')
+}
+
+/** Un Jaris : son moteur MCP et son module de connexion par compte, sur le dossier de données `root`. */
+function loadHub(root) {
   const atomic = loadTsModule('electron/services/atomicFile.ts', { fs: require('fs'), 'fs/promises': require('fs/promises'), path: require('path') })
+  const dataLocation = { getDataRoot: () => root }
+  const auth = loadTsModule('electron/services/mcpAuth.ts', { http: require('http'), 'fs/promises': require('fs/promises'), path: require('path'), './atomicFile': atomic, './dataLocation': dataLocation })
+  auth.setMcpSecretBox(BOX)
   const hub = loadTsModule('electron/services/mcpHub.ts', {
     crypto: require('crypto'),
     fs: require('fs'),
@@ -27,13 +38,22 @@ function setup() {
     '@modelcontextprotocol/sdk/client/stdio.js': require('@modelcontextprotocol/sdk/client/stdio.js'),
     '@modelcontextprotocol/sdk/client/streamableHttp.js': require('@modelcontextprotocol/sdk/client/streamableHttp.js'),
     '@modelcontextprotocol/sdk/client/sse.js': require('@modelcontextprotocol/sdk/client/sse.js'),
+    '@modelcontextprotocol/sdk/client/auth.js': require('@modelcontextprotocol/sdk/client/auth.js'),
     './atomicFile': atomic,
-    './dataLocation': { getDataRoot: () => root },
-    '../../shared/mcp': shared
+    './dataLocation': dataLocation,
+    './mcpAuth': auth,
+    '../../shared/mcp': shared,
+    '../../shared/mcpCatalog': catalog
   })
+  return { hub, auth }
+}
+
+function setup() {
+  const root = mkdtempSync(path.join(tmpdir(), 'jaris-mcp-'))
+  const { hub, auth } = loadHub(root)
   let changes = 0
   hub.setMcpChangeListener(() => changes++)
-  return { hub, root, changes: () => changes, done: async () => {
+  return { hub, auth, root, changes: () => changes, done: async () => {
     await hub.stopMcpHub()
     rmSync(root, { recursive: true, force: true })
   } }
@@ -140,18 +160,7 @@ test('désactiver arrête le serveur ; supprimer l’efface ; la configuration e
     const two = await env.hub.addMcpServers(config(), '')
     assert.deepEqual(two.map((s) => s.name), ['Mes fichiers', 'Mes fichiers 2'])
     // Un autre Jaris (redémarrage) relit le même dossier.
-    const again = loadTsModule('electron/services/mcpHub.ts', {
-      crypto: require('crypto'),
-      fs: require('fs'),
-      path: require('path'),
-      '@modelcontextprotocol/sdk/client/index.js': require('@modelcontextprotocol/sdk/client/index.js'),
-      '@modelcontextprotocol/sdk/client/stdio.js': require('@modelcontextprotocol/sdk/client/stdio.js'),
-      '@modelcontextprotocol/sdk/client/streamableHttp.js': require('@modelcontextprotocol/sdk/client/streamableHttp.js'),
-      '@modelcontextprotocol/sdk/client/sse.js': require('@modelcontextprotocol/sdk/client/sse.js'),
-      './atomicFile': loadTsModule('electron/services/atomicFile.ts', { fs: require('fs'), 'fs/promises': require('fs/promises'), path: require('path') }),
-      './dataLocation': { getDataRoot: () => env.root },
-      '../../shared/mcp': shared
-    })
+    const { hub: again } = loadHub(env.root)
     const reread = await again.listMcpServers()
     assert.deepEqual(reread.map((s) => [s.name, s.enabled]), [['Mes fichiers', false], ['Mes fichiers 2', true]])
     await again.stopMcpHub()
@@ -180,5 +189,222 @@ test('commande cherchée comme Windows le fait (PATH puis PATHEXT : npx → npx.
     }
   } finally {
     void done()
+  }
+})
+
+test('étape 419 : « Découvrir » — l’adresse vient du catalogue, la connexion par compte démarre aussitôt, hors ligne elle le dit', async () => {
+  // Aucun vrai appel à Canva pendant les tests : le réseau répond « hors ligne », et rien ne s'ouvre.
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => {
+    throw new Error('hors ligne (test)')
+  }
+  const env = setup()
+  const opened = []
+  env.auth.setMcpBrowserOpener((url) => opened.push(url))
+  try {
+    await assert.rejects(env.hub.addCatalogServer('inconnu'), /n'existe plus/)
+    const views = await env.hub.addCatalogServer('canva')
+    assert.equal(views[0].name, 'Canva')
+    assert.equal(views[0].catalogId, 'canva')
+    assert.equal(views[0].kind, 'online')
+    assert.equal(views[0].summary, 'https://mcp.canva.com/mcp')
+    const saved = JSON.parse(readFileSync(path.join(env.root, 'mcp-servers.json'), 'utf8'))
+    assert.deepEqual(saved.servers[0].transport, { kind: 'http', url: 'https://mcp.canva.com/mcp', headers: {} })
+    // Hors ligne : la connexion échoue avec un message, jamais une page ouverte pour rien.
+    const failed = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'error'), 'échec hors ligne')
+    assert.match(failed.error, /La connexion a échoué : .*hors ligne/)
+    assert.deepEqual(opened, [])
+  } finally {
+    await env.done()
+    globalThis.fetch = realFetch
+  }
+})
+
+test('étape 419 : un serveur en ligne qui refuse la clé (401) le dit clairement', async () => {
+  const server = http.createServer((req, res) => {
+    req.resume()
+    res.writeHead(401, { 'Content-Type': 'text/plain' })
+    res.end('bad credentials')
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const env = setup()
+  try {
+    await env.hub.addMcpServers(`http://127.0.0.1:${server.address().port}/mcp`, 'privé')
+    const failed = await ready(env.hub)
+    assert.equal(failed.status, 'error')
+    assert.equal(failed.error, "Le serveur MCP « privé » refuse la connexion : clé manquante ou refusée. Supprime-le puis ajoute-le de nouveau avec une clé valide.")
+  } finally {
+    await env.done()
+    server.close()
+  }
+})
+
+/**
+ * Un vrai petit service en ligne protégé par OAuth, sur 127.0.0.1 : métadonnées publiées, inscription dynamique, page
+ * d'autorisation (qui renvoie tout de suite vers Jaris, comme si Léo avait cliqué « Autoriser »), échange du code avec
+ * vérification PKCE, puis un VRAI serveur MCP (kit officiel) qui n'accepte que la clé délivrée.
+ */
+async function startOAuthService() {
+  const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js')
+  const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
+  const { createHash } = require('crypto')
+  const seen = { registrations: [], tokens: 0, authorize: [] }
+  const codes = new Map()
+  let base = ''
+  const json = (res, status, body, headers = {}) => {
+    res.writeHead(status, { 'Content-Type': 'application/json', ...headers })
+    res.end(JSON.stringify(body))
+  }
+  const readBody = (req) => new Promise((resolve) => {
+    let data = ''
+    req.on('data', (chunk) => (data += chunk))
+    req.on('end', () => resolve(data))
+  })
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, base)
+    if (url.pathname === '/.well-known/oauth-protected-resource/mcp' || url.pathname === '/.well-known/oauth-protected-resource') {
+      return json(res, 200, { resource: `${base}/mcp`, authorization_servers: [base] })
+    }
+    if (url.pathname === '/.well-known/oauth-authorization-server') {
+      return json(res, 200, {
+        issuer: base,
+        authorization_endpoint: `${base}/authorize`,
+        token_endpoint: `${base}/token`,
+        registration_endpoint: `${base}/register`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['none']
+      })
+    }
+    if (url.pathname === '/register' && req.method === 'POST') {
+      const meta = JSON.parse(await readBody(req))
+      seen.registrations.push(meta)
+      return json(res, 201, { ...meta, client_id: `client-${seen.registrations.length}`, client_id_issued_at: 1 })
+    }
+    if (url.pathname === '/authorize') {
+      const code = `code-${codes.size + 1}`
+      codes.set(code, url.searchParams.get('code_challenge'))
+      seen.authorize.push(Object.fromEntries(url.searchParams))
+      const back = new URL(url.searchParams.get('redirect_uri'))
+      back.searchParams.set('code', code)
+      back.searchParams.set('state', seen.forceState ?? url.searchParams.get('state'))
+      res.writeHead(302, { Location: back.toString() })
+      return res.end()
+    }
+    if (url.pathname === '/token' && req.method === 'POST') {
+      const form = new URLSearchParams(await readBody(req))
+      const challenge = codes.get(form.get('code'))
+      const expected = challenge && createHash('sha256').update(form.get('code_verifier') ?? '').digest('base64url')
+      if (!challenge || expected !== challenge) return json(res, 400, { error: 'invalid_grant' })
+      seen.tokens++
+      return json(res, 200, { access_token: 'tok-valide', token_type: 'Bearer', expires_in: 3600, refresh_token: 'rafraichir' })
+    }
+    if (url.pathname === '/mcp') {
+      if (req.headers.authorization !== 'Bearer tok-valide') {
+        res.writeHead(401, { 'WWW-Authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"` })
+        return res.end()
+      }
+      const mcp = new McpServer({ name: 'service', version: '1' })
+      mcp.registerTool('mes_designs', { description: 'List my designs' }, async () => ({ content: [{ type: 'text', text: 'Affiche du concert' }] }))
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+      res.on('close', () => {
+        void transport.close()
+        void mcp.close()
+      })
+      await mcp.connect(transport)
+      const body = req.method === 'POST' ? JSON.parse(await readBody(req)) : undefined
+      return transport.handleRequest(req, res, body)
+    }
+    res.writeHead(404).end()
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  base = `http://127.0.0.1:${server.address().port}`
+  return { url: `${base}/mcp`, seen, close: () => server.close() }
+}
+
+/** Le « navigateur » du test : suit la page d'autorisation, puis le retour vers Jaris. */
+const followInBrowser = async (url) => {
+  const first = await fetch(url, { redirect: 'manual' })
+  await fetch(first.headers.get('location'))
+}
+
+test('étape 419 : connexion par compte de bout en bout — « À connecter », page ouverte, clé reçue et chiffrée, outils, redémarrage sans reconnexion, suppression qui l’efface', async () => {
+  const service = await startOAuthService()
+  const env = setup()
+  try {
+    const opened = []
+    env.auth.setMcpBrowserOpener((url) => opened.push(url))
+    // Sans clé : « À connecter », sans erreur, et aucune page ouverte en arrière-plan.
+    const [added] = await env.hub.addMcpServers(service.url, 'Canva test')
+    const signin = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'signin' || s.status === 'error'), 'à connecter')
+    assert.equal(signin.status, 'signin', signin.error)
+    assert.equal(signin.error, null)
+    assert.deepEqual(opened, [])
+
+    // « Se connecter » : la page s'ouvre (le test la suit comme un navigateur), puis tout se fait seul.
+    env.auth.setMcpBrowserOpener((url) => {
+      opened.push(url)
+      void followInBrowser(url)
+    })
+    await env.hub.signInMcpServer(added.id)
+    const connected = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'ready' || s.status === 'error'), 'connecté')
+    assert.equal(connected.status, 'ready', connected.error)
+    assert.deepEqual(connected.tools.map((tool) => tool.name), ['mes_designs'])
+    assert.equal(opened.length, 1)
+    const page = new URL(opened[0])
+    assert.equal(page.searchParams.get('code_challenge_method'), 'S256', 'PKCE')
+    assert.match(page.searchParams.get('redirect_uri'), /^http:\/\/127\.0\.0\.1:\d+\/callback$/, 'retour local seulement')
+    assert.equal(service.seen.registrations[0].client_name, 'Jaris')
+    assert.equal(service.seen.tokens, 1)
+    assert.equal(await env.hub.mcpToolsFor('').call('mcp_canva_test_mes_designs', {}), 'Affiche du concert')
+
+    // La clé est gardée chiffrée sur le disque, et jamais montrée à l'écran.
+    const file = readFileSync(path.join(env.root, 'mcp-auth', `${added.id}.bin`), 'utf8')
+    assert.ok(!file.includes('tok-valide'))
+    assert.ok(!JSON.stringify(await env.hub.listMcpServers()).includes('tok-valide'))
+
+    // Jaris redémarre : connecté tout de suite avec la clé gardée, sans rien rouvrir.
+    await env.hub.stopMcpHub()
+    const { hub: again, auth: againAuth } = loadHub(env.root)
+    againAuth.setMcpSecretBox(BOX)
+    againAuth.setMcpBrowserOpener(() => assert.fail('aucune page à rouvrir'))
+    await again.startMcpHub()
+    const back = await waitFor(async () => (await again.listMcpServers()).find((s) => s.status === 'ready' || s.status === 'error' || s.status === 'signin'), 'reconnecté')
+    assert.equal(back.status, 'ready', back.error ?? back.status)
+    assert.equal(service.seen.registrations.length, 1, 'pas de nouvelle inscription')
+    // Supprimer efface aussi la clé.
+    await again.removeMcpServer(added.id)
+    assert.throws(() => readFileSync(path.join(env.root, 'mcp-auth', `${added.id}.bin`)))
+    await again.stopMcpHub()
+  } finally {
+    await env.done()
+    service.close()
+  }
+})
+
+test('étape 419 : un retour dont le « state » ne correspond pas est refusé ; « Annuler » revient à « À connecter »', async () => {
+  const service = await startOAuthService()
+  const env = setup()
+  try {
+    const [added] = await env.hub.addMcpServers(service.url, 'Service')
+    await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'signin'), 'à connecter')
+    service.seen.forceState = 'un-autre-state'
+    env.auth.setMcpBrowserOpener((url) => void followInBrowser(url))
+    await env.hub.signInMcpServer(added.id)
+    const refused = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'error'), 'refusé')
+    assert.equal(refused.error, 'La connexion a échoué : state')
+    assert.equal(service.seen.tokens, 0, 'aucune clé échangée')
+
+    // Léo ne termine pas dans le navigateur, puis annule.
+    env.auth.setMcpBrowserOpener(() => {})
+    await env.hub.signInMcpServer(added.id)
+    await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'authorizing'), 'en cours')
+    await env.hub.cancelMcpSignIn(added.id)
+    const cancelled = await waitFor(async () => (await env.hub.listMcpServers()).find((s) => s.status === 'signin'), 'annulé')
+    assert.equal(cancelled.error, null)
+  } finally {
+    await env.done()
+    service.close()
   }
 })

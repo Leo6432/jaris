@@ -1580,6 +1580,10 @@ export const IPC_CHANNELS = {
   mcpSetEnabled: 'jaris:mcp-set-enabled',
   mcpSetToolEnabled: 'jaris:mcp-set-tool-enabled',
   mcpRestart: 'jaris:mcp-restart',
+  // Étape 419 : « Découvrir » (catalogue) et connexion avec le compte de Léo (OAuth, mcpAuth.ts).
+  mcpCatalogAdd: 'jaris:mcp-catalog-add',
+  mcpSignIn: 'jaris:mcp-sign-in',
+  mcpCancelSignIn: 'jaris:mcp-cancel-sign-in',
   mcpChanged: 'jaris:mcp-changed',
   /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
   chatHistoryChanged: 'jaris:chat-history-changed',

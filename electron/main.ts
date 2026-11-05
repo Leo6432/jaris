@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerSaveBlocker, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
+import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerSaveBlocker, safeStorage, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getMissingStorageRoot } from './services/storageRoot'
@@ -53,8 +53,9 @@ import { engineModelsDir } from './services/ollamaEngine'
 import { Agent as UndiciAgent } from 'undici'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
 import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services/speedStore'
-import { addMcpServers, listMcpServers, mcpToolsFor, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
+import { addCatalogServer, addMcpServers, cancelMcpSignIn, listMcpServers, mcpToolsFor, signInMcpServer, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
 import { setExtraToolSource } from './services/assistant'
+import { setMcpBrowserOpener, setMcpSecretBox } from './services/mcpAuth'
 import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
@@ -1807,6 +1808,15 @@ app.whenReady().then(async () => {
   // Étape 418 : les serveurs MCP de Léo, branchés en arrière-plan (un serveur lent ne retarde jamais Jaris).
   setMcpChangeListener(() => void listMcpServers().then((servers) => broadcast(IPC_CHANNELS.mcpChanged, servers)))
   setExtraToolSource({ toolsFor: (prompt) => mcpToolsFor(prompt) })
+  // Étape 419 : les clés des services (connexion par compte) chiffrées par Windows ; la page de connexion dans le
+  // navigateur de Léo (seulement une adresse https du service).
+  setMcpSecretBox({
+    encrypt: (text) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : null),
+    decrypt: (data) => safeStorage.decryptString(data)
+  })
+  setMcpBrowserOpener((url) => {
+    if (isWebUrl(url)) void shell.openExternal(url)
+  })
   void startMcpHub().catch((err) => console.error('[jaris] MCP : serveurs non démarrés —', err))
   ipcMain.handle(IPC_CHANNELS.mcpList, () => listMcpServers())
   ipcMain.handle(IPC_CHANNELS.mcpAdd, (_event, pasted: unknown, name: unknown) => addMcpServers(pasted, name))
@@ -1814,6 +1824,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.mcpSetEnabled, (_event, id: unknown, enabled: unknown) => setMcpServerEnabled(id, enabled))
   ipcMain.handle(IPC_CHANNELS.mcpSetToolEnabled, (_event, id: unknown, tool: unknown, enabled: unknown) => setMcpToolEnabled(id, tool, enabled))
   ipcMain.handle(IPC_CHANNELS.mcpRestart, (_event, id: unknown) => restartMcpServer(id))
+  ipcMain.handle(IPC_CHANNELS.mcpCatalogAdd, (_event, id: unknown) => addCatalogServer(id))
+  ipcMain.handle(IPC_CHANNELS.mcpSignIn, (_event, id: unknown) => signInMcpServer(id))
+  ipcMain.handle(IPC_CHANNELS.mcpCancelSignIn, (_event, id: unknown) => cancelMcpSignIn(id))
   const duelCategory = (value: unknown): DuelCategory => {
     if (!isDuelCategory(value)) throw new Error(t('duel.error.badRequest'))
     return value

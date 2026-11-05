@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * Étape 418 : Options → Outils MCP (McpSettings.tsx), dans un vrai navigateur avec le CSS compilé : coller une
- * configuration, voir l'état de chaque serveur (connecté avec ses outils, ou la vraie raison d'un échec), décocher
- * un outil, supprimer après confirmation. Le faux pont reproduit les transitions du vrai main (démarre → connecté).
+ * Étapes 418-419 : Options → Outils MCP (McpSettings.tsx), dans un vrai navigateur avec le CSS compilé, sur le modèle
+ * des Connecteurs de Claude : « Les vôtres » (actif/désactivé, détails), « Découvrir » (la base de Jaris, ajoutée d'un
+ * clic, avec dossier ou clé), « + Ajouter » (son propre serveur). Le faux pont reproduit les transitions du vrai main.
  */
 let chromium = null
 try {
@@ -29,23 +29,43 @@ const listeners = []
 window.__calls = []
 window.__servers = window.__servers || []
 const emit = () => listeners.forEach((cb) => cb(JSON.parse(JSON.stringify(window.__servers))))
-window.__emit = emit
 const reply = () => Promise.resolve(JSON.parse(JSON.stringify(window.__servers)))
+const server = (patch) => ({ enabled: true, status: 'connecting', error: null, secretNames: [], tools: [], kind: 'local', catalogId: null, ...patch })
+// Comme le vrai main : le serveur démarre, puis il est connecté et ses outils arrivent par l'évènement.
+const connectLater = (id, tools, delay = 50) => setTimeout(() => {
+  Object.assign(window.__servers.find((s) => s.id === id), { status: 'ready', tools })
+  emit()
+}, delay)
 window.jaris = {
   mcpList: () => reply(),
   onMcpChanged: (cb) => { listeners.push(cb); return () => {} },
+  mcpCatalogAdd: async (id) => {
+    window.__calls.push(['catalog', id])
+    const names = { canva: 'Canva', notion: 'Notion', zapier: 'Zapier' }
+    // Comme le vrai main : ajouté, la page de connexion s'ouvre (« Connexion dans ton navigateur… »), puis connecté.
+    window.__servers.push(server({ id: 'c-' + id, name: names[id] ?? id, catalogId: id, kind: 'online', status: 'authorizing', summary: 'https://mcp.' + id + '.com/mcp' }))
+    // Le temps de se connecter dans le navigateur.
+    connectLater('c-' + id, [{ name: 'list-designs', description: 'List designs', enabled: true, readOnly: true }], 1500)
+    return reply()
+  },
+  mcpSignIn: async (id) => {
+    window.__calls.push(['signin', id])
+    Object.assign(window.__servers.find((s) => s.id === id), { status: 'authorizing', error: null })
+    return reply()
+  },
+  mcpCancelSignIn: async (id) => {
+    window.__calls.push(['cancelSignin', id])
+    Object.assign(window.__servers.find((s) => s.id === id), { status: 'signin' })
+    return reply()
+  },
   mcpAdd: async (pasted, name) => {
     window.__calls.push(['add', pasted, name ?? null])
     if (!pasted.includes('mcpServers')) throw new Error("Error invoking remote method 'jaris:mcp-add': Error: Rien de reconnu. Colle la configuration donnée par la page du serveur.")
-    window.__servers.push({ id: 's1', name: name || 'github', enabled: true, status: 'connecting', error: null, summary: 'npx -y @modelcontextprotocol/server-github', secretNames: ['GITHUB_PERSONAL_ACCESS_TOKEN'], tools: [] })
-    // Comme le vrai main : le serveur démarre, puis il est connecté et ses outils arrivent par l'évènement.
-    setTimeout(() => {
-      Object.assign(window.__servers[0], { status: 'ready', tools: [
-        { name: 'list_issues', description: 'List issues in a GitHub repository with filtering options', enabled: true, readOnly: true },
-        { name: 'create_issue', description: 'Create a new issue in a GitHub repository', enabled: true, readOnly: false }
-      ] })
-      emit()
-    }, 50)
+    window.__servers.push(server({ id: 's1', name: name || 'mon-serveur', summary: 'npx -y mon-serveur', secretNames: ['API_KEY'] }))
+    connectLater('s1', [
+      { name: 'list_issues', description: 'List issues in a repository', enabled: true, readOnly: true },
+      { name: 'create_issue', description: 'Create a new issue', enabled: true, readOnly: false }
+    ])
     return reply()
   },
   mcpSetToolEnabled: async (id, tool, enabled) => {
@@ -88,7 +108,7 @@ async function withPage(run, { width = 1000, init = '' } = {}) {
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
-    await page.setViewportSize({ width, height: 900 })
+    await page.setViewportSize({ width, height: 1000 })
     // L'état de départ du faux main, posé AVANT le code de l'écran (setContent ne déclenche pas addInitScript).
     await page.setContent(buildPage().replace('<div id="root"></div>', `<div id="root"></div><script>${init}</script>`))
     await page.waitForSelector('.mcp')
@@ -99,92 +119,121 @@ async function withPage(run, { width = 1000, init = '' } = {}) {
 }
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
-const PASTE = '{"mcpServers": {"github": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_secret"}}}}'
+const shot = async (page, name) => {
+  if (!process.env.JARIS_SHOTS) return
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: join(process.env.JARIS_SHOTS, name), fullPage: true })
+}
+const call = (page, kind) => page.evaluate((k) => window.__calls.find((c) => c[0] === k) ?? null, kind)
 
-test('coller une configuration : le serveur démarre, puis se dit connecté avec ses outils ; une erreur dit la vraie raison', options, async () => {
+test('rien d’ajouté : on arrive sur « Découvrir » ; les services en cartes ; « + » ajoute et ouvre la connexion par compte', options, async () => {
   await withPage(async (page) => {
-    await page.waitForSelector('.mcp-empty')
-    assert.match(await page.textContent('.mcp-empty'), /Aucun serveur MCP/)
-    const add = page.getByRole('button', { name: 'Ajouter' })
-    assert.equal(await add.isDisabled(), true, 'rien à ajouter')
-    // Un texte non reconnu : le vrai message du main, sans le préfixe technique d'Electron.
-    await page.fill('.mcp-add__input', 'bonjour')
-    await add.click()
-    await page.waitForSelector('.mcp-add .mcp-error')
-    assert.equal(await page.textContent('.mcp-add .mcp-error'), 'Rien de reconnu. Colle la configuration donnée par la page du serveur.')
-
-    await page.fill('.mcp-add__input', PASTE)
-    await add.click()
-    await page.waitForSelector('.mcp-status--connecting')
-    assert.equal(await page.inputValue('.mcp-add__input'), '', 'le champ se vide une fois ajouté')
+    await page.waitForSelector('.mcp-card')
+    assert.equal(await page.getByRole('tab', { name: 'Découvrir' }).getAttribute('aria-selected'), 'true')
+    const names = await page.$$eval('.mcp-card__name', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(names, ['Canva', 'Notion', 'Zapier', 'Figma', 'Atlassian', 'Linear', 'Todoist', 'Airtable', 'Dropbox', 'Miro', 'monday.com', 'Supabase', 'Hugging Face'])
+    assert.match(await page.textContent('.mcp-card[aria-label="Canva"]'), /designs Canva.*Avec ton compte · En ligne/)
+    assert.match(await page.textContent('.mcp-card[aria-label="Zapier"]'), /Gmail/)
+    // Pastille : l'initiale du service sur sa couleur (pas son logo).
+    const badge = await page.$eval('.mcp-card[aria-label="Canva"] .mcp-icon', (el) => ({ text: el.textContent, bg: getComputedStyle(el).backgroundColor, color: getComputedStyle(el).color }))
+    assert.deepEqual(badge, { text: 'C', bg: 'rgb(125, 42, 232)', color: 'rgb(255, 255, 255)' })
+    await shot(page, 'decouvrir.png')
+    await page.getByRole('button', { name: 'Ajouter Canva' }).click()
+    await page.waitForSelector('.mcp-row')
+    assert.deepEqual(await call(page, 'catalog'), ['catalog', 'canva'])
+    assert.equal(await page.getByRole('tab', { name: 'Les vôtres' }).getAttribute('aria-selected'), 'true')
+    assert.equal(await page.textContent('.mcp-row .mcp-status'), 'Connexion dans ton navigateur…')
+    assert.equal(await page.locator('.mcp-row__signin').getByRole('button', { name: 'Annuler' }).count(), 1)
+    await shot(page, 'connexion.png')
     await page.waitForSelector('.mcp-status--ready')
-    assert.equal(await page.textContent('.mcp-status--ready'), 'Connecté · outils : 2')
-    assert.match(await page.textContent('.mcp-server__secrets'), /GITHUB_PERSONAL_ACCESS_TOKEN/)
-    assert.doesNotMatch(await page.textContent('.mcp-server'), /ghp_secret/)
-    // La pastille « connecté » est verte pour de vrai (style calculé), « erreur » non.
-    const pill = await page.$eval('.mcp-status--ready', (el) => getComputedStyle(el).color)
-    assert.notEqual(pill, await page.$eval('.mcp-server__summary', (el) => getComputedStyle(el).color))
-
-    // Les outils : repliés, puis dépliés ; lecture seule dite ; un outil décoché part au main.
-    await page.click('.mcp-tools > summary')
-    assert.match(await page.textContent('.mcp-tools > summary'), /2 sur 2/)
-    assert.match(await page.textContent('.mcp-tool:first-child'), /list_issues\s*lecture seule/)
-    await page.getByRole('switch', { name: 'Proposer « create_issue » à Jaris' }).click()
-    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'tool'))
-    assert.deepEqual(await page.evaluate(() => window.__calls.find((c) => c[0] === 'tool')), ['tool', 's1', 'create_issue', false])
-    assert.match(await page.textContent('.mcp-tools > summary'), /1 sur 2/)
-    assert.equal(await page.getByRole('switch', { name: 'Proposer « create_issue » à Jaris' }).getAttribute('aria-checked'), 'false')
-    // Décoché pour de vrai à l'écran (pas seulement dans l'attribut) : le rail n'a pas la couleur d'un outil actif.
-    await page.waitForTimeout(400)
-    const rails = await page.$$eval('.mcp-tool [role=switch]', (els) => els.map((el) => getComputedStyle(el).backgroundColor))
-    assert.notEqual(rails[0], rails[1])
-    if (process.env.JARIS_SHOT) {
-      await page.mouse.move(0, 0)
-      await page.screenshot({ path: process.env.JARIS_SHOT, fullPage: true })
-    }
+    assert.match(await page.textContent('.mcp-row'), /Canva\s*Connecté · outils : 1/)
+    assert.equal(await page.locator('.mcp-row__signin').count(), 0, 'connecté : plus de bouton de connexion')
+    await page.getByRole('tab', { name: 'Découvrir' }).click()
+    assert.equal(await page.locator('.mcp-card[aria-label="Canva"] .mcp-card__added').count(), 1, '✓ à la place de +')
   })
 })
 
-test('un serveur en échec montre son message ; Relancer ; Supprimer demande confirmation dans la page', options, async () => {
-  const init = `window.__servers = [{ id: 's9', name: 'fichiers', enabled: true, status: 'error', error: "La commande « npx » est introuvable sur ce PC. Pour « npx », installe Node.js (nodejs.org).", summary: 'npx -y @modelcontextprotocol/server-filesystem C:\\\\Users\\\\Léo', secretNames: [], tools: [] }]`
+test('« À connecter » : « Se connecter » ouvre la connexion ; pendant ce temps, « Annuler »', options, async () => {
+  const init = `window.__servers = [{ id: 'n', name: 'Notion', enabled: true, status: 'signin', error: null, summary: 'https://mcp.notion.com/mcp', secretNames: [], kind: 'online', catalogId: 'notion', tools: [] }]`
   await withPage(async (page) => {
-    await page.waitForSelector('.mcp-status--error')
-    assert.equal(await page.textContent('.mcp-status--error'), 'Erreur')
-    assert.match(await page.textContent('.mcp-server .mcp-error'), /installe Node\.js/)
-    await page.getByRole('button', { name: 'Relancer' }).click()
-    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'restart'))
-    await page.getByRole('button', { name: 'Supprimer' }).click()
-    assert.match(await page.textContent('.mcp-server__confirm'), /Supprimer « fichiers » \?/)
+    await page.waitForSelector('.mcp-row')
+    assert.equal(await page.textContent('.mcp-row .mcp-status'), 'À connecter')
+    await page.getByRole('button', { name: 'Se connecter' }).click()
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'signin'))
+    assert.deepEqual(await call(page, 'signin'), ['signin', 'n'])
     await page.getByRole('button', { name: 'Annuler' }).click()
-    assert.equal(await page.evaluate(() => window.__calls.some((c) => c[0] === 'remove')), false, 'rien n’est supprimé sans confirmation')
-    await page.getByRole('button', { name: 'Supprimer' }).click()
-    await page.locator('.mcp-btn--danger').click()
-    await page.waitForSelector('.mcp-empty')
-    // Désactivé : pastille « Désactivé », plus de bouton Relancer.
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'cancelSignin'))
+    await page.waitForSelector('.mcp-status--signin')
   }, { init })
 })
 
-test('fenêtre étroite (760 px) : rien ne déborde, le champ et les boutons restent dans la carte', options, async () => {
-  const init = `window.__servers = [{ id: 's1', name: 'un serveur au nom vraiment très long pour voir', enabled: false, status: 'off', error: null, summary: 'npx -y @modelcontextprotocol/server-filesystem C:\\\\Users\\\\Léo\\\\Documents\\\\Un dossier au chemin très long', secretNames: [], tools: [] }]`
+test('« Les vôtres » : interrupteur actif/désactivé ; détails avec outils décochables, Relancer, Supprimer confirmé', options, async () => {
+  const init = `window.__servers = [
+    { id: 'a', name: 'GitHub', enabled: true, status: 'ready', error: null, summary: 'https://api.githubcopilot.com/mcp/', secretNames: ['Authorization'], kind: 'online', catalogId: 'github',
+      tools: [{ name: 'list_issues', description: 'List issues', enabled: true, readOnly: true }, { name: 'create_issue', description: 'Create an issue', enabled: true, readOnly: false }] },
+    { id: 'b', name: 'Fichiers', enabled: true, status: 'error', error: "La commande « npx » est introuvable sur ce PC. Pour « npx », installe Node.js (nodejs.org).", summary: 'npx -y @modelcontextprotocol/server-filesystem@2.0.0 C:\\\\Users\\\\Léo', secretNames: [], kind: 'local', catalogId: 'files', tools: [] }
+  ]`
   await withPage(async (page) => {
-    await page.waitForSelector('.mcp-status--off')
-    assert.equal(await page.textContent('.mcp-status--off'), 'Désactivé')
-    assert.equal(await page.getByRole('button', { name: 'Relancer' }).count(), 0, 'rien à relancer quand il est désactivé')
+    await page.waitForSelector('.mcp-row')
+    assert.equal(await page.getByRole('tab', { name: 'Les vôtres' }).getAttribute('aria-selected'), 'true')
+    assert.deepEqual(await page.$$eval('.mcp-table__head span', (els) => els.map((el) => el.textContent)), ['Outil MCP', 'Type', 'Actif'])
+    assert.match(await page.textContent('.mcp-row[aria-label="Fichiers"] .mcp-error'), /installe Node\.js/)
+    await shot(page, 'les-votres.png')
+    await page.getByRole('switch', { name: 'Activer GitHub' }).click()
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'enabled'))
+    assert.deepEqual(await call(page, 'enabled'), ['enabled', 'a', false])
+    await page.waitForSelector('.mcp-row[aria-label="GitHub"] .mcp-status--off')
+    assert.equal(await page.textContent('.mcp-row[aria-label="GitHub"] .mcp-status'), 'Désactivé')
+
+    const row = page.locator('.mcp-row[aria-label="GitHub"]')
+    await row.locator('.mcp-row__name').click()
+    await page.waitForSelector('.mcp-row__details')
+    assert.match(await row.locator('.mcp-server__secrets').textContent(), /Authorization/)
+    assert.match(await row.locator('.mcp-tools__title').textContent(), /2 sur 2/)
+    await page.getByRole('switch', { name: 'Proposer « create_issue » à Jaris' }).click()
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'tool'))
+    assert.deepEqual(await call(page, 'tool'), ['tool', 'a', 'create_issue', false])
+    await shot(page, 'details.png')
+    await row.getByRole('button', { name: 'Supprimer' }).click()
+    assert.match(await row.locator('.mcp-server__confirm').textContent(), /Supprimer « GitHub » \?/)
+    await row.getByRole('button', { name: 'Annuler' }).click()
+    assert.equal(await call(page, 'remove'), null, 'rien n’est supprimé sans confirmation')
+    await row.getByRole('button', { name: 'Supprimer' }).click()
+    await row.locator('.mcp-btn--danger').click()
+    await page.waitForFunction(() => document.querySelectorAll('.mcp-row').length === 1)
+  }, { init })
+})
+
+test('« + Ajouter » : son propre serveur collé ; erreur réelle ; une fois ajouté, le formulaire se ferme', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.mcp-card')
+    await page.getByRole('button', { name: 'Ajouter un serveur' }).click()
+    const form = page.locator('.mcp-add')
+    await form.locator('.mcp-add__input').fill('bonjour')
+    await form.getByRole('button', { name: 'Ajouter', exact: true }).click()
+    await page.waitForSelector('.mcp-add .mcp-error')
+    assert.equal(await page.textContent('.mcp-add .mcp-error'), 'Rien de reconnu. Colle la configuration donnée par la page du serveur.')
+    await form.locator('.mcp-add__input').fill('{"mcpServers": {"mon-serveur": {"command": "npx", "args": ["-y", "mon-serveur"], "env": {"API_KEY": "secret-123"}}}}')
+    await form.getByRole('button', { name: 'Ajouter', exact: true }).click()
+    await page.waitForSelector('.mcp-row')
+    assert.equal(await page.locator('.mcp-add').count(), 0, 'formulaire fermé')
+    assert.doesNotMatch(await page.textContent('.mcp'), /secret-123/)
+  })
+})
+
+test('fenêtre étroite (760 px) : rien ne déborde, tableau et cartes restent dans la page', options, async () => {
+  const init = `window.__servers = [{ id: 'a', name: 'un serveur au nom vraiment très long pour voir ce qui se passe', enabled: false, status: 'off', error: null, summary: 'npx -y x', secretNames: [], kind: 'local', catalogId: null, tools: [] }]`
+  await withPage(async (page) => {
+    await page.waitForSelector('.mcp-row')
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     assert.ok(overflow <= 0, `débordement horizontal de ${overflow} px`)
-    const inside = await page.$eval('.mcp-server', (card) => {
-      const c = card.getBoundingClientRect()
-      return [...card.querySelectorAll('button, .mcp-server__summary')].every((el) => {
-        const r = el.getBoundingClientRect()
-        return r.left >= c.left - 0.5 && r.right <= c.right + 0.5
-      })
-    })
-    assert.equal(inside, true)
-    const field = await page.$eval('.mcp-add__input', (el) => ({ radius: parseFloat(getComputedStyle(el).borderTopLeftRadius), font: getComputedStyle(el).fontFamily }))
-    assert.ok(field.radius >= 8, 'habillé par le CSS de Jaris')
-    assert.match(field.font, /Mono|Consolas|monospace/i, 'une configuration se lit en police à chasse fixe')
-    await page.getByRole('switch', { name: /Activer un serveur/ }).click()
-    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'enabled'))
-    assert.deepEqual(await page.evaluate(() => window.__calls.find((c) => c[0] === 'enabled')), ['enabled', 's1', true])
+    const sw = await page.$eval('.mcp-row [role=switch]', (el) => { const r = el.getBoundingClientRect(); return r.right <= document.documentElement.clientWidth })
+    assert.equal(sw, true, 'l’interrupteur reste visible')
+    await page.getByRole('tab', { name: 'Découvrir' }).click()
+    await page.waitForSelector('.mcp-card')
+    const fits = await page.$$eval('.mcp-card', (cards) => cards.every((c) => c.getBoundingClientRect().right <= document.documentElement.clientWidth))
+    assert.equal(fits, true)
+    await shot(page, 'etroit.png')
   }, { width: 760, init })
 })

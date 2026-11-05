@@ -11320,8 +11320,25 @@ input.reply-ui__field-input {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 14px;
   min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
+
+.mcp-add__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.mcp-add__description {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hud-text-dim);
 }
 
 .mcp-add textarea.mcp-add__input {
@@ -11410,40 +11427,6 @@ input.reply-ui__field-input {
   border-color: var(--hud-danger);
 }
 
-.mcp-server {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid var(--hud-line);
-  border-radius: 16px;
-  background: var(--hud-panel);
-}
-
-.mcp-server__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.mcp-server__title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-}
-
-.mcp-server__name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--hud-text);
-  overflow-wrap: anywhere;
-}
-
 .mcp-status {
   flex: 0 0 auto;
   padding: 2px 9px;
@@ -11480,13 +11463,6 @@ input.reply-ui__field-input {
   margin: 0;
   font-size: 12px;
   color: var(--hud-text-faint);
-}
-
-.mcp-tools > summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--hud-text);
-  padding: 4px 0;
 }
 
 .mcp-tools__list {
@@ -11556,4 +11532,322 @@ input.reply-ui__field-input {
   margin-right: auto;
   font-size: 13px;
   color: var(--hud-text);
+}
+
+/* Étape 419 — « Les vôtres » / « Découvrir » / « + Ajouter », sur le modèle des Connecteurs de Claude (forme
+   seulement : couleurs et coins de Jaris). */
+.mcp-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mcp-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  background: var(--hud-panel);
+}
+
+.mcp-tab {
+  height: 32px;
+  padding: 0 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mcp-tab:hover {
+  color: var(--hud-text);
+}
+
+.mcp-tab--active,
+.mcp-tab--active:hover {
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+}
+
+.mcp-bar__add span {
+  font-size: 16px;
+  line-height: 1;
+  margin-right: 2px;
+}
+
+.mcp-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
+  color: var(--hud-text);
+  background: var(--hud-panel-raised);
+}
+
+.mcp-icon--brand {
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mcp-status--signin {
+  color: var(--hud-text);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hud-line-strong);
+}
+
+.mcp-row__signin {
+  display: flex;
+  gap: 8px;
+  padding: 0 18px 14px 64px;
+}
+
+.mcp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed var(--hud-line-strong);
+  border-radius: 16px;
+}
+
+.mcp-empty p {
+  margin: 0;
+}
+
+.mcp-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+  overflow: hidden;
+}
+
+.mcp-table__head,
+.mcp-row__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+}
+
+.mcp-table__head {
+  height: 38px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.mcp-table__head span:last-child,
+.mcp-row__switch {
+  justify-self: end;
+}
+
+.mcp-row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mcp-row + .mcp-row {
+  border-top: 1px solid var(--hud-line);
+}
+
+.mcp-row__main {
+  min-height: 60px;
+}
+
+.mcp-row__name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.mcp-row__label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mcp-row__title {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-row__chevron {
+  margin-left: auto;
+  font-size: 18px;
+  color: var(--hud-text-faint);
+  transition: transform 0.15s ease;
+}
+
+.mcp-row__chevron--open {
+  transform: rotate(90deg);
+}
+
+.mcp-row__type {
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
+.mcp-row__error {
+  padding: 0 18px 12px 64px;
+}
+
+.mcp-row__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 18px 16px 64px;
+}
+
+.mcp-tools__title {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--hud-text);
+}
+
+.mcp-catalog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .mcp-catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mcp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
+
+.mcp-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mcp-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mcp-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.mcp-card__description {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--hud-text-dim);
+}
+
+.mcp-card__by {
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.mcp-card__plus,
+.mcp-card__added {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 10px;
+}
+
+.mcp-card__plus {
+  font-family: inherit;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  cursor: pointer;
+}
+
+.mcp-card__plus:hover:not(:disabled) {
+  background: var(--jv-hover);
+}
+
+.mcp-card__plus:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mcp-card__added {
+  font-size: 15px;
+  color: var(--hud-ok);
+  background: rgba(var(--hud-ok-rgb), 0.12);
+}
+
+@media (max-width: 700px) {
+  .mcp-table__head,
+  .mcp-row__main {
+    grid-template-columns: minmax(0, 1fr) 54px;
+  }
+
+  .mcp-table__head span:nth-child(2),
+  .mcp-row__type {
+    display: none;
+  }
+
+  .mcp-row__error,
+  .mcp-row__signin,
+  .mcp-row__details {
+    padding-left: 18px;
+  }
 }

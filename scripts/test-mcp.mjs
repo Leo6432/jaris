@@ -101,3 +101,21 @@ test('fichier de configuration : un serveur abîmé est ignoré, jamais tout le 
   assert.equal(mcp.parseMcpConfigFile({ nope: true }), null)
   assert.deepEqual(mcp.secretNames({ kind: 'stdio', command: 'x', args: [], env: { B: '1', A: '2' } }), ['A', 'B'])
 })
+
+test('étape 419 : le catalogue — services en ligne officiels (https), connexion par compte (aucune clé), ni GitHub ni navigateur', () => {
+  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const ids = catalog.MCP_CATALOG.map((e) => e.id)
+  assert.equal(new Set(ids).size, ids.length, 'identifiants uniques')
+  for (const id of ['canva', 'notion', 'zapier', 'figma', 'atlassian']) assert.ok(ids.includes(id), id)
+  for (const id of ['github', 'browser', 'files']) assert.ok(!ids.includes(id), `${id} : Jaris l'a déjà (Léo)`)
+  for (const entry of catalog.MCP_CATALOG) {
+    const transport = catalog.catalogTransport(entry)
+    assert.equal(transport.kind, 'http', entry.id)
+    assert.match(transport.url, /^https:\/\//, entry.id)
+    assert.deepEqual(transport.headers, {}, `${entry.id} : pas de clé collée, la connexion se fait par le compte`)
+    assert.match(entry.color, /^#[0-9a-f]{6}$/i)
+  }
+  assert.equal(catalog.catalogEntry('nope'), null)
+  const file = mcp.parseMcpConfigFile({ servers: [{ id: '1', name: 'Canva', catalogId: 'canva', transport: { kind: 'http', url: 'https://x.fr/mcp' } }] })
+  assert.equal(file.servers[0].catalogId, 'canva')
+})
