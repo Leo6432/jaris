@@ -17,7 +17,7 @@ import {
   mcpToolName,
   parseMcpConfigFile,
   parseMcpPaste,
-  isServerNamed,
+  isServerTargeted,
   pickMcpTools,
   secretNames,
   serverRequestedWaitMs,
@@ -549,43 +549,93 @@ function availableTools(): OfferedTool[] {
   return out
 }
 
+/** Étape 423 : l'outil qui charge, en cours de demande, un outil MCP qui n'avait pas été proposé. */
+export const MCP_MORE_TOOLS = 'mcp_more_tools'
+
+function toOllamaTool(tool: OfferedTool): OllamaTool {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: `[MCP ${tool.serverName}] ${tool.description || tool.toolName}`.slice(0, 1024),
+      parameters: tool.tool.inputSchema as OllamaTool['function']['parameters']
+    }
+  }
+}
+
 /**
  * Ce qu'assistant.ts reçoit (setExtraToolSource) : les outils MCP utiles à UNE demande (au plus
- * MCP_MAX_TOOLS_PER_REQUEST, shared/mcp.ts), et leur exécution. Seuls les outils proposés pour cette demande peuvent
- * être appelés : un modèle peut inventer un nom d'outil qu'on ne lui a pas donné.
+ * MCP_MAX_TOOLS_PER_REQUEST, shared/mcp.ts), et leur exécution. Seuls les outils proposés (ou chargés ensuite par
+ * `mcp_more_tools`) peuvent être appelés : un modèle peut inventer un nom d'outil qu'on ne lui a pas donné.
+ *
+ * `context` (étape 423) : la demande et les résultats du tour d'avant quand celle-ci y fait suite (« le 2 », « exporte-le
+ * en PDF ») — ils aident seulement à CHOISIR les outils ; viser un service (écran retiré, relance, « à connecter ») ne
+ * dépend que de la demande actuelle.
  */
-export function mcpToolsFor(prompt: string): {
+export function mcpToolsFor(prompt: string, context = ''): {
   tools: OllamaTool[]
   call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>
   named: string[]
   unavailable?: string
+  more?: { name: string; load: (names: readonly string[]) => OllamaTool[] }
 } {
-  // Étape 421 (Léo, « fais-moi un design sur Canva » → Jaris pilotait l'écran, Gmail devant) : un serveur NOMMÉ dans la
-  // demande et prêt reçoit seul les places d'outils ; nommé mais pas prêt, la demande dit pourquoi au lieu de laisser
+  // Étape 421 (Léo, « fais-moi un design sur Canva » → Jaris pilotait l'écran, Gmail devant) : un serveur VISÉ par la
+  // demande et prêt reçoit seul les places d'outils ; visé mais pas prêt, la demande dit pourquoi au lieu de laisser
   // le modèle se rabattre sur l'écran.
-  const named = config.servers.filter((server) => server.enabled && isServerNamed(prompt, server.name))
-  const ready = named.filter((server) => connections.get(server.id)?.status === 'ready')
+  const targeted = config.servers.filter((server) => server.enabled && isServerTargeted(prompt, server.name))
+  const ready = targeted.filter((server) => connections.get(server.id)?.status === 'ready')
   const all = availableTools()
   const readyIds = new Set(ready.map((server) => server.id))
   const pool = ready.length ? all.filter((tool) => readyIds.has(tool.serverId)) : all
-  const offered = pickMcpTools(prompt, pool)
+  const offered = pickMcpTools(context ? `${context}\n${prompt}` : prompt, pool)
   const byName = new Map(offered.map((tool) => [tool.name, tool]))
-  return {
-    tools: offered.map((tool) => ({
+  // Étape 423 : une demande en français partage peu de mots avec des descriptions en anglais — le modèle peut charger
+  // lui-même un outil du même ensemble qu'on ne lui a pas proposé (« exporte-le en PDF » → export-design).
+  const rest = pool.filter((tool) => !byName.has(tool.name))
+  const tools = offered.map(toOllamaTool)
+  let more: { name: string; load: (names: readonly string[]) => OllamaTool[] } | undefined
+  if (rest.length && !byName.has(MCP_MORE_TOOLS)) {
+    const listing = [...new Set(rest.map((tool) => tool.serverName))]
+      .map((server) => `${server} : ${rest.filter((tool) => tool.serverName === server).map((tool) => tool.name).join(', ')}`)
+      .join(' ; ')
+    tools.push({
       type: 'function',
       function: {
-        name: tool.name,
-        description: `[MCP ${tool.serverName}] ${tool.description || tool.toolName}`.slice(0, 1024),
-        parameters: tool.tool.inputSchema as OllamaTool['function']['parameters']
+        name: MCP_MORE_TOOLS,
+        description:
+          `[MCP] Autres outils disponibles, pas encore chargés — ${listing}. Si aucun outil proposé ne convient, appelle ` +
+          'celui-ci avec les noms exacts des outils utiles (au plus 4) : ils deviennent utilisables tout de suite.',
+        parameters: {
+          type: 'object',
+          properties: { names: { type: 'array', items: { type: 'string' }, description: 'Noms exacts des outils à charger.' } },
+          required: ['names']
+        } as OllamaTool['function']['parameters']
       }
-    })),
+    })
+    more = {
+      name: MCP_MORE_TOOLS,
+      load: (names) => {
+        const loaded: OllamaTool[] = []
+        for (const name of names.slice(0, 4)) {
+          const tool = rest.find((candidate) => candidate.name === name)
+          if (!tool || byName.has(tool.name)) continue
+          byName.set(tool.name, tool)
+          loaded.push(toOllamaTool(tool))
+        }
+        return loaded
+      }
+    }
+  }
+  return {
+    tools,
     call: async (name, args, signal) => {
       const tool = byName.get(name)
       if (!tool) throw new Error(t('mcp.error.unknownTool', { tool: name }))
       return callTool(tool, args, signal)
     },
     named: ready.map((server) => server.name),
-    unavailable: ready.length || !named.length ? undefined : unavailableReason(named[0])
+    unavailable: ready.length || !targeted.length ? undefined : unavailableReason(targeted[0]),
+    more
   }
 }
 

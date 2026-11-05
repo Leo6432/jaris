@@ -11041,3 +11041,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   identifiant dans la demande → `export-design` ; chaque règle retirée fait échouer le test),
   `test-assistant-history.mjs` (« le 2 » réutilise `cand-bbb222` ; autre fil : rien). **Non vérifié en usage réel** :
   la même phrase chez Léo.
+
+- **Étape 423 (v0.43.4), Léo, capture, même phrase : « je ne peux pas directement créer un nouveau design vierge avec
+  du texte… il te faudrait utiliser l'interface Canva » — « encore ».** Avant un troisième correctif, une question
+  ciblée (un essai avec un vrai modèle ici a été refusé : téléchargement de modèle bloqué) : Léo confirme que
+  `create-design` EST dans la liste des outils de Canva chez lui. L'hypothèse de l'étape 422 (« create-design absent »)
+  était donc fausse ; ses règles restent justes (vérifiées sur les 45 vrais outils : la phrase de Léo reçoit bien
+  `create-design`). Le modèle a donc ÉCARTÉ l'outil : Canva le décrit comme « générer un design à partir d'un
+  brief » et précise « ne le choisis pas seulement parce que la demande dit créer ou design » — un petit modèle en
+  conclut qu'une « page A4 vierge avec bonjour » n'en relève pas, et renvoie Léo vers l'application. Comme pour le
+  mail et la recherche web : une relance mécanique d'un tour quand un service connecté est nommé et qu'aucun de ses
+  outils n'a été appelé (consigne système, sans lui redonner son refus — étape 217), jamais deux relances pour une
+  question de connaissance (elle a déjà la sienne), et le premier jet n'est pas affiché pendant ce temps. Régression :
+  `test-assistant-history.mjs` (refus → relance → outil appelé, refus ni affiché ni redonné ; une seule relance ;
+  échoue sans la relance). **Non vérifié en usage réel** (pas de modèle ici) : la même phrase chez Léo.
+  **Revue adverse avant publication** (3 relecteurs indépendants, chaque constat soumis à un vérificateur chargé de le
+  réfuter : 16 confirmés, 2 rejetés) — corrigés avant tout envoi :
+  - le report des appels MCP se reconduisait sans fin (« { ...carried } ») : après une demande Canva, chaque mail
+    suivant redevenait « Canva nommé » (écran retiré, mail impossible, relance vers Canva). Désormais UN tour
+    seulement, et seulement si les deux derniers messages de l'historique sont exactement cette demande et cette
+    réponse (historique effacé ou autre fil : rien) ; le report n'aide qu'à CHOISIR les outils — viser un service
+    (écran retiré, relance, « à connecter ») ne dépend que de la demande actuelle ;
+  - les résultats reportés partaient en consigne `system` (injection possible par un commentaire Canva) : ils sont
+    redonnés comme de vrais appels d'outils et leurs résultats (rôle `tool`), à leur place avant la réponse d'avant ;
+  - « nommé » devient « VISÉ » (`isServerTargeted`) : mots entiers (« GitHub » ne vise plus « git »), juste après
+    « sur / avec / dans / via / utilise / mon / le mcp de… » ou juste avant « mcp », sans négation dans les quatre mots
+    d'avant ; « la notion de dérivée » ne vise plus Notion, « Canva c'est gratuit ? » ne coupe plus la réponse par
+    « connecte Canva », « n'utilise pas Canva » ne retire plus l'écran ; un serveur ajouté par son adresse
+    (« mcp.canva.com ») ou nommé « Canva MCP » est visé par « canva » ;
+  - une suite (« exporte-le en PDF ») n'avait aucun outil capable d'utiliser l'identifiant reporté (mots français
+    contre descriptions anglaises) : un outil `mcp_more_tools` liste les outils sans place et le modèle charge ceux
+    qu'il lui faut (4 au plus), appelables aussitôt ; l'identifiant reporté lève la règle « exige un identifiant » ;
+  - la relance « service visé » ne part que si AUCUN outil n'a servi (un rappel déjà posé faisait la demande) ;
+  - `hasIdLikeToken` prenait « 210x297mm », « 1080x1920 » ou une adresse pour un identifiant : il faut des
+    majuscules mêlées aux minuscules, un « _ » ou la forme d'un UUID.
+  Régression : un test par constat (`test-mcp.mjs`, `test-assistant-history.mjs`, `test-mcp-hub.mjs` avec trois vrais
+  serveurs pour `mcp_more_tools`) ; chaque règle retirée fait échouer son test (le report sans fin est bloqué deux
+  fois : par « un tour seulement » et par la correspondance exacte de l'échange).

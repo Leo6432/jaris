@@ -180,16 +180,27 @@ test('étape 420 : un serveur qui demande d’attendre (Canva : polling_policy.w
   assert.equal(mcp.serverRequestedWaitMs([], { wait_seconds: -1 }), 0)
 })
 
-test('étape 421 : isServerNamed — le service doit être nommé en entier, sans tenir compte des accents ni des majuscules', async () => {
-  const { isServerNamed } = mcp
-  assert.equal(isServerNamed('Fais-moi une affiche sur Canva', 'Canva'), true)
-  assert.equal(isServerNamed('fais une affiche sur canva', 'Canva'), true)
-  assert.equal(isServerNamed('mets ça dans GitHub', 'GitHub'), true)
-  assert.equal(isServerNamed('mets ça dans git', 'GitHub'), false, 'un morceau du nom ne suffit pas')
-  assert.equal(isServerNamed('cherche sur hugging face', 'Hugging Face'), true)
-  assert.equal(isServerNamed('un visage souriant (face)', 'Hugging Face'), false)
-  assert.equal(isServerNamed('Fais une affiche', 'Canva'), false)
-  assert.equal(isServerNamed('Fais une affiche', 'X'), false, 'un nom trop court ne compte jamais')
+test('étape 423 : isServerTargeted — le service est la CIBLE de la demande (revue : négations, mots courants, adresses)', () => {
+  const { isServerTargeted: on } = mcp
+  assert.equal(on('Fais-moi une affiche sur Canva', 'Canva'), true)
+  assert.equal(on('utilise le mcp de canva, et prend une page a4 et met un texte bonjour en gros', 'Canva'), true)
+  assert.equal(on('fais ça avec canva mcp', 'Canva'), true)
+  assert.equal(on('mets ça dans GitHub', 'GitHub'), true)
+  assert.equal(on('cherche sur hugging face', 'Hugging Face'), true)
+  // Adresse collée sans nom, ou « Canva MCP » : les mots génériques ne sont pas le nom.
+  assert.equal(on('utilise le mcp de canva', 'mcp.canva.com'), true)
+  assert.equal(on('fais une affiche sur canva', 'Canva MCP'), true)
+  // Revue de l'étape 423 : rien de tout ça ne vise le service.
+  assert.equal(on("n'utilise pas Canva, envoie plutôt un mail à Paul", 'Canva'), false, 'négation')
+  assert.equal(on('fais-le dans Paint, pas avec Canva', 'Canva'), false, 'négation')
+  assert.equal(on('explique-moi la notion de dérivée', 'Notion'), false, 'mot courant')
+  assert.equal(on('envoie un mail à Paul pour lui expliquer la notion de TVA', 'Notion'), false, 'mot courant')
+  assert.equal(on('quelle heure est-il ?', 'heure'), false)
+  assert.equal(on("regarde ma page GitHub à l'écran", 'git'), false, 'GitHub ne vise pas « git »')
+  assert.equal(on('est-ce que Canva est gratuit ?', 'Canva'), false, 'une question sur le service ne s’en sert pas')
+  assert.equal(on('c’est quoi la différence entre Canva et Figma ?', 'Canva'), false)
+  assert.equal(on('Fais une affiche', 'Canva'), false)
+  assert.equal(on('Fais une affiche sur X', 'X'), false, 'un nom trop court ne compte jamais')
 })
 
 // Étape 421 : les 45 vrais outils de Canva (noms, paramètres obligatoires, descriptions de Canva).
@@ -217,8 +228,13 @@ test('étape 421 : un outil qui exige un identifiant passe après, sauf si la de
   assert.equal(mcp.needsPriorId(['brief']), false)
   assert.equal(mcp.needsPriorId(['valid', 'paid']), false, 'un mot finissant par « id » sans séparateur ne compte pas')
   assert.equal(mcp.hasIdLikeToken('exporte le design DAGk3x9LmQ2 en PDF'), true)
-  assert.equal(mcp.hasIdLikeToken('https://www.canva.com/design/x'), true)
+  assert.equal(mcp.hasIdLikeToken('le job JOB42abc'), true)
+  assert.equal(mcp.hasIdLikeToken('3f2b8c1e-9a7d-4c3b-8e21-5d6f7a8b9c0d'), true, 'UUID')
   assert.equal(mcp.hasIdLikeToken(LEO), false, '« a4 » n’est pas un identifiant')
+  // Revue de l'étape 423 : ni une dimension ni une date.
+  for (const text of ['format 210x297mm', 'en 1080x1920', 'le 14-juillet-2026']) assert.equal(mcp.hasIdLikeToken(text), false, text)
+  const sized = mcp.pickMcpTools(`${LEO} (format 210x297mm)`, realCanva()).map((t) => t.toolName)
+  assert.ok(sized.includes('create-design'), sized.join())
   const withId = mcp.pickMcpTools('exporte le design DAGk3x9LmQ2 en PDF', realCanva()).map((t) => t.toolName)
   assert.ok(withId.includes('export-design'), withId.join())
 })

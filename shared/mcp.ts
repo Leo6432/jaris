@@ -276,9 +276,17 @@ export function needsPriorId(required: readonly string[] | undefined): boolean {
   return (required ?? []).some((param) => /(?:^|_)ids?$|[a-z]Ids?$/.test(param))
 }
 
-/** Étape 421 : la demande contient-elle un identifiant ou une adresse à réutiliser (« DAF3x9kLm2 », https://…) ? */
+/**
+ * Étape 421 : le texte contient-il un identifiant à réutiliser (« DAGk3x9LmQ2 », « JOB42abc », un UUID) ? Un mot de 8
+ * signes et plus, avec chiffres ET lettres, ET majuscules mélangées aux minuscules, ou un « _ », ou la forme d'un UUID —
+ * jamais une dimension ni une date (« 210x297mm », « 1080x1920 », « 14-juillet-2026 », revue de l'étape 423).
+ */
 export function hasIdLikeToken(text: string): boolean {
-  return /https?:\/\//i.test(text) || /(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])/.test(text)
+  for (const token of text.match(/[A-Za-z0-9_-]{8,}/g) ?? []) {
+    if (!/\d/.test(token) || !/[A-Za-z]/.test(token)) continue
+    if ((/[a-z]/.test(token) && /[A-Z]/.test(token)) || token.includes('_') || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(token)) return true
+  }
+  return false
 }
 
 /** Étape 420 : outils ajoutés en plus de `max` parce qu'un outil choisi les nomme (voir pickMcpTools). */
@@ -303,17 +311,46 @@ export function legacyReplacement(description: string): string | null {
 }
 
 /** Un nom d'outil cité tel quel dans un texte (`create-design` ne compte pas dans `create-design-from-candidate`). */
+/** Les mots ENTIERS d'un texte, sans accents ni majuscules (« GitHub » reste « github », jamais « git » + « hub »). */
+function plainTokens(text: string): string[] {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+// Ce qui, juste avant le nom, en fait la CIBLE de la demande (« sur Canva », « avec Notion », « utilise Canva »…).
+const SERVICE_TARGET_BEFORE = new Set([
+  'sur', 'avec', 'dans', 'via', 'depuis', 'vers', 'utilise', 'utiliser', 'utilises', 'ouvre', 'mcp', 'compte', 'mon', 'ma',
+  'mes', 'ton', 'ta', 'tes', 'on', 'with', 'in', 'using', 'use', 'my', 'into'
+])
+// « le mcp de Canva », « mon compte de Notion »
+const SERVICE_NOUNS = new Set(['mcp', 'compte', 'serveur', 'outil', 'outils', 'connecteur', 'account', 'server'])
+const GENERIC_NAME_WORDS = new Set(['mcp', 'com', 'www', 'org', 'net', 'app', 'api', 'dev', 'server', 'serveur', 'http', 'https'])
+const NEGATIONS = new Set(['pas', 'jamais', 'sans', 'ni', 'not', 'never', 'without', 'no', 'dont'])
+
 /**
- * Étape 421 : la demande NOMME-t-elle ce serveur (« fais-moi une affiche sur Canva ») ? Tous les mots du nom (3 lettres
- * et plus, sans accents ni majuscules) doivent s'y trouver ; un nom sans tel mot ne compte jamais comme nommé.
+ * Étape 421, resserré à l'étape 423 (revue : « explique-moi la NOTION de dérivée » visait le serveur Notion, « regarde
+ * GitHub » le serveur « git », « n'utilise pas Canva » retirait l'écran) : la demande VISE-t-elle ce serveur ? Son nom
+ * en mots entiers, juste après un mot qui le désigne comme cible (« sur », « avec », « dans », « utilise », « mon »,
+ * « le mcp de »…) ou juste avant « mcp », et sans négation dans les quatre mots qui précèdent. Un simple « Canva c'est
+ * quoi ? » ne compte pas : seulement une demande qui s'en sert.
  */
-export function isServerNamed(prompt: string, serverName: string): boolean {
-  // Les mots ENTIERS du nom : « GitHub » demande « github », pas « git » et « hub » (que words() ajoute aussi).
-  const plain = serverName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-  const needed = [...new Set(plain.split(/[^a-z0-9]+/).filter((word) => word.length >= 3))]
-  if (!needed.length) return false
-  const asked = new Set(words(prompt))
-  return needed.every((word) => asked.has(word))
+export function isServerTargeted(prompt: string, serverName: string): boolean {
+  // « mcp.canva.com », « Canva MCP » : les mots génériques d'une adresse ou d'un nom de serveur ne sont pas le nom.
+  const all = plainTokens(serverName).filter((word) => word.length >= 3)
+  const specific = all.filter((word) => !GENERIC_NAME_WORDS.has(word))
+  const name = specific.length ? specific : all
+  if (!name.length) return false
+  const tokens = plainTokens(prompt)
+  for (let i = 0; i + name.length <= tokens.length; i++) {
+    if (!name.every((word, k) => tokens[i + k] === word)) continue
+    const before = tokens[i - 1]
+    const targeted =
+      (before !== undefined && SERVICE_TARGET_BEFORE.has(before)) ||
+      ((before === 'de' || before === 'du' || before === 'd' || before === 'of') && SERVICE_NOUNS.has(tokens[i - 2] ?? '')) ||
+      tokens[i + name.length] === 'mcp'
+    const negated = tokens.slice(Math.max(0, i - 4), i).some((word) => NEGATIONS.has(word))
+    if (targeted && !negated) return true
+  }
+  return false
 }
 
 function mentions(text: string, toolName: string): boolean {

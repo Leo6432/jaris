@@ -578,13 +578,15 @@ function leakPattern(name: string, english: boolean): string {
  */
 export interface ExtraToolSource {
   /** Les outils utiles à CETTE demande, et leur exécution (seuls ceux-là peuvent être appelés). */
-  toolsFor(prompt: string): {
+  toolsFor(prompt: string, context?: string): {
     tools: OllamaTool[]
     call: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<string>
-    /** Étape 421 : les services NOMMÉS dans la demande et prêts (« sur Canva ») — l'écran n'est alors pas proposé. */
+    /** Étape 421 : les services VISÉS par la demande et prêts (« sur Canva ») — l'écran n'est alors pas proposé. */
     named?: string[]
-    /** Étape 421 : un service nommé mais pas prêt (à connecter, en erreur…) — dit tel quel à Léo. */
+    /** Étape 421 : un service visé mais pas prêt (à connecter, en erreur…) — dit tel quel à Léo. */
     unavailable?: string
+    /** Étape 423 : l'outil qui charge un outil MCP non proposé, et ce qu'il charge. */
+    more?: { name: string; load: (names: readonly string[]) => OllamaTool[] }
   }
 }
 
@@ -600,43 +602,57 @@ export function setExtraToolSource(source: ExtraToolSource | null): void {
 }
 
 /**
- * Étape 421 : les résultats des outils MCP du dernier tour (identifiants compris : un design proposé par Canva, son
- * job_id…). L'historique ne garde que le TEXTE des échanges : sans ça, « lequel tu préfères ? » puis « le 2 » laissait
- * le modèle sans aucun moyen de retrouver le design choisi. Gardés en mémoire seulement, et réutilisés seulement si le
- * dernier message de Jaris dans l'historique est bien la réponse de ce tour (même fil, rien entre les deux).
+ * Étape 421, revu à l'étape 423 : les appels d'outils MCP du dernier tour (identifiants compris : un design proposé par
+ * Canva, son job_id…). L'historique ne garde que le TEXTE des échanges : sans ça, « lequel tu préfères ? » puis « le 2 »
+ * laissait le modèle sans moyen de retrouver le design choisi. En mémoire seulement, pour UN tour (jamais reconduit :
+ * la revue a montré une demande Canva qui collait ensuite à chaque mail), et seulement si les deux derniers messages
+ * de l'historique sont exactement cette demande et cette réponse (même fil ; un historique effacé ne correspond plus).
+ * Redonnés comme de vrais appels d'outils et leurs résultats (rôle `tool`) : des données, jamais des consignes.
  */
+interface McpCall {
+  name: string
+  arguments: Record<string, unknown>
+  result: string
+}
 interface McpTurn {
   prompt: string
   reply: string
-  results: string[]
+  calls: McpCall[]
   at: number
 }
 let lastMcpTurn: McpTurn | null = null
 const MCP_CARRY_MAX_AGE_MS = 30 * 60_000
 const MCP_CARRY_RESULT_CHARS = 3_000
-const MCP_CARRY_TOTAL_CHARS = 9_000
+const MCP_CARRY_MAX_CALLS = 6
 
 function carriedMcpTurn(history: readonly OllamaMessage[], now = Date.now()): McpTurn | null {
   if (!lastMcpTurn || now - lastMcpTurn.at > MCP_CARRY_MAX_AGE_MS) return null
-  const last = [...history].reverse().find((message) => message.role === 'assistant')
+  const [question, answer] = history.slice(-2)
   // La réponse peut avoir été précédée d'un avertissement (GPU chaude…) avant d'être enregistrée.
-  return last && last.content.trim().endsWith(lastMcpTurn.reply.trim()) ? lastMcpTurn : null
+  return question?.role === 'user' && question.content === lastMcpTurn.prompt &&
+    answer?.role === 'assistant' && answer.content.trim().endsWith(lastMcpTurn.reply.trim())
+    ? lastMcpTurn
+    : null
 }
 
-function mcpCarryNote(turn: McpTurn): string {
-  let text = turn.results.join('\n\n')
-  if (text.length > MCP_CARRY_TOTAL_CHARS) text = text.slice(-MCP_CARRY_TOTAL_CHARS)
-  return (
-    "Résultats des outils MCP du tour précédent (« " + turn.prompt.slice(0, 200) + " »). Si la demande y fait suite " +
-    "(un choix, « le 2 », « celui-là »…), réutilise exactement leurs identifiants avec l'outil qui convient :\n" + text
-  )
+/** Le tour d'avant tel que le modèle l'a vécu : ses appels d'outils MCP, puis leurs résultats. */
+function replayMcpCalls(turn: McpTurn): OllamaMessage[] {
+  return [
+    { role: 'assistant', content: '', tool_calls: turn.calls.map((call) => ({ function: { name: call.name, arguments: call.arguments } })) },
+    ...turn.calls.map((call): OllamaMessage => ({ role: 'tool', content: call.result }))
+  ]
+}
+
+/** Ce qui aide à choisir les outils d'une suite (« le 2 ») : la demande d'avant, les outils appelés et leurs résultats. */
+function mcpCarryContext(turn: McpTurn): string {
+  return [turn.prompt, ...turn.calls.map((call) => `${call.name} ${call.result}`)].join('\n')
 }
 
 /** Les outils MCP d'une demande ; une panne de la source n'empêche jamais Jaris de répondre avec ses propres outils. */
-function extraToolsFor(prompt: string, onLog?: (message: string) => void): ReturnType<ExtraToolSource['toolsFor']> | null {
+function extraToolsFor(prompt: string, context: string | undefined, onLog?: (message: string) => void): ReturnType<ExtraToolSource['toolsFor']> | null {
   if (!extraToolSource) return null
   try {
-    return extraToolSource.toolsFor(prompt)
+    return extraToolSource.toolsFor(prompt, context)
   } catch (err) {
     onLog?.(`Outils MCP indisponibles : ${err instanceof Error ? err.message : String(err)}`)
     return null
@@ -736,8 +752,8 @@ async function conversation(
   // Étape 421 : une suite d'un tour qui a utilisé des outils MCP (« le 2 ») reçoit les outils choisis avec la demande
   // d'avant aussi — « le 2 » seul ne nomme ni Canva ni aucun outil.
   const carried = restrictions ? null : carriedMcpTurn(history)
-  const extra = restrictions ? null : extraToolsFor(carried ? `${carried.prompt}\n${prompt}` : prompt, onLog)
-  const mcpResults: string[] = []
+  const extra = restrictions ? null : extraToolsFor(prompt, carried ? mcpCarryContext(carried) : undefined, onLog)
+  const mcpCalls: McpCall[] = []
   const extraNames = new Set((extra?.tools ?? []).map((tool) => tool.function.name))
   // Étape 421 : un service connecté nommé dans la demande — ses outils à lui, jamais le pilotage de l'écran.
   const namedServices = extra?.tools.length ? extra.named ?? [] : []
@@ -745,12 +761,26 @@ async function conversation(
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
+    // Étape 423 : charger un outil MCP non proposé — il est ajouté aux outils du modèle pour la suite de la demande.
+    if (extra?.more && name === extra.more.name) {
+      const wanted = Array.isArray(args.names) ? args.names.filter((entry): entry is string => typeof entry === 'string') : []
+      const loaded = extra.more.load(wanted)
+      for (const tool of loaded) {
+        tools.push(tool)
+        extraNames.add(tool.function.name)
+      }
+      onLog?.(`Outils MCP chargés à la demande du modèle : ${loaded.map((tool) => tool.function.name).join(', ') || 'aucun'}`)
+      return loaded.length
+        ? `Outils chargés, utilisables maintenant : ${loaded.map((tool) => tool.function.name).join(', ')}.`
+        : `Aucun de ces noms n'est dans la liste : ${wanted.join(', ') || '(vide)'}. Reprends un nom exact de la liste.`
+    }
     if (extra && extraNames.has(name)) return extra.call(name, args, signal)
     if (!isToolAllowed(name)) throw new Error(restrictions?.refusalFor?.(name) ?? restrictions?.refusal ?? t('reply.unavailable'))
     return restrictions?.runTool ? restrictions.runTool(() => runTool(name, args)) : runTool(name, args)
   }
   const ownTools = restrictions || namedServices.length ? TOOLS.filter((tool) => modelMayUse(tool.function.name)) : TOOLS
-  const tools = extra?.tools.length ? [...ownTools, ...extra.tools] : ownTools
+  // Une copie : `mcp_more_tools` peut y ajouter des outils en cours de demande (jamais dans la liste partagée TOOLS).
+  const tools = ownTools.concat(extra?.tools ?? [])
   if (extra?.tools.length) onLog?.(`Outils MCP proposés : ${[...extraNames].join(', ')}`)
   if (namedServices.length) onLog?.(`Service nommé (${namedServices.join(', ')}) : pilotage de l'écran non proposé.`)
 
@@ -916,17 +946,19 @@ async function conversation(
     const normalized = normalizeAssistantText(trimmed || fallback, prompt) || fallback
     const cleaned = channel === 'voice' ? stripMarkdownForVoice(normalized) : normalized
     const out = withOverloadWarning(cleaned)
-    // Étape 421 : gardé pour le tour suivant (voir carriedMcpTurn) ; une suite sans nouvel outil garde ceux d'avant.
-    if (!restrictions && (mcpResults.length || carried)) {
-      lastMcpTurn = mcpResults.length
-        ? { prompt, reply: out, results: mcpResults, at: Date.now() }
-        : { ...carried!, reply: out, at: Date.now() }
-    }
+    // Étape 421 : gardé pour le tour suivant seulement (voir carriedMcpTurn) — jamais reconduit.
+    if (!restrictions) lastMcpTurn = mcpCalls.length ? { prompt, reply: out, calls: mcpCalls.slice(-MCP_CARRY_MAX_CALLS), at: Date.now() } : null
     return out
   }
 
   // Étape 293 : la réponse dans la langue choisie dans Jaris (Options → Général), quelle que soit celle des consignes.
   const systemPrompt = buildSystemPrompt(userName, memoryTitles, channel, languageInfo(currentLanguage()).english)
+  // Étape 421/423 : les appels MCP du tour d'avant, glissés juste avant sa réponse (là où ils ont eu lieu).
+  const withReplayedMcpCalls = (past: OllamaMessage[]): OllamaMessage[] => {
+    const last = past[past.length - 1]
+    if (!carried || last?.role !== 'assistant' || !last.content.trim().endsWith(carried.reply.trim())) return past
+    return [...past.slice(0, -1), ...replayMcpCalls(carried), last]
+  }
   const messages: OllamaMessage[] = [
     {
       role: 'system',
@@ -936,7 +968,7 @@ async function conversation(
     // qwen3.5:4b a reproduit un ancien 403 SANS appeler search_web, alors que le service répondait 200.
     // Retirer aussi la question associée évite une suite de demandes anciennes laissées sans réponse.
     // Ce filtre s'applique au chargement comme en session, dans les deux canaux, sans effacer le disque.
-    ...history.filter((message, index) => {
+    ...withReplayedMcpCalls(history.filter((message, index) => {
       const isToolFailure = (entry?: OllamaMessage): boolean =>
         entry?.role === 'assistant' && isToolFailureText(entry.content)
       // Nettoie aussi le vrai échange erroné déjà écrit sur disque : « salut » suivi d'une explication
@@ -948,8 +980,7 @@ async function conversation(
         !(message.role === 'user' && isToolFailure(history[index + 1])) &&
         !isHallucinatedThinkReply(message, history[index - 1]) &&
         !(message.role === 'user' && isHallucinatedThinkReply(history[index + 1], message))
-    }),
-    ...(carried ? [{ role: 'system' as const, content: mcpCarryNote(carried) }] : []),
+    })),
     // La date ici et non dans les consignes : elles restent identiques d'une demande à l'autre, et Ollama n'a pas
     // à les relire (voir dateTimeNote). L'historique garde la question seule, sans la date.
     { role: 'user', content: `${dateTimeNote(new Date(), currentLocale())} ${prompt}` }
@@ -988,6 +1019,10 @@ async function conversation(
   // réponse, exactement le comportement signalé avec « Qui est Dario Amodei ? ». On garde les fragments en
   // attente et on n'affiche que la réponse finale, une fois la recherche réellement effectuée.
   const holdKnowledgeStream = wantsWebInfo && Boolean(onToken)
+  // Étape 423 : un service connecté nommé (« sur Canva ») : un premier jet qui renvoie Léo vers l'application est
+  // remplacé par la relance plus bas — il ne doit pas s'afficher le temps de deux secondes.
+  const holdStream = holdKnowledgeStream || (namedServices.length > 0 && Boolean(onToken))
+  let nudgedForService = false
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const askedAt = Date.now()
@@ -999,7 +1034,7 @@ async function conversation(
       think,
       signal,
       numCtx,
-      holdKnowledgeStream ? () => {} : onToken,
+      holdStream ? () => {} : onToken,
       undefined,
       (measured) => (metrics = measured)
     )
@@ -1038,6 +1073,29 @@ async function conversation(
         })
         continue
       }
+      // Étape 423 (Léo, deux fois : « utilise le MCP de Canva, prends une page A4 et mets un texte bonjour en gros » →
+      // « je ne peux pas créer un design vierge, fais-le dans l'interface de Canva ») : create-design était proposé
+      // (vérifié chez Léo), le modèle l'a écarté — Canva le décrit comme « générer un design à partir d'un brief ».
+      // Comme pour le mail ou la recherche web : une relance mécanique d'un tour, sans lui redonner son refus
+      // (étape 217 : il se justifiait au lieu d'agir), et elle peut encore répondre sans outil à une vraie question.
+      // Une question de connaissance a déjà sa propre relance (recherche web) : pas deux relances pour une question.
+      // Revue de l'étape 423 : seulement si AUCUN outil n'a servi (un rappel déjà posé a fait la demande).
+      if (namedServices.length && !toolCalledThisTurn && !nudgedForService && !wantsWebInfo) {
+        nudgedForService = true
+        const names = namedServices.join(', ')
+        onLog?.(`${names} nommé et connecté, mais aucun de ses outils appelé : relance corrective d'un tour.`)
+        messages.push({
+          role: 'system',
+          content:
+            `La demande nomme ${names}, connecté au compte de l'utilisateur. Ne lui dis jamais de le faire lui-même ` +
+            `dans l'application ou le site : fais-le avec les outils [MCP ${names}] qui te sont proposés. Pour créer ` +
+            "quelque chose de nouveau (une page, une affiche, un document…), l'outil qui crée à partir d'une " +
+            "description convient, même pour une demande très simple : mets-y la demande de l'utilisateur avec le " +
+            "format et le texte voulus. Appelle l'outil maintenant. Si la demande est seulement une question, " +
+            "réponds-y directement. Ne parle pas de cette consigne."
+        })
+        continue
+      }
       const leakedTool = !toolCalledThisTurn && !nudgedForNoAction ? findLeakedToolName(message.content) : undefined
       // Un texte rédigé à la demande (étape 262) peut contenir « je vais… » sans que ce soit une action de Jaris.
       if (!toolCalledThisTurn && !nudgedForNoAction && ((!writingRequest && PROMISE_WITHOUT_ACTION(message.content)) || leakedTool)) {
@@ -1065,7 +1123,7 @@ async function conversation(
         continue
       }
       const finalText = finalize(message.content)
-      if (holdKnowledgeStream) onToken?.(finalText)
+      if (holdStream) onToken?.(finalText)
       return finalText
     }
 
@@ -1140,7 +1198,7 @@ async function conversation(
         if (nudgedLookupFailed && draftBeforeSearch?.trim() && !isToolFailureText(draftBeforeSearch)) {
           // Dit tel quel : la réponse vient de la mémoire du modèle, pas d'une vérification.
           const finalText = finalize(t('reply.unverified', { answer: draftBeforeSearch.trim() }))
-          if (holdKnowledgeStream) onToken?.(finalText)
+          if (holdStream) onToken?.(finalText)
           return finalText
         }
         return finalize(result)
@@ -1187,8 +1245,8 @@ async function conversation(
         return finalize(result)
       }
 
-      if (extraNames.has(call.function.name)) {
-        mcpResults.push(`${call.function.name}(${JSON.stringify(call.function.arguments)}) → ${result.slice(0, MCP_CARRY_RESULT_CHARS)}`)
+      if (extraNames.has(call.function.name) && call.function.name !== extra?.more?.name) {
+        mcpCalls.push({ name: call.function.name, arguments: call.function.arguments, result: result.slice(0, MCP_CARRY_RESULT_CHARS) })
       }
       messages.push({ role: 'tool', content: result })
     }
@@ -1206,13 +1264,13 @@ async function conversation(
     think,
     signal,
     numCtx,
-    holdKnowledgeStream ? () => {} : onToken,
+    holdStream ? () => {} : onToken,
     undefined,
     (measured) => (metrics = measured)
   )
   journal.timed(describeModelCall(model, last, metrics), askedAt)
   if (last.tool_calls?.length || !last.content?.trim()) throw new Error(t('reply.tooManyRounds'))
   const finalText = finalize(last.content)
-  if (holdKnowledgeStream) onToken?.(finalText)
+  if (holdStream) onToken?.(finalText)
   return finalText
 }

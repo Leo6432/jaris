@@ -1807,7 +1807,7 @@ app.whenReady().then(async () => {
   void loadModelSpeeds()
   // Étape 418 : les serveurs MCP de Léo, branchés en arrière-plan (un serveur lent ne retarde jamais Jaris).
   setMcpChangeListener(() => void listMcpServers().then((servers) => broadcast(IPC_CHANNELS.mcpChanged, servers)))
-  setExtraToolSource({ toolsFor: (prompt) => mcpToolsFor(prompt) })
+  setExtraToolSource({ toolsFor: (prompt, context) => mcpToolsFor(prompt, context) })
   // Étape 419 : les clés des services (connexion par compte) chiffrées par Windows ; la page de connexion dans le
   // navigateur de Léo (seulement une adresse https du service).
   setMcpSecretBox({

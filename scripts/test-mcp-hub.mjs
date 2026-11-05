@@ -364,7 +364,7 @@ test('étape 419 : connexion par compte de bout en bout — « À connecter », 
     assert.equal(service.seen.registrations[0].client_name, 'Jaris')
     assert.equal(service.seen.tokens, 1)
     assert.equal(await env.hub.mcpToolsFor('').call('mcp_canva_test_mes_designs', {}), 'Affiche du concert')
-    const named = env.hub.mcpToolsFor('Montre mes designs Canva test')
+    const named = env.hub.mcpToolsFor('Montre mes designs sur Canva test')
     assert.deepEqual(named.named, ['Canva test'], 'connecté et nommé')
     assert.equal(named.unavailable, undefined)
 
@@ -433,6 +433,29 @@ test('étape 420 : un travail en cours dont le serveur dit « reviens dans 1 s �
     setTimeout(() => stop.abort(), 100)
     await call.catch(() => {})
     assert.ok(Date.now() - started < 800, 'arrêté sans attendre la fin')
+  } finally {
+    await env.done()
+  }
+})
+
+test('étape 423 : plus d’outils que de places — « mcp_more_tools » liste les autres et les charge à la demande, appelables ensuite', async () => {
+  const env = setup()
+  try {
+    const servers = Object.fromEntries(['Alpha', 'Beta', 'Gamma'].map((name) => [name, { command: process.execPath, args: [SERVER] }]))
+    await env.hub.addMcpServers(JSON.stringify({ mcpServers: servers }), '')
+    await waitFor(async () => (await env.hub.listMcpServers()).every((s) => s.status === 'ready'), 'trois serveurs prêts')
+    const offered = env.hub.mcpToolsFor('Bonjour')
+    const names = offered.tools.map((tool) => tool.function.name)
+    assert.ok(names.includes('mcp_more_tools'), names.join())
+    const more = offered.tools.find((tool) => tool.function.name === 'mcp_more_tools')
+    const missing = ['mcp_gamma_add_numbers', 'mcp_beta_add_numbers', 'mcp_alpha_add_numbers'].find((name) => !names.includes(name))
+    assert.ok(missing, 'au moins un outil n’a pas eu de place')
+    assert.ok(more.function.description.includes(missing), 'il est listé')
+    await assert.rejects(offered.call(missing, { a: 1, b: 2 }), /n'a pas été proposé/, 'pas avant d’être chargé')
+    const loaded = offered.more.load([missing, 'mcp_inexistant'])
+    assert.deepEqual(loaded.map((tool) => tool.function.name), [missing])
+    assert.equal(loaded[0].function.parameters.type, 'object')
+    assert.equal(await offered.call(missing, { a: 1, b: 2 }), '3', 'chargé : appelable, sur le vrai serveur')
   } finally {
     await env.done()
   }

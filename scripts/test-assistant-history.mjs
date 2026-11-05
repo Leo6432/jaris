@@ -816,15 +816,15 @@ test("étape 421 : un service connecté nommé dans la demande — ses outils, j
   converse.setExtraToolSource(null)
 })
 
-test('étape 421 : « lequel tu préfères ? » puis « le 2 » — les résultats MCP du tour d’avant (identifiants) sont redonnés au modèle', async () => {
+test('étapes 421/423 : « lequel tu préfères ? » puis « le 2 » — les appels MCP du tour d’avant sont redonnés comme de vrais résultats d’outils, pour UN tour', async () => {
   const gen = { type: 'function', function: { name: 'mcp_canva_generate_design', description: '[MCP Canva] Generate', parameters: { type: 'object', properties: {} } } }
   const fromCandidate = { type: 'function', function: { name: 'mcp_canva_create_design_from_candidate', description: '[MCP Canva] From candidate', parameters: { type: 'object', properties: {} } } }
   const asked = []
   const called = []
   const source = {
-    toolsFor: (prompt) => (asked.push(prompt), {
+    toolsFor: (prompt, context) => (asked.push({ prompt, context }), {
       tools: [gen, fromCandidate],
-      named: ['Canva'],
+      named: /sur canva/i.test(prompt) ? ['Canva'] : [],
       call: async (name, args) => {
         called.push([name, JSON.stringify(args)])
         return name === 'mcp_canva_generate_design'
@@ -833,37 +833,159 @@ test('étape 421 : « lequel tu préfères ? » puis « le 2 » — les résulta
       }
     })
   }
+  const OWN = ['computer_use_task', 'search_web'].map((n) => ({ type: 'function', function: { name: n, description: '', parameters: {} } }))
+  const fed = []
+  const offeredTools = []
+  let script = []
+  const converse = setup(
+    async (messages, tools) => {
+      fed.push([...messages])
+      offeredTools.push(tools.map((t) => t.function.name))
+      return script.shift() ?? assert.fail(`appel au modèle en trop : ${messages.at(-1).content}`)
+    },
+    async (n) => (n === 'search_web' ? 'Il est 15 h.' : assert.fail(`outil de Jaris appelé : ${n}`)),
+    undefined,
+    { tools: OWN }
+  )
+  converse.setExtraToolSource(source)
+  const first = 'Fais une page A4 bonjour sur Canva'
+  script = [
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_generate_design', arguments: { query: 'A4 bonjour' } } }] },
+    { role: 'assistant', content: 'Voici 2 propositions. Laquelle tu préfères ?' }
+  ]
+  const reply = await converse(first, null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(reply, 'Voici 2 propositions. Laquelle tu préfères ?')
+
+  // Tour 2 « le 2 » : la demande actuelle seule décide du service visé ; le tour d'avant aide à choisir les outils.
+  script = [
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_create_design_from_candidate', arguments: { job_id: 'JOB42abc', candidate_id: 'cand-bbb222' } } }] },
+    { role: 'assistant', content: 'C’est fait, il est dans ton compte.' }
+  ]
+  const history = [{ role: 'user', content: first }, { role: 'assistant', content: reply }]
+  assert.equal(await converse('le 2', null, () => {}, undefined, history, undefined, undefined, 'chat'), 'C’est fait, il est dans ton compte.')
+  assert.equal(asked[1].prompt, 'le 2')
+  assert.match(asked[1].context, /Fais une page A4 bonjour sur Canva[\s\S]*cand-bbb222/)
+  const roles = fed[2].map((m) => m.role).join(',')
+  assert.match(roles, /user,assistant,tool,assistant,user$/, 'appel, résultat, puis la réponse d’avant, puis « le 2 »')
+  const replay = fed[2].at(-4)
+  assert.equal(replay.tool_calls[0].function.name, 'mcp_canva_generate_design')
+  assert.match(fed[2].at(-3).content, /cand-bbb222/)
+  assert.ok(!fed[2].some((m) => m.role === 'system' && /cand-bbb222/.test(m.content)), 'jamais en consigne système')
+  assert.equal(called[1][0], 'mcp_canva_create_design_from_candidate')
+
+  // Revue de l'étape 423 : un tour sans outil MCP n'est jamais reconduit au suivant.
+  const h2 = [...history, { role: 'user', content: 'le 2' }, { role: 'assistant', content: 'C’est fait, il est dans ton compte.' }]
+  script = [{ role: 'assistant', content: '', tool_calls: [{ function: { name: 'search_web', arguments: { query: 'heure' } } }] }, { role: 'assistant', content: 'Il est 15 h.' }]
+  await converse('quelle heure est-il', null, () => {}, undefined, h2, undefined, undefined, 'chat')
+  assert.ok(asked[2].context, 'juste après un tour MCP : contexte donné')
+  const h3 = [...h2, { role: 'user', content: 'quelle heure est-il' }, { role: 'assistant', content: 'Il est 15 h.' }]
+  // Le modèle ne fait rien : la relance « mail » de Jaris part (elle n'est plus bloquée par l'ancien tour Canva).
+  script = [{ role: 'assistant', content: 'Mail parti.' }, { role: 'assistant', content: 'Il me faut son adresse.' }]
+  fed.length = 0
+  offeredTools.length = 0
+  await converse('envoie un mail à Paul pour lui dire bonjour', null, () => {}, undefined, h3, undefined, undefined, 'chat')
+  assert.equal(asked[3].context, undefined, 'deux tours plus loin : plus rien')
+  assert.ok(!fed[0].some((m) => m.role === 'tool'))
+  assert.ok(offeredTools[0].includes('computer_use_task'), 'le mail garde le pilotage de l’écran')
+  assert.match(fed[1].at(-1).content, /computer_use_task/, 'relance « mail » de Jaris')
+
+  // Historique effacé ou autre fil : rien n'est redonné.
+  script = [
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_generate_design', arguments: {} } }] },
+    { role: 'assistant', content: 'C’est fait !' }
+  ]
+  await converse('Une affiche sur Canva', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  script = [{ role: 'assistant', content: 'Bonjour.' }]
+  fed.length = 0
+  await converse('raconte une blague courte', null, () => {}, undefined, [{ role: 'user', content: 'autre chose' }, { role: 'assistant', content: 'C’est fait !' }], undefined, undefined, 'chat')
+  assert.ok(!fed[0].some((m) => m.role === 'tool'), 'même réponse courte, autre demande : rien')
+  converse.setExtraToolSource(null)
+})
+
+test('étape 423 (revue) : la relance « service visé » ne part pas si un outil de Jaris a déjà fait la demande ; « mcp_more_tools » charge un outil', async () => {
+  const create = { type: 'function', function: { name: 'mcp_canva_create_design', description: '[MCP Canva] Create', parameters: { type: 'object', properties: {} } } }
+  const more = { type: 'function', function: { name: 'mcp_more_tools', description: '[MCP] Autres outils : Canva : mcp_canva_export_design', parameters: { type: 'object', properties: {} } } }
+  const exportTool = { type: 'function', function: { name: 'mcp_canva_export_design', description: '[MCP Canva] Export', parameters: { type: 'object', properties: {} } } }
+  const called = []
+  const source = {
+    toolsFor: () => ({
+      tools: [create, more],
+      named: ['Canva'],
+      call: async (n) => (called.push(n), n === 'mcp_canva_export_design' ? 'https://export.canva.com/x.pdf' : 'ok'),
+      more: { name: 'mcp_more_tools', load: (names) => (names.includes('mcp_canva_export_design') ? [exportTool] : []) }
+    })
+  }
+  const OWN = [{ type: 'function', function: { name: 'set_reminder', description: '', parameters: {} } }]
+  let script = [
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: { message: 'exporter le design Canva', delay_minutes: 60 } } }] },
+    { role: 'assistant', content: 'Rappel posé pour dans une heure.' }
+  ]
+  const offered = []
+  const converse = setup(
+    async (_messages, tools) => (offered.push(tools.map((t) => t.function.name)), script.shift() ?? assert.fail('relance de trop')),
+    async (n) => (n === 'set_reminder' ? 'Rappel enregistré.' : assert.fail(n)),
+    undefined,
+    { tools: OWN }
+  )
+  converse.setExtraToolSource(source)
+  assert.equal(await converse("rappelle-moi dans une heure d'exporter mon design sur Canva", null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Rappel posé pour dans une heure.')
+  assert.equal(called.length, 0)
+
+  script = [
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_more_tools', arguments: { names: ['mcp_canva_export_design'] } } }] },
+    { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_export_design', arguments: { design_id: 'DAGk3x9LmQ2', format: { type: 'pdf' } } } }] },
+    { role: 'assistant', content: 'Ton PDF : https://export.canva.com/x.pdf' }
+  ]
+  offered.length = 0
+  assert.equal(await converse('exporte mon design DAGk3x9LmQ2 en pdf sur Canva', null, () => {}, undefined, [], undefined, undefined, 'chat'), 'Ton PDF : https://export.canva.com/x.pdf')
+  assert.ok(!offered[0].includes('mcp_canva_export_design'))
+  assert.ok(offered[1].includes('mcp_canva_export_design'), 'chargé pour la suite de la demande')
+  assert.deepEqual(called, ['mcp_canva_export_design'])
+  converse.setExtraToolSource(null)
+})
+
+test('étape 423 : service nommé et connecté, mais le modèle refuse sans outil — relance d’un tour, le refus n’est ni affiché ni redonné', async () => {
+  const create = { type: 'function', function: { name: 'mcp_canva_create_design', description: '[MCP Canva] Generate a new Canva design from a written brief', parameters: { type: 'object', properties: {} } } }
+  const called = []
+  const source = { toolsFor: () => ({ tools: [create], named: ['Canva'], call: async (n, a) => (called.push([n, JSON.stringify(a)]), 'Design créé : https://canva.com/d/DAG9') }) }
+  const REFUSAL = "Je ne peux pas créer un design vierge : ouvre Canva toi-même dans ton navigateur."
   const fed = []
   let step = 0
   const converse = setup(
-    async (messages) => {
+    async (messages, _tools, _model, _think, _signal, _ctx, onToken) => {
       step++
-      fed.push(messages.map((m) => `${m.role}:${m.content}`).join('\n'))
-      if (step === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_generate_design', arguments: { query: 'A4 bonjour' } } }] }
-      if (step === 2) return { role: 'assistant', content: 'Voici 2 propositions. Laquelle tu préfères ?' }
-      if (step === 3) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_create_design_from_candidate', arguments: { job_id: 'JOB42abc', candidate_id: 'cand-bbb222' } } }] }
-      return { role: 'assistant', content: 'C’est fait, il est dans ton compte.' }
+      fed.push(messages)
+      if (step === 1) { onToken?.(REFUSAL); return { role: 'assistant', content: REFUSAL } }
+      if (step === 2) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'mcp_canva_create_design', arguments: { brief: 'Page A4, « bonjour » en très gros' } } }] }
+      return { role: 'assistant', content: 'C’est fait : ta page A4 est dans ton compte Canva.' }
     },
     async (n) => assert.fail(`outil de Jaris appelé : ${n}`),
     undefined,
     { tools: [] }
   )
   converse.setExtraToolSource(source)
-  const first = 'Fais une page A4 bonjour sur Canva'
-  const reply = await converse(first, null, () => {}, undefined, [], undefined, undefined, 'chat')
-  assert.equal(reply, 'Voici 2 propositions. Laquelle tu préfères ?')
+  const shown = []
+  const reply = await converse('utilise le mcp de canva, et prend une page a4 et met un texte bonjour en gros', null, () => {}, undefined, [], undefined, undefined, 'chat', (d) => shown.push(d))
+  assert.equal(reply, 'C’est fait : ta page A4 est dans ton compte Canva.')
+  assert.equal(called.length, 1)
+  assert.equal(shown.join(''), reply, 'seule la réponse finale est affichée')
+  const second = fed[1].map((m) => m.content).join('\n')
+  assert.match(second, /Ne lui dis jamais de le faire lui-même/)
+  assert.ok(!second.includes(REFUSAL), 'le refus n’est pas redonné au modèle')
 
-  const history = [{ role: 'user', content: first }, { role: 'assistant', content: reply }]
-  assert.equal(await converse('le 2', null, () => {}, undefined, history, undefined, undefined, 'chat'), 'C’est fait, il est dans ton compte.')
-  assert.equal(asked[1], `${first}\nle 2`, 'les outils sont choisis avec la demande d’avant aussi')
-  assert.match(fed[2], /system:Résultats des outils MCP du tour précédent[\s\S]*cand-bbb222/)
-  assert.ok(fed[2].indexOf('cand-bbb222') < fed[2].lastIndexOf('le 2'), 'la note précède la demande')
-  assert.equal(called[1][0], 'mcp_canva_create_design_from_candidate')
-
-  // Autre fil (le dernier message de Jaris n'est pas cette réponse) : rien n'est redonné.
-  step = 3
+  // Une seule relance : une demande sans outil possible garde sa seconde réponse (jamais de boucle).
+  step = 0
   fed.length = 0
-  await converse('le 2', null, () => {}, undefined, [{ role: 'user', content: 'salut' }, { role: 'assistant', content: 'Bonjour !' }], undefined, undefined, 'chat')
-  assert.ok(!/Résultats des outils MCP/.test(fed[0]))
+  const answers = ['Je ne peux pas.', 'Aucun outil Canva proposé ne permet de supprimer ton compte.']
+  const ask = setup(
+    async () => ({ role: 'assistant', content: answers[step++] }),
+    async () => assert.fail('aucun outil'),
+    undefined,
+    { tools: [] }
+  )
+  ask.setExtraToolSource(source)
+  assert.equal(await ask('supprime mon compte canva', null, () => {}, undefined, [], undefined, undefined, 'chat'), answers[1])
+  assert.equal(step, 2)
+  ask.setExtraToolSource(null)
   converse.setExtraToolSource(null)
 })
