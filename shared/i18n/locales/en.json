@@ -147,6 +147,8 @@
   "mcp.details.hide": "Hide details",
   "mcp.catalog.added": "Already added",
   "mcp.catalog.add": "Add {name}",
+  "mcp.search.placeholder": "Search for a service",
+  "mcp.search.empty": "No service matches “{query}”. You can add your own with “+ {button}”.",
   "mcp.error.auth": "The MCP server “{name}” refuses the connection: key missing or rejected. Delete it, then add it again with a valid key.",
   "options.tab.general.subtitle": "The app itself: language, version, files, history.",
   "options.score.questions": "Questions",

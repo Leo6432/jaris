@@ -11616,6 +11616,20 @@ input.reply-ui__field-input {
   gap: 22px;
 }
 
+.mcp-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.mcp-search__empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hud-text-dim);
+}
+
 .mcp-discover__section {
   display: flex;
   flex-direction: column;

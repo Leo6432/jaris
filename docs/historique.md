@@ -11107,3 +11107,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-mcp-hub.mjs` (service SSE seul : « Se connecter » de bout en bout ; échoue sans le correctif),
   `test-mcp-settings-ui.mjs` (rubriques dans l'ordre, 45 cartes, logos tous chargés, tuile claire ; captures 1000 et
   760 px). **Non vérifié en usage réel** : la connexion à chacun de ces services avec les comptes de Léo.
+
+- **Étape 425 (v0.44.1), Léo : « ajoute une barre de recherche »** (dans « Découvrir », juste après les 45 services de
+  l'étape 424). Champ pleine largeur au-dessus des rubriques, au style des champs de Jaris ; il cherche dans ce qui est
+  AFFICHÉ (nom, description, rubrique — donc dans la langue de Léo), sans accents ni majuscules, chaque mot tapé devant
+  se trouver (`catalogMatches`, shared/mcpCatalog.ts) ; les rubriques vides disparaissent ; aucun résultat : « Aucun
+  service ne correspond à « … ». Tu peux ajouter le tien avec « + Ajouter » » (le libellé réel du bouton, 24 langues) ;
+  Échap vide le champ. Régression : `test-mcp.mjs` (sans accents, tous les mots ; échoue sans le pliage des accents),
+  `test-mcp-settings-ui.mjs` (navigateur, CSS compilé : trouvable par son nom, largeur mesurée, « canva », « MAILS »,
+  « video », « crm salesflare », aucun résultat, Échap ; capture).

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Skjul detaljer",
   "mcp.catalog.added": "Allerede tilføjet",
   "mcp.catalog.add": "Tilføj {name}",
+  "mcp.search.placeholder": "Søg efter en tjeneste",
+  "mcp.search.empty": "Ingen tjeneste matcher „{query}“. Du kan tilføje din egen med „+ {button}“.",
   "mcp.error.auth": "MCP-serveren „{name}“ afviser forbindelsen: nøgle mangler eller er afvist. Slet den, og tilføj den igen med en gyldig nøgle.",
   "options.tab.general.subtitle": "Selve appen: sprog, version, filer, historik.",
   "options.score.questions": "Spørgsmål",

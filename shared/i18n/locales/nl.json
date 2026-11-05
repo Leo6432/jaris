@@ -147,6 +147,8 @@
   "mcp.details.hide": "Details verbergen",
   "mcp.catalog.added": "Al toegevoegd",
   "mcp.catalog.add": "{name} toevoegen",
+  "mcp.search.placeholder": "Een dienst zoeken",
+  "mcp.search.empty": "Geen dienst komt overeen met ‘{query}’. Je kunt je eigen dienst toevoegen met ‘+ {button}’.",
   "mcp.error.auth": "De MCP-server “{name}” weigert de verbinding: sleutel ontbreekt of is geweigerd. Verwijder hem en voeg hem opnieuw toe met een geldige sleutel.",
   "options.tab.general.subtitle": "De app zelf: taal, versie, bestanden, geschiedenis.",
   "options.score.questions": "Vragen",

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Skryť podrobnosti",
   "mcp.catalog.added": "Už pridané",
   "mcp.catalog.add": "Pridať {name}",
+  "mcp.search.placeholder": "Hľadať službu",
+  "mcp.search.empty": "Žiadna služba nezodpovedá „{query}“. Vlastnú môžeš pridať cez „+ {button}“.",
   "mcp.error.auth": "Server MCP „{name}“ odmieta pripojenie: kľúč chýba alebo bol odmietnutý. Odstráň ho a pridaj znova s platným kľúčom.",
   "options.tab.general.subtitle": "Samotná aplikácia: jazyk, verzia, súbory, história.",
   "options.score.questions": "Otázky",

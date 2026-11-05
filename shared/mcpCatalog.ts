@@ -104,3 +104,17 @@ export function catalogEntry(id: unknown): McpCatalogEntry | null {
 export function catalogTransport(entry: McpCatalogEntry): McpTransportConfig {
   return { kind: 'http', url: entry.url, headers: {} }
 }
+
+const fold = (text: string): string => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/**
+ * Étape 425 (Léo : « ajoute une barre de recherche ») : une entrée de « Découvrir » correspond-elle à ce qui est tapé ?
+ * Chaque mot tapé doit se trouver dans l'un des textes de la carte (nom, description, rubrique — affichés, donc dans la
+ * langue de Léo), sans tenir compte des accents ni des majuscules. Rien de tapé : tout correspond.
+ */
+export function catalogMatches(query: string, texts: readonly string[]): boolean {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const haystack = fold(texts.join(' \n '))
+  return words.every((word) => haystack.includes(word))
+}

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Slēpt informāciju",
   "mcp.catalog.added": "Jau pievienots",
   "mcp.catalog.add": "Pievienot {name}",
+  "mcp.search.placeholder": "Meklēt pakalpojumu",
+  "mcp.search.empty": "Neviens pakalpojums neatbilst “{query}”. Savu vari pievienot ar “+ {button}”.",
   "mcp.error.auth": "MCP serveris “{name}” atsaka savienojumu: atslēgas nav vai tā noraidīta. Izdzēs to un pievieno no jauna ar derīgu atslēgu.",
   "options.tab.general.subtitle": "Pati lietotne: valoda, versija, faili, vēsture.",
   "options.score.questions": "Jautājumi",

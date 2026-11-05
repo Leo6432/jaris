@@ -147,6 +147,8 @@
   "mcp.details.hide": "Slėpti išsamią informaciją",
   "mcp.catalog.added": "Jau pridėta",
   "mcp.catalog.add": "Pridėti {name}",
+  "mcp.search.placeholder": "Ieškoti paslaugos",
+  "mcp.search.empty": "Jokia paslauga neatitinka „{query}“. Savo gali pridėti mygtuku „+ {button}“.",
   "mcp.error.auth": "MCP serveris „{name}“ atmeta ryšį: rakto nėra arba jis atmestas. Ištrink jį ir pridėk iš naujo su galiojančiu raktu.",
   "options.tab.general.subtitle": "Pati programa: kalba, versija, failai, istorija.",
   "options.score.questions": "Klausimai",

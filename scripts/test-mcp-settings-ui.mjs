@@ -246,3 +246,36 @@ test('fenêtre étroite (760 px) : rien ne déborde, tableau et cartes restent d
     await shot(page, 'etroit.png')
   }, { width: 760, init })
 })
+
+test('étape 425 : barre de recherche de « Découvrir » — nom, description ou rubrique, sans accents ; aucun résultat dit quoi faire ; Échap vide', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.mcp-card')
+    const search = page.getByRole('searchbox', { name: 'Rechercher un service' })
+    assert.equal(await search.count(), 1, 'trouvable par son nom')
+    // Pleine largeur, au-dessus des rubriques, avec le style des champs de Jaris.
+    const box = await page.$eval('.mcp-search', (el) => {
+      const r = el.getBoundingClientRect()
+      const list = document.querySelector('.mcp-discover__section').getBoundingClientRect()
+      return { width: Math.round(r.width), listWidth: Math.round(list.width), above: r.bottom <= list.top, height: Math.round(r.height), radius: getComputedStyle(el).borderTopLeftRadius }
+    })
+    assert.equal(box.width, box.listWidth)
+    assert.ok(box.above && box.height >= 36, JSON.stringify(box))
+    const visible = () => page.$$eval('.mcp-card__name', (els) => els.map((el) => el.textContent))
+    await search.fill('canva')
+    assert.deepEqual(await visible(), ['Canva'])
+    await search.fill('MAILS')
+    assert.deepEqual(await visible(), ['Fastmail', 'Superhuman Mail'], 'description, sans majuscules')
+    await search.fill('video')
+    assert.ok((await visible()).includes('Higgsfield'), 'rubrique « vidéo » et descriptions, sans accent')
+    assert.deepEqual(await page.$$eval('.mcp-discover__title', (els) => els.map((el) => el.textContent)).then((t) => t.includes('Design, vidéo et image')), true)
+    await search.fill('crm salesflare')
+    assert.deepEqual(await visible(), ['Salesflare'], 'chaque mot tapé compte')
+    await shot(page, 'recherche.png')
+    await search.fill('zzzz')
+    assert.equal(await page.locator('.mcp-card').count(), 0)
+    assert.equal(await page.textContent('.mcp-search__empty'), 'Aucun service ne correspond à « zzzz ». Tu peux ajouter le tien avec « + Ajouter ».')
+    await search.press('Escape')
+    assert.equal(await search.inputValue(), '')
+    assert.equal(await page.locator('.mcp-card').count(), 45)
+  })
+})

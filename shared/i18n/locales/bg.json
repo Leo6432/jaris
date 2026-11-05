@@ -147,6 +147,8 @@
   "mcp.details.hide": "Скрий подробностите",
   "mcp.catalog.added": "Вече е добавен",
   "mcp.catalog.add": "Добави {name}",
+  "mcp.search.placeholder": "Търсене на услуга",
+  "mcp.search.empty": "Няма услуга, която да отговаря на „{query}“. Можеш да добавиш своя с „+ {button}“.",
   "mcp.error.auth": "MCP сървърът „{name}“ отказва връзката: липсващ или отхвърлен ключ. Изтрий го и го добави отново с валиден ключ.",
   "options.tab.general.subtitle": "Самото приложение: език, версия, файлове, история.",
   "options.score.questions": "Въпроси",

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Részletek elrejtése",
   "mcp.catalog.added": "Már hozzáadva",
   "mcp.catalog.add": "{name} hozzáadása",
+  "mcp.search.placeholder": "Szolgáltatás keresése",
+  "mcp.search.empty": "Egy szolgáltatás sem felel meg ennek: „{query}”. A sajátodat a „+ {button}” gombbal adhatod hozzá.",
   "mcp.error.auth": "A(z) „{name}” MCP-szerver elutasítja a kapcsolatot: hiányzó vagy elutasított kulcs. Töröld, majd add hozzá újra érvényes kulccsal.",
   "options.tab.general.subtitle": "Maga az alkalmazás: nyelv, verzió, fájlok, előzmények.",
   "options.score.questions": "Kérdések",

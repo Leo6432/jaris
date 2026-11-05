@@ -271,3 +271,14 @@ test('étape 424 : chaque service de « Découvrir » a son vrai logo (PNG 64 px
     assert.ok(ids.has(id), id)
   }
 })
+
+test('étape 425 : catalogMatches — chaque mot tapé, sans accents ni majuscules ; rien de tapé : tout', () => {
+  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const card = ['Canva', 'Créer et modifier tes designs Canva', 'Design, vidéo et image']
+  assert.equal(catalog.catalogMatches('', card), true)
+  assert.equal(catalog.catalogMatches('   ', card), true)
+  assert.equal(catalog.catalogMatches('CANVA', card), true)
+  assert.equal(catalog.catalogMatches('video creer', card), true)
+  assert.equal(catalog.catalogMatches('canva mail', card), false, 'tous les mots')
+  assert.equal(catalog.catalogMatches('figma', card), false)
+})

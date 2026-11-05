@@ -147,6 +147,8 @@
   "mcp.details.hide": "Skrij podrobnosti",
   "mcp.catalog.added": "Že dodano",
   "mcp.catalog.add": "Dodaj {name}",
+  "mcp.search.placeholder": "Iskanje storitve",
+  "mcp.search.empty": "Nobena storitev se ne ujema z »{query}«. Svojo lahko dodaš z »+ {button}«.",
   "mcp.error.auth": "Strežnik MCP »{name}« zavrača povezavo: ključ manjka ali je zavrnjen. Izbriši ga in ga znova dodaj z veljavnim ključem.",
   "options.tab.general.subtitle": "Aplikacija sama: jezik, različica, datoteke, zgodovina.",
   "options.score.questions": "Vprašanja",

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Nascondi i dettagli",
   "mcp.catalog.added": "Già aggiunto",
   "mcp.catalog.add": "Aggiungi {name}",
+  "mcp.search.placeholder": "Cerca un servizio",
+  "mcp.search.empty": "Nessun servizio corrisponde a «{query}». Puoi aggiungere il tuo con «+ {button}».",
   "mcp.error.auth": "Il server MCP «{name}» rifiuta la connessione: chiave mancante o rifiutata. Eliminalo e aggiungilo di nuovo con una chiave valida.",
   "options.tab.general.subtitle": "L'app stessa: lingua, versione, file, cronologia.",
   "options.score.questions": "Domande",

@@ -147,6 +147,8 @@
   "mcp.details.hide": "Ukryj szczegóły",
   "mcp.catalog.added": "Już dodano",
   "mcp.catalog.add": "Dodaj {name}",
+  "mcp.search.placeholder": "Szukaj usługi",
+  "mcp.search.empty": "Żadna usługa nie pasuje do „{query}”. Możesz dodać własną przyciskiem „+ {button}”.",
   "mcp.error.auth": "Serwer MCP „{name}” odrzuca połączenie: brak klucza lub został odrzucony. Usuń go i dodaj ponownie z prawidłowym kluczem.",
   "options.tab.general.subtitle": "Sama aplikacja: język, wersja, pliki, historia.",
   "options.score.questions": "Pytania",

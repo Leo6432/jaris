@@ -3,7 +3,7 @@ import { t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { Toggle } from './SettingsLayout'
 import { MCP_MAX_TOOLS_PER_REQUEST, type McpServerView } from '../../shared/mcp'
-import { MCP_CATALOG, MCP_CATEGORIES, catalogEntry, type McpCatalogEntry } from '../../shared/mcpCatalog'
+import { MCP_CATALOG, MCP_CATEGORIES, catalogEntry, catalogMatches, type McpCatalogEntry } from '../../shared/mcpCatalog'
 import { MCP_LOGOS } from '@/assets/mcp-logos'
 import type { MessageKey } from '../../shared/i18n'
 
@@ -333,13 +333,36 @@ function MineList({ servers, act, onDiscover }: { servers: McpServerView[] | nul
 /** « Découvrir » : les services proposés par Jaris, en cartes ; « + » ajoute et ouvre la connexion avec ton compte. */
 function Discover({ servers, onAdd }: { servers: McpServerView[]; onAdd: (id: string) => Promise<boolean> }): JSX.Element {
   const added = new Set(servers.map((server) => server.catalogId).filter(Boolean))
+  // Étape 425 : la recherche porte sur ce qui est affiché (nom, description, rubrique), dans la langue de Léo.
+  const [query, setQuery] = useState('')
+  const sections = MCP_CATEGORIES.map((category) => {
+    const title = t(`mcp.category.${category}` as MessageKey)
+    const entries = MCP_CATALOG.filter((entry) => entry.category === category && catalogMatches(query, [entry.name, catalogDescription(entry.id), title]))
+    return { category, title, entries }
+  }).filter((section) => section.entries.length)
   // Étape 424 : par rubrique, dans l'ordre de la liste de Léo.
   return (
     <div className="mcp-discover">
-      {MCP_CATEGORIES.map((category) => {
-        const entries = MCP_CATALOG.filter((entry) => entry.category === category)
-        if (!entries.length) return null
-        const title = t(`mcp.category.${category}` as MessageKey)
+      <input
+        type="search"
+        className="mcp-search"
+        placeholder={t('mcp.search.placeholder')}
+        aria-label={t('mcp.search.placeholder')}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && query) {
+            event.stopPropagation()
+            setQuery('')
+          }
+        }}
+      />
+      {!sections.length && (
+        <p className="mcp-search__empty" role="status">
+          {t('mcp.search.empty', { query: query.trim(), button: t('mcp.add.button') })}
+        </p>
+      )}
+      {sections.map(({ category, title, entries }) => {
         return (
           <section key={category} className="mcp-discover__section" aria-label={title}>
             <h3 className="mcp-discover__title">{title}</h3>

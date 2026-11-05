@@ -157,6 +157,8 @@ export const fr = {
   "mcp.details.hide": "Masquer les détails",
   "mcp.catalog.added": "Déjà ajouté",
   "mcp.catalog.add": "Ajouter {name}",
+  "mcp.search.placeholder": "Rechercher un service",
+  "mcp.search.empty": "Aucun service ne correspond à « {query} ». Tu peux ajouter le tien avec « + {button} ».",
   "mcp.error.auth": "Le serveur MCP « {name} » refuse la connexion : clé manquante ou refusée. Supprime-le puis ajoute-le de nouveau avec une clé valide.",
   "options.tab.general.subtitle": "L'application elle-même : langue, version, fichiers, historique.",
   "options.score.questions": "Questions",
