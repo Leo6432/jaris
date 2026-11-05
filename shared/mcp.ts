@@ -265,11 +265,36 @@ export interface McpToolCandidate {
   description: string
 }
 
+/** Étape 420 : outils ajoutés en plus de `max` parce qu'un outil choisi les nomme (voir pickMcpTools). */
+export const MCP_COMPANION_TOOLS_MAX = 4
+
+/**
+ * Étape 420 : un outil que son serveur dit ancien ou à éviter (« LEGACY-ONLY — DO NOT CALL WHEN create-design IS
+ * AVAILABLE », « deprecated »…). Détecté par le PATRON, jamais par le nom d'un serveur.
+ */
+export function isLegacyTool(description: string): boolean {
+  return /\b(legacy|deprecated|obsolete)\b/i.test(description) || /\bdo not (call|use)\b[^.\n]{0,40}\bwhen\b/i.test(description)
+}
+
+/** Un nom d'outil cité tel quel dans un texte (`create-design` ne compte pas dans `create-design-from-candidate`). */
+function mentions(text: string, toolName: string): boolean {
+  const escaped = toolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}($|[^A-Za-z0-9_-])`).test(text)
+}
+
 /**
  * Les outils MCP proposés pour UNE demande. Tant qu'il y en a peu (au plus `max`), tous. Au-delà, ceux dont le nom, la
  * description ou le nom du serveur partagent le plus de mots avec la demande, puis les autres dans l'ordre (un petit
- * modèle reçoit toujours au plus `max` outils de plus que les siens). Les descriptions des serveurs sont souvent en
- * anglais : une demande en français peut ne partager aucun mot — l'ordre des serveurs départage alors.
+ * modèle reçoit au plus `max` outils de plus que les siens). Les descriptions des serveurs sont souvent en anglais :
+ * une demande en français peut ne partager aucun mot — l'ordre des serveurs départage alors.
+ *
+ * Étape 420 (Léo : « il a commencé, mais il ne fait même pas sur mon compte Canva, il me demande d'ouvrir des liens ») :
+ * Canva a ~45 outils ; le modèle avait reçu l'ANCIEN `generate-design` (des propositions à choisir) sans l'outil qui
+ * met la proposition dans le compte. Deux règles générales :
+ * - un outil que son serveur dit ancien ou à éviter passe après les autres (`isLegacyTool`) ;
+ * - un outil choisi qui en NOMME un autre du même serveur dans sa description (« use create-design-from-candidate »,
+ *   « poll get-create-design-async-job ») l'emmène avec lui, au plus MCP_COMPANION_TOOLS_MAX en plus : sans lui, le
+ *   modèle ne peut pas finir ce que le premier commence.
  */
 export function pickMcpTools<T extends McpToolCandidate>(prompt: string, tools: readonly T[], max = MCP_MAX_TOOLS_PER_REQUEST): T[] {
   if (tools.length <= max) return [...tools]
@@ -279,15 +304,21 @@ export function pickMcpTools<T extends McpToolCandidate>(prompt: string, tools: 
     const own = new Set([...words(tool.toolName), ...words(tool.description)])
     let shared = 0
     for (const word of own) if (asked.has(word)) shared++
-    // Un serveur nommé dans la demande (« sur GitHub ») compte plus qu'un mot commun.
-    return server * 3 + shared
+    // Un serveur nommé dans la demande (« sur GitHub ») compte plus qu'un mot commun ; un outil ancien, moins.
+    return server * 3 + shared - (isLegacyTool(tool.description) ? 2 : 0)
   }
-  return tools
-    .map((tool, index) => ({ tool, index, score: score(tool) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, max)
-    .sort((a, b) => a.index - b.index)
-    .map((entry) => entry.tool)
+  const ranked = tools.map((tool, index) => ({ tool, index, score: score(tool) })).sort((a, b) => b.score - a.score || a.index - b.index)
+  const chosen = new Set(ranked.slice(0, max).map((entry) => entry.index))
+  let extra = 0
+  for (const entry of ranked.slice(0, max)) {
+    for (let index = 0; index < tools.length && extra < MCP_COMPANION_TOOLS_MAX; index++) {
+      const other = tools[index]
+      if (chosen.has(index) || other.serverName !== entry.tool.serverName || !mentions(entry.tool.description, other.toolName)) continue
+      chosen.add(index)
+      extra++
+    }
+  }
+  return tools.filter((_, index) => chosen.has(index))
 }
 
 /** Une partie d'un résultat d'outil MCP (`content` de `tools/call`). */
@@ -314,6 +345,38 @@ export function mcpResultText(content: readonly McpContentPart[] | undefined, st
   if (!text.trim() && structured !== undefined && structured !== null) text = JSON.stringify(structured)
   if (text.length > max) return `${text.slice(0, max)}\n[… résultat coupé : ${text.length - max} caractères de plus]`
   return text
+}
+
+/** Étape 420 : la plus longue attente demandée par un serveur que Jaris respecte (au-delà, il rend la main au modèle). */
+export const MCP_MAX_SERVER_WAIT_MS = 60_000
+
+/**
+ * Étape 420 : un serveur qui dit « reviens dans N secondes » (Canva : `polling_policy.wait_seconds` du travail en
+ * cours de `create-design`). Cherché dans les données structurées et dans un texte JSON, par le NOM du champ
+ * (`wait_seconds`, `retry_after_seconds`, `retry_after`). Sans demande, ou au-delà d'une minute : 0.
+ */
+export function serverRequestedWaitMs(content: readonly McpContentPart[] | undefined, structured: unknown): number {
+  const found: number[] = []
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > 6 || value === null || typeof value !== 'object') return
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (/^(wait_seconds|retry_after_seconds|retry_after)$/i.test(key) && typeof entry === 'number' && Number.isFinite(entry) && entry > 0) found.push(entry)
+      else visit(entry, depth + 1)
+    }
+  }
+  visit(structured, 0)
+  for (const part of content ?? []) {
+    if (part.type !== 'text' || !part.text || !/wait_seconds|retry_after/i.test(part.text)) continue
+    try {
+      visit(JSON.parse(part.text), 0)
+    } catch {
+      const match = part.text.match(/"?(?:wait_seconds|retry_after_seconds)"?\s*[:=]\s*(\d+(?:\.\d+)?)/i)
+      if (match) found.push(Number(match[1]))
+    }
+  }
+  if (!found.length) return 0
+  const ms = Math.max(...found) * 1000
+  return ms <= MCP_MAX_SERVER_WAIT_MS ? Math.round(ms) : 0
 }
 
 /** Lecture tolérante du fichier de configuration : un serveur mal formé est ignoré, jamais tout le fichier. */

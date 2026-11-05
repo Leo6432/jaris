@@ -19,6 +19,7 @@ import {
   parseMcpPaste,
   pickMcpTools,
   secretNames,
+  serverRequestedWaitMs,
   transportSummary,
   type McpConfigFile,
   type McpContentPart,
@@ -500,6 +501,20 @@ export async function restartMcpServer(id: unknown): Promise<McpServerView[]> {
   return config.servers.map(view)
 }
 
+/** Une attente interrompue tout de suite par « Arrêter » ou une nouvelle phrase. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve()
+    const done = (): void => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done)
+  })
+}
+
 /** Un échec que le serveur a lui-même signalé (`isError`) : son message part tel quel, sans être réemballé. */
 class McpToolError extends Error {}
 
@@ -563,6 +578,10 @@ async function callTool(tool: OfferedTool, args: Record<string, unknown>, signal
       resetTimeoutOnProgress: true
     })
     const text = mcpResultText(result.content as McpContentPart[] | undefined, result.structuredContent)
+    // Étape 420 : le serveur demande d'attendre avant de redemander (travail en cours) — Jaris attend ici, plutôt que
+    // de laisser le modèle redemander aussitôt et épuiser ses actions sur un travail pas encore fini.
+    const wait = result.isError ? 0 : serverRequestedWaitMs(result.content as McpContentPart[] | undefined, result.structuredContent)
+    if (wait > 0) await pause(wait, signal)
     if (result.isError) throw new McpToolError(t('mcp.error.toolFailed', { tool: tool.toolName, name: tool.serverName, error: text || '?' }))
     return text || t('mcp.result.empty', { tool: tool.toolName })
   } catch (err) {

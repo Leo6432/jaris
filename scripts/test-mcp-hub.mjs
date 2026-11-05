@@ -80,7 +80,7 @@ test('un vrai serveur collé en JSON : connecté, outils listés (lecture seule 
     assert.equal(views[0].name, 'Mes fichiers')
     const server = await ready(env.hub)
     assert.equal(server.status, 'ready', server.error)
-    assert.deepEqual(server.tools.map((tool) => tool.name).sort(), ['add_numbers', 'crash', 'fail', 'list_files', 'secret'])
+    assert.deepEqual(server.tools.map((tool) => tool.name).sort(), ['add_numbers', 'crash', 'fail', 'job_status', 'list_files', 'secret'])
     assert.equal(server.tools.find((tool) => tool.name === 'list_files').readOnly, true)
     assert.equal(server.tools.find((tool) => tool.name === 'add_numbers').readOnly, false)
     assert.deepEqual(server.secretNames, ['SECRET'])
@@ -406,5 +406,25 @@ test('étape 419 : un retour dont le « state » ne correspond pas est refusé ;
   } finally {
     await env.done()
     service.close()
+  }
+})
+
+test('étape 420 : un travail en cours dont le serveur dit « reviens dans 1 s » — Jaris attend avant de rendre la main ; « Arrêter » coupe l’attente', async () => {
+  const env = setup()
+  try {
+    await env.hub.addMcpServers(config(), '')
+    assert.equal((await ready(env.hub)).status, 'ready')
+    const offered = env.hub.mcpToolsFor('')
+    let started = Date.now()
+    assert.match(await offered.call('mcp_mes_fichiers_job_status', {}), /in_progress/)
+    assert.ok(Date.now() - started >= 900, `attente respectée (${Date.now() - started} ms)`)
+    const stop = new AbortController()
+    started = Date.now()
+    const call = offered.call('mcp_mes_fichiers_job_status', {}, stop.signal)
+    setTimeout(() => stop.abort(), 100)
+    await call.catch(() => {})
+    assert.ok(Date.now() - started < 800, 'arrêté sans attendre la fin')
+  } finally {
+    await env.done()
   }
 })

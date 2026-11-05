@@ -30,4 +30,8 @@ server.registerTool('crash', { description: 'Stops the server' }, async () => {
   setTimeout(() => process.exit(3), 10)
   return { content: [{ type: 'text', text: 'bye' }] }
 })
+// Étape 420 : un travail encore en cours, comme le `get-create-design-async-job` de Canva.
+server.registerTool('job_status', { description: 'Status of a running job' }, async () => ({
+  content: [{ type: 'text', text: '{"status":"in_progress","polling_policy":{"wait_seconds":1}}' }]
+}))
 await server.connect(new StdioServerTransport())

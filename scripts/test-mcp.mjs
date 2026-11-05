@@ -119,3 +119,53 @@ test('étape 419 : le catalogue — services en ligne officiels (https), connexi
   const file = mcp.parseMcpConfigFile({ servers: [{ id: '1', name: 'Canva', catalogId: 'canva', transport: { kind: 'http', url: 'https://x.fr/mcp' } }] })
   assert.equal(file.servers[0].catalogId, 'canva')
 })
+
+// Étape 420 : les 45 outils du vrai serveur MCP de Canva (noms tels que le serveur les donne), avec les extraits de
+// leurs descriptions qui comptent ici, copiés des descriptions publiées par Canva.
+const CANVA_TOOLS = ['comment-on-design', 'copy-design', 'create-brand-template-draft', 'create-design', 'create-design-from-brand-template', 'create-design-from-candidate', 'create-folder', 'create-upload-url', 'create-video', 'edit-design', 'export-design', 'generate-design', 'generate-design-structured', 'generate-image', 'get-assets', 'get-brand-template-dataset', 'get-create-design-async-job', 'get-design-dataset', 'get-export-formats', 'get-generate-image-job', 'get-motion-import-job-status', 'get-separate-image-layers-job', 'get-video-generation-status', 'get-video-production-guide', 'help', 'import-claude-motion-from-url', 'import-design-from-url', 'list-brand-kits', 'list-comments', 'list-folder-items', 'list-replies', 'merge-designs', 'move-item-to-folder', 'publish-brand-template', 'read-design', 'remove-background', 'reply-to-comment', 'request-outline-review', 'resize-design', 'resolve-shortlink', 'search-brand-templates', 'search-designs', 'search-folders', 'separate-image-layers', 'upload-asset-from-url']
+const CANVA_DESCRIPTIONS = {
+  'create-design': 'Generate a new Canva design from a written brief. Use this tool only when the requested output itself is an editable Canva page or layout. Returns a job_id and continuation_token. Only when no widget is shown, poll get-create-design-async-job with both, until the job completes, then share the design link with the user.',
+  'generate-design': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE. If create-design is in the tool list, you MUST NOT call this tool. The generated designs are design candidates for users to select from. Ask for a preferred design and use \'create-design-from-candidate\' tool to add the design to users\' account.',
+  'generate-design-structured': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE.',
+  'create-design-from-candidate': 'LEGACY-ONLY — DO NOT CALL WHEN create-design IS AVAILABLE. Create a new Canva design from a generation job candidate ID.',
+  'get-create-design-async-job': 'Get the result of a create-design job.'
+}
+const canvaTools = () =>
+  CANVA_TOOLS.map((toolName) => ({ name: `mcp_canva_${toolName}`, serverName: 'Canva', toolName, description: CANVA_DESCRIPTIONS[toolName] ?? `Canva tool ${toolName}` }))
+
+test('étape 420 : Canva (45 outils) — la demande de Léo reçoit create-design ET l’outil qui va chercher le design, jamais l’ancien generate-design', () => {
+  const picked = mcp.pickMcpTools('utilise le mcp de canva, et prend une page a4 et met un texte bonjour en gros', canvaTools()).map((t) => t.toolName)
+  assert.ok(picked.includes('create-design'), picked.join())
+  assert.ok(picked.includes('get-create-design-async-job'), 'l’outil cité par create-design suit')
+  assert.ok(!picked.includes('generate-design') && !picked.includes('generate-design-structured') && !picked.includes('create-design-from-candidate'), 'les outils « LEGACY » passent après')
+  assert.ok(picked.length <= mcp.MCP_MAX_TOOLS_PER_REQUEST + mcp.MCP_COMPANION_TOOLS_MAX)
+})
+
+test('étape 420 : un outil choisi emmène ceux qu’il nomme (même serveur, nom exact), au plus 4 en plus', () => {
+  const tool = (serverName, toolName, description = '') => ({ name: `mcp_${serverName}_${toolName}`, serverName, toolName, description })
+  const tools = [
+    ...Array.from({ length: 14 }, (_, i) => tool('a', `filler_${i}`)),
+    tool('a', 'make_poster', 'Make a poster. Then call finish_job and share_job.'),
+    tool('a', 'finish_job'),
+    tool('a', 'share_job'),
+    tool('a', 'finish_job_v2'),
+    tool('b', 'finish_job', 'Another server with the same tool name')
+  ]
+  const picked = mcp.pickMcpTools('fais un poster avec make poster', tools)
+  const names = picked.map((t) => `${t.serverName}/${t.toolName}`)
+  assert.ok(names.includes('a/make_poster') && names.includes('a/finish_job') && names.includes('a/share_job'), names.join())
+  assert.ok(!names.includes('a/finish_job_v2'), 'nom exact seulement')
+  assert.ok(!names.includes('b/finish_job'), 'jamais d’un autre serveur')
+  assert.equal(mcp.isLegacyTool('This tool is deprecated, use x'), true)
+  assert.equal(mcp.isLegacyTool('Do not use this tool when the user wants an image'), true)
+  assert.equal(mcp.isLegacyTool('Lists the user’s designs'), false)
+})
+
+test('étape 420 : un serveur qui demande d’attendre (Canva : polling_policy.wait_seconds) est écouté, jusqu’à une minute', () => {
+  assert.equal(mcp.serverRequestedWaitMs([], { job: { status: 'in_progress' }, polling_policy: { wait_seconds: 5 } }), 5000)
+  assert.equal(mcp.serverRequestedWaitMs([{ type: 'text', text: '{"status":"in_progress","polling_policy":{"wait_seconds":3}}' }], undefined), 3000)
+  assert.equal(mcp.serverRequestedWaitMs([{ type: 'text', text: 'Job queued. wait_seconds: 2' }], undefined), 2000)
+  assert.equal(mcp.serverRequestedWaitMs([{ type: 'text', text: 'Fini : https://www.canva.com/design/x' }], { design: { id: 'x' } }), 0)
+  assert.equal(mcp.serverRequestedWaitMs([], { polling_policy: { wait_seconds: 600 } }), 0, 'au-delà d’une minute : la main au modèle')
+  assert.equal(mcp.serverRequestedWaitMs([], { wait_seconds: -1 }), 0)
+})

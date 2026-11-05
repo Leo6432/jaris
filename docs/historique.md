@@ -10975,3 +10975,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
     `test-mcp-settings-ui.mjs` (navigateur, CSS compilé : cartes, pastille mesurée, « + » → connexion → ✓,
     « Se connecter » / « Annuler », 760 px ; captures). **Non vérifié en usage réel** : une vraie connexion à Canva,
     Notion… avec le compte de Léo, sur Windows.
+
+- **Étape 420 (v0.43.1), Léo, capture : « utilise le MCP de Canva, prends une page A4 et mets un texte bonjour en
+  gros » → Jaris répond avec 4 liens « à ouvrir » ; « il a commencé, mais il ne fait même pas sur mon compte
+  Canva ».** La connexion par compte à Canva marche (étape 419, vérifié par Léo en usage réel). Cause, lue dans les
+  descriptions publiées par Canva lui-même : `generate-design` est marqué « LEGACY-ONLY — DO NOT CALL WHEN
+  create-design IS AVAILABLE » et ne produit que des PROPOSITIONS à choisir, qu'il faut ensuite mettre dans le compte
+  avec `create-design-from-candidate` ; le bon outil est `create-design` (puis `get-create-design-async-job` jusqu'à ce
+  que le travail soit fini). Canva a ~45 outils : sur les 12 donnés au modèle (étape 418), le choix tombait sur l'ordre
+  du serveur (tous les outils de Canva à égalité grâce au mot « canva »). Trois règles générales (jamais propres à
+  Canva) :
+  - un outil que son serveur dit ancien ou à éviter (« legacy », « deprecated », « do not use … when ») passe après
+    les autres (`isLegacyTool`) ;
+  - un outil choisi qui NOMME un autre outil du même serveur dans sa description l'emmène avec lui (nom exact, au plus
+    4 en plus, `MCP_COMPANION_TOOLS_MAX`) : sans lui, le modèle ne peut pas finir ce que le premier commence ;
+  - un serveur qui dit « reviens dans N secondes » (`wait_seconds`, `retry_after` : la `polling_policy` de Canva) est
+    écouté : Jaris attend ce délai (une minute au plus, coupé par « Arrêter ») avant de rendre la réponse au modèle,
+    qui sinon redemande aussitôt et épuise ses 20 actions sur un travail pas fini.
+  Régression : `test-mcp.mjs` — les 45 vrais noms d'outils de Canva avec les extraits de leurs descriptions : la phrase
+  de Léo reçoit `create-design` et `get-create-design-async-job`, jamais les outils « LEGACY » (échoue sans la
+  règle) ; outils nommés (même serveur, nom exact) ; délais demandés. `test-mcp-hub.mjs` : un vrai outil « travail en
+  cours » (serveur de test) attendu 1 s, et « Arrêter » coupe l'attente. **Non vérifié en usage réel** : la même
+  demande sur le compte Canva de Léo avec cette version. **Reste** : une réponse en deux temps (« lequel tu
+  préfères ? » puis « le 2 ») perd les identifiants du premier tour (seul le texte des échanges est gardé).
