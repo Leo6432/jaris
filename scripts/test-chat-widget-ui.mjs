@@ -31,6 +31,7 @@ const entryPath = join(projectRoot, 'tmp-chat-widget-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import ChatWidget, { computeReplyDismissDelayMs } from './src/components/ChatWidget'
+import VoiceWidget from './src/components/VoiceWidget'
 
 window.__computeReplyDismissDelayMs = computeReplyDismissDelayMs
 window.__heights = []
@@ -82,23 +83,21 @@ window.__renderChatWidget = (inactive) => root.render(
   </div>
 )
 window.__renderChatWidget(false)
-// Étape 346 : même balisage que le widget vocal déplié d'App.tsx (statut puis conversation).
+// Étape 432 : le VRAI widget vocal (VoiceWidget.tsx), comme App.tsx le monte.
+const audio = { current: null }
 window.__renderVoiceLong = (reply) => root.render(
   <div className="app app--widget">
-    <div className="widget-details">
-      <div className="app__status app__status--widget">Je réponds</div>
-      <div className="app__conversation app__conversation--widget">
-        <p className="app__transcript">« Raconte-moi l'histoire de Rome »</p>
-        <p className="app__reply">{reply}</p>
-      </div>
-    </div>
+    <VoiceWidget emotion="happy" transcript="Raconte-moi l'histoire de Rome" reply={reply} activity={null} audioElRef={audio} onOpen={() => {}} />
+  </div>
+)
+window.__renderVoice = (emotion, transcript, reply, activity) => root.render(
+  <div className={\`app app--widget\${emotion === 'idle' ? ' app--widget-collapsed' : ''}\`}>
+    <VoiceWidget emotion={emotion} transcript={transcript} reply={reply} activity={activity} audioElRef={audio} onOpen={() => { window.__openedSettings += 1 }} />
   </div>
 )
 window.__renderVoiceRest = () => root.render(
   <div className="app app--widget app--widget-collapsed">
-    <div className="widget-rest">
-      <div className="widget-pill"><span style={{ display: 'block', width: 32, height: 32 }} /></div>
-    </div>
+    <VoiceWidget emotion="idle" transcript="" reply="" activity={null} audioElRef={audio} onOpen={() => {}} />
   </div>
 )
 `
@@ -140,11 +139,12 @@ async function withWidget(run) {
 
 const options = { skip: chromium ? false : 'playwright introuvable (absent du runner CI)' }
 
-test('le widget affiche une barre de saisie, jamais le cercle du widget vocal', options, async () => {
+test('le widget affiche une barre de saisie (avec le petit orbe, étape 432), jamais la capsule vocale', options, async () => {
   await withWidget(async (page) => {
     assert.ok(await page.$('.chat-widget__input'), 'la barre de saisie est absente')
-    assert.equal(await page.$('.jaris-orb'), null, 'le cercle vocal ne doit pas être dessiné dans le widget texte')
-    assert.equal(await page.$('.chat-widget__answer'), null, 'au repos, rien ne doit être déplié')
+    assert.equal(await page.locator('.voice-island').count(), 0, 'la capsule vocale ne doit pas être dessinée dans le widget texte')
+    assert.equal(await page.locator('.chat-widget__bar .jaris-orb').count(), 1, 'l’orbe de Jaris à gauche de la barre')
+    assert.equal(await page.locator('.chat-widget__answer').count(), 0, 'au repos, rien ne doit être déplié')
   })
 })
 
@@ -152,7 +152,7 @@ test('le Chat inactif reste un petit widget puis + peut afficher une barre déj�
   await withWidget(async (page) => {
     await page.evaluate(() => window.__renderChatWidget(true))
     await page.waitForSelector('.chat-widget__idle')
-    assert.equal(await page.$('.chat-widget__input'), null, 'la barre est visible avant la pression sur +')
+    assert.equal(await page.locator('.chat-widget__input').count(), 0, 'la barre est visible avant la pression sur +')
     const idle = await page.$eval('.chat-widget__idle', (el) => {
       const rect = el.getBoundingClientRect()
       return { width: rect.width, height: rect.height }
@@ -177,7 +177,7 @@ test('un clic sur l’indicateur inactif ramène l’application, sans ouvrir la
     await page.click('.chat-widget__idle')
     await page.waitForFunction(() => window.__openedSettings === 1)
     assert.equal(await page.evaluate(() => window.__openedChatBar), 0, 'le clic ouvre encore la barre au lieu de l’application')
-    assert.equal(await page.$('.chat-widget__input'), null, 'la barre ne doit pas apparaître au clic')
+    assert.equal(await page.locator('.chat-widget__input').count(), 0, 'la barre ne doit pas apparaître au clic')
   })
 })
 
@@ -273,7 +273,7 @@ test('après un repli souris, le prochain + rouvre une simple barre sans ancienn
     await page.waitForSelector('.chat-widget__idle')
     await page.evaluate(() => window.__renderChatWidget(false))
     await page.waitForSelector('.chat-widget__input')
-    assert.equal(await page.$('.chat-widget__answer'), null)
+    assert.equal(await page.locator('.chat-widget__answer').count(), 0)
   })
 })
 
@@ -290,14 +290,16 @@ test('le halo possède assez de marge transparente pour ne pas être coupé', op
 
 test('le halo du widget vocal inactif possède lui aussi sa marge complète', options, async () => {
   await withWidget(async (page) => {
-    await page.setViewportSize({ width: 320, height: 68 })
+    // La fenêtre repliée (104x68, main.ts) : la capsule de repos (76x40) garde 14px tout autour.
+    await page.setViewportSize({ width: 104, height: 68 })
     await page.evaluate(() => window.__renderVoiceRest())
-    await page.waitForSelector('.widget-pill')
-    const geometry = await page.$eval('.widget-pill', (el) => {
+    await page.waitForSelector('.voice-island')
+    await page.waitForTimeout(400)
+    const geometry = await page.$eval('.voice-island', (el) => {
       const rect = el.getBoundingClientRect()
-      return { top: rect.top, bottom: innerHeight - rect.bottom }
+      return { top: rect.top, left: rect.left, right: innerWidth - rect.right, bottom: innerHeight - rect.bottom }
     })
-    assert.deepEqual(geometry, { top: 14, bottom: 14 })
+    assert.deepEqual(geometry, { top: 14, left: 14, right: 14, bottom: 14 })
   })
 })
 
@@ -363,7 +365,8 @@ test('envoyer une question déplie la réponse et donne au main la hauteur RÉEL
     assert.match(content, /18 degrés/, 'la réponse doit s’afficher dans le widget, sans rouvrir l’application')
     assert.ok(await page.$('.chat-widget__reply strong'), 'le **gras** du modèle doit être rendu, pas affiché tel quel')
     const answerBackground = await page.$eval('.chat-widget__answer', (el) => getComputedStyle(el).backgroundColor)
-    const alpha = Number(answerBackground.match(/[\d.]+(?=\)$)/)?.[0] ?? 1)
+    // « rgb(0, 0, 0) » (étape 432, noir opaque) n'a pas d'alpha : seul « rgba(…, a) » en porte un.
+    const alpha = answerBackground.startsWith('rgba') ? Number(answerBackground.match(/[\d.]+(?=\)$)/)?.[0] ?? 1) : 1
     assert.ok(alpha >= 0.9, `le fond de la réponse reste trop transparent (${answerBackground})`)
 
     const heights = await page.evaluate(() => window.__heights)
@@ -413,7 +416,7 @@ test('le widget garde seulement "Ouvrir le Chat", qui rouvre l’application', o
 
     await page.click('.chat-widget__action:has-text("Ouvrir le Chat")')
     assert.equal(await page.evaluate(() => window.__openedSettings), 1, 'le bouton ne rouvre pas Jaris')
-    assert.equal(await page.$('.chat-widget__action:has-text("Fermer")'), null, 'le bouton Fermer doit être absent')
+    assert.equal(await page.locator('.chat-widget__action:has-text("Fermer")').count(), 0, 'le bouton Fermer doit être absent')
   })
 })
 
@@ -536,19 +539,80 @@ test('Échap ferme la réponse affichée, et rend la fenêtre au petit indicateu
 // bas de la fenêtre — coupée, et impossible à faire défiler puisque la boîte croyait avoir 380 px de place.
 test('widget vocal : une très longue réponse reste dans la fenêtre et défile jusqu’à sa fin', options, async () => {
   await withWidget(async (page) => {
-    await page.setViewportSize({ width: 320, height: 460 })
+    // La fenêtre dépliée du widget vocal (500x460, main.ts).
+    await page.setViewportSize({ width: 500, height: 460 })
     await page.evaluate(() => window.__renderVoiceLong('Rome fut fondée, dit la légende, par Romulus. '.repeat(60)))
-    await page.waitForSelector('.app__conversation--widget')
-    const box = await page.$eval('.app__conversation--widget', (el) => {
+    await page.waitForSelector('.voice-island__reply')
+    await page.waitForTimeout(400)
+    const card = await page.$eval('.voice-island', (el) => {
       const rect = el.getBoundingClientRect()
-      return { bottom: rect.bottom, scroll: el.scrollHeight, client: el.clientHeight }
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: innerWidth - rect.right }
     })
-    assert.ok(box.bottom <= 460, `la boîte sort de la fenêtre (bas à ${Math.round(box.bottom)} px)`)
+    assert.equal(card.top, 14)
+    assert.ok(card.bottom <= 460 - 14, `la carte sort de la fenêtre ou touche son bord (bas à ${Math.round(card.bottom)} px)`)
+    assert.equal(card.left, card.right, 'carte centrée')
+    assert.ok(card.left >= 14, 'la carte garde sa marge sur les côtés')
+    const box = await page.$eval('.voice-island__body', (el) => ({ scroll: el.scrollHeight, client: el.clientHeight }))
     assert.ok(box.scroll > box.client, 'la réponse ne défile pas : sa fin est inaccessible')
-    const end = await page.$eval('.app__conversation--widget', (el) => {
+    const end = await page.$eval('.voice-island__body', (el) => {
       el.scrollTop = el.scrollHeight
       return el.getBoundingClientRect().bottom
     })
-    assert.ok(end <= 460)
+    assert.ok(end <= 460 - 14)
+    // Étape 432 : texte blanc sur fond noir opaque — lisible sur n'importe quel fond d'écran.
+    const colors = await page.$eval('.voice-island__reply', (el) => [getComputedStyle(el).color, getComputedStyle(el.closest('.voice-island')).backgroundColor])
+    assert.deepEqual(colors, ['rgb(255, 255, 255)', 'rgb(0, 0, 0)'])
+  })
+})
+
+// Étape 432 (Léo : « on ne voit pas le texte ») : une seule capsule noire qui change de forme selon ce que fait Jaris.
+test('widget vocal : capsule de repos, écoute, réflexion puis carte de réponse, toujours texte blanc sur noir', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 500, height: 460 })
+    const state = async () => {
+      await page.waitForTimeout(400)
+      return page.$eval('.voice-island', (el) => {
+        const rect = el.getBoundingClientRect()
+        const headline = el.querySelector('.voice-island__headline')
+        const body = el.querySelector('.voice-island__body')
+        return {
+          width: Math.round(rect.width),
+          headline: headline.textContent,
+          headlineShown: getComputedStyle(headline).opacity === '1',
+          bodyShown: getComputedStyle(body).display !== 'none',
+          body: body.textContent,
+          headlineColor: getComputedStyle(headline).color
+        }
+      })
+    }
+    await page.evaluate(() => window.__renderVoice('idle', '', '', null))
+    let s = await state()
+    assert.equal(s.width, 76, 'au repos : la petite capsule')
+    assert.equal(s.headlineShown, false, 'au repos : l’orbe seul')
+    assert.equal(s.bodyShown, false)
+
+    await page.evaluate(() => window.__renderVoice('listening', 'Quel temps fera-t-il demain', '', null))
+    s = await state()
+    assert.equal(s.width, 380)
+    assert.equal(s.headline, 'Quel temps fera-t-il demain', 'les mots entendus s’écrivent dans la capsule')
+    assert.equal(s.headlineShown, true)
+    assert.equal(s.headlineColor, 'rgb(255, 255, 255)')
+    assert.equal(s.bodyShown, false)
+
+    await page.evaluate(() => window.__renderVoice('thinking', 'Quel temps fera-t-il demain ?', '', 'Recherche sur internet…'))
+    s = await state()
+    assert.equal(s.headline, 'Recherche sur internet…', 'ce que Jaris fait en ce moment')
+    assert.equal(s.bodyShown, true, 'la question reste lisible sous la capsule')
+    assert.match(s.body, /Quel temps fera-t-il demain/)
+
+    await page.evaluate(() => window.__renderVoice('happy', 'Quel temps fera-t-il demain ?', 'Demain : 14 °C, nuageux.', null))
+    s = await state()
+    assert.equal(s.width, 470, 'la réponse ouvre la carte')
+    assert.match(s.body, /Quel temps fera-t-il demain[\s\S]*Demain : 14 °C, nuageux\./)
+
+    // Un clic sur l'orbe rouvre Jaris.
+    const before = await page.evaluate(() => window.__openedSettings)
+    await page.click('.voice-island .jaris-orb')
+    assert.equal(await page.evaluate(() => window.__openedSettings), before + 1)
   })
 })

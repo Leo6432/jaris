@@ -11244,3 +11244,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Régression : `test-hardwarescan-single-pool.mjs` (granite4.2:8b = outils/à refaire ; vrais scores = outils seulement ;
   ligne vision retirée = outils + vision ; échoue si « à refaire » devient « jamais passé »),
   `test-options-reorganization-ui.mjs` (une ligne par modèle et son manque), faux ponts mis à jour. Capture à 760 px.
+
+## Étape 432 — Widgets en capsule noire (vocal et Chat) (v0.46.0)
+
+- Léo : « je veux changer le widget vocal, on ne voit pas le texte… je vois beaucoup d'applis faire ça » (captures
+  d'une encoche façon Dynamic Island). Maquette montrée d'abord (vrai orbe, fond clair), validée « parfait, fais-le,
+  et pareil pour tous les widgets ». Seuls Vocal et Chat ont un widget (Code, Image, Vidéo, Duel, Classement : aucun).
+- Vocal : `src/components/VoiceWidget.tsx`, UNE capsule noire qui change de forme selon l'émotion — 76x40 au repos
+  (orbe seul), 380 de large pendant l'écoute (les mots entendus en direct, barres de son) et la réflexion (ce que Jaris
+  fait, `voiceActivity`), carte de 470 pour la réponse (question en gris, réponse en blanc, défile si longue). Un seul
+  orbe toujours monté, branché au lecteur audio. Remplace l'orbe de 160 px et le texte posés sur le bureau
+  (`.widget-rest/.widget-active/.widget-details/.widget-pill`, `.app__status--widget`, `.app__conversation--widget`
+  retirés). `WIDGET_WIDTH` 320 → 500 (carte + 14 px de marge), hauteur 460 inchangée ; fenêtre repliée 104x68 inchangée.
+- Chat : mêmes couleurs ; orbe à gauche de la barre (40 px de haut pour garder 14 px de marge dans la fenêtre de 68),
+  en-tête « orbe + Jaris » sur la carte de réponse (orbe en réflexion, puis réponse ou erreur).
+- Couleurs FIXES (noir, texte blanc) déclarées sur `.app--widget`, pas les jetons du thème : la capsule flotte sur le
+  bureau et doit rester lisible en thème clair. Bloc CSS en fin d'`index.css` (la dernière règle gagne sur les
+  familles de boutons). Transitions < 340 ms (le main réduit la fenêtre native après 340 ms), `interpolate-size`.
+- Piège retrouvé : `assert.equal(await page.$(…), null)` qui échoue tente d'afficher l'ElementHandle — le test a
+  saturé la mémoire (16 Go) au lieu d'échouer. Toutes ces comparaisons passent par `locator(…).count()`. Autre test
+  faux révélé : l'opacité lue dans « rgb(0, 0, 0) » (pas d'alpha) valait 0.
+- Régression : `test-chat-widget-ui.mjs` (vrai `VoiceWidget` : capsule de repos 14 px tout autour dans 104x68, 4 états
+  — largeurs, texte affiché, carte —, clic sur l'orbe, longue réponse qui défile dans 500x460, blanc sur noir ; échoue
+  si les mots entendus ne s'affichent plus), `test-voice-activity.mjs`. Captures du rendu compilé aux vraies tailles
+  de fenêtre, montrées à Léo avant publication (« Oui, publie »). Pas vérifié sur Windows (liseré, ombre).

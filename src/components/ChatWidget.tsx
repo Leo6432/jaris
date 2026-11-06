@@ -5,6 +5,8 @@ import { formatChatProgress } from '@/lib/formatChatProgress'
 import { ELAPSED_HINT_MS, formatDuration } from '@/lib/formatCodeGenProgress'
 import { useElapsedMs } from '@/lib/useElapsedMs'
 import { t } from '@/lib/i18n'
+import JarisOrb from './JarisOrb'
+import { VOICE_WIDGET_ORB_SIZE } from './VoiceWidget'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
 // (300ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
@@ -233,6 +235,8 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
             void send()
           }}
         >
+          {/* Étape 432 : la même capsule noire que le widget vocal, avec l'orbe de Jaris à gauche. */}
+          <JarisOrb emotion="idle" size={VOICE_WIDGET_ORB_SIZE} />
           <input
             ref={inputRef}
             className="chat-widget__input"
@@ -256,6 +260,10 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
 
       {expanded && (
         <div className="chat-widget__answer">
+          <div className="chat-widget__head">
+            <JarisOrb emotion={error ? 'surprised' : sending ? 'thinking' : 'happy'} size={VOICE_WIDGET_ORB_SIZE} />
+            <span className="chat-widget__name">Jaris</span>
+          </div>
           <p className="chat-widget__question">{t('common.quoted', { text: question })}</p>
           {error ? (
             <p className="chat-widget__error">{error}</p>

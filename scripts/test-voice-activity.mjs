@@ -58,5 +58,9 @@ test('la ligne d’activité suit la vraie demande vocale : démarrée, mise à 
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   assert.match(main, /pipeline\.on\('activity', \(text: string \| null\) => broadcast\(IPC_CHANNELS\.voiceActivity, text\)\)/)
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
-  assert.equal((app.match(/<p className="app__activity">\{voiceActivity\}<\/p>/g) ?? []).length, 2, 'écran vocal ET widget')
+  assert.equal((app.match(/<p className="app__activity">\{voiceActivity\}<\/p>/g) ?? []).length, 1, 'écran vocal')
+  // Étape 432 : dans le widget, l'activité est le texte de la capsule pendant la réflexion (VoiceWidget.tsx).
+  assert.match(app, /<VoiceWidget[\s\S]*?activity=\{voiceActivity\}/, 'widget')
+  const widget = readFileSync(new URL('../src/components/VoiceWidget.tsx', import.meta.url), 'utf8')
+  assert.match(widget, /emotion === 'thinking' && activity\s*\?\s*activity/)
 })

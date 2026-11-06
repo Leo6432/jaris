@@ -1919,34 +1919,6 @@ p.capacity-scan__tier-missing {
   justify-content: center;
 }
 
-/*
- * Un simple orbe miniaturisé flottant sur le bureau, sans rien autour, rendait "bizarre" en usage réel (Léo :
- * "on a un logo de jaris mais en tout petit") — le rendu détaillé de l'orbe (JarisOrb.tsx) est pensé pour
- * 160-320px, pas pour quelques dizaines de pixels (déjà simplifié côté canvas, voir MINIMAL_SIZE_THRESHOLD),
- * mais un point lumineux SEUL reste trop nu pour lire "Jaris est là" au premier coup d'œil. Un vrai petit
- * boîtier façon pilule (mêmes tokens HUD que le reste de l'appli, pas de couleur inventée) l'entoure pour
- * donner une vraie présence stylée, comme un notch/Dynamic Island réel plutôt qu'un logo qui flotte seul.
- *
- * Ajustée à son PROPRE contenu (App.tsx : `<div className="widget-pill">{orb}</div>`), pas étirée à toute la
- * fenêtre avec `margin`/`height` pour se décoller des bords — signalé par Léo en usage réel ("il y a un fond
- * rectangulaire" autour de la pilule arrondie), limite connue des fenêtres Electron transparentes sur
- * Windows (le DWM anti-alias mal un bord arrondi qui touche EXACTEMENT le bord de la fenêtre). Une première
- * tentative avec `margin: 2px` sur le conteneur plein-écran a provoqué un piège CSS classique attrapé avant
- * de livrer (vérifié : `margin` ne réduit pas `height: 100%` comme `width: auto` le ferait, ET le margin-top
- * d'un premier enfant sans padding/bordure sur ses parents "remonte" par fusion de marges jusqu'à `body`,
- * décalant toute la page de 2px au lieu de juste décoller la pilule) — un élément à taille AUTO, centré par
- * le flex du parent, reste naturellement décollé des bords sans ces effets de bord.
- */
-.widget-pill {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 10px;
-  background: var(--hud-panel-raised);
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
-  box-shadow: none;
-}
 
 /* --- Widget TEXTE (quitter Jaris depuis le mode Chat) ---
  *
@@ -2083,27 +2055,6 @@ p.capacity-scan__tier-missing {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.app__status--widget {
-  font-size: 0.7rem;
-  color: var(--hud-text-soft);
-}
-
-.app__conversation--widget {
-  max-width: 270px;
-  max-height: 380px;
-  overflow-y: auto;
-  /* Étape 346 : la boîte ne dépasse jamais le bas de la fenêtre (460 px) — sans ça, la fin d'une longue réponse
-     tombait hors de l'écran, impossible à faire défiler. Elle prend la place restante sous le statut. */
-  min-height: 0;
-  flex: 0 1 auto;
-}
-
-.app__conversation--widget p {
-  font-size: 0.75rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
 }
 
 /* --- Mode Chat (étape 30) --- */
@@ -2982,65 +2933,6 @@ p.capacity-scan__tier-missing {
   align-items: center;
 }
 .app--widget .jaris-orb { animation: none; }
-.widget-rest, .widget-active {
-  position: absolute;
-  left: 50%;
-  transition: transform 320ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease;
-}
-.widget-rest {
-  top: 14px;
-  transform: translate(-50%, 72px) scale(5);
-  opacity: 0;
-  pointer-events: none;
-}
-.widget-active {
-  top: 16px;
-  transform: translate(-50%, 0) scale(1);
-  opacity: 1;
-}
-.widget-details {
-  position: absolute;
-  top: 186px;
-  left: 14px;
-  right: 14px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 200ms ease, transform 320ms ease, visibility 320ms;
-}
-.app--widget-collapsed .widget-rest {
-  transform: translate(-50%, 0) scale(1);
-  opacity: 1;
-  pointer-events: auto;
-}
-.app--widget-collapsed .widget-active {
-  transform: translate(-50%, -72px) scale(.2);
-  opacity: 0;
-  pointer-events: none;
-}
-.app--widget-collapsed .widget-details {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-8px);
-  pointer-events: none;
-}
-/* Voir widgetInstant (App.tsx) : posé tant que la fenêtre du widget est cachée, retiré seulement une fois
-   une vraie frame peinte dans le bon état. Sans ça, l'émotion qui change pendant que le widget est caché
-   laissait la transition se jouer À L'AFFICHAGE, depuis le dernier état peint (replié) — le widget
-   apparaissait au repos puis se dépliait en 320ms alors que Jaris écoutait déjà. */
-.app--widget-instant .widget-rest,
-.app--widget-instant .widget-active,
-.app--widget-instant .widget-details {
-  transition: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .widget-rest, .widget-active, .widget-details { transition: none; }
-}
 
 /* Test du mot « Jaris » (étape 180) : même emplacement dépliable que le test micro, une ligne par phrase entendue. */
 .options-menu__wake-test {
@@ -12192,4 +12084,295 @@ input.reply-ui__field-input {
   text-overflow: ellipsis;
   font-size: 13px;
   color: var(--hud-text-faint);
+}
+
+/* ============================================================================
+   Étape 432 — widgets en capsule noire (Léo : « on ne voit pas le texte », maquette validée « parfait »).
+   Vocal ET Chat : une capsule noire collée en haut au centre, texte blanc — lisible sur n'importe quel fond
+   d'écran, clair ou chargé. Couleurs fixes (pas les jetons du thème) : la capsule flotte sur le bureau, pas dans
+   Jaris, et doit rester noire en thème clair comme en sombre. Seul l'orbe porte la couleur de l'émotion.
+   Écrit en fin de fichier : à spécificité égale, la dernière règle gagne sur les familles de boutons plus haut.
+   Marges : la capsule commence à 14px du haut et des côtés de la fenêtre native (liseré des fenêtres
+   transparentes sous Windows, ombre jamais coupée par les limites natives).
+   ============================================================================ */
+.app--widget {
+  --island-bg: #000;
+  --island-line: rgba(255, 255, 255, 0.09);
+  --island-text: #fff;
+  --island-text-dim: #a3a3a3;
+  --island-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --island-accent: #33e6c8;
+}
+.voice-island[data-emotion='listening'] { --island-accent: #37e2ff; }
+.voice-island[data-emotion='thinking'] { --island-accent: #ffb648; }
+.voice-island[data-emotion='happy'] { --island-accent: #4dffa6; }
+.voice-island[data-emotion='surprised'] { --island-accent: #ff5d7a; }
+
+/* Une seule capsule, qui change de forme : 76x40 au repos (dans la fenêtre repliée de 104x68), 380x48 pendant
+   l'écoute et la réflexion, carte de 470px pour la réponse (fenêtre de 500x460, main.ts). La durée reste sous les
+   340 ms après lesquels le main réduit la fenêtre native au repli. */
+.voice-island {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  interpolate-size: allow-keywords;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-height: calc(100% - 28px);
+  overflow: hidden;
+  color: var(--island-text);
+  background: var(--island-bg);
+  border: 1px solid var(--island-line);
+  border-radius: 24px;
+  box-shadow: var(--island-shadow);
+  transition: width 300ms cubic-bezier(.22, 1, .36, 1), border-radius 300ms ease, height 300ms cubic-bezier(.22, 1, .36, 1);
+}
+.voice-island--open {
+  width: 470px;
+  border-radius: 26px;
+}
+.app--widget-collapsed .voice-island {
+  width: 76px;
+  border-radius: 20px;
+}
+.voice-island__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 16px 0 10px;
+  transition: height 300ms cubic-bezier(.22, 1, .36, 1), padding 300ms cubic-bezier(.22, 1, .36, 1);
+}
+/* Au repos, l'orbe seul, centré : (76 - 2 de bordure - 26) / 2 = 24px de chaque côté. */
+.app--widget-collapsed .voice-island__head {
+  height: 38px;
+  padding: 0 24px;
+}
+.voice-island .jaris-orb {
+  flex: 0 0 auto;
+}
+.voice-island__headline {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--island-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 200ms ease;
+}
+.voice-island--thinking .voice-island__headline {
+  color: var(--island-accent);
+}
+.voice-island--open.voice-island--happy .voice-island__headline,
+.voice-island--open.voice-island--surprised .voice-island__headline {
+  color: var(--island-text-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+.voice-island__signal {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  transition: opacity 200ms ease;
+}
+.app--widget-collapsed .voice-island__headline,
+.app--widget-collapsed .voice-island__signal {
+  opacity: 0;
+}
+.voice-island__bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+.voice-island__bars i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--island-accent);
+  transform: scaleY(0.3);
+  transform-origin: center;
+}
+.voice-island--listening .voice-island__bars i,
+.voice-island--happy .voice-island__bars i {
+  animation: voice-island-bar 900ms ease-in-out infinite;
+}
+.voice-island__bars i:nth-child(2) { animation-delay: -150ms; }
+.voice-island__bars i:nth-child(3) { animation-delay: -450ms; }
+.voice-island__bars i:nth-child(4) { animation-delay: -300ms; }
+.voice-island__bars i:nth-child(5) { animation-delay: -600ms; }
+.voice-island__bars i:nth-child(6) { animation-delay: -750ms; }
+@keyframes voice-island-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.voice-island__dots {
+  display: flex;
+  gap: 4px;
+}
+.voice-island__dots i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--island-accent);
+  animation: voice-island-dot 1200ms ease-in-out infinite;
+}
+.voice-island__dots i:nth-child(2) { animation-delay: 200ms; }
+.voice-island__dots i:nth-child(3) { animation-delay: 400ms; }
+@keyframes voice-island-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+/* La carte : la question en gris, la réponse en blanc. Une longue réponse défile DANS la carte, jamais hors de la
+   fenêtre (étape 346). */
+.voice-island__body {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 20px 16px;
+  overflow-y: auto;
+}
+.voice-island--open .voice-island__body {
+  display: flex;
+}
+.app--widget-collapsed .voice-island__body {
+  display: none;
+}
+.voice-island__question {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--island-text-dim);
+  overflow-wrap: anywhere;
+}
+.voice-island__reply {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--island-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.voice-island__body::-webkit-scrollbar,
+.chat-widget__answer::-webkit-scrollbar {
+  width: 6px;
+}
+.voice-island__body::-webkit-scrollbar-thumb,
+.chat-widget__answer::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+.app--widget-instant .voice-island,
+.app--widget-instant .voice-island__head,
+.app--widget-instant .voice-island__headline,
+.app--widget-instant .voice-island__signal {
+  transition: none;
+}
+
+/* Widget Chat : même capsule. Au repos, le même 76x40 que l'orbe vocal ; ouverte, la barre où écrire avec l'orbe
+   à gauche (40px de haut : la fenêtre de la barre fait 68, 14px de marge en haut et en bas) ; la réponse, la même
+   carte noire que le vocal. */
+.chat-widget__idle,
+.chat-widget__bar,
+.chat-widget__answer {
+  color: var(--island-text);
+  background: var(--island-bg);
+  border: 1px solid var(--island-line);
+  box-shadow: var(--island-shadow);
+}
+.chat-widget__idle {
+  width: 76px;
+  height: 40px;
+  border-radius: 20px;
+}
+.chat-widget__bar {
+  gap: 10px;
+  height: 40px;
+  padding: 0 4px 0 6px;
+  border-radius: 20px;
+}
+.chat-widget__input {
+  font-size: 14px;
+  color: var(--island-text);
+}
+.chat-widget__input::placeholder {
+  color: var(--island-text-dim);
+}
+.chat-widget__send {
+  width: 30px;
+  height: 30px;
+  color: #000;
+  background: #fff;
+  border-color: transparent;
+}
+.chat-widget__send:not(:disabled):hover {
+  color: #000;
+  background: #e6e6e6;
+  border-color: transparent;
+}
+.chat-widget__answer {
+  gap: 8px;
+  padding: 0 20px 16px;
+  border-radius: 26px;
+  max-height: 412px;
+}
+.chat-widget__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  margin: 0 -10px;
+  flex: 0 0 auto;
+}
+.chat-widget__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--island-text-dim);
+}
+.chat-widget__question {
+  font-size: 13px;
+  color: var(--island-text-dim);
+}
+.chat-widget__reply {
+  font-size: 15px;
+  color: var(--island-text);
+}
+.chat-widget__error {
+  font-size: 14px;
+  color: #ff8a9d;
+}
+.chat-widget__elapsed {
+  color: var(--island-text-dim);
+}
+.chat-widget__action {
+  color: var(--island-text);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+}
+.chat-widget__action:not(:disabled):hover {
+  color: var(--island-text);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-island,
+  .voice-island__head,
+  .voice-island__headline,
+  .voice-island__signal {
+    transition: none;
+  }
+  .voice-island__bars i,
+  .voice-island__dots i {
+    animation: none;
+  }
 }

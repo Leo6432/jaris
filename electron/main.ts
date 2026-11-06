@@ -359,7 +359,9 @@ let revealGraceUntil = 0
 // CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
 // transparent donc invisible tant qu'il n'y a rien à dire, sert de marge pour qu'une réponse longue pousse
 // vers le bas sans être coupée.
-const WIDGET_WIDTH = 320
+// Étape 432 : 500 de large pour la carte noire de la réponse (470px, VoiceWidget.tsx) et ses 14px de marge de chaque
+// côté. Les 460 de haut bornent une longue réponse, qui défile dans la carte.
+const WIDGET_WIDTH = 500
 const WIDGET_HEIGHT = 460
 // Taille "repos" (étape 68) : juste assez pour le petit orbe réduit (voir WIDGET_ORB_COLLAPSED_SIZE côté
 // renderer, App.tsx) sans texte autour — ni statut ni transcript/réponse, qui ne réapparaissent qu'une fois

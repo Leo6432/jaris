@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
+import VoiceWidget from '@/components/VoiceWidget'
 import CodePanel from '@/components/CodePanel'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ImagePanel from '@/components/ImagePanel'
@@ -193,11 +194,6 @@ function RailButton({ label, icon, active, onClick, title }: {
  */
 const MODE = new URLSearchParams(window.location.search).get('mode') === 'widget' ? 'widget' : 'full'
 
-/** Taille de l'orbe replié au repos (étape 68, agrandie à la demande de Léo en usage réel : "agrandit un
- * peu") — le côté Electron (main.ts, WIDGET_COLLAPSED_WIDTH/HEIGHT) doit rester assez grand pour le contenir
- * sans le couper. */
-const WIDGET_ORB_COLLAPSED_SIZE = 32
-const WIDGET_ORB_EXPANDED_SIZE = 160
 
 export default function App(): JSX.Element {
   // Toute l'interface se redessine quand la langue change (Options → Général) : chaque texte passe par t().
@@ -934,8 +930,8 @@ export default function App(): JSX.Element {
     )
   }
 
-  // Les deux rendus restent montés : le fondu/zoom reste continu, même si l'émotion
-  // change de nouveau avant la fin de la transition.
+  // Étape 432 : une seule capsule qui change de forme (VoiceWidget.tsx). La fenêtre native se replie en même temps sur
+  // la même émotion (main.ts, positionWidgetWindow) : la forme dessinée et la taille native ont une seule source.
   const widgetCollapsed = emotion === 'idle'
   return (
     <div
@@ -943,27 +939,14 @@ export default function App(): JSX.Element {
         widgetInstant ? ' app--widget-instant' : ''
       }`}
     >
-      <div className="widget-rest" aria-hidden={!widgetCollapsed}>
-        <div className="widget-pill">
-          <JarisOrb emotion={emotion} size={WIDGET_ORB_COLLAPSED_SIZE}
-            onClick={() => window.jaris.openSettings()} />
-        </div>
-      </div>
-      <div className="widget-active" aria-hidden={widgetCollapsed}>
-        <JarisOrb emotion={emotion} audioElRef={audioRef} size={WIDGET_ORB_EXPANDED_SIZE}
-          onClick={() => window.jaris.openSettings()} />
-      </div>
-      <div className="widget-details" aria-hidden={widgetCollapsed}>
-        <div className="app__status app__status--widget">{t(STATUS_LABEL[emotion])}</div>
-        {(transcript || reply) && (
-          <div className="app__conversation app__conversation--widget">
-            {transcript && <p className="app__transcript">{t('common.quoted', { text: transcript })}</p>}
-            {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
-            {reply && <p className="app__reply">{reply}</p>}
-          </div>
-        )}
-      </div>
-
+      <VoiceWidget
+        emotion={emotion}
+        transcript={transcript ?? ''}
+        reply={reply ?? ''}
+        activity={voiceActivity}
+        audioElRef={audioRef}
+        onOpen={() => window.jaris.openSettings()}
+      />
       {widgetAudio}
     </div>
   )
