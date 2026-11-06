@@ -106,7 +106,7 @@ test('fichier de configuration : un serveur abîmé est ignoré, jamais tout le 
 })
 
 test('étape 419 : le catalogue — services en ligne officiels (https), connexion par compte (aucune clé), ni GitHub ni navigateur', () => {
-  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const catalog = loadTsModule('shared/mcpCatalog.ts', { './textSearch': loadTsModule('shared/textSearch.ts') })
   const ids = catalog.MCP_CATALOG.map((e) => e.id)
   assert.equal(new Set(ids).size, ids.length, 'identifiants uniques')
   for (const id of ['canva', 'notion', 'zapier', 'figma', 'atlassian']) assert.ok(ids.includes(id), id)
@@ -251,7 +251,7 @@ test('étape 421 : legacyReplacement — le remplaçant nommé par la descriptio
 })
 
 test('étape 424 : chaque service de « Découvrir » a son vrai logo (PNG 64 px, livré avec Jaris) et chaque rubrique ses services', () => {
-  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const catalog = loadTsModule('shared/mcpCatalog.ts', { './textSearch': loadTsModule('shared/textSearch.ts') })
   const logosDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'assets', 'mcp-logos')
   const index = readFileSync(path.join(logosDir, 'index.ts'), 'utf8')
   for (const entry of catalog.MCP_CATALOG) {
@@ -273,7 +273,7 @@ test('étape 424 : chaque service de « Découvrir » a son vrai logo (PNG 64 px
 })
 
 test('étape 425 : catalogMatches — chaque mot tapé, sans accents ni majuscules ; rien de tapé : tout', () => {
-  const catalog = loadTsModule('shared/mcpCatalog.ts')
+  const catalog = loadTsModule('shared/mcpCatalog.ts', { './textSearch': loadTsModule('shared/textSearch.ts') })
   const card = ['Canva', 'Créer et modifier tes designs Canva', 'Design, vidéo et image']
   assert.equal(catalog.catalogMatches('', card), true)
   assert.equal(catalog.catalogMatches('   ', card), true)

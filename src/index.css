@@ -11895,3 +11895,188 @@ input.reply-ui__field-input {
     padding-left: 18px;
   }
 }
+
+/* ============================================================================
+   Étape 426 (Léo, captures de ChatGPT : « améliore le design et fais comme ChatGPT, mais garde à gauche les
+   logos ») : le Chat comme ChatGPT, avec les couleurs de Jaris. La barre d'icônes à gauche ne change pas.
+   ============================================================================ */
+
+/* Champ du Chat en pilule : « + », le texte, puis modèle, micro et envoi, sur UNE ligne. */
+.composer--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  row-gap: 2px;
+  padding: 6px 8px;
+  border-radius: 28px;
+}
+
+.composer--inline .composer__actions {
+  display: contents;
+}
+
+.composer--inline .composer__actions > * {
+  order: 3;
+}
+
+.composer--inline .composer__add {
+  order: 1;
+}
+
+.composer--inline .composer__spacer {
+  display: none;
+}
+
+.composer--inline .composer__attachment {
+  order: 0;
+  flex: 0 0 100%;
+}
+
+.composer--inline .composer__input {
+  order: 2;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 38px;
+  max-height: 220px;
+  padding: 7px 6px;
+  box-sizing: border-box;
+  line-height: 24px;
+  overflow-y: auto;
+}
+
+/* Le texte passe à la ligne : il prend toute la largeur, les boutons passent dessous (comme ChatGPT). */
+.composer--inline.composer--expanded {
+  padding: 10px 10px 8px;
+  border-radius: 24px;
+}
+
+.composer--inline.composer--expanded .composer__input {
+  order: 1;
+  flex: 0 0 100%;
+  padding: 4px 8px 6px;
+  box-sizing: border-box;
+  height: auto;
+}
+
+.composer--inline.composer--expanded .composer__add {
+  order: 2;
+}
+
+.composer--inline.composer--expanded .composer__spacer {
+  display: block;
+  order: 2;
+  flex: 1 1 auto;
+}
+
+/* Accueil du Chat : la seule phrase, avec le prénom, juste au-dessus du champ (comme ChatGPT). */
+.empty-state--minimal {
+  gap: 0;
+  padding: 24px 0 28px;
+}
+
+.empty-state--minimal .empty-state__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Sous chaque réponse : « Copier » (toujours sous la dernière, au survol sous les autres). */
+.chat-panel__reply-actions {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 0 -6px;
+  white-space: normal;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-panel__message:hover .chat-panel__reply-actions,
+.chat-panel__reply-actions:focus-within,
+.chat-panel__reply-actions--last {
+  opacity: 1;
+}
+
+.chat-panel__reply-action {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hud-text-faint);
+  cursor: pointer;
+}
+
+.chat-panel__reply-action:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.chat-panel__reply-action:focus-visible {
+  outline: 2px solid var(--hud-line-strong);
+  outline-offset: 1px;
+}
+
+/* La mise en garde sous le champ, discrète et centrée. */
+.chat-panel__disclaimer {
+  margin: -2px 0 0;
+  padding: 0 16px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--hud-text-faint);
+}
+
+/* Barre latérale : « Récents » et la loupe sur une ligne ; la recherche juste en dessous. */
+.workspace__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.workspace__rail-head .workspace__rail-label {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* L'air au-dessus de « Récents » (16 px) passe sur la ligne entière : la loupe reste centrée sur le texte. */
+.workspace__rail-head {
+  padding: 16px 0 4px;
+}
+
+.workspace__search-toggle {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--hud-text-faint);
+  cursor: pointer;
+}
+
+.workspace__search-toggle:hover,
+.workspace__search-toggle--on {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.workspace__search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}

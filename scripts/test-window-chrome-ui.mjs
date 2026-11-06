@@ -374,3 +374,25 @@ test('« … » ouvre un menu Duel / Classement ; le Classement montre le tablea
     assert.ok(await page.$('.rail__more .rail__item--active'), '« … » marqué actif sur le Classement')
   })
 })
+
+test('étape 426 : dans la vraie barre latérale, la loupe de recherche est centrée sur « Récents » et la liste se filtre', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    await page.click('.rail__item:has-text("Chat")')
+    await page.waitForSelector('.app-sidebar .workspace__search-toggle')
+    const [label, toggle] = await page.evaluate(() => {
+      const mid = (el) => { const r = el.getBoundingClientRect(); return Math.round(r.top + r.height / 2) }
+      // Le milieu du TEXTE « Récents » (une plage de texte), pas de sa boîte : c'est ce que l'œil aligne.
+      const range = document.createRange()
+      range.selectNodeContents(document.querySelector('.app-sidebar .workspace__rail-label'))
+      return [mid(range), mid(document.querySelector('.app-sidebar .workspace__search-toggle'))]
+    })
+    assert.ok(Math.abs(label - toggle) <= 2, `loupe ${toggle} / « Récents » ${label}`)
+    const before = await page.locator('.app-sidebar .workspace__item').count()
+    await page.click('.app-sidebar .workspace__search-toggle')
+    await page.fill('.app-sidebar .workspace__search', 'zzz')
+    assert.equal(await page.locator('.app-sidebar .workspace__item').count(), 0)
+    await page.press('.app-sidebar .workspace__search', 'Escape')
+    assert.equal(await page.locator('.app-sidebar .workspace__item').count(), before)
+  })
+})

@@ -3,6 +3,7 @@ import { useReportActivity } from '@/lib/useReportActivity'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
+import { copyText } from '@/lib/copyText'
 import logo from '@/assets/jaris-logo-64.png'
 import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -16,7 +17,7 @@ import type { ChatMessage, ConversationList, WebActivity } from '../../shared/ip
 import ModelEffortPicker from './ModelEffortPicker'
 import WebActivityBlock from './WebActivityBlock'
 import { mergeWebActivity } from '@/lib/webActivity'
-import { DownloadIcon } from './icons'
+import { CheckIcon, CopyIcon, DownloadIcon } from './icons'
 import { t } from '@/lib/i18n'
 
 /**
@@ -78,6 +79,20 @@ export default function ChatPanel(): JSX.Element {
    * (mesuré : granite4.2:8b, 2 min 06, étape 245). Le temps écoulé s'affiche à côté, après une dizaine de secondes.
    */
   const elapsedMs = useElapsedMs(sending || externalBusy)
+
+  /** Étape 426 : réponse tout juste copiée (index du message), le temps d'afficher la coche. */
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const copyReply = async (text: string, index: number): Promise<void> => {
+    if (!(await copyText(text))) return
+    setCopiedIndex(index)
+    setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 2000)
+  }
+
+  /** Étape 426 : le prénom de Léo dans l'accueil (« Que puis-je faire pour toi, Léo ? »), comme ChatGPT. */
+  const [userName, setUserName] = useState('')
+  useEffect(() => {
+    void window.jaris.getProfile().then((profile) => setUserName(profile?.name?.trim() ?? '')).catch(() => {})
+  }, [])
 
   const saveImage = async (dataUrl: string, index: number): Promise<void> => {
     const result = await window.jaris.saveGeneratedImage(dataUrl)
@@ -269,12 +284,8 @@ export default function ChatPanel(): JSX.Element {
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
           {messages.length === 0 && !(sending && answerIsHere()) && !externalBusy && (
-            <EmptyState
-              title={t('app.voice.prompt')}
-              description={t('chat.empty.hint')}
-              suggestions={[t('chat.suggest.1'), t('chat.suggest.2'), t('chat.suggest.3')]}
-              onSuggestion={(text) => void send(text)}
-            />
+            // Étape 426 (Léo : « fais comme ChatGPT ») : une seule phrase, avec son prénom, juste au-dessus du champ.
+            <EmptyState minimal title={userName ? t('chat.empty.greeting', { name: userName }) : t('app.voice.prompt')} />
           )}
 
           {messages.map((message, index) => (
@@ -297,6 +308,21 @@ export default function ChatPanel(): JSX.Element {
               {/* Étape 272 : réponse coupée par « Arrêter » — dit discrètement, pour qu'une phrase tronquée ne
                   passe pas pour une réponse complète. */}
               {message.stopped && message.content !== t('chat.stopped') && <p className="chat-panel__stopped">{t('chat.stopped')}</p>}
+              {/* Étape 426 : sous chaque réponse, comme ChatGPT — « Copier » (toujours visible sous la dernière, au
+                  survol sous les autres). */}
+              {message.role === 'assistant' && message.content.trim() && (
+                <div className={`chat-panel__reply-actions${index === messages.length - 1 ? ' chat-panel__reply-actions--last' : ''}`}>
+                  <button
+                    type="button"
+                    className="chat-panel__reply-action"
+                    title={copiedIndex === index ? t('chat.copied') : t('chat.copy')}
+                    aria-label={copiedIndex === index ? t('chat.copied') : t('chat.copy')}
+                    onClick={() => void copyReply(message.content, index)}
+                  >
+                    {copiedIndex === index ? <CheckIcon /> : <CopyIcon />}
+                  </button>
+                </div>
+              )}
               {/* Étape 173 : image dessinée par Jaris, sous sa réponse et en grand. */}
               {message.image && message.role === 'assistant' && (
                 <figure className="chat-panel__generated">
@@ -368,7 +394,10 @@ export default function ChatPanel(): JSX.Element {
           onAttachmentChange={setAttachment}
           onError={setError}
           submitOnEnter
+          inline
         />
+        {/* Étape 426 : comme ChatGPT, la mise en garde discrète sous le champ — seulement dans une conversation. */}
+        {messages.length > 0 && <p className="chat-panel__disclaimer">{t('chat.disclaimer')}</p>}
       </div>
     </Workspace>
   )

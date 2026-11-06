@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   fileToImageAttachment,
   findImageInDataTransfer,
@@ -61,7 +61,16 @@ interface ComposerProps {
   imagesAllowed?: boolean
   /** Entrées supplémentaires du menu « + » (étape 191). */
   addItems?: ComposerAddItem[]
+  /**
+   * Étape 426 (Léo, captures de ChatGPT : « fais comme ChatGPT ») : le champ tient sur UNE ligne en pilule — « + », le
+   * texte, puis modèle, micro et envoi — et ne s'agrandit (texte au-dessus, boutons en dessous) que quand le texte passe
+   * à la ligne. Le Chat seulement : le mode Code garde son grand champ, ses descriptions font plusieurs lignes.
+   */
+  inline?: boolean
 }
+
+/** Étape 426 : hauteur maximale du champ qui grandit avec le texte, avant de défiler. */
+const INLINE_MAX_HEIGHT_PX = 220
 
 function PlusIcon(): JSX.Element {
   return (
@@ -123,7 +132,8 @@ export default function Composer({
   rows = 2,
   extraActions,
   imagesAllowed = true,
-  addItems = []
+  addItems = [],
+  inline = false
 }: ComposerProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -142,6 +152,24 @@ export default function Composer({
   const valueRef = useRef(value)
   valueRef.current = value
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Étape 426 : le champ en pilule s'agrandit quand le texte passe à la ligne ; il ne redevient une ligne que quand le
+  // texte a nettement raccourci (sinon, mesuré dans une pilule plus étroite, il basculerait à chaque lettre).
+  const [expanded, setExpanded] = useState(false)
+  const expandedAtRef = useRef(0)
+  useLayoutEffect(() => {
+    const field = inputRef.current
+    if (!inline || !field) return
+    field.style.height = 'auto'
+    const lineHeight = parseFloat(getComputedStyle(field).lineHeight) || 24
+    const wraps = value.includes('\n') || field.scrollHeight > lineHeight * 1.6
+    if (!expanded && wraps) {
+      expandedAtRef.current = value.length
+      setExpanded(true)
+    } else if (expanded && !value.includes('\n') && (value.length === 0 || value.length < expandedAtRef.current * 0.8)) {
+      setExpanded(false)
+    }
+    field.style.height = `${Math.min(field.scrollHeight, INLINE_MAX_HEIGHT_PX)}px`
+  }, [value, inline, expanded])
   const canDictate = typeof window !== 'undefined' && typeof window.jaris?.transcribeDictation === 'function'
 
   const clearDictationTimers = (): void => {
@@ -299,7 +327,7 @@ export default function Composer({
 
   return (
     <div
-      className={`composer${busy ? ' composer--busy' : ''}`}
+      className={`composer${busy ? ' composer--busy' : ''}${inline ? ' composer--inline' : ''}${inline && expanded ? ' composer--expanded' : ''}`}
       onDrop={handleDrop}
       onDragOver={(event) => event.preventDefault()}
     >
@@ -335,7 +363,7 @@ export default function Composer({
           }
         }}
         placeholder={placeholder}
-        rows={rows}
+        rows={inline ? 1 : rows}
         disabled={busy}
       />
 

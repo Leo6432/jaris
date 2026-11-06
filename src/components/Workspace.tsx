@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DeleteIcon } from '@/components/icons'
+import { matchesSearch } from '../../shared/textSearch'
 import { useScreenActive, useShellSlots } from '@/lib/shellContext'
 import { t } from '@/lib/i18n'
 
@@ -63,6 +64,16 @@ function NewIcon(): JSX.Element {
   )
 }
 
+/** Étape 426 : loupe de la recherche dans la liste, comme celle de ChatGPT. */
+function SearchIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
+    </svg>
+  )
+}
+
 export default function Workspace({
   newLabel,
   onNew,
@@ -79,6 +90,14 @@ export default function Workspace({
   /** Élément dont la ligne demande confirmation avant suppression (une seule à la fois). */
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const activeItem = items.find((item) => item.id === activeId)
+  // Étape 426 (Léo, captures de ChatGPT) : chercher une conversation par son titre, sans accents ni majuscules.
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState('')
+  const shown = searching ? items.filter((item) => matchesSearch(query, [item.title])) : items
+  const closeSearch = (): void => {
+    setSearching(false)
+    setQuery('')
+  }
 
   const newButton = (
     // Design v2 : dans la colonne de la coque, seul le crayon est visible (le libellé reste en bulle et pour
@@ -91,12 +110,45 @@ export default function Workspace({
 
   const recents = (
     <div className="workspace__rail">
-      <div className="workspace__rail-label">{t('workspace.recents')}</div>
+      <div className="workspace__rail-head">
+        <div className="workspace__rail-label">{t('workspace.recents')}</div>
+        {items.length > 0 && (
+          <button
+            type="button"
+            className={`workspace__search-toggle${searching ? ' workspace__search-toggle--on' : ''}`}
+            onClick={() => (searching ? closeSearch() : setSearching(true))}
+            title={t('workspace.search')}
+            aria-label={t('workspace.search')}
+            aria-expanded={searching}
+          >
+            <SearchIcon />
+          </button>
+        )}
+      </div>
+      {searching && (
+        <input
+          type="search"
+          className="workspace__search"
+          placeholder={t('workspace.search')}
+          aria-label={t('workspace.search')}
+          value={query}
+          autoFocus
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              closeSearch()
+            }
+          }}
+        />
+      )}
       {items.length === 0 ? (
         <p className="workspace__empty">{emptyLabel}</p>
+      ) : shown.length === 0 ? (
+        <p className="workspace__empty" role="status">{t('workspace.searchEmpty')}</p>
       ) : (
         <ul className="workspace__list">
-          {items.map((item) => (
+          {shown.map((item) => (
             <li key={item.id}>
               {/* Confirmation DANS la ligne, jamais un dialogue natif : celui-ci ferait perdre le focus
                   à la fenêtre, et Jaris se replierait en widget en plein milieu (piège de l'étape 93). */}

@@ -146,7 +146,7 @@ window.jaris = {
     window.__web = cb
     return () => {}
   },
-  getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
+  getProfile: () => Promise.resolve({ name: 'Léo', soundEffectsEnabled: false }),
   getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
   setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
@@ -549,5 +549,62 @@ test('quitter la conversation pendant la réponse puis y revenir : question et r
     const texts = await page.$$eval('.chat-panel__message', (nodes) => nodes.map((n) => n.textContent))
     assert.equal(texts.filter((t) => t.includes('une recette de pâtes')).length, 1, 'question une seule fois')
     assert.equal(texts.filter((t) => t.includes('Des pâtes, du sel.')).length, 1, 'réponse une seule fois')
+  })
+})
+
+test('étape 426 (« fais comme ChatGPT ») : accueil d’une seule phrase avec le prénom ; « Copier » sous la réponse ; mise en garde sous le champ', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.chat-panel__message')
+    // Dans une conversation : la mise en garde sous le champ, et « Copier » toujours visible sous la dernière réponse.
+    assert.equal(await page.textContent('.chat-panel__disclaimer'), 'Jaris peut faire des erreurs. Vérifie les informations importantes.')
+    const disclaimer = await page.$eval('.chat-panel__disclaimer', (el) => el.getBoundingClientRect().top)
+    const composer = await page.$eval('.composer', (el) => el.getBoundingClientRect().bottom)
+    assert.ok(disclaimer >= composer, 'sous le champ')
+    await page.evaluate(() => {
+      window.__copied = []
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (text) => (window.__copied.push(text), Promise.resolve()) } })
+    })
+    const last = page.locator('.chat-panel__reply-actions--last .chat-panel__reply-action')
+    assert.equal(await last.count(), 1)
+    assert.equal(await last.evaluate((el) => getComputedStyle(el.parentElement).opacity), '1', 'visible sous la dernière réponse')
+    await page.getByRole('button', { name: 'Copier la réponse' }).last().click()
+    await page.getByRole('button', { name: 'Copié' }).waitFor()
+    assert.deepEqual(await page.evaluate(() => window.__copied), ['Voilà ton image.'])
+    // Une réponse plus ancienne : « Copier » n'apparaît qu'au survol.
+    const older = page.locator('.chat-panel__message--assistant').first()
+    assert.equal(await older.locator('.chat-panel__reply-actions').evaluate((el) => getComputedStyle(el).opacity), '0')
+    await older.hover()
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.chat-panel__message--assistant .chat-panel__reply-actions')).opacity === '1')
+
+    // Nouvelle conversation : seulement la phrase d'accueil, avec le prénom, sans logo, texte ni suggestions.
+    await page.click('.workspace__new')
+    await page.waitForSelector('.empty-state--minimal')
+    assert.equal(await page.textContent('.empty-state__title'), 'Que puis-je faire pour toi, Léo ?')
+    assert.equal(await page.locator('.empty-state__logo, .empty-state__description, .empty-state__suggestion').count(), 0)
+    assert.equal(await page.locator('.chat-panel__disclaimer').count(), 0, 'pas de mise en garde sur une conversation vide (comme ChatGPT)')
+  })
+})
+
+test('étape 426 : chercher une conversation — loupe alignée sur « Récents », sans accents, aucun résultat dit, Échap referme', options, async () => {
+  await withPage(async (page) => {
+    const toggle = page.getByRole('button', { name: 'Rechercher' })
+    const mids = await page.evaluate(() => {
+      const mid = (el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 }
+      const range = document.createRange()
+      range.selectNodeContents(document.querySelector('.workspace__rail-label'))
+      return [mid(range), mid(document.querySelector('.workspace__search-toggle'))]
+    })
+    assert.ok(Math.abs(mids[0] - mids[1]) <= 2, `loupe centrée sur « Récents » (${mids.join(' / ')})`)
+    await toggle.click()
+    const field = page.getByRole('searchbox', { name: 'Rechercher' })
+    await field.waitFor()
+    assert.equal(await field.evaluate((el) => el === document.activeElement), true, 'le champ prend le focus')
+    await field.fill('CREPES')
+    assert.deepEqual(await page.$$eval('.workspace__item-title', (els) => els.map((el) => el.textContent)), ['recette de crêpes'])
+    await field.fill('zzz')
+    assert.equal(await page.textContent('.workspace__rail .workspace__empty'), 'Aucune conversation ne correspond.')
+    await field.press('Escape')
+    await field.waitFor({ state: 'detached' })
+    assert.equal(await page.locator('.workspace__item').count(), 2, 'toutes les conversations reviennent')
   })
 })

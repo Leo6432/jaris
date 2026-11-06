@@ -16,7 +16,7 @@ import { loadTsModule } from './load-ts-module.mjs'
 const require = createRequire(import.meta.url)
 const SERVER = fileURLToPath(new URL('./fixtures/mcp-test-server.mjs', import.meta.url))
 const shared = loadTsModule('shared/mcp.ts')
-const catalog = loadTsModule('shared/mcpCatalog.ts')
+const catalog = loadTsModule('shared/mcpCatalog.ts', { './textSearch': loadTsModule('shared/textSearch.ts') })
 
 /** Un faux chiffrement réversible (le vrai est celui de Windows) : le fichier ne contient jamais la clé en clair. */
 const BOX = {

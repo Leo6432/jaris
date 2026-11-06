@@ -60,3 +60,22 @@ export function DownloadIcon(): JSX.Element {
     </svg>
   )
 }
+
+/** Étape 426 : « Copier » sous une réponse du Chat (deux feuilles, comme ChatGPT). */
+export function CopyIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M5 15V6.5A1.5 1.5 0 0 1 6.5 5H15" />
+    </svg>
+  )
+}
+
+/** Étape 426 : « Copié » — la coche qui remplace un instant l'icône de copie. */
+export function CheckIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </svg>
+  )
+}

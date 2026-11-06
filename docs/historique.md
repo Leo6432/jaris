@@ -11116,3 +11116,36 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Échap vide le champ. Régression : `test-mcp.mjs` (sans accents, tous les mots ; échoue sans le pliage des accents),
   `test-mcp-settings-ui.mjs` (navigateur, CSS compilé : trouvable par son nom, largeur mesurée, « canva », « MAILS »,
   « video », « crm salesflare », aucun résultat, Échap ; capture).
+
+- **Étape 426 (v0.45.0), Léo, deux captures de l'appli ChatGPT : « améliore le design et fais comme ChatGPT, mais
+  garde à gauche les logos etc. »** Le Chat était déjà proche de ChatGPT (étape 266) ; banc de captures de l'appli
+  entière (bundle esbuild de src/main.tsx + faux `window.jaris` en Proxy + CSS compilé), MESURÉ face aux captures de
+  Léo. La barre d'icônes à gauche ne bouge pas ; la forme vient de ChatGPT, les couleurs restent celles de Jaris.
+  - **Champ en pilule sur UNE ligne** (« + », texte, modèle, micro, envoi) ; dès que le texte passe à la ligne, texte
+    au-dessus et boutons en dessous, et le champ grandit jusqu'à 220 px (Composer `inline`, Chat seulement : le mode
+    Code garde son grand champ). Il ne redevient une ligne que quand le texte a nettement raccourci (mesuré dans une
+    pilule plus étroite, il basculait sinon à chaque lettre). L'étape 191 (« texte en haut, boutons en dessous »)
+    était déjà une demande « comme ChatGPT » : ChatGPT fait maintenant une ligne, la demande récente l'emporte, et
+    `test-model-picker-ui.mjs` vérifie les deux états.
+  - **Accueil d'une seule phrase avec le prénom** (« Que puis-je faire pour toi, Léo ? ») juste au-dessus du champ ;
+    plus de logo, de paragraphe ni de suggestions dans le Chat (`EmptyState minimal` ; les autres modes gardent le
+    leur) — textes `chat.empty.hint` et `chat.suggest.1-3` retirés des 24 langues.
+  - **« Copier » sous chaque réponse** (toujours visible sous la dernière, au survol sous les autres), coche
+    « Copié » 2 s ; `copyText` (presse-papiers moderne, sinon l'ancienne méthode). Pas de « Lire à voix haute » ni de
+    « Régénérer » : Jaris n'a pas ces fonctions, on n'invente pas un bouton pour l'apparence.
+  - **Mise en garde sous le champ** dans une conversation (« Jaris peut faire des erreurs. Vérifie les informations
+    importantes. »), pas sur une conversation vide.
+  - **Chercher une conversation** : loupe à droite de « Récents », titre sans accents ni majuscules (`matchesSearch`,
+    nouveau shared/textSearch.ts, aussi utilisé par la recherche de l'étape 425), « Aucune conversation ne correspond »,
+    Échap referme. Le premier test de l'alignement de la loupe ne MORDAIT pas : il mesurait la BOÎTE de « Récents »
+    (marge de 16 px comprise) au lieu de son TEXTE — mesuré maintenant sur une plage de texte, il échoue en remettant
+    le défaut (161 contre 169).
+  - **Piège trouvé par test-code-panel-ui** : l'expression qui enlève les accents contenait les caractères combinants
+    EUX-MÊMES au lieu de `̀-ͯ` (l'outil d'écriture les avait convertis). Une page servie sans encodage les
+    lit en Latin-1 → `[Ì€-Í¯]` → « Range out of order » → écran entier cassé. Réécrit en échappements, octets vérifiés.
+    **Reste** (hors de cette étape, même fragilité, sans effet tant que les pages sont en UTF-8) : transcriptCorrector.ts,
+    uiBlocks.ts, filterModels.ts et trois scripts de banc ont le même motif brut.
+  Captures avant/après montrées à Léo AVANT l'envoi (règle des refontes) : « Oui, publie ». Régression : `test-chat-conversations-ui.mjs`
+  (accueil avec prénom sans logo ni suggestions, « Copier » qui copie la réponse, visible sous la dernière et au
+  survol ailleurs, mise en garde, recherche), `test-window-chrome-ui.mjs` (loupe centrée dans la VRAIE barre latérale),
+  `test-model-picker-ui.mjs` (une ligne, puis texte long sur deux rangées, retour à une ligne).

@@ -145,16 +145,36 @@ async function withPage(run, init = '') {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('le champ du Chat : texte en haut, « + » à gauche, modèle/effort puis envoi rond à droite', options, async () => {
+// Étape 426 (Léo, captures de ChatGPT : « fais comme ChatGPT ») : le champ du Chat tient sur UNE ligne en pilule
+// (« + », le texte, modèle/effort, envoi) et ne passe à « texte en haut, boutons en dessous » (étape 191) que quand le
+// texte passe à la ligne — comme celui de ChatGPT aujourd'hui.
+test('le champ du Chat : une ligne en pilule (« + », texte, modèle/effort, envoi rond) ; texte long : texte en haut, boutons en dessous', options, async () => {
   await withPage(async (page) => {
-    const box = async (sel) => page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
-    const input = await box('#root .composer__input')
-    const plus = await box('#root .composer__plus')
-    const picker = await box('#root .effort-picker__trigger')
-    const send = await box('#root .composer__send')
-    assert.ok(input.y + input.h <= plus.y + 1, 'le texte est au-dessus de la rangée de boutons')
+    const box = async (sel) => page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, mid: r.y + r.height / 2 } })
+    let input = await box('#root .composer__input')
+    let plus = await box('#root .composer__plus')
+    let picker = await box('#root .effort-picker__trigger')
+    let send = await box('#root .composer__send')
+    const composer = await box('#root .composer')
+    assert.ok(composer.h <= 60, `une seule ligne (${composer.h} px)`)
+    for (const [name, b] of [['texte', input], ['modèle', picker], ['envoi', send]]) {
+      assert.ok(Math.abs(b.mid - plus.mid) <= 3, `${name} sur la même ligne que « + »`)
+    }
+    assert.ok(plus.x + plus.w <= input.x && input.x + input.w <= picker.x && picker.x < send.x, '« + », texte, modèle/effort, envoi')
+    const radius = await page.$eval('#root .composer', (el) => parseFloat(getComputedStyle(el).borderTopLeftRadius))
+    assert.ok(radius >= composer.h / 2 - 1, `pilule (rayon ${radius} pour ${composer.h} px)`)
+    await page.fill('#root .composer__input', 'Peux-tu écrire une présentation de mon association de théâtre, Les Planches, qui répète le mardi soir à Laval et cherche de nouveaux membres, débutants bienvenus, pour notre site et nos réseaux ?')
+    await page.waitForSelector('#root .composer--expanded')
+    input = await box('#root .composer__input')
+    plus = await box('#root .composer__plus')
+    picker = await box('#root .effort-picker__trigger')
+    send = await box('#root .composer__send')
+    assert.ok(input.y + input.h <= plus.y + 1, 'texte long : le texte est au-dessus de la rangée de boutons')
     assert.ok(plus.x < picker.x && picker.x < send.x, '« + » à gauche, puis modèle/effort, puis envoi')
     assert.ok(send.x + send.w > input.x + input.w - 30, 'envoi tout à droite')
+    assert.ok(input.h > 40, `le champ grandit avec le texte (${input.h} px)`)
+    await page.fill('#root .composer__input', '')
+    await page.waitForSelector('#root .composer--expanded', { state: 'detached' })
     const sendStyle = await page.$eval('#root .composer__send', (el) => ({ radius: getComputedStyle(el).borderRadius, clip: getComputedStyle(el).clipPath, bg: getComputedStyle(el).backgroundColor }))
     assert.equal(sendStyle.clip, 'none', 'plus de coins coupés : un bouton rond')
     assert.ok(['50%', '9999px'].includes(sendStyle.radius), `envoi rond comme ChatGPT (rayon ${sendStyle.radius})`)
