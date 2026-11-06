@@ -12080,3 +12080,40 @@ input.reply-ui__field-input {
   padding: 7px 10px;
   font-size: 13px;
 }
+
+/* Étape 427 (Léo : « vidéo, image, code n'ont pas pareil » que le Chat) : sur un écran vide, la phrase et le champ
+   ensemble au milieu, comme le Chat (étape 266) ; les créations récentes (Image, Vidéo) passent SOUS le champ.
+   Seulement sur une fenêtre assez haute, comme le Chat. */
+@media (min-height: 700px) {
+  .code-chat:has(.code-chat__thread > .empty-state) {
+    justify-content: safe center;
+  }
+
+  .code-chat:has(.code-chat__thread > .empty-state) .code-chat__thread {
+    flex: none;
+  }
+
+  .image-panel:has(> .image-panel__home) {
+    justify-content: safe center;
+    overflow-y: auto;
+  }
+
+  .image-panel > .image-panel__home {
+    display: contents;
+  }
+
+  .image-panel > .image-panel__home > .empty-state {
+    order: 1;
+    padding-bottom: 8px;
+  }
+
+  .image-panel:has(> .image-panel__home) > * {
+    order: 2;
+  }
+
+  .image-panel > .image-panel__home > .image-panel__recent {
+    order: 3;
+    align-self: center;
+    margin-top: 18px;
+  }
+}

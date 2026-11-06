@@ -11149,3 +11149,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (accueil avec prénom sans logo ni suggestions, « Copier » qui copie la réponse, visible sous la dernière et au
   survol ailleurs, mise en garde, recherche), `test-window-chrome-ui.mjs` (loupe centrée dans la VRAIE barre latérale),
   `test-model-picker-ui.mjs` (une ligne, puis texte long sur deux rangées, retour à une ligne).
+
+- **Étape 427 (v0.45.1), Léo : « tu as changé que celui de Chat, mais c'est bizarre que vidéo, image, code n'ont pas
+  pareil ».** Le design de l'étape 426 passe aux modes Code, Image et Vidéo : champ en pilule sur une ligne
+  (Composer `inline`), accueil d'une seule phrase (`EmptyState minimal`), et sur un écran vide la phrase et le champ
+  ensemble au milieu comme le Chat — en Image et Vidéo, les créations récentes passent juste SOUS le champ (l'étape
+  268 de Léo — une rangée, centrée, jamais repoussée en bas — tient toujours). Phrases d'aide et suggestions retirées
+  (23 textes, 24 langues) : les textes d'aide des champs guident déjà (« Décris l'application à créer… »). Le titre du
+  dépôt vide devient une invitation (« Ce dépôt est encore vide : que veux-tu y créer ? ») : l'étape 279 voulait
+  « proposer de créer, pas d'expliquer », c'était mon choix, la phrase garde ce sens.
+  **Deux pièges du champ en pilule, trouvés par test-code-panel-ui** (la colonne du Code fait 300 à 460 px) :
+  - **Boucle sans fin** : dans une colonne étroite, le TEXTE D'AIDE d'un champ vide passe à la ligne ; « le texte
+    passe à la ligne » l'agrandissait, « champ vide » le rétrécissait, à l'infini (« Maximum update depth exceeded »,
+    écran entier cassé). Seul le texte tapé compte ; vide, le champ garde la hauteur d'une ligne.
+  - **Plus de place pour écrire** : « + », GitHub, branche, modèle, micro et envoi sur la même ligne ne laissaient
+    presque rien au texte. Sous 160 px de texte, le champ passe sur deux rangées (`cramped`, observé au
+    redimensionnement du champ ET du texte — un bouton qui apparaît rétrécit le texte sans changer le champ) et ne
+    revient sur une ligne que quand il a élargi de 80 px.
+  Régression : `test-code-panel-ui.mjs` (colonne étroite : vide sans boucle, deux rangées avec 160 px de texte au
+  moins, une ligne à nouveau colonne élargie — échoue en remettant le texte d'aide dans le calcul ; sans message,
+  champ sous la phrase, puis en bas dès la première demande), `test-image-panel-ui.mjs` (phrase, champ, puis galerie
+  centrée juste dessous), `test-github-ui.mjs` (titre du dépôt vide). Captures avant/après montrées à Léo avant
+  l'envoi : « Oui, publie ».

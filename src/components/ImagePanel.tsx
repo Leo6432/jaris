@@ -247,12 +247,8 @@ export default function ImagePanel(): JSX.Element {
       <div className="code-panel image-panel">
         {!selected && !generating && (
           <div className="image-panel__home">
-            <EmptyState
-              title={t('image.empty.title')}
-              description={t('image.empty.hint')}
-              suggestions={[t('image.suggest.1'), t('image.suggest.2'), t('image.suggest.3')]}
-              onSuggestion={setPrompt}
-            />
+            {/* Étape 427 : une seule phrase, comme le Chat ; les créations récentes restent juste en dessous. */}
+            <EmptyState minimal title={t('image.empty.title')} />
             {gallery.length > 0 && (
               // Étape 268 : une section titrée, centrée à la largeur du champ de saisie, juste sous les
               // suggestions (elle était repoussée en bas de l'écran et collée à gauche).
@@ -331,6 +327,7 @@ export default function ImagePanel(): JSX.Element {
           onError={setError}
           imagesAllowed={false}
           rows={2}
+          inline
         />
       </div>
     </Workspace>

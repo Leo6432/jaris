@@ -952,7 +952,9 @@ export default function CodePanel(): JSX.Element {
           <section ref={chatRef} className="code-chat" aria-label={t('code.conversation')}>
             <div className="code-chat__thread" ref={threadRef}>
               {turns.length === 0 && !generating && (
+                // Étape 427 (Léo : « vidéo, image, code n'ont pas pareil » que le Chat) : une seule phrase, comme le Chat.
                 <EmptyState
+                  minimal
                   title={
                     repo
                       ? repo.fileCount === 0
@@ -962,25 +964,6 @@ export default function CodePanel(): JSX.Element {
                         ? t('code.empty.app')
                         : t('code.empty.new')
                   }
-                  description={
-                    repo
-                      ? repo.fileCount === 0
-                        ? t('code.empty.repoEmpty.hint')
-                        : t('code.empty.repo.hint')
-                      : appResult
-                        ? t('code.empty.app.hint')
-                        : t('code.empty.new.hint')
-                  }
-                  suggestions={
-                    repo
-                      ? repo.fileCount === 0
-                        ? [t('code.suggest.repoEmpty.1'), t('code.suggest.repoEmpty.2'), t('code.suggest.gitignore')]
-                        : [t('code.suggest.repo.1'), t('code.suggest.repo.2'), t('code.suggest.gitignore')]
-                      : appResult
-                        ? [t('code.suggest.app.1'), t('code.suggest.app.2'), t('code.suggest.app.3')]
-                        : [t('code.suggest.new.1'), t('code.suggest.new.2'), t('code.suggest.new.3')]
-                  }
-                  onSuggestion={setDescription}
                 />
               )}
 
@@ -1098,6 +1081,7 @@ export default function CodePanel(): JSX.Element {
               onAttachmentChange={setAttachment}
               onError={setError}
               rows={3}
+              inline
             />
           </section>
 

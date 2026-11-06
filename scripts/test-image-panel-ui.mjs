@@ -112,7 +112,7 @@ test('accueil : les dernières images en vignettes, la liste à gauche, le champ
   })
 })
 
-test('accueil : les créations récentes forment UNE rangée titrée, juste sous les suggestions, centrée', options, async () => {
+test('accueil : les créations récentes forment UNE rangée titrée, juste sous le champ, centrée (étapes 268, 427)', options, async () => {
   // Étape 268 (Léo : « c'est mal fait les vidéos créées et images ») : la galerie était repoussée tout en bas
   // de l'écran, collée à gauche, avec une image orpheline sur la dernière ligne.
   await withPage(async (page) => {
@@ -123,17 +123,20 @@ test('accueil : les créations récentes forment UNE rangée titrée, juste sous
       const visible = [...document.querySelectorAll('.image-panel__gallery li')].filter((li) => li.getBoundingClientRect().height > 0)
       const tops = new Set(visible.map((li) => Math.round(li.getBoundingClientRect().top)))
       const recent = rect('.image-panel__recent')
-      const home = rect('.image-panel__home')
+      // Étape 427 (comme le Chat) : la phrase, le champ, puis les créations récentes juste en dessous.
+      const composer = rect('.composer')
       return {
         rows: tops.size,
         visible: visible.length,
-        gap: recent.top - rect('.empty-state').bottom,
-        offCenter: Math.abs((recent.left + recent.right) / 2 - (home.left + home.right) / 2)
+        order: rect('.empty-state').bottom <= composer.top && composer.bottom <= recent.top,
+        gap: recent.top - composer.bottom,
+        offCenter: Math.abs((recent.left + recent.right) / 2 - (composer.left + composer.right) / 2)
       }
     })
     assert.equal(layout.rows, 1, 'une seule rangée')
     assert.ok(layout.visible <= 4, `au plus 4 vignettes : ${layout.visible}`)
-    assert.ok(layout.gap < 60, `trou entre les suggestions et la galerie : ${layout.gap}px`)
+    assert.ok(layout.order, 'la phrase, puis le champ, puis la galerie')
+    assert.ok(layout.gap < 60, `trou entre le champ et la galerie : ${layout.gap}px`)
     assert.ok(layout.offCenter < 4, `galerie décentrée de ${layout.offCenter}px`)
   }, "window.__images = Array.from({ length: 7 }, (_, i) => ({ fileName: i + '.png', label: 'Image ' + i, timestamp: Date.now() - i * 1000 }))")
 })

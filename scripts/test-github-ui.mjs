@@ -560,8 +560,8 @@ test('un dépôt tout neuf s’ouvre (étape 279) et propose de créer, pas d’
     // Étape 280 : plus de « Dépôt vide » en haut (Léo : « enlève dépôt vide »).
     assert.equal(await page.locator('.repo-panel').count(), 0)
     assert.doesNotMatch(await page.textContent('.code-panel'), /Dépôt vide/)
-    assert.match(await page.textContent('.empty-state__title'), /encore vide/)
-    assert.match(await page.textContent('.empty-state'), /Crée un petit site web/)
+    // Étape 427 (une seule phrase, comme le Chat) : le titre invite à créer, sans suggestions.
+    assert.equal(await page.textContent('.empty-state__title'), 'Ce dépôt est encore vide : que veux-tu y créer ?')
     assert.equal(await page.locator('.code-panel__error').count(), 0)
   })
 })

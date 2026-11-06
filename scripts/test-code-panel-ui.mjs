@@ -265,7 +265,8 @@ test('conversation à gauche, aperçu à droite, champ de saisie en bas de la co
         sideBySide: Math.abs(chat.top - preview.top) < 2,
         iframeInPreview: document.querySelector('.code-preview').contains(document.querySelector('.code-panel__preview')),
         composerInChat: document.querySelector('.code-chat').lastElementChild.classList.contains('composer'),
-        composerAtBottom: Math.abs(box('.composer').bottom - chat.bottom) < 24,
+        // Étape 427 (comme le Chat) : sans message, le champ est juste sous la phrase d'accueil, au milieu.
+        composerUnderWelcome: Math.abs(box('.composer').top - box('.empty-state').bottom) < 40,
         previewWiderThanChat: preview.width > chat.width
       }
     })
@@ -275,9 +276,13 @@ test('conversation à gauche, aperçu à droite, champ de saisie en bas de la co
       sideBySide: true,
       iframeInPreview: true,
       composerInChat: true,
-      composerAtBottom: true,
+      composerUnderWelcome: true,
       previewWiderThanChat: true
     })
+    // Dès la première demande, le champ redescend en bas de la conversation (étape 282).
+    await startGeneration(page)
+    const gap = await page.evaluate(() => document.querySelector('.code-chat').getBoundingClientRect().bottom - document.querySelector('.composer').getBoundingClientRect().bottom)
+    assert.ok(Math.abs(gap) < 24, `champ en bas de la conversation (écart ${gap} px)`)
   })
 })
 
@@ -657,8 +662,8 @@ test('la carte monte jusqu’en haut, à côté de la barre de titre de Jaris (�
     const expandHit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.className, [expand.x + expand.width / 2, expand.y + expand.height / 2])
     assert.match(String(expandHit), /code-preview__expand/, `le clic tombe sur « ${expandHit} » au lieu de « Agrandir »`)
 
-    // Et le reste fonctionne toujours : une suggestion remplit le champ, la poignée se règle au clavier.
-    await page.click('.empty-state__suggestion')
+    // Et le reste fonctionne toujours : le champ se remplit, la poignée se règle au clavier.
+    await page.fill('.composer__input', 'Un minuteur Pomodoro')
     assert.notEqual(await page.inputValue('.composer__input'), '')
     const before = await page.evaluate(() => Math.round(document.querySelector('.code-chat').getBoundingClientRect().width))
     await page.focus('.code-split__handle')
@@ -1285,5 +1290,38 @@ test('étape 416 : « Écrire le code maintenant » seulement pendant qu’il r�
     await startGeneration(page)
     await page.evaluate((s) => window.__emitProgress({ ...s, elapsedMs: 2_000, phase: 'thinking' }), step)
     assert.equal(await page.locator('.code-panel__write-now').count(), 1)
+  })
+})
+
+test('étape 427 : champ en pilule dans une colonne étroite — vide, il reste sur une ligne (son texte d’aide ne compte pas) ; sans place pour le texte, deux rangées ; colonne élargie, une ligne', options, async () => {
+  await withPage(async (page) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(e.message))
+    await page.waitForSelector('.code-split__handle')
+    const state = () => page.evaluate(() => {
+      const c = document.querySelector('.composer')
+      return { expanded: c.classList.contains('composer--expanded'), height: Math.round(c.getBoundingClientRect().height), text: Math.round(document.querySelector('.composer__input').getBoundingClientRect().width), chat: Math.round(document.querySelector('.code-chat').getBoundingClientRect().width) }
+    })
+    // Colonne au plus étroit (300 px) : le texte d'aide « Décris l'application à créer… » passe à la ligne, mais
+    // un champ VIDE ne bascule pas (il basculait sans fin : « Maximum update depth exceeded »).
+    const box = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(0, box.y + box.height / 2, { steps: 4 })
+    await page.mouse.up()
+    let s = await state()
+    assert.ok(s.chat <= 310, `colonne étroite (${s.chat} px)`)
+    assert.equal(errors.length, 0, errors.join(' | '))
+    // Dans 300 px, « + », modèle, micro et envoi ne laissent pas 160 px au texte : deux rangées, texte pleine largeur.
+    assert.equal(s.expanded, true, JSON.stringify(s))
+    assert.ok(s.text >= 160, `place pour écrire (${s.text} px)`)
+    // Colonne élargie : une ligne de nouveau.
+    await page.setViewportSize({ width: 1600, height: 860 })
+    await page.focus('.code-split__handle')
+    for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowRight')
+    await page.waitForFunction(() => !document.querySelector('.composer').classList.contains('composer--expanded'))
+    s = await state()
+    assert.ok(s.height <= 60, `une ligne (${s.height} px)`)
+    assert.equal(errors.length, 0, errors.join(' | '))
   })
 })

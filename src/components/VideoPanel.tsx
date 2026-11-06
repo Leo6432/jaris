@@ -339,12 +339,8 @@ export default function VideoPanel(): JSX.Element {
       <div className="code-panel image-panel video-panel">
         {!selected && !generating && !installing && (
           <div className="image-panel__home">
-            <EmptyState
-              title={t('video.empty.title')}
-              description={t('video.empty.hint')}
-              suggestions={[t('video.suggest.1'), t('video.suggest.2'), t('video.suggest.3')]}
-              onSuggestion={setPrompt}
-            />
+            {/* Étape 427 : une seule phrase, comme le Chat ; les créations récentes restent juste en dessous. */}
+            <EmptyState minimal title={t('video.empty.title')} />
             {gallery.length > 0 && (
               // Étape 268 : même section que le mode Image (titrée, centrée, juste sous les suggestions).
               <section className="image-panel__recent">
@@ -446,6 +442,7 @@ export default function VideoPanel(): JSX.Element {
           onAttachmentChange={setAttachment}
           onError={setError}
           rows={2}
+          inline
           busy={generating || installing}
           onStop={generating ? stop : undefined}
           extraActions={

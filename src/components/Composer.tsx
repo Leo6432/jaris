@@ -71,6 +71,8 @@ interface ComposerProps {
 
 /** Étape 426 : hauteur maximale du champ qui grandit avec le texte, avant de défiler. */
 const INLINE_MAX_HEIGHT_PX = 220
+/** Étape 427 : en dessous de cette largeur pour le texte, le champ sur une ligne passe sur deux rangées. */
+const INLINE_MIN_TEXT_PX = 160
 
 function PlusIcon(): JSX.Element {
   return (
@@ -156,19 +158,50 @@ export default function Composer({
   // texte a nettement raccourci (sinon, mesuré dans une pilule plus étroite, il basculerait à chaque lettre).
   const [expanded, setExpanded] = useState(false)
   const expandedAtRef = useRef(0)
+  // Étape 427 (Code, Image, Vidéo comme le Chat) : un champ avec beaucoup de boutons (GitHub, branche, modèle…) dans
+  // une colonne étroite ne laisse presque plus de place au texte sur une ligne — il passe alors sur deux rangées, et ne
+  // revient sur une ligne que quand le champ a nettement élargi.
+  const [cramped, setCramped] = useState(false)
+  const crampedAtRef = useRef(0)
+  const composerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const composer = composerRef.current
+    const field = inputRef.current
+    if (!inline || !composer || !field || typeof ResizeObserver === 'undefined') return
+    const check = (): void => {
+      const width = composer.getBoundingClientRect().width
+      setCramped((current) => {
+        if (!current && !composer.classList.contains('composer--expanded') && field.getBoundingClientRect().width < INLINE_MIN_TEXT_PX) {
+          crampedAtRef.current = width
+          return true
+        }
+        if (current && width > crampedAtRef.current + 80) return false
+        return current
+      })
+    }
+    check()
+    const observer = new ResizeObserver(check)
+    observer.observe(composer)
+    // Un bouton qui apparaît (la branche, à l'ouverture d'un dépôt) rétrécit le texte sans changer la largeur du champ.
+    observer.observe(field)
+    return () => observer.disconnect()
+  }, [inline])
   useLayoutEffect(() => {
     const field = inputRef.current
     if (!inline || !field) return
     field.style.height = 'auto'
     const lineHeight = parseFloat(getComputedStyle(field).lineHeight) || 24
-    const wraps = value.includes('\n') || field.scrollHeight > lineHeight * 1.6
+    // Le texte d'aide (placeholder) ne compte pas : dans une colonne étroite il passe à la ligne, et un champ vide
+    // basculait sans fin entre une et deux rangées (« Maximum update depth », trouvé par test-code-panel-ui).
+    const wraps = value.length > 0 && (value.includes('\n') || field.scrollHeight > lineHeight * 1.6)
     if (!expanded && wraps) {
       expandedAtRef.current = value.length
       setExpanded(true)
     } else if (expanded && !value.includes('\n') && (value.length === 0 || value.length < expandedAtRef.current * 0.8)) {
       setExpanded(false)
     }
-    field.style.height = `${Math.min(field.scrollHeight, INLINE_MAX_HEIGHT_PX)}px`
+    // Vide : la hauteur d'une ligne (celle du CSS), jamais celle d'un texte d'aide passé à la ligne.
+    field.style.height = value.length > 0 ? `${Math.min(field.scrollHeight, INLINE_MAX_HEIGHT_PX)}px` : ''
   }, [value, inline, expanded])
   const canDictate = typeof window !== 'undefined' && typeof window.jaris?.transcribeDictation === 'function'
 
@@ -327,7 +360,8 @@ export default function Composer({
 
   return (
     <div
-      className={`composer${busy ? ' composer--busy' : ''}${inline ? ' composer--inline' : ''}${inline && expanded ? ' composer--expanded' : ''}`}
+      ref={composerRef}
+      className={`composer${busy ? ' composer--busy' : ''}${inline ? ' composer--inline' : ''}${inline && (expanded || cramped) ? ' composer--expanded' : ''}`}
       onDrop={handleDrop}
       onDragOver={(event) => event.preventDefault()}
     >
