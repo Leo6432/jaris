@@ -81,7 +81,7 @@ test('étape 362 : « Télécharger les votes » — toutes les sessions, répon
 })
 
 // Étape 398 (Léo : « dans l'historique, pouvoir supprimer des choses ou tout supprimer »).
-test('étape 398 : supprimer un duel retire le vote, ses applications, et ne compte plus — même livré avec Jaris', async () => {
+test('étapes 398 et 429 : retirer un duel de l’historique efface ses applications, mais son vote compte toujours (Léo : « garder les scores »)', async () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'jaris-duel-store-'))
   const sharedFile = join(dataRoot, 'livres.json')
   const id1 = '11111111-1111-4111-8111-111111111111'
@@ -97,35 +97,51 @@ test('étape 398 : supprimer un duel retire le vote, ses applications, et ne com
     // id1 a aussi été livré avec Jaris (étape 369), id3 seulement livré.
     writeFileSync(sharedFile, JSON.stringify([vote(id1), vote(id3)]))
     await store.loadSharedDuelVotes(sharedFile)
-    const before = store.getRankingVotes()
-    assert.deepEqual(before.map((v) => v.id).sort(), [id1, id2, id3])
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
 
     assert.equal(await store.deleteDuelVotes([id1]), 1)
-    assert.deepEqual(store.getDuelVotes().map((v) => v.id), [id2])
-    const after = store.getRankingVotes()
-    assert.notEqual(after, before, 'nouvel objet : les calculs mis en cache par référence sont refaits')
-    assert.deepEqual(after.map((v) => v.id).sort(), [id2, id3], 'la copie livrée du vote supprimé ne compte plus')
+    assert.deepEqual(store.getDuelVotes().map((v) => v.id), [id2], 'retiré de l’historique')
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3], 'son vote compte toujours')
     assert.equal(await store.readDuelApp(id1, 'a'), null, 'son application est effacée')
     assert.equal(await store.readDuelApp(id2, 'b'), '<p>b</p>', 'celle d’un autre duel reste')
-
-    // Après un redémarrage, et même si un disque rebranché ramène l'ancienne liste, il reste supprimé.
     const votesFile = join(dataRoot, 'duel-votes.json')
-    writeFileSync(votesFile, JSON.stringify([vote(id1), vote(id2)]))
+    assert.deepEqual(JSON.parse(readFileSync(votesFile, 'utf8')).map((v) => v.id).sort(), [id1, id2], 'le vote reste sur ce PC')
+
+    // Après un redémarrage, il reste caché de l'historique, et compté.
     const restarted = load(dataRoot)
     await restarted.loadSharedDuelVotes(sharedFile)
-    assert.deepEqual((await restarted.loadDuelVotes()).map((v) => v.id), [id2])
-    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id2, id3])
+    assert.deepEqual((await restarted.loadDuelVotes()).map((v) => v.id).sort(), [id1, id2])
+    assert.deepEqual(restarted.getDuelVotes().map((v) => v.id), [id2])
+    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
 
-    // Tout supprimer : tous les votes de ce PC ; un vote seulement livré et jamais sur ce PC n'est pas touché.
+    // Tout retirer : l'historique est vide, le classement garde tout.
     assert.equal(await restarted.deleteDuelVotes('all'), 1)
     assert.deepEqual(restarted.getDuelVotes(), [])
-    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id), [id3])
+    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
     assert.equal(await restarted.readDuelApp(id2, 'b'), null)
-    assert.deepEqual(JSON.parse(readFileSync(votesFile, 'utf8')), [])
-    assert.equal(await restarted.deleteDuelVotes('all'), 0, 'rien à supprimer : rien ne change')
-    // Un nouveau vote après coup compte normalement.
+    assert.equal(await restarted.deleteDuelVotes('all'), 0, 'rien à retirer : rien ne change')
+    // Un nouveau vote après coup s'affiche normalement.
     await restarted.addDuelVote(vote('44444444-4444-4444-8444-444444444444'))
     assert.equal(restarted.getDuelVotes().length, 1)
+  } finally {
+    rmSync(dataRoot, { recursive: true, force: true })
+  }
+})
+
+test('étape 429 : la situation de Léo — duels effacés AVANT l’étape 429 (plus sur ce PC, notés supprimés) : leurs copies livrées avec Jaris recomptent', async () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'jaris-duel-store-'))
+  const sharedFile = join(dataRoot, 'livres.json')
+  const id1 = '11111111-1111-4111-8111-111111111111'
+  try {
+    // Ancien effacement : le vote a quitté duel-votes.json, son identifiant est dans duel-votes-deleted.json.
+    writeFileSync(join(dataRoot, 'duel-votes.json'), '[]')
+    writeFileSync(join(dataRoot, 'duel-votes-deleted.json'), JSON.stringify([{ id: id1, at: 1 }]))
+    writeFileSync(sharedFile, JSON.stringify([vote(id1)]))
+    const store = load(dataRoot)
+    await store.loadSharedDuelVotes(sharedFile)
+    await store.loadDuelVotes()
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id), [id1], 'les points « Duels Code » reviennent')
+    assert.deepEqual(store.getDuelVotes(), [], 'l’historique reste vide, comme Léo l’avait laissé')
   } finally {
     rmSync(dataRoot, { recursive: true, force: true })
   }

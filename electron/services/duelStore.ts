@@ -15,15 +15,18 @@ const storePath = join(getDataRoot(), 'duel-votes.json')
 const appsDir = join(getDataRoot(), 'duel-apps')
 const unreadableDir = join(getDataRoot(), UNREADABLE_DATA_DIR)
 /**
- * Étape 398 (Léo : « dans l'historique, pouvoir supprimer des choses ou tout supprimer ») : les identifiants des votes
- * supprimés. Gardés à part pour deux raisons : un vote déjà livré avec Jaris (étape 369) ne compte plus non plus sur ce
- * PC, et un disque rebranché (union par identifiant) ne ramène pas un vote supprimé.
+ * Étape 398 (Léo : « dans l'historique, pouvoir supprimer des choses ou tout supprimer »), revue à l'étape 429 : les
+ * identifiants des duels RETIRÉS DE L'HISTORIQUE. Léo avait tout effacé et ses points « Duels Code » avaient disparu du
+ * Classement ; son choix (question à choix) : « garder les scores ». Ces duels ne s'affichent plus, mais leurs votes
+ * comptent toujours dans le classement et le choix des modèles. Même fichier qu'avant (rien à convertir) : les duels
+ * supprimés avant l'étape 429 sont simplement cachés, et ceux livrés avec Jaris (étape 369) recomptent.
  */
 const deletedPath = join(getDataRoot(), 'duel-votes-deleted.json')
 
+/** TOUS les votes de ce PC, cachés compris : ils comptent tous. */
 let cache: DuelVote[] = []
 let loaded = false
-/** Nouvel objet à chaque changement : getRankingVotes compare par référence. */
+/** Duels cachés de l'historique. Nouvel objet à chaque changement. */
 let deleted: ReadonlySet<string> = new Set()
 
 function parseDeletedIds(value: unknown): string[] | null {
@@ -51,7 +54,7 @@ const notDeleted = (votes: DuelVote[], ids: ReadonlySet<string>): DuelVote[] => 
 export async function loadDuelVotes(): Promise<DuelVote[]> {
   try {
     deleted = await readDeleted()
-    cache = notDeleted(await readVotes(), deleted)
+    cache = await readVotes()
     loaded = true
   } catch (err) {
     console.error('[jaris] Votes des duels illisibles pour l’instant :', err)
@@ -59,9 +62,16 @@ export async function loadDuelVotes(): Promise<DuelVote[]> {
   return cache
 }
 
-/** Les votes connus, sans attendre le disque (vide tant que loadDuelVotes n'a pas répondu). */
+let visible: { local: readonly DuelVote[]; deleted: ReadonlySet<string>; votes: readonly DuelVote[] } | null = null
+
+/**
+ * Les votes de l'HISTORIQUE (ceux que Léo n'a pas retirés), sans attendre le disque (vide tant que loadDuelVotes n'a pas
+ * répondu). Le classement, lui, compte tout : getRankingVotes.
+ */
 export function getDuelVotes(): readonly DuelVote[] {
-  return cache
+  if (visible?.local === cache && visible.deleted === deleted) return visible.votes
+  visible = { local: cache, deleted, votes: notDeleted(cache, deleted) }
+  return visible.votes
 }
 
 /**
@@ -82,17 +92,18 @@ export async function loadSharedDuelVotes(file: string): Promise<readonly DuelVo
   return shared
 }
 
-let merged: { local: readonly DuelVote[]; shared: readonly DuelVote[]; deleted: ReadonlySet<string>; votes: readonly DuelVote[] } | null = null
+let merged: { local: readonly DuelVote[]; shared: readonly DuelVote[]; votes: readonly DuelVote[] } | null = null
 
 /**
  * Votes du classement : ceux de ce PC + ceux livrés avec Jaris, un même identifiant compté une fois (le PC de Léo a
- * les deux). Même objet tant que rien ne change : main.ts met ses calculs en cache par référence.
+ * les deux). Les duels retirés de l'historique comptent aussi (étape 429). Même objet tant que rien ne change : main.ts
+ * met ses calculs en cache par référence.
  */
 export function getRankingVotes(): readonly DuelVote[] {
-  if (merged?.local === cache && merged.shared === shared && merged.deleted === deleted) return merged.votes
+  if (merged?.local === cache && merged.shared === shared) return merged.votes
   const ids = new Set(cache.map((v) => v.id))
-  const votes = shared.length ? [...cache, ...shared.filter((v) => !ids.has(v.id) && !deleted.has(v.id))] : cache
-  merged = { local: cache, shared, deleted, votes }
+  const votes = shared.length ? [...cache, ...shared.filter((v) => !ids.has(v.id))] : cache
+  merged = { local: cache, shared, votes }
   return votes
 }
 
@@ -114,22 +125,22 @@ export function addDuelVote(vote: DuelVote): Promise<void> {
     const votes = await readVotes()
     if (!votes.some((v) => v.id === vote.id)) votes.push(vote)
     await writeFileAtomic(storePath, JSON.stringify(votes, null, 2))
-    cache = notDeleted(votes, deleted)
+    cache = votes
     loaded = true
   })
 }
 
 /**
- * Étape 398 : supprime des votes de ce PC (`'all'` : tous), avec leurs applications gardées. Ils ne comptent plus dans
- * le classement ni dans le choix des modèles. Renvoie le nombre de votes supprimés. Les identifiants sont notés AVANT
- * de réécrire la liste : une coupure entre les deux ne ramène jamais un vote supprimé.
+ * Étape 398, revue à l'étape 429 (Léo : « garder les scores ») : retire des duels de l'HISTORIQUE (`'all'` : tous) et
+ * efface leurs applications gardées (les fichiers lourds). Leurs VOTES restent sur ce PC et comptent toujours dans le
+ * classement et le choix des modèles. Renvoie le nombre de duels retirés.
  */
 export function deleteDuelVotes(which: readonly string[] | 'all'): Promise<number> {
   return exclusive(async () => {
     const votes = await readVotes()
     const wanted = which === 'all' ? null : new Set(which)
     const gone = votes.filter((v) => (wanted ? wanted.has(v.id) : true) && !deleted.has(v.id))
-    // Un vote déjà supprimé ailleurs (ou livré avec Jaris et absent de ce PC) peut quand même être demandé.
+    // Un vote déjà retiré ailleurs (ou livré avec Jaris et absent de ce PC) peut quand même être demandé.
     const ids = new Set([...gone.map((v) => v.id), ...(wanted ? [...wanted].filter((id) => VOTE_ID.test(id)) : [])])
     if (!ids.size) return 0
     const known = await readDeleted()
@@ -137,9 +148,7 @@ export function deleteDuelVotes(which: readonly string[] | 'all'): Promise<numbe
     const nextDeleted = new Set([...known, ...ids])
     await writeFileAtomic(deletedPath, JSON.stringify([...nextDeleted].map((id) => ({ id, at: now })), null, 2))
     deleted = nextDeleted
-    const kept = votes.filter((v) => !nextDeleted.has(v.id))
-    await writeFileAtomic(storePath, JSON.stringify(kept, null, 2))
-    cache = kept
+    cache = votes
     for (const id of ids) {
       for (const side of ['a', 'b'] as const) {
         const path = appPath(id, side)
@@ -202,7 +211,7 @@ export function decideDuelReview(id: string, accept: boolean): Promise<boolean> 
         const { reason: _reason, ...vote } = review
         votes.push(vote)
         await writeFileAtomic(storePath, JSON.stringify(votes, null, 2))
-        cache = notDeleted(votes, deleted)
+        cache = votes
         loaded = true
       }
     }

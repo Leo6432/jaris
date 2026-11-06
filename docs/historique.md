@@ -11189,3 +11189,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   service à connecter absent, pleine largeur au-dessus du champ, logo chargé, début de phrase + lettre gardée — échoue
   3 fois sur 3 en remettant le focus différé —, devant un texte, jamais en double), `test-model-picker-ui.mjs`.
   Capture montrée à Léo avant l'envoi : « Oui, publie ».
+
+- **Étape 429 (v0.45.3), Léo : « pourquoi dans Classement il n'y a aucun score dans Duels Code ? »** Mesuré avant tout :
+  le vrai calcul (`getModelOverview` avec les 18 votes livrés, scripts/shared-duel-votes.json) donne bien des points
+  « Duels Code » à 17 modèles, et le fichier est bien dans l'installeur — la cause n'était pas visible d'ici. Question
+  ciblée à Léo : il avait **effacé l'historique des duels**. L'étape 398 (« pouvoir supprimer des choses ou tout
+  supprimer ») retirait alors les votes du classement ET ignorait leurs copies livrées avec Jaris : ses points Code
+  avaient disparu. Choix de Léo (question à choix) : **« garder les scores »** — une demande récente qui l'emporte sur
+  le comportement de l'étape 398. Effacer l'historique ne fait plus que CACHER les duels (et effacer les applications
+  gardées, les fichiers lourds) : les votes restent sur ce PC et comptent toujours dans le classement et le choix des
+  modèles (`getRankingVotes` ne filtre plus ; `getDuelVotes` = l'historique visible). Même fichier
+  `duel-votes-deleted.json` (rien à convertir) : les duels effacés avant restent cachés, et ceux livrés avec Jaris —
+  ses 17 duels Code — recomptent tout de suite. Les votes effacés AVANT qui n'étaient que sur son PC (non livrés) sont
+  perdus : l'ancienne version les retirait du fichier. Textes de confirmation réécrits (24 langues : « leurs votes
+  restent comptés dans le classement »). « Télécharger les votes » exporte tout, cachés compris (ils comptent).
+  Régression : `test-duel-store.mjs` (retiré de l'historique mais compté, application effacée, redémarrage, tout
+  retirer ; la situation exacte de Léo : ancien effacement, copie livrée qui recompte — les deux échouent en remettant
+  l'ancien filtre), `test-duel-panel-ui.mjs` (texte de confirmation).

@@ -717,10 +717,10 @@ test('étape 398 : supprimer un duel ou tout l’historique, toujours après une
     await page.waitForFunction(() => document.querySelectorAll('.duel-history__item').length === 2)
     assert.deepEqual(await deletes(), [['historyDelete', ['v2']]])
     assert.doesNotMatch(await page.textContent('.duel-history__list'), /serpent/)
-    // Tout supprimer : une confirmation qui dit combien et que c'est définitif.
+    // Tout supprimer : une confirmation qui dit combien, et (étape 429) que les votes restent comptés.
     await page.click('.duel-history__delete-all')
     await page.waitForSelector('.duel-history__confirm-all')
-    assert.match(await page.textContent('.duel-history__confirm-all'), /Duels à effacer : 2\..*définitif/)
+    assert.match(await page.textContent('.duel-history__confirm-all'), /Duels à retirer de l'historique : 2\..*restent comptés dans le classement/)
     assert.equal((await deletes()).length, 1, 'le bouton seul n’efface rien')
     await page.click('.duel-history__confirm-all button:has-text("Tout effacer")')
     await page.waitForFunction(() => document.querySelector('.duel-home__note')?.textContent?.includes('Aucun duel'))
