@@ -207,6 +207,16 @@ export async function setVoiceOutputDevice(audioEl: HTMLAudioElement, sinkId: st
   await Promise.all(targets.map((target) => (target.setSinkId ? target.setSinkId.call(target, sinkId).catch(() => {}) : undefined)))
 }
 
+/**
+ * Étape 434 : le niveau de la voix de Jaris en ce moment (0-1), pour les barres du widget — le même analyseur que
+ * l'orbe (un seul par lecteur). 0 quand rien ne joue.
+ */
+export function playingAudioLevel(audioEl: HTMLAudioElement | null): number {
+  if (!audioEl || audioEl.paused || audioEl.ended) return 0
+  const { analyser } = getOrCreateAudioAnalysis(audioEl)
+  return readAudioLevel(analyser, new Uint8Array(analyser.frequencyBinCount))
+}
+
 /** Niveau sonore moyen courant (0-1) ; le lissage vient de smoothingTimeConstant sur l'AnalyserNode lui-même. */
 function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>): number {
   analyser.getByteFrequencyData(buffer)

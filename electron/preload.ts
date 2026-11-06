@@ -324,6 +324,7 @@ const api = {
   armChatWidgetPointer: (): void => ipcRenderer.send(IPC_CHANNELS.armChatWidgetPointer),
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
+  onCaptureLevel: (cb: (level: number) => void) => subscribe(IPC_CHANNELS.captureLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
   onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb),
   // Téléphone (étape 214)

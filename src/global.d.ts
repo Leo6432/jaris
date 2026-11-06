@@ -270,6 +270,7 @@ declare global {
       armChatWidgetPointer: () => void
       collapseChatWidget: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
+      onCaptureLevel: (cb: (level: number) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void
       getPhoneAccess: () => Promise<PhoneAccessStatus>

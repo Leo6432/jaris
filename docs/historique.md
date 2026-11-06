@@ -11286,3 +11286,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Régression : `test-hardwarescan-single-pool.mjs` (propre temps pour un rejeu ; mise à l'échelle 5,3 → 1,9 Go pour un
   modèle jamais passé ; délai exclu de la moyenne — échoue s'il y entre ; aucune trace = aucune durée),
   `test-options-reorganization-ui.mjs` (durées par ligne et total arrondis). Pas vérifié sur le vrai fichier de Léo.
+
+## Étape 434 — Widget vocal : les barres suivent le vrai son ; plus de rond blanc autour de l'orbe (v0.46.2)
+
+- Léo (après la v0.46.0) : « ça bouge aléatoirement, mais ça doit bouger s'il parle », et une capture d'un rond blanc
+  autour de l'orbe (« des fois ça sélectionne »). Il a aussi refusé la version noire de l'application (« non, on fait
+  rien ») : le gris actuel reste.
+- Barres : plus d'animation CSS en boucle. Pendant l'écoute, le programme d'écoute envoie le niveau de la voix à chaque
+  morceau capté (80 ms, `capture_level`, 0 sous le seuil de silence) → voiceClient → pipeline → main, au widget seul
+  (`IPC_CHANNELS.captureLevel`, `onCaptureLevel`). Pendant la réponse, le niveau du lecteur audio du widget
+  (`playingAudioLevel`, même analyseur que l'orbe). `useVoiceBars` (VoiceWidget.tsx) règle chaque barre à chaque image,
+  lissé ; sans niveau depuis 250 ms, retour au repos. Les petits points de « il travaille » gardent leur animation.
+- Rond blanc : le contour clavier de l'orbe (`.jaris-orb--clickable:focus-visible`, écran vocal, étape 402)
+  réapparaissait dans le widget après un clic puis un retour sur la fenêtre. Supprimé dans le widget, et la capsule
+  n'est plus sélectionnable (`user-select: none`).
+- Régression : `test-chat-widget-ui.mjs` (silence = barres immobiles et au repos, voix = barres qui montent, retour au
+  repos ; aucun contour ni sélection après clic — les deux échouent en remettant le défaut), `test-voice-activity.mjs`
+  (chemin du niveau, du Python au widget). Pas vérifié sur Windows avec un vrai micro.

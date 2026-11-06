@@ -22,6 +22,7 @@ type VoiceServerEvent =
   | { event: 'mic_status'; available: boolean; message?: string }
   | { event: 'mic_test_started' }
   | { event: 'mic_test_level'; level: number }
+  | { event: 'capture_level'; level: number }
   | { event: 'mic_test_done'; detected: boolean; silentStream?: boolean }
   | { event: 'wake_test_heard'; text: string; matched: boolean; tooShort: boolean; peak: number }
   | { event: 'file_transcript'; id: string; text?: string; error?: string }
@@ -190,6 +191,9 @@ export class VoiceClient extends EventEmitter {
             break
           case 'mic_test_level':
             this.emit('micTestLevel', payload.level)
+            break
+          case 'capture_level':
+            this.emit('captureLevel', payload.level)
             break
           case 'mic_test_done':
             this.emit('micTestDone', { detected: payload.detected, silentStream: payload.silentStream === true })

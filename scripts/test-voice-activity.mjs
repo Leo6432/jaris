@@ -64,3 +64,16 @@ test('la ligne d’activité suit la vraie demande vocale : démarrée, mise à 
   const widget = readFileSync(new URL('../src/components/VoiceWidget.tsx', import.meta.url), 'utf8')
   assert.match(widget, /emotion === 'thinking' && activity\s*\?\s*activity/)
 })
+
+// Étape 434 : le niveau de la voix pendant l'écoute remonte du programme d'écoute jusqu'au widget, par un seul chemin.
+test('étape 434 : le niveau de la voix pendant l’écoute va du programme d’écoute aux barres du widget', () => {
+  const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+  const server = read('python/voice_server.py')
+  const capture = server.slice(server.indexOf('# mode == "capture"'), server.indexOf('utterance_done ='))
+  assert.match(capture, /emit\(\{"event": "capture_level", "level": [^\n]*if chunk_is_loud else 0\.0\}\)/, 'émis à chaque morceau capté, 0 dans le silence')
+  assert.match(read('electron/services/voiceClient.ts'), /case 'capture_level':\s*this\.emit\('captureLevel', payload\.level\)/)
+  assert.match(read('electron/services/voicePipeline.ts'), /this\.voice\.on\('captureLevel', \(level: number\) => this\.emit\('captureLevel', level\)\)/)
+  assert.match(read('electron/main.ts'), /pipeline\.on\('captureLevel'[\s\S]{0,200}widgetWindow\.webContents\.send\(IPC_CHANNELS\.captureLevel, level\)/)
+  assert.match(read('electron/preload.ts'), /onCaptureLevel: \(cb: \(level: number\) => void\) => subscribe\(IPC_CHANNELS\.captureLevel, cb\)/)
+  assert.match(read('src/components/VoiceWidget.tsx'), /window\.jaris\.onCaptureLevel\(/)
+})

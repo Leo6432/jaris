@@ -1,5 +1,5 @@
-import type { RefObject } from 'react'
-import JarisOrb from './JarisOrb'
+import { useEffect, useRef, type RefObject } from 'react'
+import JarisOrb, { playingAudioLevel } from './JarisOrb'
 import type { JarisEmotion } from '@/store/useJarisStore'
 import { t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
@@ -24,6 +24,55 @@ const STATUS_LABEL: Record<JarisEmotion, MessageKey> = {
 
 export const VOICE_WIDGET_ORB_SIZE = 26
 
+/** Hauteur relative de chaque barre : une forme de voix, pas six barres identiques. */
+const BAR_WEIGHTS = [0.55, 0.85, 1, 0.75, 0.95, 0.6]
+/** Barre au repos (silence) : un trait, pas une barre vide. */
+export const BAR_REST_SCALE = 0.18
+/** Sans nouveau niveau depuis ce délai, la voix est retombée dans le silence. */
+const CAPTURE_LEVEL_STALE_MS = 250
+
+/**
+ * Étape 434 (Léo : « ça bouge aléatoirement, mais ça doit bouger s'il parle ») : les barres suivent le VRAI son —
+ * ta voix pendant l'écoute (niveau du micro envoyé par le programme d'écoute), celle de Jaris pendant la réponse
+ * (le lecteur audio du widget). Immobiles dans le silence. Mises à jour hors de React (une image par frame).
+ */
+function useVoiceBars(emotion: JarisEmotion, audioElRef: RefObject<HTMLAudioElement>): RefObject<HTMLSpanElement> {
+  const barsRef = useRef<HTMLSpanElement>(null)
+  const captured = useRef({ level: 0, at: 0 })
+  useEffect(() => window.jaris.onCaptureLevel((level) => (captured.current = { level, at: performance.now() })), [])
+  useEffect(() => {
+    const bars = barsRef.current ? Array.from(barsRef.current.children) as HTMLElement[] : []
+    const setScale = (level: number, time: number): void => {
+      bars.forEach((bar, i) => {
+        // Un léger mouvement propre à chaque barre, seulement quand il y a du son (multiplié par le niveau).
+        const wobble = 0.8 + 0.2 * Math.sin(time / 90 + i * 1.7)
+        bar.style.transform = `scaleY(${Math.min(1, BAR_REST_SCALE + level * BAR_WEIGHTS[i % BAR_WEIGHTS.length] * wobble).toFixed(3)})`
+      })
+    }
+    if (emotion !== 'listening' && emotion !== 'happy') {
+      setScale(0, 0)
+      return undefined
+    }
+    let shown = 0
+    let frame = 0
+    const tick = (time: number): void => {
+      const target =
+        emotion === 'listening'
+          ? time - captured.current.at < CAPTURE_LEVEL_STALE_MS
+            ? captured.current.level
+            : 0
+          : Math.min(1, playingAudioLevel(audioElRef.current) * 3)
+      shown += (Math.min(1, target * 1.6) - shown) * 0.35
+      if (shown < 0.01) shown = 0
+      setScale(shown, time)
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [emotion, audioElRef])
+  return barsRef
+}
+
 interface VoiceWidgetProps {
   emotion: JarisEmotion
   transcript: string
@@ -47,6 +96,7 @@ export default function VoiceWidget({ emotion, transcript, reply, activity, audi
   const question = emotion !== 'listening' && transcript ? transcript : ''
   const answer = emotion === 'happy' || emotion === 'surprised' ? reply : ''
   const open = !resting && Boolean(question || answer)
+  const barsRef = useVoiceBars(emotion, audioElRef)
   return (
     <div
       className={`voice-island voice-island--${emotion}${open ? ' voice-island--open' : ''}`}
@@ -65,7 +115,7 @@ export default function VoiceWidget({ emotion, transcript, reply, activity, audi
               <i />
             </span>
           ) : (
-            <span className="voice-island__bars">
+            <span className="voice-island__bars" ref={barsRef}>
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <i key={i} />
               ))}

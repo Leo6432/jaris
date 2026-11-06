@@ -52,6 +52,8 @@ const overrides = {
     return () => { window.__logListeners = window.__logListeners.filter((entry) => entry !== listener) }
   },
   setChatWidgetHeight: (height) => window.__heights.push(height),
+  // Étape 434 : le niveau de la voix pendant l'écoute, envoyé par le main au widget.
+  onCaptureLevel: (listener) => { window.__captureLevel = listener; return () => { window.__captureLevel = null } },
   setChatWidgetKeepOpen: (keepOpen) => { window.__keepOpen = keepOpen },
   armChatWidgetPointer: () => {},
   collapseChatWidget: () => { if (!window.__keepOpen) window.__collapsed += 1 },
@@ -614,5 +616,45 @@ test('widget vocal : capsule de repos, écoute, réflexion puis carte de répons
     const before = await page.evaluate(() => window.__openedSettings)
     await page.click('.voice-island .jaris-orb')
     assert.equal(await page.evaluate(() => window.__openedSettings), before + 1)
+  })
+})
+
+// Étape 434 (Léo : « ça bouge aléatoirement, mais ça doit bouger s'il parle ») : les barres suivent le vrai son.
+test('widget vocal : les barres restent immobiles dans le silence et suivent la voix pendant l’écoute', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 500, height: 460 })
+    await page.evaluate(() => window.__renderVoice('listening', '', '', null))
+    await page.waitForSelector('.voice-island__bars i')
+    const scales = () => page.$$eval('.voice-island__bars i', (bars) => bars.map((bar) => Number(/scaleY\(([\d.]+)\)/.exec(bar.style.transform)?.[1] ?? NaN)))
+    await page.waitForTimeout(500)
+    const silent = await scales()
+    assert.ok(silent.every((v) => Math.abs(v - 0.18) < 0.01), `silence : barres au repos, reçu ${silent}`)
+    await page.waitForTimeout(400)
+    assert.deepEqual(await scales(), silent, 'silence : rien ne bouge tout seul')
+
+    // Il parle : un niveau toutes les 80 ms, comme le programme d'écoute.
+    await page.evaluate(() => { window.__talk = setInterval(() => window.__captureLevel?.(0.6), 80) })
+    await page.waitForTimeout(500)
+    const talking = await scales()
+    assert.ok(Math.max(...talking) > 0.6, `il parle : les barres montent, reçu ${talking}`)
+
+    // Il se tait : les barres retombent.
+    await page.evaluate(() => clearInterval(window.__talk))
+    await page.waitForTimeout(800)
+    assert.ok((await scales()).every((v) => Math.abs(v - 0.18) < 0.01), 'silence revenu : barres au repos')
+  })
+})
+
+test('widget vocal : cliquer sur l’orbe ne laisse ni contour ni sélection', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 500, height: 460 })
+    await page.evaluate(() => window.__renderVoice('happy', 'Quelle heure est-il ?', 'Il est 15 h.', null))
+    await page.waitForSelector('.voice-island .jaris-orb')
+    await page.click('.voice-island .jaris-orb')
+    // Le contour « clavier » de l'écran vocal réapparaissait au retour sur la fenêtre : forcé ici par le clavier.
+    await page.focus('.voice-island .jaris-orb')
+    await page.keyboard.press('Shift')
+    const style = await page.$eval('.voice-island .jaris-orb', (el) => ({ outline: getComputedStyle(el).outlineStyle, select: getComputedStyle(el.closest('.voice-island')).userSelect }))
+    assert.deepEqual(style, { outline: 'none', select: 'none' })
   })
 })

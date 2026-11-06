@@ -1477,6 +1477,10 @@ async function startVoicePipeline(): Promise<void> {
   // Étape 173 : une image dessinée à la voix s'ouvre dans la visionneuse de Windows (pas de Chat à l'écran).
   pipeline.on('image', (path: string) => void shell.openPath(path))
   pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
+  // Étape 434 : seul le widget dessine ces barres ; 12 niveaux par seconde, inutile de les envoyer ailleurs.
+  pipeline.on('captureLevel', (level: number) => {
+    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) widgetWindow.webContents.send(IPC_CHANNELS.captureLevel, level)
+  })
   pipeline.on('micTestDone', (done: MicTestDonePayload) => broadcast(IPC_CHANNELS.micTestDone, done))
   pipeline.on('wakeTestHeard', (heard: WakeTestHeardPayload) => broadcast(IPC_CHANNELS.wakeTestHeard, heard))
   // Étape 325 : la raison affichée près de « Parler à Jaris » suit l'état réel de l'écoute, et s'efface quand elle est prête.

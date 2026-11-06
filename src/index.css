@@ -12154,6 +12154,20 @@ input.reply-ui__field-input {
 .voice-island .jaris-orb {
   flex: 0 0 auto;
 }
+/* Étape 434 (Léo, capture d'un rond blanc autour de l'orbe) : le widget ne se pilote pas au clavier — la fenêtre
+   n'est jamais activée pour ça —, mais après un clic sur l'orbe puis un retour sur la fenêtre, Chromium redessinait
+   le contour « clavier » de l'écran vocal. Ni contour ni texte sélectionnable dans la capsule. */
+.app--widget .jaris-orb:focus,
+.app--widget .jaris-orb:focus-visible {
+  outline: none;
+}
+.voice-island,
+.chat-widget__idle,
+.chat-widget__head,
+.chat-widget__bar .jaris-orb {
+  user-select: none;
+  -webkit-user-select: none;
+}
 .voice-island__headline {
   flex: 1;
   min-width: 0;
@@ -12196,21 +12210,13 @@ input.reply-ui__field-input {
   height: 100%;
   border-radius: 2px;
   background: var(--island-accent);
-  transform: scaleY(0.3);
   transform-origin: center;
 }
-.voice-island--listening .voice-island__bars i,
-.voice-island--happy .voice-island__bars i {
-  animation: voice-island-bar 900ms ease-in-out infinite;
-}
-.voice-island__bars i:nth-child(2) { animation-delay: -150ms; }
-.voice-island__bars i:nth-child(3) { animation-delay: -450ms; }
-.voice-island__bars i:nth-child(4) { animation-delay: -300ms; }
-.voice-island__bars i:nth-child(5) { animation-delay: -600ms; }
-.voice-island__bars i:nth-child(6) { animation-delay: -750ms; }
-@keyframes voice-island-bar {
-  0%, 100% { transform: scaleY(0.3); }
-  50% { transform: scaleY(1); }
+/* Étape 434 : plus d'animation en boucle — VoiceWidget.tsx règle la hauteur de chaque barre sur le vrai son
+   (ta voix pendant l'écoute, celle de Jaris pendant la réponse) ; immobiles dans le silence. */
+.voice-island__bars i {
+  transform: scaleY(0.18);
+  transition: transform 60ms linear;
 }
 .voice-island__dots {
   display: flex;
@@ -12371,7 +12377,6 @@ input.reply-ui__field-input {
   .voice-island__signal {
     transition: none;
   }
-  .voice-island__bars i,
   .voice-island__dots i {
     animation: none;
   }

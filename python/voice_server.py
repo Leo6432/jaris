@@ -39,6 +39,9 @@ Une ligne JSON par événement sur stdout :
                                             pour les messages vocaux du téléphone, et réessaie d'ouvrir un micro)
   {"event": "mic_test_started"}
   {"event": "mic_test_level", "level": 0.0-1.0}
+  {"event": "capture_level", "level": 0.0-1.0}
+                                           (étape 434 : pendant l'écoute de la demande, un niveau toutes les 80 ms —
+                                            les barres du widget suivent la vraie voix, 0 dans le silence)
   {"event": "mic_test_done", "detected": true|false, "silentStream": true|false}
   {"event": "wake_test_heard", "text": "...", "matched": true|false, "tooShort": true|false, "peak": 0.0-1.0}
   {"event": "file_transcript", "id": "...", "text": "..."}  ou  {"event": "file_transcript", "id": "...", "error": "..."}
@@ -516,7 +519,10 @@ def main() -> None:
         # mode == "capture"
         capture_chunks.append(chunk)
         captured_ms += chunk_ms
-        chunk_is_loud = rms(chunk) >= SILENCE_RMS_THRESHOLD
+        chunk_level = rms(chunk)
+        chunk_is_loud = chunk_level >= SILENCE_RMS_THRESHOLD
+        # Étape 434 : les barres du widget suivent la voix qui parle, immobiles dans le silence (sous le seuil : 0).
+        emit({"event": "capture_level", "level": min(1.0, chunk_level / MIC_TEST_LEVEL_DIVISOR) if chunk_is_loud else 0.0})
         silent_ms = 0.0 if chunk_is_loud else silent_ms + chunk_ms
         if chunk_is_loud:
             loud_ms += chunk_ms

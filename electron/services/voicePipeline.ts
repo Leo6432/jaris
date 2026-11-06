@@ -272,6 +272,8 @@ export class VoicePipeline extends EventEmitter {
     })
     this.voice.on('micTestStarted', () => this.emit('micTestStarted'))
     this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
+    // Étape 434 : niveau de la voix pendant l'écoute de la demande, pour les barres du widget.
+    this.voice.on('captureLevel', (level: number) => this.emit('captureLevel', level))
     this.voice.on('micTestDone', (done: MicTestDonePayload) => this.emit('micTestDone', done))
     this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
     // Étape 325 : la raison affichée près de « Parler à Jaris » suit l'état réel (effacée quand l'écoute est prête).

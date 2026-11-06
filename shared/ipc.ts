@@ -1439,6 +1439,8 @@ export const IPC_CHANNELS = {
   stopTestMicrophone: 'jaris:stop-test-microphone',
   /** main -> renderer : mesure de niveau sonore pendant un test micro en cours. */
   micTestLevel: 'jaris:mic-test-level',
+  /** main -> widget : niveau de la voix (0-1) pendant que Jaris écoute la demande (étape 434). */
+  captureLevel: 'jaris:capture-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
   /** renderer -> main : démarre / arrête le test du mot « Jaris » (étape 180). */
