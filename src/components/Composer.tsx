@@ -33,7 +33,13 @@ export interface ComposerAddItem {
   label: string
   hint?: string
   icon: ReactNode
-  onSelect: () => void
+  /** Action de l'entrée ; facultative quand `prefix` suffit. */
+  onSelect?: () => void
+  /**
+   * Étape 428 (Léo, capture du menu « + » de ChatGPT) : début de phrase posé dans le champ (« Cherche sur internet : »,
+   * « Avec Canva, »), modifiable avant l'envoi — Léo voit exactement ce qui part, jamais une consigne cachée.
+   */
+  prefix?: string
 }
 interface ComposerProps {
   value: string
@@ -67,6 +73,8 @@ interface ComposerProps {
    * à la ligne. Le Chat seulement : le mode Code garde son grand champ, ses descriptions font plusieurs lignes.
    */
   inline?: boolean
+  /** Étape 428 : appelé à l'ouverture du menu « + » (l'écran y rafraîchit ce qu'il propose, ex. services connectés). */
+  onMenuOpen?: () => void
 }
 
 /** Étape 426 : hauteur maximale du champ qui grandit avec le texte, avant de défiler. */
@@ -135,7 +143,8 @@ export default function Composer({
   extraActions,
   imagesAllowed = true,
   addItems = [],
-  inline = false
+  inline = false,
+  onMenuOpen
 }: ComposerProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -298,6 +307,24 @@ export default function Composer({
     }
   }, [menuOpen])
 
+  /** Étape 428 : le début de phrase d'une entrée du menu, devant ce qui est déjà écrit, puis le curseur à la fin. */
+  const insertPrefix = (prefix: string): void => {
+    const rest = value.trimStart()
+    const next = rest.startsWith(prefix.trim()) ? rest : prefix + rest
+    // Le focus revient TOUT DE SUITE (une lettre tapée juste après le choix était perdue quand il revenait une image
+    // plus tard) ; le curseur est posé à la fin une fois le nouveau texte affiché (effet ci-dessous).
+    caretToEndRef.current = true
+    onChange(next)
+    inputRef.current?.focus()
+  }
+  const caretToEndRef = useRef(false)
+  useLayoutEffect(() => {
+    const field = inputRef.current
+    if (!caretToEndRef.current || !field) return
+    caretToEndRef.current = false
+    field.setSelectionRange(field.value.length, field.value.length)
+  }, [value])
+
   const attach = async (file: File | Blob, name = ''): Promise<void> => {
     try {
       onAttachmentChange(await fileToImageAttachment(file, name))
@@ -407,7 +434,10 @@ export default function Composer({
             <button
               type="button"
               className={`composer__plus${menuOpen ? ' composer__plus--open' : ''}`}
-              onClick={() => setMenuOpen(!menuOpen)}
+              onClick={() => {
+                if (!menuOpen) onMenuOpen?.()
+                setMenuOpen(!menuOpen)
+              }}
               disabled={busy}
               title={t('composer.add')}
               aria-label={t('composer.add')}
@@ -417,8 +447,7 @@ export default function Composer({
               <PlusIcon />
             </button>
             {menuOpen && (
-              <div className="composer__menu" role="menu">
-                <span className="composer__menu-title">{t('composer.add')}</span>
+              <div className="composer__menu" role="menu" aria-label={t('composer.add')}>
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
@@ -427,7 +456,8 @@ export default function Composer({
                     className="composer__menu-item"
                     onClick={() => {
                       setMenuOpen(false)
-                      item.onSelect()
+                      if (item.prefix !== undefined) insertPrefix(item.prefix)
+                      item.onSelect?.()
                     }}
                   >
                     <span className="composer__menu-icon">{item.icon}</span>

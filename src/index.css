@@ -12117,3 +12117,72 @@ input.reply-ui__field-input {
     margin-top: 18px;
   }
 }
+
+/* Étape 428 (Léo, capture du menu « + » de ChatGPT : « améliore ça aussi ») : le menu prend toute la largeur du
+   champ, juste au-dessus ; une ligne par action — icône, titre, puis ce qu'elle fait en plus discret. */
+.composer {
+  position: relative;
+}
+
+.composer__add {
+  position: static;
+}
+
+.composer__menu {
+  /* Bord à bord avec le champ (son cadre de 1 px compris). */
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 8px);
+  min-width: 0;
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  padding: 6px;
+  gap: 1px;
+  border-radius: 18px;
+  border-color: var(--hud-line);
+  background: var(--hud-panel-raised);
+}
+
+.composer__menu-item {
+  gap: 12px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.composer__menu-item:hover,
+.composer__menu-item:focus-visible {
+  background: var(--jv-hover);
+  outline: none;
+}
+
+.composer__menu-icon {
+  width: 20px;
+  justify-content: center;
+  flex: none;
+  color: var(--hud-text-dim);
+}
+
+.composer__menu-logo {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.composer__menu-label {
+  font-weight: 500;
+  color: var(--hud-text);
+}
+
+.composer__menu-hint {
+  margin-left: 0;
+  padding-left: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+}

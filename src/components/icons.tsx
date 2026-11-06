@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 /**
  * Icônes partagées par plusieurs panneaux (étape 96). Des SVG inline qui héritent de `currentColor` : aucune
  * dépendance, aucun emoji — même parti pris que l'icône de pièce jointe du composeur.
@@ -77,5 +79,55 @@ export function CheckIcon(): JSX.Element {
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m5 12.5 4.5 4.5L19 7.5" />
     </svg>
+  )
+}
+
+/** Étape 428 : entrées du menu « + » du Chat (même famille : SVG en traits, couleur héritée). */
+function MenuIcon({ children }: { children: ReactNode }): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  )
+}
+
+/** « Créer une image » : un pinceau et une étincelle. */
+export function DrawIcon(): JSX.Element {
+  return (
+    <MenuIcon>
+      <path d="M14.5 4.5 19.5 9.5 10 19H5v-5Z" />
+      <path d="m12.5 6.5 5 5" />
+      <path d="M5 3v4M3 5h4" />
+    </MenuIcon>
+  )
+}
+
+/** « Recherche sur le web » : un globe. */
+export function GlobeIcon(): JSX.Element {
+  return (
+    <MenuIcon>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5S9.6 5.8 12 3.5Z" />
+    </MenuIcon>
+  )
+}
+
+/** « Regarder mon écran » : un moniteur. */
+export function ScreenIcon(): JSX.Element {
+  return (
+    <MenuIcon>
+      <rect x="3" y="4.5" width="18" height="12" rx="2" />
+      <path d="M8.5 20h7M12 16.5V20" />
+    </MenuIcon>
+  )
+}
+
+/** « Rappel » : une cloche. */
+export function BellIcon(): JSX.Element {
+  return (
+    <MenuIcon>
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15Z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </MenuIcon>
   )
 }

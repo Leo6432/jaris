@@ -147,6 +147,8 @@ window.jaris = {
     return () => {}
   },
   getProfile: () => Promise.resolve({ name: 'Léo', soundEffectsEnabled: false }),
+  // Étape 428 : un service connecté (dans le menu « + ») et un autre encore à connecter (absent du menu).
+  mcpList: () => Promise.resolve([{ id: 'c1', name: 'Canva', enabled: true, status: 'ready', catalogId: 'canva', tools: [] }, { id: 'n1', name: 'Notion', enabled: true, status: 'signin', catalogId: 'notion', tools: [] }]),
   getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
   setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
@@ -606,5 +608,35 @@ test('étape 426 : chercher une conversation — loupe alignée sur « Récents 
     await field.press('Escape')
     await field.waitFor({ state: 'detached' })
     assert.equal(await page.locator('.workspace__item').count(), 2, 'toutes les conversations reviennent')
+  })
+})
+
+test('étape 428 : menu « + » façon ChatGPT — pleine largeur au-dessus du champ, ce que Jaris sait faire, les services connectés ; un choix pose son début de phrase', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.workspace__new')
+    await page.waitForSelector('.empty-state--minimal')
+    await page.getByRole('button', { name: 'Ajouter' }).click()
+    const menu = page.getByRole('menu', { name: 'Ajouter' })
+    await menu.waitFor()
+    const labels = await page.$$eval('.composer__menu-label', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(labels, ['Joindre une image', 'Créer une image', 'Recherche sur le web', 'Regarder mon écran', 'Rappel', 'Canva'], 'Notion (à connecter) n’y est pas')
+    const geometry = await page.evaluate(() => {
+      const m = document.querySelector('.composer__menu').getBoundingClientRect()
+      const c = document.querySelector('.composer').getBoundingClientRect()
+      return { width: Math.abs(m.width - c.width) < 1.5, above: m.bottom <= c.top, logo: document.querySelector('.composer__menu-logo')?.naturalWidth ?? 0 }
+    })
+    assert.deepEqual(geometry, { width: true, above: true, logo: 64 })
+    // Un choix pose son début de phrase, le champ garde le focus : la lettre tapée juste après n'est pas perdue.
+    await page.getByRole('menuitem', { name: /Recherche sur le web/ }).click()
+    await page.keyboard.type('météo à Laval')
+    assert.equal(await page.inputValue('.composer__input'), 'Cherche sur internet : météo à Laval')
+    // Devant un texte déjà écrit, et jamais en double.
+    await page.fill('.composer__input', 'une affiche de concert')
+    await page.getByRole('button', { name: 'Ajouter' }).click()
+    await page.getByRole('menuitem', { name: /Canva/ }).click()
+    assert.equal(await page.inputValue('.composer__input'), 'Avec Canva, une affiche de concert')
+    await page.getByRole('button', { name: 'Ajouter' }).click()
+    await page.getByRole('menuitem', { name: /Canva/ }).click()
+    assert.equal(await page.inputValue('.composer__input'), 'Avec Canva, une affiche de concert')
   })
 })

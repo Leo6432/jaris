@@ -17,7 +17,11 @@ import type { ChatMessage, ConversationList, WebActivity } from '../../shared/ip
 import ModelEffortPicker from './ModelEffortPicker'
 import WebActivityBlock from './WebActivityBlock'
 import { mergeWebActivity } from '@/lib/webActivity'
-import { CheckIcon, CopyIcon, DownloadIcon } from './icons'
+import { BellIcon, CheckIcon, CopyIcon, DownloadIcon, DrawIcon, GlobeIcon, ScreenIcon } from './icons'
+import type { ComposerAddItem } from '@/components/Composer'
+import { MCP_LOGOS } from '@/assets/mcp-logos'
+import { catalogEntry } from '../../shared/mcpCatalog'
+import type { McpServerView } from '../../shared/mcp'
 import { t } from '@/lib/i18n'
 
 /**
@@ -87,6 +91,36 @@ export default function ChatPanel(): JSX.Element {
     setCopiedIndex(index)
     setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 2000)
   }
+
+  /**
+   * Étape 428 (Léo, capture du menu « + » de ChatGPT : « améliore ça aussi ») : le menu propose ce que Jaris sait
+   * vraiment faire depuis le Chat — chaque entrée pose le début de phrase qui déclenche l'outil (modifiable avant
+   * l'envoi) — puis les services connectés (« Avec Canva, » : le service est alors VISÉ, étape 423).
+   */
+  const [services, setServices] = useState<McpServerView[]>([])
+  const refreshServices = (): void => {
+    const pending = window.jaris.mcpList?.()
+    if (!pending) return
+    void pending.then((list) => setServices(list.filter((server) => server.enabled && server.status === 'ready'))).catch(() => {})
+  }
+  useEffect(refreshServices, [])
+  const menuItems: ComposerAddItem[] = [
+    { id: 'draw', label: t('composer.menu.draw'), hint: t('composer.menu.draw.hint'), icon: <DrawIcon />, prefix: t('composer.menu.draw.prefix') },
+    { id: 'web', label: t('composer.menu.web'), hint: t('composer.menu.web.hint'), icon: <GlobeIcon />, prefix: t('composer.menu.web.prefix') },
+    { id: 'screen', label: t('composer.menu.screen'), hint: t('composer.menu.screen.hint'), icon: <ScreenIcon />, prefix: t('composer.menu.screen.prefix') },
+    { id: 'reminder', label: t('composer.menu.reminder'), hint: t('composer.menu.reminder.hint'), icon: <BellIcon />, prefix: t('composer.menu.reminder.prefix') },
+    ...services.map((server): ComposerAddItem => {
+      const entry = catalogEntry(server.catalogId)
+      const logo = entry ? MCP_LOGOS[entry.logo ?? entry.id] : undefined
+      return {
+        id: `mcp:${server.id}`,
+        label: server.name,
+        hint: t('composer.menu.service.hint', { name: server.name }),
+        icon: logo ? <img className="composer__menu-logo" src={logo} alt="" width={18} height={18} /> : <GlobeIcon />,
+        prefix: t('composer.menu.service.prefix', { name: server.name })
+      }
+    })
+  ]
 
   /** Étape 426 : le prénom de Léo dans l'accueil (« Que puis-je faire pour toi, Léo ? »), comme ChatGPT. */
   const [userName, setUserName] = useState('')
@@ -395,6 +429,8 @@ export default function ChatPanel(): JSX.Element {
           onError={setError}
           submitOnEnter
           inline
+          addItems={menuItems}
+          onMenuOpen={refreshServices}
         />
         {/* Étape 426 : comme ChatGPT, la mise en garde discrète sous le champ — seulement dans une conversation. */}
         {messages.length > 0 && <p className="chat-panel__disclaimer">{t('chat.disclaimer')}</p>}

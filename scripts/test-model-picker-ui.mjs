@@ -187,7 +187,9 @@ test('« + » ouvre le menu Ajouter, avec l’image et le rappel Ctrl+V ; un cli
   await withPage(async (page) => {
     await page.click('#root .composer__plus')
     await page.waitForSelector('#root .composer__menu')
-    assert.match(await page.textContent('#root .composer__menu'), /Ajouter.*Joindre une image.*Ctrl\+V/s)
+    // Étape 428 : plus de titre « Ajouter » affiché (comme ChatGPT) ; il reste le nom du menu pour les lecteurs d'écran.
+    assert.equal(await page.getAttribute('#root .composer__menu', 'aria-label'), 'Ajouter')
+    assert.match(await page.textContent('#root .composer__menu'), /Joindre une image.*Depuis ton ordinateur, ou Ctrl\+V pour coller/s)
     const menu = await page.$eval('#root .composer__menu', (el) => el.getBoundingClientRect().bottom)
     const plus = await page.$eval('#root .composer__plus', (el) => el.getBoundingClientRect().top)
     assert.ok(menu <= plus, 'le menu s’ouvre AU-DESSUS du champ (le champ est en bas de l’écran)')

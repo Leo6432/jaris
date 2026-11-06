@@ -11171,3 +11171,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   champ sous la phrase, puis en bas dès la première demande), `test-image-panel-ui.mjs` (phrase, champ, puis galerie
   centrée juste dessous), `test-github-ui.mjs` (titre du dépôt vide). Captures avant/après montrées à Léo avant
   l'envoi : « Oui, publie ».
+
+- **Étape 428 (v0.45.2), Léo, captures du menu « + » de Jaris et de celui de ChatGPT : « améliore ça aussi ».** Le menu
+  prend la forme de celui de ChatGPT — toute la largeur du champ, juste au-dessus ; une ligne par action : icône,
+  titre, puis ce qu'elle fait en plus discret ; plus de titre « Ajouter » affiché (gardé pour les lecteurs d'écran).
+  **Seulement ce que Jaris sait vraiment faire** depuis le Chat, jamais une entrée pour l'apparence (ChatGPT en a
+  pour des documents, PDF, tableurs…) : Joindre une image, Créer une image, Recherche sur le web, Regarder mon écran,
+  Rappel, puis chaque service MCP CONNECTÉ (logo de l'étape 424 ; un service à connecter n'y est pas). Chaque entrée
+  pose dans le champ le début de phrase qui déclenche l'outil (« Dessine », « Cherche sur internet : », « Regarde
+  mon écran : », « Rappelle-moi », « Avec Canva, » — ce dernier VISE le service, étape 423), modifiable avant
+  l'envoi : Léo voit exactement ce qui part, aucune consigne cachée ; jamais en double devant un texte déjà écrit.
+  Vérifié sur le code qui reconnaît ces phrases (« cherche » : recherche web imposée ; « écran » : `isScreenQuestion` ;
+  « rappelle-moi » ; « dessine » : outil `generate_image`). « Joindre une image » dit enfin d'où (« Depuis ton
+  ordinateur, ou Ctrl+V pour coller »). **Défaut trouvé au banc** : le focus revenait au champ une image plus tard,
+  et la première lettre tapée juste après le choix se perdait (« étéo ») — il revient maintenant tout de suite, le
+  curseur est posé à la fin après l'affichage. Régression : `test-chat-conversations-ui.mjs` (entrées dans l'ordre,
+  service à connecter absent, pleine largeur au-dessus du champ, logo chargé, début de phrase + lettre gardée — échoue
+  3 fois sur 3 en remettant le focus différé —, devant un texte, jamais en double), `test-model-picker-ui.mjs`.
+  Capture montrée à Léo avant l'envoi : « Oui, publie ».
