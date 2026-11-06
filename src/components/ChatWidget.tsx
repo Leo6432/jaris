@@ -5,6 +5,7 @@ import { formatChatProgress } from '@/lib/formatChatProgress'
 import { ELAPSED_HINT_MS, formatDuration } from '@/lib/formatCodeGenProgress'
 import { useElapsedMs } from '@/lib/useElapsedMs'
 import { t } from '@/lib/i18n'
+import { fileToImageAttachment, findImageInDataTransfer, type ImageAttachment } from '@/lib/imageAttachment'
 import JarisOrb from './JarisOrb'
 import { VOICE_WIDGET_ORB_SIZE } from './VoiceWidget'
 
@@ -14,6 +15,11 @@ import { VOICE_WIDGET_ORB_SIZE } from './VoiceWidget'
 // temps de lecture calculé soit écoulé.
 const REPLY_DISMISS_MS_PER_WORD = 300
 const MIN_REPLY_DISMISS_MS = 5000
+
+/** Étape 435 : un glisser venu de l'Explorateur porte des fichiers (un texte glissé, non). */
+function draggingFiles(event: React.DragEvent): boolean {
+  return Array.from(event.dataTransfer.types).includes('Files')
+}
 
 /** Exportée pour être testée directement (le vrai délai, plusieurs secondes à minutes, est trop lent à
  * attendre dans un test — voir scripts/test-chat-widget-ui.mjs, qui vérifie séparément que l'effet s'en
@@ -46,6 +52,12 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hovering, setHovering] = useState(false)
+  // Étape 435 (Léo : « dans le widget message, pour ajouter une image ») : une image glissée sur la barre est jointe
+  // au message, comme dans le Chat — même lecture et même réduction (imageAttachment.ts).
+  const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
+  const [questionImage, setQuestionImage] = useState<string | null>(null)
+  const [dropping, setDropping] = useState(false)
+  const [dropError, setDropError] = useState<string | null>(null)
   // Étape 325 : même compteur que le Chat — sans lui, « Jaris réfléchit… » paraît figé pendant une longue attente.
   const elapsedMs = useElapsedMs(sending)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -100,8 +112,15 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     // brouillon que Léo demande de protéger quand il clique ailleurs. Après l'envoi, le champ redevient
     // vide mais `expanded` reste vrai pendant la réflexion ET une fois la réponse affichée : protéger les
     // deux évite que la question disparaisse précisément pendant que Léo attend de pouvoir lire la réponse.
-    window.jaris.setChatWidgetKeepOpen(input.length > 0 || expanded)
-  }, [input, expanded])
+    // Étape 435 : une image déjà jointe est un brouillon, protégée comme le texte.
+    window.jaris.setChatWidgetKeepOpen(input.length > 0 || expanded || attachment !== null)
+  }, [input, expanded, attachment])
+
+  useEffect(() => {
+    if (!dropError) return undefined
+    const timer = setTimeout(() => setDropError(null), 3000)
+    return () => clearTimeout(timer)
+  }, [dropError])
 
   useEffect(() => {
     if (!inactive) return
@@ -129,10 +148,13 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
 
   const send = async (): Promise<void> => {
     const prompt = input.trim()
-    if (!prompt || sending) return
+    const image = attachment
+    if ((!prompt && !image) || sending) return
 
     setError(null)
     setInput('')
+    setAttachment(null)
+    setQuestionImage(image?.dataUrl ?? null)
     setQuestion(prompt)
     setReply('')
     setProgress(null)
@@ -140,7 +162,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     void playSoundCueIfEnabled('send')
 
     try {
-      const message = await window.jaris.sendChatMessage(prompt)
+      const message = await window.jaris.sendChatMessage(prompt, image?.base64)
       setReply(message.content)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -153,6 +175,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   /** Retour à la simple barre : la fenêtre se replie et rend l'écran à ce qu'il y avait derrière. */
   const dismiss = (): void => {
     setQuestion(null)
+    setQuestionImage(null)
     setReply('')
     setError(null)
     setProgress(null)
@@ -198,6 +221,26 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     return () => clearTimeout(timer)
   }, [inactive, sending, error, reply, hovering, input])
 
+  /** Dépôt d'un fichier sur la barre : une image est jointe, autre chose est refusé avec la raison. */
+  const drop = (event: React.DragEvent): void => {
+    if (!draggingFiles(event)) return
+    event.preventDefault()
+    setDropping(false)
+    if (expanded) return
+    const file = findImageInDataTransfer(event.dataTransfer.items)
+    if (!file) {
+      setDropError(t('widget.chat.dropNotImage'))
+      return
+    }
+    fileToImageAttachment(file, file.name)
+      .then((image) => {
+        setAttachment(image)
+        setDropError(null)
+        inputRef.current?.focus()
+      })
+      .catch((err) => setDropError(err instanceof Error ? err.message : String(err)))
+  }
+
   if (inactive) {
     // Étape 338 : un clic ramène Jaris, comme le petit orbe du mode vocal ; seule la touche « + » ouvre la barre de
     // saisie. L'étape 325 avait fait ouvrir la barre au clic : on ne pouvait alors plus revenir à l'application.
@@ -208,6 +251,15 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
         title={t('widget.chat.idle.title')}
         aria-label={t('widget.chat.idle')}
         onClick={() => window.jaris.openSettings()}
+        // Étape 435 : une image glissée sur le petit indicateur ouvre la barre pour être déposée dedans.
+        onDragEnter={(event) => {
+          if (!draggingFiles(event)) return
+          event.preventDefault()
+          window.jaris.openChatWidgetForDrop()
+        }}
+        onDragOver={(event) => {
+          if (draggingFiles(event)) event.preventDefault()
+        }}
       >
         <ChatIcon />
       </button>
@@ -226,10 +278,25 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
         setHovering(false)
         window.jaris.collapseChatWidget()
       }}
+      onDragEnter={(event) => {
+        if (!draggingFiles(event) || expanded) return
+        event.preventDefault()
+        setDropping(true)
+        window.jaris.armChatWidgetPointer()
+      }}
+      onDragOver={(event) => {
+        if (!draggingFiles(event)) return
+        event.preventDefault()
+        if (!expanded) setDropping(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={drop}
     >
       {!expanded && (
         <form
-          className="chat-widget__bar"
+          className={`chat-widget__bar${dropping ? ' chat-widget__bar--drop' : ''}`}
           onSubmit={(event) => {
             event.preventDefault()
             void send()
@@ -237,12 +304,32 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
         >
           {/* Étape 432 : la même capsule noire que le widget vocal, avec l'orbe de Jaris à gauche. */}
           <JarisOrb emotion="idle" size={VOICE_WIDGET_ORB_SIZE} />
+          {attachment && (
+            <span className="chat-widget__thumb">
+              <img src={attachment.dataUrl} alt={t('composer.attachment.preview')} />
+              <button
+                type="button"
+                className="chat-widget__thumb-remove"
+                onClick={() => setAttachment(null)}
+                title={t('composer.attachment.remove')}
+                aria-label={t('composer.attachment.remove')}
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          {/* Pendant le glisser, la barre devient la zone où déposer (cadre en pointillés) ; un refus dit pourquoi. */}
+          {(dropping || dropError) && (
+            <span className={`chat-widget__drop${dropError ? ' chat-widget__drop--error' : ''}`} role="status">
+              {dropError ?? t('widget.chat.dropHere')}
+            </span>
+          )}
           <input
             ref={inputRef}
             className="chat-widget__input"
             type="text"
             value={input}
-            placeholder={t('widget.chat.placeholder')}
+            placeholder={attachment ? t('widget.chat.placeholderImage') : t('widget.chat.placeholder')}
             aria-label={t('widget.chat.label')}
             disabled={sending}
             onChange={(event) => setInput(event.target.value)}
@@ -252,7 +339,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
               if (event.key === 'Escape') dismiss()
             }}
           />
-          <button className="chat-widget__send" type="submit" disabled={sending || !input.trim()} title={t('common.send')}>
+          <button className="chat-widget__send" type="submit" disabled={sending || (!input.trim() && !attachment)} title={t('common.send')}>
             <SendIcon />
           </button>
         </form>
@@ -264,7 +351,8 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
             <JarisOrb emotion={error ? 'surprised' : sending ? 'thinking' : 'happy'} size={VOICE_WIDGET_ORB_SIZE} />
             <span className="chat-widget__name">Jaris</span>
           </div>
-          <p className="chat-widget__question">{t('common.quoted', { text: question })}</p>
+          {questionImage && <img className="chat-widget__question-image" src={questionImage} alt={t('composer.attachment.preview')} />}
+          {question && <p className="chat-widget__question">{t('common.quoted', { text: question })}</p>}
           {error ? (
             <p className="chat-widget__error">{error}</p>
           ) : (

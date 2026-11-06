@@ -157,7 +157,8 @@ test('quitter la barre avec la souris replie réellement la fenêtre en Chat ina
   assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,160}?startChatPointerWatch\(\)/)
   assert.match(mainSource, /win\.on\(['"]blur['"],\s*\(\)\s*=>\s*collapseChatWidget\(\)\)/)
   assert.match(mainSource, /function collapseChatWidget\(\)[\s\S]{0,350}?chatWidgetKeepOpen/)
-  assert.match(widgetSource, /setChatWidgetKeepOpen\(input\.length > 0 \|\| expanded\)/)
+  // Étape 435 : une image jointe protège aussi la barre, comme le texte.
+  assert.match(widgetSource, /setChatWidgetKeepOpen\(input\.length > 0 \|\| expanded \|\| attachment !== null\)/)
   assert.match(widgetSource, /onMouseEnter[\s\S]{0,100}?armChatWidgetPointer\(\)/)
 })
 
@@ -305,7 +306,9 @@ test('un clic sur le petit indicateur du Chat ramène l’application, + ouvre l
   const idle = /if \(inactive\) \{[\s\S]*?chat-widget__idle[\s\S]*?<\/button>/.exec(widgetSource)?.[0] ?? ''
   assert.ok(idle, 'branche inactive de ChatWidget introuvable')
   assert.match(idle, /onClick=\{\(\) => window\.jaris\.openSettings\(\)\}/)
-  assert.doesNotMatch(idle, /openChatWidget/, 'le clic ouvre encore la barre au lieu de l’application')
+  // Étape 435 : seule une image GLISSÉE ouvre la barre (openChatWidgetForDrop, dans onDragEnter), jamais le clic.
+  assert.doesNotMatch(idle, /openChatWidget(?!ForDrop)/, 'le clic ouvre encore la barre au lieu de l’application')
+  assert.match(idle, /onDragEnter=\{[\s\S]{0,200}?openChatWidgetForDrop\(\)/)
   assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.openSettings, \(\) => showFullWindow\(\)\)/)
   const open = /function openChatWidgetBar\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
   // Les gardes (mode Chat seulement, jamais par-dessus la grande fenêtre) sont EXÉCUTÉES par test-wake-availability.mjs.
@@ -314,7 +317,7 @@ test('un clic sur le petit indicateur du Chat ramène l’application, + ouvre l
   const wake = /function triggerVisibleWake\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
   assert.match(wake, /activeMode === ['"]chat['"]\)\s*\{\s*openChatWidgetBar\(\)/, '+ ouvre la barre du Chat')
   const preload = sourceWithoutComments('electron/preload.ts')
-  assert.doesNotMatch(preload, /openChatWidget/, 'plus aucun canal pour ouvrir la barre au clic')
+  assert.doesNotMatch(preload, /openChatWidget(?!ForDrop)/, 'plus aucun canal pour ouvrir la barre au clic')
 })
 
 // Étape 346 : second écran branché ou retiré, échelle changée — le widget n'était recentré qu'à son affichage.
@@ -330,4 +333,13 @@ test('changement d’écran : le widget visible est recentré, dans l’état o�
   assert.match(expanded, /displayedWidgetMode === 'chat'\)\s*return true/)
   assert.match(expanded, /displayedWidgetMode === 'chat-idle'\)\s*return false/)
   assert.match(expanded, /return lastEmotion !== 'idle'/)
+})
+
+// Étape 435 : une image glissée sur le petit indicateur du Chat ouvre la barre — seulement depuis cet indicateur.
+test('glisser une image sur l’indicateur du Chat ouvre la barre, par le même chemin que +', () => {
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.match(main, /ipcMain\.on\(IPC_CHANNELS\.openChatWidgetForDrop, \(\) => \{\s*if \(displayedWidgetMode === 'chat-idle'\) openChatWidgetBar\(\)\s*\}\)/)
+  for (const file of ['shared/ipc.ts', 'electron/preload.ts', 'src/global.d.ts']) {
+    assert.match(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), /openChatWidgetForDrop/, file)
+  }
 })

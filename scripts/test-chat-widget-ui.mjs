@@ -43,7 +43,8 @@ window.__sendDelay = 60
 window.__logListeners = []
 window.__emitLog = (message) => window.__logListeners.forEach((listener) => listener(message))
 const overrides = {
-  sendChatMessage: async () => {
+  sendChatMessage: async (prompt, image) => {
+    ;(window.__sent = window.__sent || []).push([prompt, image ?? null])
     await new Promise((resolve) => setTimeout(resolve, window.__sendDelay))
     return { role: 'assistant', content: "Il fait 18 degrés à Paris, ciel **couvert**." }
   },
@@ -56,6 +57,11 @@ const overrides = {
   onCaptureLevel: (listener) => { window.__captureLevel = listener; return () => { window.__captureLevel = null } },
   setChatWidgetKeepOpen: (keepOpen) => { window.__keepOpen = keepOpen },
   armChatWidgetPointer: () => {},
+  // Étape 435 : comme main.ts, une image glissée sur l'indicateur ouvre la barre.
+  openChatWidgetForDrop: () => {
+    window.__openedForDrop = (window.__openedForDrop || 0) + 1
+    window.__renderChatWidget(false)
+  },
   collapseChatWidget: () => { if (!window.__keepOpen) window.__collapsed += 1 },
   openSettings: () => { window.__openedSettings += 1 },
   // Étape 325 : comme main.ts, la demande d'ouverture remplace aussitôt l'indicateur par la barre.
@@ -656,5 +662,52 @@ test('widget vocal : cliquer sur l’orbe ne laisse ni contour ni sélection', o
     await page.keyboard.press('Shift')
     const style = await page.$eval('.voice-island .jaris-orb', (el) => ({ outline: getComputedStyle(el).outlineStyle, select: getComputedStyle(el.closest('.voice-island')).userSelect }))
     assert.deepEqual(style, { outline: 'none', select: 'none' })
+  })
+})
+
+// Étape 435 (Léo : « dans le widget message, pour ajouter une image, dans le message ») : glisser une image sur le
+// widget Chat la joint au message.
+test('widget Chat : glisser une image ouvre la barre, la joint, et elle part avec le message', options, async () => {
+  await withWidget(async (page) => {
+    await page.evaluate(() => window.__renderChatWidget(true))
+    await page.waitForSelector('.chat-widget__idle')
+    // Un vrai glisser de fichier : une petite image PNG, puis un fichier texte.
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 4
+      canvas.height = 4
+      canvas.getContext('2d').fillRect(0, 0, 4, 4)
+      const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      window.__drag = (selector, type, file) => {
+        const data = new DataTransfer()
+        data.items.add(file)
+        document.querySelector(selector).dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }))
+      }
+      window.__png = new File([png], 'capture.png', { type: 'image/png' })
+      window.__txt = new File(['bonjour'], 'notes.txt', { type: 'text/plain' })
+    })
+    await page.evaluate(() => window.__drag('.chat-widget__idle', 'dragenter', window.__png))
+    assert.equal(await page.evaluate(() => window.__openedForDrop), 1, 'l’indicateur doit ouvrir la barre')
+    await page.waitForSelector('.chat-widget__bar')
+
+    await page.evaluate(() => window.__drag('.chat-widget__bar', 'dragenter', window.__png))
+    assert.match(await page.textContent('.chat-widget__bar--drop .chat-widget__drop'), /Dépose l'image ici/)
+
+    await page.evaluate(() => window.__drag('.chat-widget__bar', 'drop', window.__txt))
+    await page.waitForSelector('.chat-widget__drop--error')
+    assert.match(await page.textContent('.chat-widget__drop--error'), /Seules les images/)
+
+    await page.evaluate(() => window.__drag('.chat-widget__bar', 'drop', window.__png))
+    await page.waitForSelector('.chat-widget__thumb img')
+    assert.equal(await page.locator('.chat-widget__bar--drop').count(), 0, 'la zone de dépôt disparaît après le dépôt')
+    assert.equal(await page.evaluate(() => window.__keepOpen), true, 'une image jointe est protégée comme un brouillon')
+    assert.equal(await page.getAttribute('.chat-widget__input', 'placeholder'), 'Ajoute un message (facultatif)…')
+
+    // Envoyée seule (sans texte) : l'image part avec le message, et reste visible au-dessus de la réponse.
+    await page.click('.chat-widget__send')
+    await page.waitForSelector('.chat-widget__question-image')
+    const sent = await page.evaluate(() => window.__sent.at(-1))
+    assert.equal(sent[0], '')
+    assert.ok(typeof sent[1] === 'string' && sent[1].length > 20 && !sent[1].startsWith('data:'), 'l’image part en base64, sans préfixe')
   })
 })

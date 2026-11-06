@@ -268,6 +268,7 @@ declare global {
       setChatWidgetHeight: (height: number | null) => void
       setChatWidgetKeepOpen: (keepOpen: boolean) => void
       armChatWidgetPointer: () => void
+      openChatWidgetForDrop: () => void
       collapseChatWidget: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onCaptureLevel: (cb: (level: number) => void) => () => void

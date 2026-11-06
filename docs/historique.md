@@ -11303,3 +11303,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Régression : `test-chat-widget-ui.mjs` (silence = barres immobiles et au repos, voix = barres qui montent, retour au
   repos ; aucun contour ni sélection après clic — les deux échouent en remettant le défaut), `test-voice-activity.mjs`
   (chemin du niveau, du Python au widget). Pas vérifié sur Windows avec un vrai micro.
+
+## Étape 435 — Widget Chat : glisser une image pour la joindre au message (v0.46.3)
+
+- Léo (capture d'une encoche qui reçoit un fichier glissé) : « ajoute comme ça, dans le widget message, pour ajouter une
+  image dans le message ».
+- Glisser un fichier sur le petit indicateur du Chat ouvre la barre (`openChatWidgetForDrop` → `openChatWidgetBar`,
+  seulement depuis `chat-idle` ; le CLIC ramène toujours l'application, étape 338). Sur la barre, le glisser la change
+  en zone de dépôt (« Dépose l'image ici », cadre en pointillés) ; une image est jointe par le MÊME chemin que le Chat
+  (`fileToImageAttachment` : réduction à 1280 px, JPEG), autre chose est refusé avec la raison. Vignette avec sa croix
+  dans la barre, texte facultatif ; l'image part avec `sendChatMessage(prompt, base64)` et reste visible au-dessus de
+  la réponse. Une image jointe protège la barre comme un brouillon (`setChatWidgetKeepOpen`). Textes en 24 langues.
+- Régression : `test-chat-widget-ui.mjs` (vrai glisser de fichiers dans le navigateur : ouverture depuis l'indicateur,
+  zone de dépôt, refus d'un .txt, vignette, envoi d'une image seule en base64 — échoue si l'image ne protège plus la
+  barre), `test-widget-mode.mjs` (canal et garde côté main ; le clic n'ouvre toujours pas la barre). Pas vérifié sur
+  Windows avec un vrai glisser depuis l'Explorateur (zone cliquable de la fenêtre repliée).

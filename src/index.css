@@ -12381,3 +12381,71 @@ input.reply-ui__field-input {
     animation: none;
   }
 }
+
+/* Étape 435 (Léo : « dans le widget message, pour ajouter une image », capture d'une encoche qui reçoit un fichier) :
+   pendant le glisser, la barre devient la zone où déposer — cadre en pointillés, texte centré, par-dessus le champ. */
+.chat-widget__bar {
+  position: relative;
+}
+.chat-widget__bar--drop {
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  background: #0d0d0d;
+}
+.chat-widget__drop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--island-text);
+  background: var(--island-bg);
+  pointer-events: none;
+}
+.chat-widget__bar--drop .chat-widget__drop {
+  background: #0d0d0d;
+}
+.chat-widget__drop--error {
+  color: #ff8a9d;
+}
+/* L'image jointe : une petite vignette dans la barre, avec sa croix pour la retirer. */
+.chat-widget__thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+.chat-widget__thumb img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 7px;
+  border: 1px solid var(--island-line);
+}
+.chat-widget__thumb-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  font-size: 9px;
+  line-height: 13px;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.chat-widget__question-image {
+  display: block;
+  max-width: 120px;
+  max-height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--island-line);
+}

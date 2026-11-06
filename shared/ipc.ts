@@ -1560,6 +1560,8 @@ export const IPC_CHANNELS = {
   setChatWidgetKeepOpen: 'jaris:set-chat-widget-keep-open',
   /** widget Chat -> main : la souris a réellement atteint la barre visible ; arme le filet natif de sortie. */
   armChatWidgetPointer: 'jaris:arm-chat-widget-pointer',
+  /** widget -> main : une image glissée sur le petit indicateur du Chat ouvre la barre pour la recevoir (étape 435). */
+  openChatWidgetForDrop: 'jaris:open-chat-widget-for-drop',
   /** widget Chat -> main : la souris a quitté toute la barre/réponse, revenir au petit état inactif. */
   collapseChatWidget: 'jaris:collapse-chat-widget',
   /**

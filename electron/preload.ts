@@ -322,6 +322,7 @@ const api = {
   setChatWidgetKeepOpen: (keepOpen: boolean): void =>
     ipcRenderer.send(IPC_CHANNELS.setChatWidgetKeepOpen, keepOpen),
   armChatWidgetPointer: (): void => ipcRenderer.send(IPC_CHANNELS.armChatWidgetPointer),
+  openChatWidgetForDrop: (): void => ipcRenderer.send(IPC_CHANNELS.openChatWidgetForDrop),
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onCaptureLevel: (cb: (level: number) => void) => subscribe(IPC_CHANNELS.captureLevel, cb),

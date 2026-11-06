@@ -1987,6 +1987,11 @@ app.whenReady().then(async () => {
     if (displayedWidgetMode === 'chat') chatPointerWasInside = true
   })
   ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
+  // Étape 435 (Léo : « dans le widget message, pour ajouter une image ») : une image glissée sur le petit indicateur
+  // ouvre la barre, comme « + », pour qu'elle puisse y être déposée. Mêmes gardes que « + » (mode Chat, Jaris réduit).
+  ipcMain.on(IPC_CHANNELS.openChatWidgetForDrop, () => {
+    if (displayedWidgetMode === 'chat-idle') openChatWidgetBar()
+  })
   ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform))
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
     setLaunchAtStartup(app, process.platform, enabled)
