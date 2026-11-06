@@ -115,7 +115,7 @@ import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProb
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { getModelsToTest, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { getModelsToTestDetails, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
@@ -2196,7 +2196,7 @@ app.whenReady().then(async () => {
   })
   // Étape 168, remis à l'étape 221 (Léo : « rajoute le bouton analyse pour tester Ling-3.0-tiny ») : test des seuls
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
-  ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTest())
+  ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTestDetails())
   ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event) =>
     testUnscoredModels((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   )

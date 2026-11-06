@@ -11226,3 +11226,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   objet ; compteur d'attente ; export complet) — les deux échouent en remettant l'ancien `getRankingVotes` ;
   `test-duel-panel-ui.mjs` (ligne d'attente affichée seulement quand N > 0). Faux `duelStore` des tests de session
   complétés. Vérifié par les tests, pas en usage réel.
+
+## Étape 431 — Votes de Léo du 06/11 livrés ; « Modèles à tester » dit ce qui manque à chaque modèle (v0.45.5)
+
+- Votes : `node scripts/import-duel-votes.mjs jaris-votes-2026-11-06.json` → 3 votes Code ajoutés (gemma4:e4b,
+  ministral-3:8b, gpt-oss:20b), 21 au total dans `scripts/shared-duel-votes.json`. Ils comptent pour tout le monde
+  avec cette version (règle de l'étape 430).
+- Léo voyait « Modèles à tester (31) » et 31 noms, avec « Les tests ont changé… » : « il n'y a pas 31 modèles qui
+  manquent un ou deux scores ? ». Mesure sur les vrais scores du dépôt : 12 modèles seulement sans score, tous
+  pour la SEULE épreuve « outils » (modèles de vision et de code, étape 376). Les 19 autres viennent de sa campagne en
+  cours (`benchmark-nouveaux-modeles.traces.jsonl`) : des cas « à refaire » (délai dépassé, erreur, demande coupée)
+  font reproposer un modèle même avec son score recopié (étape 244). Déduit du code, fichier de Léo non vu.
+- Plutôt que deviner : `describeModelsToTest(campagne)` (hardwareScan.ts) donne pour chaque modèle les épreuves
+  (`tools`/`vision`/`code`) et la raison (`missing`, `redo`, `remeasure`) ; `getUnscoredModels` en dérive (une seule
+  source de vérité). Le canal `getUnscoredModels` renvoie maintenant ces détails (`ModelToTest`, shared/ipc.ts). Écran :
+  une ligne par modèle « nom : outils (quelques questions à refaire) », légende réécrite, 24 langues.
+- Régression : `test-hardwarescan-single-pool.mjs` (granite4.2:8b = outils/à refaire ; vrais scores = outils seulement ;
+  ligne vision retirée = outils + vision ; échoue si « à refaire » devient « jamais passé »),
+  `test-options-reorganization-ui.mjs` (une ligne par modèle et son manque), faux ponts mis à jour. Capture à 760 px.

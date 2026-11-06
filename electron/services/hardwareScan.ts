@@ -15,7 +15,9 @@ import type {
   DuelModelOption,
   DuelUnavailableReason,
   MyModelPicks,
-  Profile
+  Profile,
+  ModelToTest,
+  ModelToTestReason
 } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 import type { DuelCategory } from '../../shared/duel'
@@ -1592,6 +1594,15 @@ const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
  * jamais été testés en vision sans que rien ne le signale. En attendant, Jaris garde les anciens scores.
  */
 export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() }): string[] {
+  return describeModelsToTest(campaign).map((m) => m.model)
+}
+
+/**
+ * Étape 431 (Léo : « il n'y a pas 31 modèles qui manquent un ou deux scores ? ») : la même liste que getUnscoredModels,
+ * avec pour chaque modèle l'épreuve qui lui manque et pourquoi — jamais mesurée, questions à refaire dans la campagne
+ * en cours (délai dépassé, erreur), ou à remesurer. Avant, l'écran donnait juste 31 noms et « les tests ont changé ».
+ */
+export function describeModelsToTest(campaign: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() }): ModelToTest[] {
   const scores = parseVerifiedToolScores()
   // Étape 232 : un modèle de conversation a besoin des DEUX scores — les 78 questions et les demandes complètes.
   // Le script ne rejoue que l'épreuve qui manque. Une épreuve déjà TOUT faite dans la campagne en cours (fichier
@@ -1601,24 +1612,36 @@ export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: ne
   const remeasure = parseModelsToRemeasure()
   const scored = (tier: VerifiedTier, model: string, total: number): boolean =>
     !remeasure.has(model) && Boolean(scores[tier].get(model)?.endsWith(`/${total}`))
-  const needsConversation = (model: string): boolean =>
-    CONVERSATION_ROLE_MODELS.has(model) &&
-    ((!scored('conversation', model, CONVERSATION_TEST_TOTAL) && !campaign.conversation?.has(model)) ||
-      (!scored('scenarios', model, SCENARIO_TEST_TOTAL) && !campaign.scenarios.has(model)) ||
-      Boolean(campaign.todo?.scenarios.has(model)))
-  const needsVision = (model: string): boolean =>
-    VISION_ROLE_MODELS.has(model) &&
-    ((!scored('vision', model, VISION_TEST_TOTAL) && !campaign.vision.has(model)) || Boolean(campaign.todo?.vision.has(model)))
-  const needsCode = (model: string): boolean =>
-    CODE_ROLE_MODELS.has(model) &&
-    ((!scored('code', model, CODE_TEST_TOTAL) && !campaign.code.has(model)) || Boolean(campaign.todo?.code.has(model)))
+  const reasonFor = (missing: boolean, redo: boolean, model: string): ModelToTestReason | null =>
+    missing ? (remeasure.has(model) ? 'remeasure' : 'missing') : redo ? 'redo' : null
+  const needsFor = (model: string): ModelToTest['needs'] => {
+    const needs: ModelToTest['needs'] = []
+    if (CONVERSATION_ROLE_MODELS.has(model)) {
+      const missing =
+        (!scored('conversation', model, CONVERSATION_TEST_TOTAL) && !campaign.conversation?.has(model)) ||
+        (!scored('scenarios', model, SCENARIO_TEST_TOTAL) && !campaign.scenarios.has(model))
+      const reason = reasonFor(missing, Boolean(campaign.todo?.scenarios.has(model)), model)
+      if (reason) needs.push({ test: 'tools', reason })
+    }
+    if (VISION_ROLE_MODELS.has(model)) {
+      const missing = !scored('vision', model, VISION_TEST_TOTAL) && !campaign.vision.has(model)
+      const reason = reasonFor(missing, Boolean(campaign.todo?.vision.has(model)), model)
+      if (reason) needs.push({ test: 'vision', reason })
+    }
+    if (CODE_ROLE_MODELS.has(model)) {
+      const missing = !scored('code', model, CODE_TEST_TOTAL) && !campaign.code.has(model)
+      const reason = reasonFor(missing, Boolean(campaign.todo?.code.has(model)), model)
+      if (reason) needs.push({ test: 'code', reason })
+    }
+    return needs
+  }
   // Étape 312 : jamais proposé au test tant qu'Ollama ne sait pas le charger (il serait téléchargé pour rien).
   const tooNewForOllama = modelsNeedingNewerOllama()
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
     .filter((c) => !tooNewForOllama.has(c.model))
-    .filter((c) => needsConversation(c.model) || needsVision(c.model) || needsCode(c.model))
-    .map((c) => c.model)
+    .map((c) => ({ model: c.model, needs: needsFor(c.model) }))
+    .filter((m) => m.needs.length > 0)
 }
 
 /**

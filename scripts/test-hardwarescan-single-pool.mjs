@@ -381,6 +381,30 @@ test('modèles à tester : un cas à refaire compte même quand le score est dé
   const toTest = scan.getUnscoredModels(campaign)
   assert.ok(toTest.includes('granite4.2:8b'), 'le cas à refaire doit le faire proposer')
   assert.ok(!toTest.includes('gemma4:12b'), 'un modèle sans rien à refaire reste fini')
+  // Étape 431 : l'écran dit POURQUOI — quelques questions à refaire, pas une épreuve jamais passée.
+  const described = scan.describeModelsToTest(campaign)
+  assert.deepEqual(described.map((m) => m.model), toTest, 'même liste, même ordre')
+  assert.equal(JSON.stringify(described.find((m) => m.model === 'granite4.2:8b').needs), JSON.stringify([{ test: 'tools', reason: 'redo' }]))
+})
+
+// Étape 431, Léo : « il n'y a pas 31 modèles qui manquent un ou deux scores ? ». Sur les vrais scores, sans campagne :
+// les modèles de vision et de code (étape 376 : tout le monde passe les outils) n'ont que l'épreuve « outils » à passer.
+test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const described = scan.describeModelsToTest()
+  const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
+  assert.equal(needs('qwen3-vl:2b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('qwen2.5-coder:7b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  // Un modèle de vision sans score de vision : les deux épreuves, dans l'ordre outils puis vision.
+  const scores = REAL_SCORES.replace(/^\| qwen3-vl:2b \| \d+\/34 \|\r?\n/m, '')
+  assert.notEqual(scores, REAL_SCORES, 'ligne vision de qwen3-vl:2b introuvable')
+  const noVision = setup({ vramMib: 24 * 1024, scores }).describeModelsToTest()
+  assert.equal(
+    JSON.stringify(noVision.find((m) => m.model === 'qwen3-vl:2b').needs),
+    JSON.stringify([{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }])
+  )
+  assert.equal(needs('granite4.2:8b'), undefined, 'un modèle qui a tous ses scores n’apparaît pas')
+  assert.ok(described.every((m) => m.needs.length > 0))
 })
 
 // Étape 315 : le 14/10/2026, les 5 applis de code de K2 Horizon 0.9B ont reçu « model not found » (Ollama ne

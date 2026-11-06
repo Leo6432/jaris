@@ -50,6 +50,7 @@ import type {
   WakeAvailabilityPayload,
   WakeTestHeardPayload,
   ModelOverviewResult,
+  ModelToTest,
   ModelsLocationStatus,
   OllamaVersionStatus,
   PickedImageFile,
@@ -133,7 +134,7 @@ declare global {
       setThinkChoice: (mode: ModelChoiceMode, think: ThinkValue | null) => Promise<void>
       setModelChoice: (mode: ModelChoiceMode, model: string | null) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
-      getUnscoredModels: () => Promise<string[]>
+      getUnscoredModels: () => Promise<ModelToTest[]>
       testUnscoredModels: () => Promise<{ models: string[]; resultsPath: string }>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void

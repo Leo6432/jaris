@@ -160,5 +160,32 @@
     "modelA": "gemma4:e4b",
     "modelB": "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M",
     "outcome": "a"
+  },
+  {
+    "id": "bbd8d945-9605-4908-917b-e392cb578cd8",
+    "category": "code",
+    "at": 1793997474968,
+    "sessionId": "dd2546c4-747f-4822-aac1-8c0b401c89db",
+    "modelA": "gpt-oss:20b",
+    "modelB": "ministral-3:8b",
+    "outcome": "tie"
+  },
+  {
+    "id": "7796027c-7f63-484f-aa23-c5b1dc324743",
+    "category": "code",
+    "at": 1793997602411,
+    "sessionId": "dd2546c4-747f-4822-aac1-8c0b401c89db",
+    "modelA": "gemma4:e4b",
+    "modelB": "ministral-3:8b",
+    "outcome": "a"
+  },
+  {
+    "id": "956aaf25-ef07-4837-afc6-e034d02b27b3",
+    "category": "code",
+    "at": 1793997748272,
+    "sessionId": "dd2546c4-747f-4822-aac1-8c0b401c89db",
+    "modelA": "gemma4:e4b",
+    "modelB": "gpt-oss:20b",
+    "outcome": "a"
   }
 ]

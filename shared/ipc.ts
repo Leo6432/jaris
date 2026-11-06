@@ -1203,6 +1203,17 @@ export interface DuelSummary {
   downloaded: { model: string; sizeGb: number; inUse: boolean }[]
 }
 
+/**
+ * Un modèle que le bouton « Tester ces modèles » propose, avec ce qui lui manque (étape 431) : `missing` = épreuve
+ * jamais mesurée, `redo` = quelques questions à refaire dans la dernière série (délai dépassé, erreur), `remeasure` =
+ * score à remesurer. `tools` = appels d'outils (les 78 questions et les demandes complètes).
+ */
+export type ModelToTestReason = 'missing' | 'redo' | 'remeasure'
+export interface ModelToTest {
+  model: string
+  needs: { test: 'tools' | 'vision' | 'code'; reason: ModelToTestReason }[]
+}
+
 export interface DuelRankingView {
   category: DuelCategory
   votes: number
@@ -1282,7 +1293,7 @@ export const IPC_CHANNELS = {
   /** main -> renderer : nouveau statut de version d'Ollama (ex : fin de l'installeur officiel, étape 170). */
   ollamaVersionStatusChanged: 'jaris:ollama-version-status-changed',
   updateOllama: 'jaris:update-ollama',
-  /** renderer <-> main : modèles de Jaris sans aucun score (getUnscoredModels, hardwareScan.ts). */
+  /** renderer <-> main : modèles de Jaris à tester et ce qui leur manque (describeModelsToTest, hardwareScan.ts). */
   getUnscoredModels: 'jaris:get-unscored-models',
   /** renderer -> main : teste ces modèles avec le script de test (étape 168), résout à la fin. */
   testUnscoredModels: 'jaris:test-unscored-models',

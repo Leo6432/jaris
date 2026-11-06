@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { formatModelName } from '../lib/formatModelName'
 import { ipcErrorMessage } from '../lib/ipcError'
 import { t, tn } from '@/lib/i18n'
+import type { ModelToTest } from '../../shared/ipc'
 
 /**
  * Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ». L'analyse complète a été retirée
@@ -17,8 +18,15 @@ import { t, tn } from '@/lib/i18n'
 type Row = { model: string; status: 'done' | 'skipped' | 'replayed'; correct?: number; total?: number; reason?: string }
 type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error'
 
+function describeNeed(need: ModelToTest['needs'][number]): string {
+  const test = t(need.test === 'tools' ? 'unscored.need.tools' : need.test === 'vision' ? 'unscored.need.vision' : 'unscored.need.code')
+  if (need.reason === 'redo') return t('unscored.need.redo', { test })
+  if (need.reason === 'remeasure') return t('unscored.need.remeasure', { test })
+  return test
+}
+
 export default function UnscoredModelsTest(): JSX.Element | null {
-  const [models, setModels] = useState<string[] | null>(null)
+  const [models, setModels] = useState<ModelToTest[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [percent, setPercent] = useState(0)
   const [current, setCurrent] = useState(() => t('runtime.preparing'))
@@ -84,9 +92,15 @@ export default function UnscoredModelsTest(): JSX.Element | null {
 
   return (
     <div className="options-menu__unscored">
-      <p className="options-menu__unscored-title">
-        {t('unscored.toTest', { count: models.length, models: models.map((model) => formatModelName(model)).join(', ') })}
-      </p>
+      <p className="options-menu__unscored-title">{t('unscored.toTest', { count: models.length })}</p>
+      {/* Étape 431 : pour chaque modèle, ce qui lui manque — avant, 31 noms d'affilée sans dire pourquoi. */}
+      <ul className="options-menu__unscored-list">
+        {models.map(({ model, needs }) => (
+          <li key={model}>
+            {t('common.labelValue', { label: formatModelName(model), value: needs.map(describeNeed).join(', ') })}
+          </li>
+        ))}
+      </ul>
       <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (

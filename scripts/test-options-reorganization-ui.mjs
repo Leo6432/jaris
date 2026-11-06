@@ -100,7 +100,7 @@ const overrides = {
   },
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: window.__ramGb ?? 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false }, video: window.__videoPick ?? { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
-  getUnscoredModels: async () => ['qwen2.5-coder:14b', 'nemotron-3.5-lightning:30b'],
+  getUnscoredModels: async () => [{ model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }] }, { model: 'nemotron-3.5-lightning:30b', needs: [{ test: 'tools', reason: 'redo' }] }],
   onModelBenchmarkLine: (cb) => {
     window.__benchLine = cb
     return () => {}
@@ -632,7 +632,11 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
     await page.waitForSelector('.options-menu__unscored')
     const title = await page.textContent('.options-menu__unscored-title')
     assert.match(title, /\(2\)/)
-    assert.match(title, /qwen2\.5-coder:14b|Qwen2\.5/i)
+    // Étape 431 : chaque modèle dit ce qui lui manque.
+    const list = await page.locator('.options-menu__unscored-list li').allTextContents()
+    assert.equal(list.length, 2)
+    assert.match(list[0], /qwen2\.5-coder:14b.* : outils, vision$/i)
+    assert.match(list[1], /lightning.* : outils \(quelques questions à refaire\)$/i)
 
     // Rien ne démarre avant la confirmation, et Annuler ne lance rien.
     await page.click('.options-menu__unscored button:has-text("Tester ces modèles")')

@@ -26,7 +26,7 @@ import { createRoot } from 'react-dom/client'
 import UnscoredModelsTest from './src/components/UnscoredModelsTest'
 
 window.jaris = {
-  getUnscoredModels: () => Promise.resolve(['ministral-3:14b', 'qwen2.5-coder:14b']),
+  getUnscoredModels: () => Promise.resolve([{ model: 'ministral-3:14b', needs: [{ test: 'tools', reason: 'redo' }] }, { model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }] }]),
   onModelBenchmarkLine: (cb) => { window.__line = cb; return () => {} },
   testUnscoredModels: () => new Promise((resolve) => { window.__finish = () => resolve({ models: [], resultsPath: 'x' }) }),
   showUnscoredResults: () => {}

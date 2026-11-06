@@ -420,7 +420,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
           return false
         }
       }
-    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
+    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'], describeModelsToTest: () => [{ model: 'qwen3.5:9b', needs: [{ test: 'tools', reason: 'missing' }] }], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
     if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === './profileStore') return {}
     if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
