@@ -11268,3 +11268,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   — largeurs, texte affiché, carte —, clic sur l'orbe, longue réponse qui défile dans 500x460, blanc sur noir ; échoue
   si les mots entendus ne s'affichent plus), `test-voice-activity.mjs`. Captures du rendu compilé aux vraies tailles
   de fenêtre, montrées à Léo avant publication (« Oui, publie »). Pas vérifié sur Windows (liseré, ombre).
+
+## Étape 433 — « Modèles à tester » : durée estimée par modèle et au total (v0.46.1)
+
+- Léo : « ajoute le temps estimé dans les modèles à faire (appel d'outils, etc.) ». Aucune durée dans le dépôt, mais
+  le fichier brut des tests de Léo (`benchmark-nouveaux-modeles.traces.jsonl`) porte la durée de CHAQUE cas (`ms`),
+  mesurée sur son PC. `caseTimesFromTraces` (hardwareScan.ts) les additionne par « épreuve|modèle » (toutes
+  campagnes ; un délai dépassé exclu : sa durée est celle du délai, pas du modèle).
+- `describeModelsToTest(campagne, temps)` sait maintenant ce que le script rejouera vraiment : épreuve jamais passée
+  = tous ses cas (78 questions, 48 demandes, 34 vision, 5 code), « à refaire » = seulement les cas en attente
+  (`todoCases`, nouveau dans `campaignCompletion`). Durée d'un cas : la sienne si déjà mesurée sur ce PC, sinon la
+  moyenne des deux modèles mesurés de taille la plus proche, mise à l'échelle de la taille. Rien de comparable mesuré :
+  `null`, jamais une durée inventée. `ModelToTest.estimatedMs`.
+- Écran : « nom : outils — environ 25 min » (arrondi à la minute sous 10 min, aux 5 min au-delà), puis « Durée estimée
+  en tout : environ X, sans les téléchargements » (« Au moins X » si un modèle n'a pas d'estimation). Nouvelle clé
+  `duration.minutesOnly`, 24 langues.
+- Régression : `test-hardwarescan-single-pool.mjs` (propre temps pour un rejeu ; mise à l'échelle 5,3 → 1,9 Go pour un
+  modèle jamais passé ; délai exclu de la moyenne — échoue s'il y entre ; aucune trace = aucune durée),
+  `test-options-reorganization-ui.mjs` (durées par ligne et total arrondis). Pas vérifié sur le vrai fichier de Léo.

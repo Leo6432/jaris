@@ -1230,6 +1230,8 @@ export interface CampaignCompletion {
    * pas tester les modèles avec la dernière version ») : leurs modèles avaient déjà un score sur 48.
    */
   todo?: { scenarios: Set<string>; vision: Set<string>; code: Set<string> }
+  /** Étape 433 : nombre de cas à refaire, par « rôle|modèle » (pour estimer la durée du rejeu). */
+  todoCases?: Map<string, number>
 }
 
 /**
@@ -1292,7 +1294,11 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     if (cases === totals[role] && !pending) done[role].add(rest.join('|'))
     if (pending) todo[role].add(rest.join('|'))
   }
-  return { ...done, todo }
+  const todoCases = new Map<string, number>()
+  for (const { role, model, pending } of latest.values()) {
+    if (pending) todoCases.set(`${role}|${model}`, (todoCases.get(`${role}|${model}`) ?? 0) + 1)
+  }
+  return { ...done, todo, todoCases }
 }
 
 /**
@@ -1597,12 +1603,78 @@ export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: ne
   return describeModelsToTest(campaign).map((m) => m.model)
 }
 
+/** Une épreuve du test, telle qu'écrite dans le fichier brut (`question`, `demande`, `vision`, `code`). */
+export type TestRole = 'conversation' | 'scenarios' | 'vision' | 'code'
+
+/** Temps mesurés sur CE PC, par « rôle|modèle » : somme des durées et nombre de cas. */
+export type CaseTimes = Map<string, { ms: number; count: number }>
+
+const TRACE_ROLE: Record<string, TestRole> = { question: 'conversation', demande: 'scenarios', vision: 'vision', code: 'code' }
+
+/**
+ * Étape 433 (Léo : « ajoute le temps estimé dans les modèles à faire ») : chaque cas du fichier brut porte sa durée
+ * (`ms`), mesurée sur le PC de Léo. Toutes les campagnes comptent (le temps ne dépend pas de la version du test) ;
+ * un délai dépassé non, sa durée est celle du délai, pas du modèle.
+ */
+export function caseTimesFromTraces(tracesText: string): CaseTimes {
+  const times: CaseTimes = new Map()
+  for (const line of tracesText.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown>
+    try {
+      row = JSON.parse(line)
+    } catch {
+      continue
+    }
+    const role = TRACE_ROLE[String(row.type)]
+    if (!role || typeof row.ms !== 'number' || !(row.ms > 0) || row.timeout) continue
+    const key = `${role}|${String(row.model)}`
+    const entry = times.get(key) ?? { ms: 0, count: 0 }
+    entry.ms += row.ms
+    entry.count++
+    times.set(key, entry)
+  }
+  return times
+}
+
+/**
+ * Durée d'un cas pour un modèle : la sienne si elle a déjà été mesurée sur ce PC, sinon celle des deux modèles mesurés
+ * de taille la plus proche, mise à l'échelle de sa taille (un modèle deux fois plus gros répond environ deux fois plus
+ * lentement ; deux voisins de taille proche portent aussi le ralentissement d'un modèle qui déborde sur la RAM).
+ * `null` : rien de mesuré pour cette épreuve sur ce PC.
+ */
+function caseMs(role: TestRole, model: string, vramGb: number, times: CaseTimes, sizes: ReadonlyMap<string, number>): number | null {
+  const own = times.get(`${role}|${model}`)
+  if (own && own.count > 0) return own.ms / own.count
+  const measured: { size: number; perCase: number }[] = []
+  for (const [key, { ms, count }] of times) {
+    const [keyRole, ...rest] = key.split('|')
+    const size = sizes.get(rest.join('|'))
+    if (keyRole !== role || !size || count === 0) continue
+    measured.push({ size, perCase: ms / count })
+  }
+  if (!measured.length || !(vramGb > 0)) return null
+  measured.sort((a, b) => Math.abs(Math.log(a.size / vramGb)) - Math.abs(Math.log(b.size / vramGb)))
+  const near = measured.slice(0, 2)
+  return near.reduce((sum, m) => sum + (m.perCase / m.size) * vramGb, 0) / near.length
+}
+
+const ROLE_TOTAL: Record<TestRole, number> = {
+  conversation: CONVERSATION_TEST_TOTAL,
+  scenarios: SCENARIO_TEST_TOTAL,
+  vision: VISION_TEST_TOTAL,
+  code: CODE_TEST_TOTAL
+}
+
 /**
  * Étape 431 (Léo : « il n'y a pas 31 modèles qui manquent un ou deux scores ? ») : la même liste que getUnscoredModels,
  * avec pour chaque modèle l'épreuve qui lui manque et pourquoi — jamais mesurée, questions à refaire dans la campagne
  * en cours (délai dépassé, erreur), ou à remesurer. Avant, l'écran donnait juste 31 noms et « les tests ont changé ».
  */
-export function describeModelsToTest(campaign: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() }): ModelToTest[] {
+export function describeModelsToTest(
+  campaign: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() },
+  times: CaseTimes = new Map()
+): ModelToTest[] {
   const scores = parseVerifiedToolScores()
   // Étape 232 : un modèle de conversation a besoin des DEUX scores — les 78 questions et les demandes complètes.
   // Le script ne rejoue que l'épreuve qui manque. Une épreuve déjà TOUT faite dans la campagne en cours (fichier
@@ -1614,33 +1686,63 @@ export function describeModelsToTest(campaign: CampaignCompletion = { scenarios:
     !remeasure.has(model) && Boolean(scores[tier].get(model)?.endsWith(`/${total}`))
   const reasonFor = (missing: boolean, redo: boolean, model: string): ModelToTestReason | null =>
     missing ? (remeasure.has(model) ? 'remeasure' : 'missing') : redo ? 'redo' : null
+  // Étape 433 : ce que le script rejouera vraiment, épreuve par épreuve — tout (jamais passée, à remesurer) ou seulement
+  // les cas à refaire —, pour estimer la durée.
+  const runs = new Map<string, { role: TestRole; cases: number }[]>()
+  const plan = (model: string, role: TestRole, missing: boolean): void => {
+    const cases = missing ? ROLE_TOTAL[role] : (campaign.todoCases?.get(`${role}|${model}`) ?? 0)
+    if (cases > 0) runs.set(model, [...(runs.get(model) ?? []), { role, cases }])
+  }
   const needsFor = (model: string): ModelToTest['needs'] => {
     const needs: ModelToTest['needs'] = []
     if (CONVERSATION_ROLE_MODELS.has(model)) {
-      const missing =
-        (!scored('conversation', model, CONVERSATION_TEST_TOTAL) && !campaign.conversation?.has(model)) ||
-        (!scored('scenarios', model, SCENARIO_TEST_TOTAL) && !campaign.scenarios.has(model))
-      const reason = reasonFor(missing, Boolean(campaign.todo?.scenarios.has(model)), model)
-      if (reason) needs.push({ test: 'tools', reason })
+      const missingQuestions = !scored('conversation', model, CONVERSATION_TEST_TOTAL) && !campaign.conversation?.has(model)
+      const missingDemands = !scored('scenarios', model, SCENARIO_TEST_TOTAL) && !campaign.scenarios.has(model)
+      const redo = Boolean(campaign.todo?.scenarios.has(model))
+      const reason = reasonFor(missingQuestions || missingDemands, redo, model)
+      if (reason) {
+        needs.push({ test: 'tools', reason })
+        if (missingQuestions) plan(model, 'conversation', true)
+        if (missingDemands || redo) plan(model, 'scenarios', missingDemands)
+      }
     }
     if (VISION_ROLE_MODELS.has(model)) {
       const missing = !scored('vision', model, VISION_TEST_TOTAL) && !campaign.vision.has(model)
       const reason = reasonFor(missing, Boolean(campaign.todo?.vision.has(model)), model)
-      if (reason) needs.push({ test: 'vision', reason })
+      if (reason) {
+        needs.push({ test: 'vision', reason })
+        plan(model, 'vision', missing)
+      }
     }
     if (CODE_ROLE_MODELS.has(model)) {
       const missing = !scored('code', model, CODE_TEST_TOTAL) && !campaign.code.has(model)
       const reason = reasonFor(missing, Boolean(campaign.todo?.code.has(model)), model)
-      if (reason) needs.push({ test: 'code', reason })
+      if (reason) {
+        needs.push({ test: 'code', reason })
+        plan(model, 'code', missing)
+      }
     }
     return needs
+  }
+  const sizes = new Map(ALL_MODELS.map((c) => [c.model, c.vramGb]))
+  const estimate = (model: string, vramGb: number): number | null => {
+    let total = 0
+    for (const { role, cases } of runs.get(model) ?? []) {
+      const perCase = caseMs(role, model, vramGb, times, sizes)
+      if (perCase === null) return null
+      total += perCase * cases
+    }
+    return total > 0 ? Math.round(total) : null
   }
   // Étape 312 : jamais proposé au test tant qu'Ollama ne sait pas le charger (il serait téléchargé pour rien).
   const tooNewForOllama = modelsNeedingNewerOllama()
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
     .filter((c) => !tooNewForOllama.has(c.model))
-    .map((c) => ({ model: c.model, needs: needsFor(c.model) }))
+    .map((c) => {
+      const needs = needsFor(c.model)
+      return { model: c.model, needs, estimatedMs: needs.length ? estimate(c.model, c.vramGb) : null }
+    })
     .filter((m) => m.needs.length > 0)
 }
 

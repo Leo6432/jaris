@@ -25,6 +25,17 @@ function describeNeed(need: ModelToTest['needs'][number]): string {
   return test
 }
 
+/**
+ * Étape 433 : une durée estimée lisible — arrondie à la minute sous 10 min, aux 5 minutes au-delà (une estimation
+ * n'a pas la précision de la seconde).
+ */
+export function formatEstimate(ms: number): string {
+  const rawMinutes = Math.max(1, Math.round(ms / 60_000))
+  const minutes = rawMinutes < 10 ? rawMinutes : Math.round(rawMinutes / 5) * 5
+  if (minutes < 60) return t('duration.minutesOnly', { m: minutes })
+  return t('duration.hours', { h: Math.floor(minutes / 60), m: String(minutes % 60).padStart(2, '0') })
+}
+
 export default function UnscoredModelsTest(): JSX.Element | null {
   const [models, setModels] = useState<ModelToTest[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -71,6 +82,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   }, [phase])
 
   if (!models) return null
+  const estimatedTotal = models.reduce((sum, m) => sum + (m.estimatedMs ?? 0), 0)
   if (!models.length && phase === 'idle') {
     return <p className="capacity-scan__status">{t('unscored.allScored')}</p>
   }
@@ -95,12 +107,24 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       <p className="options-menu__unscored-title">{t('unscored.toTest', { count: models.length })}</p>
       {/* Étape 431 : pour chaque modèle, ce qui lui manque — avant, 31 noms d'affilée sans dire pourquoi. */}
       <ul className="options-menu__unscored-list">
-        {models.map(({ model, needs }) => (
-          <li key={model}>
-            {t('common.labelValue', { label: formatModelName(model), value: needs.map(describeNeed).join(', ') })}
-          </li>
-        ))}
+        {models.map(({ model, needs, estimatedMs }) => {
+          const missing = needs.map(describeNeed).join(', ')
+          return (
+            <li key={model}>
+              {t('common.labelValue', {
+                label: formatModelName(model),
+                value: estimatedMs ? t('unscored.lineEstimate', { needs: missing, duration: formatEstimate(estimatedMs) }) : missing
+              })}
+            </li>
+          )
+        })}
       </ul>
+      {/* Étape 433 (Léo : « ajoute le temps estimé ») : le total, d'après les temps déjà mesurés sur ce PC. */}
+      {estimatedTotal > 0 && (
+        <p className="options-menu__unscored-text options-menu__unscored-total">
+          {t(models.every((m) => m.estimatedMs) ? 'unscored.total' : 'unscored.totalPartial', { duration: formatEstimate(estimatedTotal) })}
+        </p>
+      )}
       <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (

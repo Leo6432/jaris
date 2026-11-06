@@ -1212,6 +1212,11 @@ export type ModelToTestReason = 'missing' | 'redo' | 'remeasure'
 export interface ModelToTest {
   model: string
   needs: { test: 'tools' | 'vision' | 'code'; reason: ModelToTestReason }[]
+  /**
+   * Étape 433 : durée estimée du test de ce modèle sur CE PC (sans le téléchargement), d'après les temps déjà mesurés
+   * dans le fichier brut des tests ; `null` quand rien de comparable n'a encore été mesuré ici.
+   */
+  estimatedMs: number | null
 }
 
 export interface DuelRankingView {

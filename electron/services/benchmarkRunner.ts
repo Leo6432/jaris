@@ -6,7 +6,7 @@ import { config } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
-import { campaignCompletion, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
+import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult, ModelTiers, ModelToTest } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
@@ -241,14 +241,16 @@ export function unscoredResultsPath(): string {
  * dans le fichier brut de la campagne en cours (même nom que le script : <résultats>.traces.jsonl). Sans ce fichier
  * (aucune campagne), ce sont simplement les modèles sans score.
  */
-function currentCampaign(): ReturnType<typeof campaignCompletion> {
-  let traces = ''
+function readCampaignTraces(): string {
   try {
-    traces = readFileSync(unscoredResultsPath().replace(/\.md$/i, '.traces.jsonl'), 'utf8')
+    return readFileSync(unscoredResultsPath().replace(/\.md$/i, '.traces.jsonl'), 'utf8')
   } catch {
-    // Pas encore de campagne.
+    return '' // Pas encore de campagne.
   }
-  return campaignCompletion(traces)
+}
+
+function currentCampaign(): ReturnType<typeof campaignCompletion> {
+  return campaignCompletion(readCampaignTraces())
 }
 
 export function getModelsToTest(): string[] {
@@ -257,7 +259,9 @@ export function getModelsToTest(): string[] {
 
 /** La même liste, avec ce qui manque à chaque modèle (écran « Tous les modèles », étape 431). */
 export function getModelsToTestDetails(): ModelToTest[] {
-  return describeModelsToTest(currentCampaign())
+  // Étape 433 : le même fichier donne aussi les temps mesurés sur ce PC, pour estimer la durée de chaque modèle.
+  const traces = readCampaignTraces()
+  return describeModelsToTest(campaignCompletion(traces), caseTimesFromTraces(traces))
 }
 
 /**

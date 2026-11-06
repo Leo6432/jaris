@@ -488,3 +488,31 @@ test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
     code: 'qwen3.8:27b'
   })
 })
+
+// Étape 433 (Léo : « ajoute le temps estimé dans les modèles à faire ») : la durée vient des temps déjà mesurés sur
+// SON PC (champ `ms` de chaque cas dans le fichier brut) — la sienne pour un modèle déjà passé, sinon celle des
+// modèles mesurés de taille voisine, à l'échelle de la taille.
+test('étape 433 : durée estimée de chaque modèle à tester, d’après les temps mesurés sur ce PC', () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const versions = { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
+  const lines = [{ type: 'campagne', versions }]
+  // granite4.2:8b (5,3 Go) : questions à 2 s, demandes à 10 s ; une demande coupée par le délai (ne compte pas dans
+  // la moyenne) reste à refaire.
+  for (let i = 0; i < 6; i++) lines.push({ type: 'question', model: 'granite4.2:8b', index: i, pass: 1, ok: true, ms: 2000 })
+  for (let i = 0; i < 4; i++) lines.push({ type: 'demande', model: 'granite4.2:8b', id: `d${i}`, pass: 1, ok: true, ms: 10_000 })
+  lines.push({ type: 'demande', model: 'granite4.2:8b', id: 'd9', pass: 1, ok: false, timeout: true, ms: 600_000 })
+  const traces = lines.map((l) => JSON.stringify(l)).join('\n')
+  const described = scan.describeModelsToTest(scan.campaignCompletion(traces), scan.caseTimesFromTraces(traces))
+  const of = (model) => described.find((m) => m.model === model)
+
+  // Son propre temps : 1 demande à refaire × 10 s (le délai de 600 s n'entre pas dans la moyenne).
+  assert.equal(JSON.stringify(of('granite4.2:8b').needs), JSON.stringify([{ test: 'tools', reason: 'redo' }]))
+  assert.equal(of('granite4.2:8b').estimatedMs, 10_000)
+  // Jamais passé : 78 questions + 48 demandes, au temps de granite ramené à sa taille (1,9 Go au lieu de 5,3).
+  const expected = Math.round(78 * (2000 / 5.3) * 1.9 + 48 * (10_000 / 5.3) * 1.9)
+  assert.equal(of('qwen3-vl:2b').estimatedMs, expected)
+  assert.ok(of('qwen3.6:35b-a3b').estimatedMs > of('qwen3-vl:2b').estimatedMs, 'un plus gros modèle prend plus longtemps')
+
+  // Rien de mesuré sur ce PC : pas de durée inventée.
+  assert.ok(scan.describeModelsToTest().every((m) => m.estimatedMs === null))
+})
