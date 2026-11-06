@@ -25,7 +25,9 @@ import {
   deleteDuelVotes,
   getDuelReviews,
   getDuelVotes,
+  getAllDuelVotes,
   getRankingVotes,
+  countPendingDuelVotes,
   readDuelApp,
   saveDuelApp
 } from './duelStore'
@@ -417,7 +419,7 @@ function isInstalled(model: string, installed: readonly string[]): boolean {
   return installed.some((m) => sameModel(m, model))
 }
 
-/** Le classement d'une catégorie, tous les votes compris. */
+/** Le classement d'une catégorie : seulement les votes livrés avec Jaris, le même sur tous les PC (étape 430). */
 export function duelRanking(category: DuelCategory): DuelStandingView[] {
   const votes = getRankingVotes().filter((v) => v.category === category)
   // Le même classement que le choix des modèles (duelStrength, hardwareScan.ts) : tous partent de 0 (étape 358).
@@ -428,6 +430,7 @@ export function duelRankings(): DuelRankingView[] {
   return DUEL_CATEGORIES.map((category) => ({
     category,
     votes: getRankingVotes().filter((v) => v.category === category).length,
+    pending: countPendingDuelVotes(category),
     ranking: duelRanking(category)
   }))
 }
@@ -502,7 +505,7 @@ export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
     getDuelModelList(category, profile, remote?.machine)
   ])
   const sizeOf = new Map(candidates.map((c) => [c.model, c.vramGb]))
-  const done = countDuelsByModel(getRankingVotes(), category)
+  const done = countDuelsByModel(getAllDuelVotes(), category)
   const counts = [...new Set(DUEL_SESSION_SIZES.map((size) => Math.min(size, candidates.length)))].filter((n) => n >= DUEL_MIN_MODELS)
   return {
     category,
@@ -596,13 +599,13 @@ export async function startDuel(
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
   // Étape 384 : les duels déjà votés comptent (votes de ce PC et votes livrés avec Jaris).
   const seriesPlan =
-    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getRankingVotes(), 'code'))
+    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), 'code'))
   if (seriesPlan && !seriesPlan.length) throw new Error(t('duel.series.allDone', { count: seriesPerModel as number }))
   // Étape 399 : chaque modèle fait au moins N duels, en comptant les votes déjà faits ET ceux de Claude encore à vérifier.
   const judgePlan =
     judgePerModel === undefined
       ? null
-      : planDuelSeries(shuffled, judgePerModel, Math.random, countDuelsByModel([...getRankingVotes(), ...getDuelReviews()], 'conversation'))
+      : planDuelSeries(shuffled, judgePerModel, Math.random, countDuelsByModel([...getAllDuelVotes(), ...getDuelReviews()], 'conversation'))
   if (judgePlan && !judgePlan.length) throw new Error(t('duel.series.allDone', { count: judgePerModel as number }))
   session = {
     id: randomUUID(),

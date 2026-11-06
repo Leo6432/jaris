@@ -125,6 +125,8 @@ function setup(t) {
       addDuelVote: async () => {},
       getDuelVotes: () => [],
       getRankingVotes: () => [],
+      getAllDuelVotes: () => [],
+      countPendingDuelVotes: () => 0,
       saveDuelApp: async () => {},
       readDuelApp: async () => null,
       addDuelReview: async () => {},

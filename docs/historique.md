@@ -11206,3 +11206,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `test-duel-store.mjs` (retiré de l'historique mais compté, application effacée, redémarrage, tout
   retirer ; la situation exacte de Léo : ancien effacement, copie livrée qui recompte — les deux échouent en remettant
   l'ancien filtre), `test-duel-panel-ui.mjs` (texte de confirmation).
+
+## Étape 430 — Duels : seuls les votes envoyés comptent, le même classement pour tout le monde (v0.45.4)
+
+- Demande de Léo : « je veux que ça ne compte pas, je veux que ça compte que quand je t'envoie et tout le monde doit
+  avoir le même classement ». Remplace la règle des étapes 369/429 (votes de ce PC + votes livrés).
+- `duelStore.ts` : `getRankingVotes()` = SEULEMENT les votes livrés avec Jaris (`scripts/shared-duel-votes.json`), même
+  objet tant que le fichier ne change pas (les caches de `main.ts` ne recalculent rien après un vote local). Nouveau
+  `getAllDuelVotes()` (ce PC + livrés, un identifiant une fois) : sert seulement à PRÉPARER les duels (priorité aux
+  modèles peu testés, séries Code, juge), dans `duelSession.ts`. Nouveau `countPendingDuelVotes(catégorie)` : votes
+  de ce PC absents du fichier livré.
+- Classement, choix des modèles (`setDuelStrengthSource`, `setDuelProbability`) et résumé de fin de session ne
+  comptent donc plus un vote tant que Léo ne l'a pas envoyé (« Télécharger les votes ») et qu'il n'est pas importé
+  (`scripts/import-duel-votes.mjs`) puis publié.
+- Écran : titre « Classement » (au lieu de « Classement de tes votes »), ligne « Votes pas encore envoyés : N… » sous
+  le classement quand N > 0 (`DuelRankingView.pending`), textes de suppression (« leurs votes restent dans
+  « Télécharger les votes » ») et « Rien ne change pour l'instant… » réécrits, 24 langues.
+- Régression : `test-duel-store.mjs`, `test-shared-duel-votes.mjs` (un vote local ne change ni le classement ni son
+  objet ; compteur d'attente ; export complet) — les deux échouent en remettant l'ancien `getRankingVotes` ;
+  `test-duel-panel-ui.mjs` (ligne d'attente affichée seulement quand N > 0). Faux `duelStore` des tests de session
+  complétés. Vérifié par les tests, pas en usage réel.

@@ -43,9 +43,9 @@ window.__plan = window.__plan || {
   ]
 }
 window.__rankings = window.__rankings || [
-  { category: 'conversation', votes: 3, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
-  { category: 'code', votes: 0, ranking: [] },
-  { category: 'voice', votes: 0, ranking: [] }
+  { category: 'conversation', votes: 3, pending: 0, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
+  { category: 'code', votes: 0, pending: 2, ranking: [] },
+  { category: 'voice', votes: 0, pending: 0, ranking: [] }
 ]
 window.__view = window.__view === undefined ? null : window.__view
 const listeners = []
@@ -234,10 +234,13 @@ test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images)
     assert.match(await page.textContent('.duel-ranking__list'), /granite4\.2.*\+120 pts ± 310 · Rang 1 à 2/s)
     assert.match(await page.textContent('.duel-ranking__list'), /qwen3\.5.*-120 pts ± 310/s)
     assert.match(await page.textContent('.duel-ranking'), /Tous les modèles partent de 0 point/)
+    assert.equal(await page.locator('.duel-ranking__pending').count(), 0, 'rien en attente : pas de ligne')
     // Changer de catégorie redemande ce que la session téléchargerait.
     await page.click('.duel-category:has-text("Code")')
     await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'plan' && c[1] === 'code'))
     assert.match(await page.textContent('.duel-ranking'), /Pas encore de vote/)
+    // Étape 430 : les votes de ce PC pas encore envoyés ne comptent pas, et l'écran le dit.
+    assert.match(await page.textContent('.duel-ranking__pending'), /Votes pas encore envoyés : 2\. Ils compteront dans le classement/)
     await page.click('.duel-home__start')
     assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'start'), ['start', 'code', 4])
   })
@@ -717,10 +720,10 @@ test('étape 398 : supprimer un duel ou tout l’historique, toujours après une
     await page.waitForFunction(() => document.querySelectorAll('.duel-history__item').length === 2)
     assert.deepEqual(await deletes(), [['historyDelete', ['v2']]])
     assert.doesNotMatch(await page.textContent('.duel-history__list'), /serpent/)
-    // Tout supprimer : une confirmation qui dit combien, et (étape 429) que les votes restent comptés.
+    // Tout supprimer : une confirmation qui dit combien, et (étapes 429-430) que les votes restent à envoyer.
     await page.click('.duel-history__delete-all')
     await page.waitForSelector('.duel-history__confirm-all')
-    assert.match(await page.textContent('.duel-history__confirm-all'), /Duels à retirer de l'historique : 2\..*restent comptés dans le classement/)
+    assert.match(await page.textContent('.duel-history__confirm-all'), /Duels à retirer de l'historique : 2\..*restent dans « Télécharger les votes »/)
     assert.equal((await deletes()).length, 1, 'le bouton seul n’efface rien')
     await page.click('.duel-history__confirm-all button:has-text("Tout effacer")')
     await page.waitForFunction(() => document.querySelector('.duel-home__note')?.textContent?.includes('Aucun duel'))

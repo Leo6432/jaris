@@ -81,7 +81,7 @@ test('étape 362 : « Télécharger les votes » — toutes les sessions, répon
 })
 
 // Étape 398 (Léo : « dans l'historique, pouvoir supprimer des choses ou tout supprimer »).
-test('étapes 398 et 429 : retirer un duel de l’historique efface ses applications, mais son vote compte toujours (Léo : « garder les scores »)', async () => {
+test('étapes 398, 429 et 430 : retirer un duel de l’historique efface ses applications, mais son vote reste à envoyer ; seuls les votes livrés font le classement', async () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'jaris-duel-store-'))
   const sharedFile = join(dataRoot, 'livres.json')
   const id1 = '11111111-1111-4111-8111-111111111111'
@@ -97,27 +97,34 @@ test('étapes 398 et 429 : retirer un duel de l’historique efface ses applicat
     // id1 a aussi été livré avec Jaris (étape 369), id3 seulement livré.
     writeFileSync(sharedFile, JSON.stringify([vote(id1), vote(id3)]))
     await store.loadSharedDuelVotes(sharedFile)
-    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
+    // Étape 430 : le classement = seulement les votes livrés avec Jaris ; id2 (pas encore envoyé) n'y est pas.
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id3])
+    assert.deepEqual(store.getAllDuelVotes().map((v) => v.id).sort(), [id1, id2, id3], 'la préparation des duels voit tout')
+    assert.equal(store.countPendingDuelVotes('code'), 1, 'id2 attend d’être envoyé')
+    assert.equal(store.countPendingDuelVotes('conversation'), 0)
 
     assert.equal(await store.deleteDuelVotes([id1]), 1)
     assert.deepEqual(store.getDuelVotes().map((v) => v.id), [id2], 'retiré de l’historique')
-    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3], 'son vote compte toujours')
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id).sort(), [id1, id3], 'son vote livré compte toujours')
     assert.equal(await store.readDuelApp(id1, 'a'), null, 'son application est effacée')
     assert.equal(await store.readDuelApp(id2, 'b'), '<p>b</p>', 'celle d’un autre duel reste')
     const votesFile = join(dataRoot, 'duel-votes.json')
     assert.deepEqual(JSON.parse(readFileSync(votesFile, 'utf8')).map((v) => v.id).sort(), [id1, id2], 'le vote reste sur ce PC')
 
-    // Après un redémarrage, il reste caché de l'historique, et compté.
+    // Après un redémarrage, il reste caché de l'historique ; le classement ne change pas.
     const restarted = load(dataRoot)
     await restarted.loadSharedDuelVotes(sharedFile)
     assert.deepEqual((await restarted.loadDuelVotes()).map((v) => v.id).sort(), [id1, id2])
     assert.deepEqual(restarted.getDuelVotes().map((v) => v.id), [id2])
-    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
+    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id3])
 
-    // Tout retirer : l'historique est vide, le classement garde tout.
+    // Tout retirer : l'historique est vide, le classement ne bouge pas, et le vote retiré part toujours à l'envoi.
     assert.equal(await restarted.deleteDuelVotes('all'), 1)
     assert.deepEqual(restarted.getDuelVotes(), [])
-    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id2, id3])
+    assert.deepEqual(restarted.getRankingVotes().map((v) => v.id).sort(), [id1, id3])
+    assert.equal(restarted.countPendingDuelVotes('code'), 1)
+    const exported = JSON.parse((await restarted.buildDuelVotesExport('0', new Date(0))).json)
+    assert.deepEqual(exported.votes.map((v) => v.id).sort(), [id1, id2], 'retirés de l’historique, mais toujours envoyables')
     assert.equal(await restarted.readDuelApp(id2, 'b'), null)
     assert.equal(await restarted.deleteDuelVotes('all'), 0, 'rien à retirer : rien ne change')
     // Un nouveau vote après coup s'affiche normalement.

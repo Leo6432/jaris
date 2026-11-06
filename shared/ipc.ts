@@ -1206,6 +1206,8 @@ export interface DuelSummary {
 export interface DuelRankingView {
   category: DuelCategory
   votes: number
+  /** Votes de ce PC pas encore envoyés à Léo/livrés avec Jaris : ils ne comptent pas encore (étape 430). */
+  pending: number
   ranking: DuelStandingView[]
 }
 

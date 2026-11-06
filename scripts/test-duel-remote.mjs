@@ -134,6 +134,8 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
       addDuelVote: async (vote) => votes.push(vote),
       getDuelVotes: () => votes,
       getRankingVotes: () => votes,
+      getAllDuelVotes: () => votes,
+      countPendingDuelVotes: () => 0,
       saveDuelApp: async () => {},
       readDuelApp: async () => null,
       addDuelReview: async () => {},

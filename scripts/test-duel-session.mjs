@@ -271,6 +271,8 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       },
       getDuelVotes: () => votes,
       getRankingVotes: () => votes,
+      getAllDuelVotes: () => votes,
+      countPendingDuelVotes: () => 0,
       saveDuelApp: async (id, side, html) => {
         apps.set(`${id}-${side}`, html)
       },

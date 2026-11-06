@@ -66,7 +66,7 @@ let visible: { local: readonly DuelVote[]; deleted: ReadonlySet<string>; votes: 
 
 /**
  * Les votes de l'HISTORIQUE (ceux que Léo n'a pas retirés), sans attendre le disque (vide tant que loadDuelVotes n'a pas
- * répondu). Le classement, lui, compte tout : getRankingVotes.
+ * répondu). Le classement ne compte que les votes livrés avec Jaris : getRankingVotes.
  */
 export function getDuelVotes(): readonly DuelVote[] {
   if (visible?.local === cache && visible.deleted === deleted) return visible.votes
@@ -95,16 +95,32 @@ export async function loadSharedDuelVotes(file: string): Promise<readonly DuelVo
 let merged: { local: readonly DuelVote[]; shared: readonly DuelVote[]; votes: readonly DuelVote[] } | null = null
 
 /**
- * Votes du classement : ceux de ce PC + ceux livrés avec Jaris, un même identifiant compté une fois (le PC de Léo a
- * les deux). Les duels retirés de l'historique comptent aussi (étape 429). Même objet tant que rien ne change : main.ts
- * met ses calculs en cache par référence.
+ * TOUS les votes connus : ceux de ce PC + ceux livrés avec Jaris, un même identifiant compté une fois (le PC de Léo a
+ * les deux), retirés de l'historique compris. Sert à PRÉPARER les duels (donner la priorité aux modèles peu testés),
+ * jamais au classement.
  */
-export function getRankingVotes(): readonly DuelVote[] {
+export function getAllDuelVotes(): readonly DuelVote[] {
   if (merged?.local === cache && merged.shared === shared) return merged.votes
   const ids = new Set(cache.map((v) => v.id))
   const votes = shared.length ? [...cache, ...shared.filter((v) => !ids.has(v.id))] : cache
   merged = { local: cache, shared, votes }
   return votes
+}
+
+/**
+ * Étape 430 (Léo : « je veux que ça compte que quand je t'envoie et tout le monde doit avoir le même classement ») :
+ * le classement et le choix des modèles ne comptent QUE les votes livrés avec Jaris (scripts/shared-duel-votes.json).
+ * Un vote fait sur ce PC ne compte qu'une fois envoyé puis publié : tous les PC ont le même classement. Même objet tant
+ * que rien ne change : main.ts met ses calculs en cache par référence.
+ */
+export function getRankingVotes(): readonly DuelVote[] {
+  return shared
+}
+
+/** Votes de ce PC pas encore livrés avec Jaris (ils ne comptent pas encore dans le classement), par catégorie. */
+export function countPendingDuelVotes(category: DuelVote['category']): number {
+  const ids = new Set(shared.map((v) => v.id))
+  return cache.filter((v) => v.category === category && !ids.has(v.id)).length
 }
 
 export function duelVotesLoaded(): boolean {

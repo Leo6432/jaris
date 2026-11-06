@@ -2206,6 +2206,9 @@ export default function DuelPanel(): JSX.Element {
             ) : (
               <p className="duel-home__note">{t('duel.ranking.empty')}</p>
             )}
+            {ranking && ranking.pending > 0 && (
+              <p className="duel-home__note duel-ranking__pending">{t('duel.ranking.pending', { count: ranking.pending })}</p>
+            )}
             <p className="duel-home__note">{t('duel.ranking.legend')}</p>
           </section>
         </div>

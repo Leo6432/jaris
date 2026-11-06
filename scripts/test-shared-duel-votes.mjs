@@ -33,7 +33,7 @@ test('le fichier livré contient les votes de Léo, sans demande ni réponses, e
   assert.match(readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8'), /- shared-duel-votes\.json/)
 })
 
-test('classement = votes locaux + livrés, un même vote compté une fois ; historique local seul', async () => {
+test('étape 430 : classement = seulement les votes livrés (le même partout) ; préparation = locaux + livrés une fois ; historique local seul', async () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'jaris-shared-votes-'))
   try {
     const store = load(dataRoot)
@@ -41,14 +41,23 @@ test('classement = votes locaux + livrés, un même vote compté une fois ; hist
     writeFileSync(file, JSON.stringify([vote('v1'), vote('partage', 2)]))
     await store.loadDuelVotes()
     await store.addDuelVote(vote('v1'))
+    await store.addDuelVote(vote('local', 3))
     await store.loadSharedDuelVotes(file)
-    assert.deepEqual(store.getRankingVotes().map((v) => v.id), ['v1', 'partage'])
-    assert.deepEqual(store.getDuelVotes().map((v) => v.id), ['v1'], 'historique : seulement ce PC')
+    assert.deepEqual(store.getRankingVotes().map((v) => v.id), ['v1', 'partage'], 'le vote pas encore envoyé ne compte pas')
+    assert.deepEqual(store.getAllDuelVotes().map((v) => v.id), ['v1', 'local', 'partage'])
+    assert.equal(store.countPendingDuelVotes('code'), 1)
+    // Un nouveau vote sur ce PC ne change pas le classement (même objet : main.ts ne recalcule rien).
+    const before = store.getRankingVotes()
+    await store.addDuelVote(vote('encore', 4))
+    assert.equal(store.getRankingVotes(), before)
+    assert.equal(store.countPendingDuelVotes('code'), 2)
+    assert.deepEqual(store.getDuelVotes().map((v) => v.id), ['v1', 'local', 'encore'], 'historique : seulement ce PC')
     assert.equal(store.getRankingVotes(), store.getRankingVotes(), 'même objet tant que rien ne change')
     const exported = JSON.parse((await store.buildDuelVotesExport('0', new Date(0))).json)
-    assert.deepEqual(exported.votes.map((v) => v.id), ['v1'], 'export : seulement ce PC')
+    assert.deepEqual(exported.votes.map((v) => v.id), ['v1', 'local', 'encore'], 'export : seulement ce PC')
     assert.deepEqual(await store.loadSharedDuelVotes(join(dataRoot, 'absent.json')), [], 'fichier absent : rien')
-    assert.deepEqual(store.getRankingVotes().map((v) => v.id), ['v1'])
+    assert.deepEqual(store.getRankingVotes(), [], 'rien de livré : classement vide')
+    assert.equal(store.countPendingDuelVotes('code'), 3)
   } finally {
     rmSync(dataRoot, { recursive: true, force: true })
   }
