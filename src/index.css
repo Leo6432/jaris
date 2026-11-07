@@ -12,10 +12,14 @@
   /* Style ChatGPT (étape 266, Léo : « ça fait trop application Windows avec la couleur violet ») : des gris
      neutres, AUCUNE couleur d'accent — les boutons pleins sont blancs sur fond sombre, noirs sur fond clair,
      comme ChatGPT. Les noms --hud-* sont gardés pour ne pas réécrire les centaines de règles qui les
-     utilisent ; seules leurs valeurs changent. Thème sombre ici, clair juste en dessous (suit Windows). */
-  --hud-bg: #212121;
-  --hud-panel: #2a2a2a;
-  --hud-panel-raised: #303030;
+     utilisent ; seules leurs valeurs changent. Thème sombre ici, clair juste en dessous (suit Windows).
+     Étape 440 (Léo, capture de ChatGPT en noir : « mets l'application full noir ») : fond, barre latérale et barre
+     d'icônes en noir pur ; seuls les éléments posés dessus (bulles, champ de saisie, menus, cartes) gardent un gris
+     très foncé pour se détacher. UNE seule définition par thème : un second bloc :root plus bas, qui redéfinissait
+     une partie de ces valeurs, rendait celles d'ici trompeuses. */
+  --hud-bg: #000000;
+  --hud-panel: #171717;
+  --hud-panel-raised: #1f1f1f;
 
   /* Texte, du plus lisible au plus discret. */
   --hud-text: #ececec;
@@ -27,7 +31,6 @@
   --jv-accent: #ececec;
   --hud-accent: var(--jv-accent);
   --hud-accent-bright: #ffffff;
-  --hud-accent-deep: #d4d4d4;
   --hud-accent-rgb: 236, 236, 236;
   /* Liens et phrases d'exemple : le texte normal, soulignés là où ce sont des liens. */
   --jv-accent-text: var(--hud-text);
@@ -43,18 +46,17 @@
 
   --hud-line: rgba(255, 255, 255, 0.1);
   --hud-line-strong: rgba(255, 255, 255, 0.16);
-  --hud-glow: none;
 
   /* Encre des anciens voiles « blanc translucide » : blanc en sombre, noir en clair. */
   --jv-ink-rgb: 255, 255, 255;
 
-  /* Surfaces propres au design. --jv-side : la barre latérale et la barre de titre, un cran plus sombres
-     que la zone principale (comme ChatGPT). */
-  --jv-side: #181818;
-  --jv-hover: rgba(255, 255, 255, 0.06);
+  /* Surfaces propres au design. --jv-side : la barre latérale ; --jv-rail : la barre d'icônes et la barre de titre. */
+  --jv-side: #000000;
+  --jv-rail: #000000;
+  --jv-hover: rgba(255, 255, 255, 0.07);
   --jv-hover-strong: rgba(255, 255, 255, 0.1);
-  --jv-bubble: #303030;
-  --jv-code: #171717;
+  --jv-bubble: #1b1b1b;
+  --jv-code: #111111;
   --jv-accent-ink: #0d0d0d;
   --jv-frame: rgba(255, 255, 255, 0.1);
   /* Champ de saisie : gris foncé plein sur le noir en sombre (étape 440) ; blanc posé sur un trait et une ombre en clair. */
@@ -79,7 +81,7 @@
     color-scheme: light;
 
     --hud-bg: #ffffff;
-    --hud-panel: #ffffff;
+    --hud-panel: #f4f4f4;
     --hud-panel-raised: #f4f4f4;
 
     --hud-text: #0d0d0d;
@@ -89,7 +91,6 @@
 
     --jv-accent: #0d0d0d;
     --hud-accent-bright: #000000;
-    --hud-accent-deep: #2f2f2f;
     --hud-accent-rgb: 13, 13, 13;
 
     --hud-line: rgba(0, 0, 0, 0.1);
@@ -98,10 +99,11 @@
     --jv-ink-rgb: 0, 0, 0;
 
     --jv-side: #f9f9f9;
-    --jv-hover: rgba(0, 0, 0, 0.05);
+    --jv-rail: #f0f0f0;
+    --jv-hover: rgba(0, 0, 0, 0.06);
     --jv-hover-strong: rgba(0, 0, 0, 0.08);
     --jv-bubble: #f4f4f4;
-    --jv-code: #f7f7f7;
+    --jv-code: #f5f5f5;
     --jv-accent-ink: #ffffff;
     --jv-frame: rgba(0, 0, 0, 0.1);
     --jv-composer: #ffffff;
@@ -131,7 +133,6 @@ body,
 }
 
 body {
-  background: var(--hud-bg);
   color: var(--hud-text);
   overflow: hidden;
 }
@@ -179,20 +180,6 @@ body.body--splash {
 
 /* --- Colonne latérale permanente + zone principale (étape 30) --- */
 
-.app-shell {
-  display: flex;
-  height: 100%;
-}
-
-.app-main {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 /* La vue vocale garde son orbe centré, mais dans la zone restante à droite de la colonne. Le `height:
    100%` hérité de .app déborderait dès qu'un bandeau (nouveaux modèles) occupe le haut de .app-main :
    c'est `flex: 1` qui doit décider de la hauteur ici. */
@@ -218,33 +205,6 @@ body.body--splash {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
-}
-
-.options-menu__trigger {
-  background: transparent;
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text-dim);
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.options-menu__trigger:hover {
-  border-color: var(--hud-accent);
-  color: var(--hud-text);
-}
-
-/* Page pleine (pas un petit menu déroulant) : même structure que .memory-brain, pour de la place à
-   l'historique des conversations, qui peut contenir des dizaines d'échanges avec du texte long. */
-.options-page {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .options-page__header {
@@ -252,38 +212,21 @@ body.body--splash {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
-}
-
-.options-page__close {
-  background: transparent;
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text-dim);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
 }
 
 .options-page__close:hover {
-  border-color: var(--hud-accent);
   color: var(--hud-text);
 }
 
 .options-page__content {
   flex: 1;
-  overflow-y: auto;
-  padding: 28px 32px 40px;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 12px;
 }
 
 .options-page__content > * {
   width: 100%;
-  max-width: 960px;
 }
 
 /* Titre + sous-titre en tête de chaque page de réglages (design importé) — voir TAB_META, OptionsMenu.tsx.
@@ -291,14 +234,11 @@ body.body--splash {
    un groupe de réglages de plus. */
 .options-page__tab-header h3 {
   margin: 0;
-  font-size: 1.3rem;
   color: var(--hud-text);
 }
 
 .options-page__tab-header p {
   margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--hud-text-faint);
 }
 
 .options-menu__tabs {
@@ -335,11 +275,6 @@ body.body--splash {
   gap: 8px;
 }
 
-.options-menu__section-title {
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
 /* Refonte des réglages (étape 116), Léo : "tu voit sur claude chatgpt tout se ressemble mais dans les
    option rien ne se ressemble micro comment se déclencher" — avant, un menu déroulant (`.options-menu__field`),
    une case isolée (`.options-menu__checkbox`) et un bouton nu avaient chacun leur propre mise en forme.
@@ -350,8 +285,6 @@ body.body--splash {
 .options-menu__group {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--hud-line);
-  background: var(--hud-panel-raised);
   padding: 10px 18px 24px;
   /* Léo, capture annotée de rouge sur PLUSIEURS cartes : "augmente un peut la taille des carre la ou j'ai
      entourée entre la barre et le texte et la fin du rectangle pour tout les rectangle dans option" — le
@@ -417,7 +350,6 @@ body.body--splash {
 }
 
 .options-menu__row-label {
-  font-size: 12px;
   color: var(--hud-text);
 }
 
@@ -441,13 +373,7 @@ body.body--splash {
 .options-menu__switch {
   position: relative;
   flex: 0 0 auto;
-  width: 44px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--hud-line-strong);
-  background: rgba(21, 21, 23, 0.6);
   cursor: pointer;
-  clip-path: none;
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
@@ -458,26 +384,11 @@ body.body--splash {
   cursor: default;
 }
 
-.options-menu__switch--on {
-  background: rgba(var(--hud-accent-rgb), 0.16);
-  border-color: var(--hud-accent);
-}
-
 .options-menu__switch-knob {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 14px;
-  background: var(--hud-text-faint);
-  transition:
-    left 0.14s ease,
-    background 0.14s ease;
 }
 
 .options-menu__switch--on .options-menu__switch-knob {
-  left: 25px;
-  background: var(--hud-accent);
   box-shadow: none;
 }
 
@@ -509,7 +420,6 @@ body.body--splash {
 
 .options-menu__capability-intro {
   margin: 0 0 6px;
-  font-size: 12px;
   color: var(--hud-text-dim);
 }
 
@@ -523,7 +433,6 @@ body.body--splash {
 
 .options-menu__capability-group-title {
   margin: 0;
-  font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--hud-text);
@@ -593,7 +502,6 @@ body.body--splash {
 .options-menu__capability-example-text {
   font-size: 12px;
   line-height: 1.4;
-  color: var(--hud-accent);
 }
 
 /* Une limitation n'est pas une capacité : pas de carte, pas de bordure pleine — un liseré à gauche, comme
@@ -612,29 +520,9 @@ body.body--splash {
   font-weight: 600;
 }
 
-.options-menu__account {
-  font-size: 12px;
-  color: var(--hud-text);
-  word-break: break-all;
-}
-
-.options-menu__action {
-  background: rgba(var(--hud-accent-rgb), 0.072);
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.24);
-  color: var(--hud-text);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
 .options-menu__action:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.options-menu__action:not(:disabled):hover {
-  border-color: var(--hud-accent);
 }
 
 .options-menu__error {
@@ -668,77 +556,6 @@ body.body--splash {
   margin: 6px 0 0;
 }
 
-/* Popup de choix du périmètre d'analyse ("tout" ou un seul palier) — au-dessus de .options-page (z-index 20). */
-.options-menu__scope-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  background: rgba(21, 21, 23, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.options-menu__scope-dialog {
-  background: var(--hud-panel);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.125);
-  border-radius: 14px;
-  padding: 22px 24px;
-  max-width: 380px;
-  width: 100%;
-}
-
-.options-menu__scope-dialog h3 {
-  margin: 0 0 8px;
-  font-size: 1rem;
-  color: var(--hud-text);
-}
-
-.options-menu__scope-dialog p {
-  margin: 0 0 16px;
-  font-size: 12px;
-  color: var(--hud-text-soft);
-}
-
-.options-menu__scope-dialog-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.options-menu__scope-dialog-options button {
-  background: rgba(var(--hud-accent-rgb), 0.06);
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
-  color: var(--hud-text);
-  padding: 9px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.options-menu__scope-dialog-options button:hover {
-  border-color: var(--hud-accent);
-  background: rgba(var(--hud-accent-rgb), 0.108);
-}
-
-.options-menu__scope-dialog-options button.options-menu__scope-dialog-all {
-  grid-column: 1 / -1;
-  background: rgba(var(--hud-accent-rgb), 0.108);
-}
-
-.options-menu__scope-dialog-cancel {
-  background: transparent;
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text-dim);
-  padding: 7px 16px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  width: 100%;
-}
-
 .options-menu__progress {
   margin-top: 10px;
 }
@@ -751,15 +568,11 @@ body.body--splash {
 
 .options-menu__progress-bar {
   height: 6px;
-  border-radius: 999px;
-  background: rgba(var(--jv-ink-rgb), 0.075);
   overflow: hidden;
 }
 
 .options-menu__progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
-  border-radius: 999px;
   transition: width 0.3s ease;
 }
 
@@ -837,21 +650,11 @@ body.body--splash {
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
-  background: rgba(var(--jv-ink-rgb), 0.02);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.06);
-  border-radius: 10px;
   padding: 10px 12px;
 }
 
 .options-menu__model-group + .options-menu__model-group {
   margin-top: 10px;
-}
-
-.options-menu__model-group-title {
-  color: var(--hud-text-dim);
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 6px;
 }
 
 .options-menu__model-overview {
@@ -1060,29 +863,21 @@ body.body--splash {
 
 .options-menu__badge {
   display: inline-block;
-  padding: 1px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .options-menu__badge--good {
   background: rgba(49, 255, 176, 0.15);
-  color: var(--hud-ok);
 }
 
 .options-menu__badge--mid {
   background: rgba(255, 176, 32, 0.15);
-  color: var(--hud-gold);
 }
 
 .options-menu__badge--bad {
   background: rgba(255, 77, 104, 0.15);
-  color: var(--hud-danger);
 }
 
 .options-menu__badge--none {
-  color: var(--hud-text-faint);
   font-weight: 400;
 }
 
@@ -1140,12 +935,6 @@ body.body--splash {
 
 .options-menu__action--danger {
   background: rgba(255, 77, 104, 0.12);
-  border-color: rgba(255, 77, 104, 0.4);
-  color: var(--hud-danger);
-}
-
-.options-menu__action--danger:not(:disabled):hover {
-  border-color: var(--hud-danger);
 }
 
 /* Refonte étape 120 (maquette "Options Jaris.dc.html") : carte COMPACTE, orbe + flèches à gauche, bloc de
@@ -1290,41 +1079,11 @@ body.body--splash {
 }
 
 .app__status {
-  font-size: 13px;
-  color: var(--hud-text-dim);
   min-height: 1.4em;
-}
-
-.app__hint {
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
-.app__conversation {
-  max-width: 480px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.app__transcript {
-  margin: 0;
-  color: var(--hud-text-soft);
-  font-style: italic;
-}
-
-.app__reply {
-  margin: 0;
-  color: var(--hud-text);
-  font-weight: 500;
 }
 
 /* Étape 252 : ce que Jaris fait pendant une demande vocale — discret, sous la phrase entendue, le compteur avance. */
 .app__activity {
-  margin: 0;
-  color: var(--hud-text-faint);
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1343,7 +1102,6 @@ body.body--splash {
   padding: 14px 20px;
   font-size: 12px;
   color: var(--hud-text-soft);
-  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
 }
 
 .memory-brain__actions {
@@ -1351,18 +1109,7 @@ body.body--splash {
   gap: 10px;
 }
 
-.memory-brain__actions button {
-  background: transparent;
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text-dim);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
 .memory-brain__actions button:hover {
-  border-color: var(--hud-accent);
   color: var(--hud-text);
 }
 
@@ -1382,14 +1129,10 @@ body.body--splash {
 }
 
 .memory-brain__note {
-  position: absolute;
   top: 60px;
   right: 20px;
   bottom: 20px;
   width: min(360px, 80vw);
-  background: rgba(21, 21, 23, 0.92);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.15);
-  border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1434,44 +1177,17 @@ body.body--splash {
   /* Affiché en haut de la zone principale quel que soit le mode actif (étape 30), pas seulement sur la
      vue vocale : une nouveauté de modèle concerne autant le chat et le code. */
   align-self: center;
-  margin: 16px 16px 0;
   max-width: 480px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--hud-accent-bright);
-  background: rgba(var(--hud-accent-rgb), 0.048);
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
-  border-radius: 12px;
-  padding: 10px 16px;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.app__new-models button {
-  background: transparent;
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.21);
-  color: var(--hud-accent-bright);
-  padding: 4px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
 }
 
 .app__new-models button:hover {
-  border-color: var(--hud-accent);
   color: var(--hud-text);
 }
 
 .app__setup-warning {
   max-width: 480px;
   text-align: center;
-  font-size: 12px;
-  color: var(--hud-gold);
-  background: rgba(255, 176, 32, 0.08);
-  border: 1px solid rgba(255, 176, 32, 0.3);
-  border-radius: 12px;
   padding: 10px 16px;
 }
 
@@ -1484,31 +1200,12 @@ body.body--splash {
 .app__onboarding {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-  max-width: 320px;
-}
-
-.app__onboarding h1 {
-  margin: 0;
-  font-size: 1.4rem;
-}
-
-.app__onboarding p {
-  margin: 0 0 8px;
-  color: var(--hud-text-soft);
 }
 
 .app__onboarding input {
-  width: 100%;
   background: rgba(var(--jv-ink-rgb), 0.06);
   border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text);
-  padding: 10px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  text-align: center;
 }
 
 .app__onboarding input:focus {
@@ -1517,24 +1214,12 @@ body.body--splash {
 }
 
 .app__onboarding button {
-  background: rgba(var(--hud-accent-rgb), 0.108);
-  border: 1px solid var(--hud-accent);
-  color: var(--hud-text);
-  padding: 8px 20px;
-  border-radius: 999px;
-  font-size: 13px;
   cursor: pointer;
 }
 
 .app__onboarding button:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.app__onboarding button.app__onboarding-secondary {
-  background: transparent;
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text-dim);
 }
 
 /* Écran « Configuration de Jaris » (CapacityScan.tsx) : la carte des modèles a besoin de la largeur d'un tableau,
@@ -1639,15 +1324,11 @@ body.body--splash {
 
 .capacity-scan__tier {
   text-align: left;
-  background: rgba(var(--jv-ink-rgb), 0.03);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
-  border-radius: 14px;
   padding: 10px 16px;
 }
 
 .capacity-scan__tier--current {
   background: rgba(var(--hud-accent-rgb), 0.06);
-  border-color: var(--hud-accent);
 }
 
 .capacity-scan__tier-header {
@@ -1906,7 +1587,6 @@ p.capacity-scan__tier-missing {
 .app--widget {
   justify-content: flex-start;
   gap: 10px;
-  padding: 16px 14px;
 }
 
 /*
@@ -1923,7 +1603,7 @@ p.capacity-scan__tier-missing {
 /* --- Widget TEXTE (quitter Jaris depuis le mode Chat) ---
  *
  * Même emplacement et même vocabulaire visuel que la pilule du widget vocal (fond `--hud-panel-raised`,
- * bordure `--hud-line`, `--hud-glow`, coins en pilule) : seule la barre de saisie remplace le cercle, à la
+ * bordure `--hud-line`, coins en pilule) : seule la barre de saisie remplace le cercle, à la
  * demande de Léo. Aucune couleur ni forme inventée à côté — la leçon déjà tirée deux fois ici (le cercle
  * lisse du widget replié, celui du sélecteur de voix) : se raccrocher à la famille existante.
  */
@@ -1939,26 +1619,13 @@ p.capacity-scan__tier-missing {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 76px;
-  height: 40px;
   padding: 0;
-  color: var(--hud-accent-bright);
-  background: rgba(21, 21, 23, 0.92);
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
-  box-shadow: none;
   cursor: pointer;
 }
 
 .chat-widget__bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 14px;
-  background: rgba(21, 21, 23, 0.92);
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
-  box-shadow: none;
 }
 
 /* La règle générale `input, textarea, select` (plus haut dans ce fichier) impose bordure/fond/coins droits
@@ -1969,15 +1636,9 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-width: 0;
   padding: 6px 0;
-  font-size: 0.85rem;
-  color: var(--hud-text);
   background: transparent;
   border: none;
   outline: none;
-}
-
-.chat-widget__input::placeholder {
-  color: var(--hud-text-faint);
 }
 
 /* Petit bouton icône : une action secondaire dans un champ, pas un bouton d'action pleine largeur. */
@@ -1985,22 +1646,12 @@ p.capacity-scan__tier-missing {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
   flex: 0 0 auto;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: transparent;
-  color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.chat-widget__send:not(:disabled):hover {
-  color: var(--hud-accent-bright);
-  border-color: var(--hud-line);
-  background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
 .chat-widget__send:disabled {
@@ -2011,39 +1662,23 @@ p.capacity-scan__tier-missing {
 .chat-widget__answer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  /* Le widget flotte au-dessus de n'importe quelle application : à 55 % d'opacité, un fond clair ou très
-     détaillé traversait le panneau et réduisait fortement la lisibilité. Le fond reste légèrement translucide
-     pour conserver l'effet HUD, mais suffisamment sombre et opaque pour que la réponse soit toujours nette. */
-  background: rgba(21, 21, 23, 0.94);
-  border: 1px solid var(--hud-line);
-  border-radius: 14px;
-  box-shadow: none;
-  max-height: 300px;
   overflow-y: auto;
 }
 
 .chat-widget__question {
   margin: 0;
-  font-size: 0.75rem;
-  color: var(--hud-text-faint);
   overflow-wrap: anywhere;
 }
 
 .chat-widget__reply {
-  font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--hud-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .chat-widget__error {
   margin: 0;
-  font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--hud-danger);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2066,12 +1701,9 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 860px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 24px 28px;
 }
 
 .chat-panel__thread {
@@ -2079,25 +1711,10 @@ p.capacity-scan__tier-missing {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   padding-right: 6px;
 }
 
-.chat-panel__empty {
-  margin: auto;
-  max-width: 420px;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--hud-text-faint);
-}
-
 .chat-panel__message {
-  max-width: 78%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 12px;
-  line-height: 1.55;
   /* Les réponses écrites peuvent contenir des listes et des blocs de code (voir le prompt système du
      canal "chat" dans assistant.ts) : on respecte les retours à la ligne du modèle. */
   white-space: pre-wrap;
@@ -2105,29 +1722,7 @@ p.capacity-scan__tier-missing {
 }
 
 .chat-panel__message--user {
-  align-self: flex-end;
-  background: rgba(var(--hud-accent-rgb), 0.078);
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.15);
   color: var(--hud-text);
-}
-
-.chat-panel__message--assistant {
-  align-self: flex-start;
-  background: rgba(var(--jv-ink-rgb), 0.04);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
-  color: var(--hud-text);
-}
-
-.chat-panel__message--pending {
-  align-self: flex-start;
-  color: var(--hud-text-faint);
-  font-style: italic;
-}
-
-.chat-panel__error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--hud-gold);
 }
 
 /* ==========================================================================
@@ -2146,18 +1741,7 @@ p.capacity-scan__tier-missing {
 .composer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 10px 8px;
-  border: 1px solid var(--hud-line);
-  border-radius: 16px;
-  background: var(--hud-panel-raised);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-/* La carte entière s'allume quand le champ a le focus : le contour ne saute plus d'un élément à l'autre. */
-.composer:focus-within {
-  border-color: var(--hud-line-strong);
-  box-shadow: none;
 }
 
 .composer--busy {
@@ -2169,10 +1753,7 @@ p.capacity-scan__tier-missing {
   border: none;
   background: transparent;
   color: var(--hud-text);
-  padding: 6px 6px 0;
   font-family: inherit;
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .composer__input:focus {
@@ -2186,7 +1767,6 @@ p.capacity-scan__tier-missing {
 .composer__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
 /* Écran vocal : sous l'astuce, centré avec le reste du groupe orbe + texte. */
@@ -2205,9 +1785,6 @@ p.capacity-scan__tier-missing {
   align-self: flex-start;
   max-width: 100%;
   padding: 6px 8px;
-  border: 1px solid var(--hud-line);
-  border-radius: 12px;
-  background: rgba(21, 21, 23, 0.5);
 }
 
 .composer__attachment img {
@@ -2299,49 +1876,17 @@ p.capacity-scan__tier-missing {
 
 /* --- Espace de travail partagé : Chat et mode Code (étape 97) ------------- */
 
-/* Colonne de gauche façon Claude/ChatGPT, demandée par Léo ("les conversation et code fait comme claude ou
-   chatgpt la meme présentation"). UN seul jeu de styles pour les deux écrans : ils affichent exactement la
-   même chose (un bouton "nouveau", une liste, le contenu courant à droite). */
-.workspace {
-  flex: 1;
-  /* min-width: 0 obligatoire, pas seulement min-height : sans lui, un élément flex refuse de se réduire en
-     dessous de la largeur minimale de son contenu — la colonne (240px) plus le contenu débordaient donc la
-     fenêtre au lieu de la partager (mesuré : 784px de large dans une fenêtre de 760px). */
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-}
-
 .workspace__rail {
-  width: 240px;
   flex-shrink: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 12px;
   border-right: 1px solid var(--hud-line);
-  background: rgba(21, 21, 23, 0.35);
-}
-
-.workspace__new {
-  width: 100%;
-  text-align: center;
 }
 
 .workspace__empty {
-  margin: 4px 6px;
-  font-size: 12px;
   line-height: 1.5;
-  color: var(--hud-text-faint);
 }
 
 .workspace__list {
   list-style: none;
-  margin: 0;
-  padding: 0;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 /* Lignes séparées par un simple filet, sans cadre individuel : la colonne a déjà sa bordure, en remettre
@@ -2349,8 +1894,6 @@ p.capacity-scan__tier-missing {
    filet est porté par le <li> et non par le bouton, parce qu'une ligne contient DEUX boutons (ouvrir et
    supprimer) qui dessineraient sinon deux bouts de séparateur côte à côte. */
 .workspace__list li {
-  display: flex;
-  align-items: center;
   border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.07);
 }
 
@@ -2359,28 +1902,15 @@ p.capacity-scan__tier-missing {
 }
 
 .workspace__item {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   gap: 2px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-soft);
-  padding: 9px 8px;
   font-family: inherit;
   font-size: 12px;
-  text-align: left;
-  cursor: pointer;
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
 .workspace__item:hover {
-  background: rgba(var(--hud-accent-rgb), 0.08);
   color: var(--hud-text);
 }
 
@@ -2393,9 +1923,6 @@ p.capacity-scan__tier-missing {
 
 .workspace__item-title {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Seule la première lettre passe en majuscule : `text-transform: capitalize` écrirait "Liste De Courses". */
@@ -2415,38 +1942,17 @@ p.capacity-scan__tier-missing {
 
 /* Discrète tant qu'on ne la survole pas : c'est l'action rare et irréversible de la ligne. */
 .workspace__delete {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-faint);
-  padding: 9px 8px;
-  cursor: pointer;
-  /* 0,55 sur une couleur déjà "faint" rendait la corbeille délavée au point qu'on ne distinguait plus sa
-     forme (étape 100). Elle reste volontairement discrète — une suppression ne doit pas crier — mais
-     lisible. */
-  opacity: 0.75;
   transition:
     color 0.15s ease,
     opacity 0.15s ease;
 }
 
 .workspace__delete:hover {
-  color: var(--hud-danger);
   opacity: 1;
 }
 
 .workspace__confirm {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px;
-  font-size: 12px;
   line-height: 1.4;
-  color: var(--hud-text);
   background: rgba(255, 77, 104, 0.07);
 }
 
@@ -2461,33 +1967,6 @@ p.capacity-scan__tier-missing {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Gouttière réservée au bouton de repli, qui flotte en haut à gauche : sans elle, il passerait par-dessus
-     le premier message de la discussion. */
-  padding-left: 34px;
-}
-
-.workspace__rail-toggle {
-  position: absolute;
-  top: 10px;
-  left: 6px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-faint);
-  padding: 4px;
-  cursor: pointer;
-  opacity: 0.6;
-  transition:
-    color 0.15s ease,
-    opacity 0.15s ease;
-}
-
-.workspace__rail-toggle:hover {
-  color: var(--hud-accent-bright);
-  opacity: 1;
 }
 
 /* Sur une fenêtre étroite, la colonne des modes (200px) plus celle-ci laisseraient trop peu de place à la
@@ -2506,81 +1985,13 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 24px 28px;
 }
 
 .code-panel__error {
   margin: 0;
-  font-size: 12px;
-  color: var(--hud-gold);
-}
-
-.code-panel__intro {
-  margin: 0;
-  max-width: 78ch;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--hud-text-dim);
-}
-
-/*
- * Bandeau d'avancement d'une génération (étape 99) : où on en est, depuis combien de temps, et de quoi
- * arrêter. Posé juste au-dessus du journal, qui garde lui l'historique des étapes franchies.
- */
-.code-panel__live,
-.code-panel__done {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: rgba(var(--hud-accent-rgb), 0.08);
-  border: 1px solid var(--hud-line-strong);
-  box-shadow: none;
-}
-
-.code-panel__live-text {
-  flex: 1;
-  /* Sans ça, un long libellé d'étape refuse de se réduire et pousse le bouton hors de l'écran sur une
-     fenêtre étroite — exactement le débordement mesuré à l'étape 97. */
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.code-panel__live-title {
-  font-size: 12px;
-  color: var(--hud-accent-bright);
-}
-
-.code-panel__live-detail {
-  font-size: 12px;
-  color: var(--hud-text-dim);
-}
-
-/* Écrit APRÈS la règle partagée ci-dessus, jamais avant : à spécificité égale c'est l'ordre qui décide,
-   et la couleur de succès serait sinon silencieusement écrasée par le cyan (piège des étapes 95 et 97). */
-.code-panel__done {
-  margin: 0;
-  font-size: 12px;
-  color: var(--hud-ok);
-  border-color: rgba(var(--hud-ok-rgb), 0.45);
-  background: rgba(var(--hud-ok-rgb), 0.08);
-  box-shadow: none;
-}
-
-/* Un arrêt demandé n'est ni un succès ni une panne : même bandeau, au même endroit, mais en neutre.
-   Écrit APRÈS la règle de succès ci-dessus — à spécificité égale, c'est l'ordre qui décide. */
-.code-panel__done--stopped {
-  color: var(--hud-text-dim);
-  border-color: var(--hud-line);
-  background: rgba(var(--jv-ink-rgb), 0.03);
-  box-shadow: none;
 }
 
 .code-panel__result {
@@ -2599,26 +2010,12 @@ p.capacity-scan__tier-missing {
 
 .code-panel__view-tabs {
   display: flex;
-  gap: 6px;
-  background: rgba(var(--jv-ink-rgb), 0.04);
-  border-radius: 999px;
-  padding: 3px;
 }
 
 .code-panel__view-tab {
   background: transparent;
-  border: none;
-  color: var(--hud-text-dim);
   padding: 5px 16px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-family: inherit;
   cursor: pointer;
-}
-
-.code-panel__view-tab--active {
-  background: rgba(var(--hud-accent-rgb), 0.09);
-  color: var(--hud-text);
 }
 
 /* Fond blanc explicite : une page générée qui ne définit pas son propre fond serait sinon transparente
@@ -2682,16 +2079,12 @@ p.capacity-scan__tier-missing {
 .runtime-setup__bar {
   width: 100%;
   height: 6px;
-  border-radius: 999px;
-  background: rgba(var(--jv-ink-rgb), 0.1);
   overflow: hidden;
 }
 
 .runtime-setup__bar-fill {
   height: 100%;
   width: 0;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--hud-accent), var(--hud-accent-deep));
   transition: width 0.3s ease;
 }
 
@@ -2720,16 +2113,6 @@ p.capacity-scan__tier-missing {
   gap: 10px;
 }
 
-.runtime-setup__actions button {
-  background: rgba(var(--hud-accent-rgb), 0.108);
-  border: 1px solid var(--hud-accent);
-  color: var(--hud-text);
-  padding: 8px 18px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
 .runtime-setup__actions .runtime-setup__skip {
   background: transparent;
   border-color: rgba(var(--jv-ink-rgb), 0.175);
@@ -2755,15 +2138,10 @@ p.capacity-scan__tier-missing {
 
 .options-page__header h2 {
   margin: 1px 0 0;
-  font-size: 1.45rem;
 }
 
 .options-page__navigation-label {
   display: block;
-  font-family: var(--hud-font-display);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--hud-text-faint);
 }
 
 .options-page__body {
@@ -2792,8 +2170,6 @@ p.capacity-scan__tier-missing {
 .options-page__navigation {
   min-height: 0;
   padding: 28px 16px;
-  border-right: 1px solid var(--hud-line);
-  background: rgba(21, 21, 23, 0.5);
 }
 
 .options-page__navigation-label {
@@ -2810,7 +2186,6 @@ p.capacity-scan__tier-missing {
 .options-page .options-menu__tabs {
   display: flex;
   flex-direction: column;
-  gap: 3px;
   border: 0;
   background: transparent;
 }
@@ -2818,8 +2193,6 @@ p.capacity-scan__tier-missing {
 .options-page .options-menu__tab {
   flex: 0 0 auto;
   width: 100%;
-  padding: 11px 12px;
-  border: 1px solid transparent;
   border-left: 2px solid transparent;
   text-align: left;
 }
@@ -2841,10 +2214,6 @@ p.capacity-scan__tier-missing {
   overflow-y: auto;
   align-items: stretch;
   padding: 32px clamp(28px, 5vw, 80px) 48px;
-}
-
-.options-page__content > * {
-  max-width: 1240px;
 }
 
 @media (max-width: 700px) {
@@ -2997,15 +2366,11 @@ p.capacity-scan__tier-missing {
   flex-direction: column;
   gap: 14px;
   padding: 26px 28px;
-  background: var(--hud-panel-raised);
   border: 1px solid var(--hud-line);
 }
 
 .image-install__card h2 {
   margin: 0;
-  font-family: var(--hud-font-display);
-  font-size: 1.5rem;
-  color: var(--hud-text);
 }
 
 .image-install__lead {
@@ -3041,10 +2406,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   aspect-ratio: 1;
   padding: 0;
-  overflow: hidden;
   background: var(--hud-panel-raised);
-  border: 1px solid var(--hud-line);
-  border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -3118,15 +2480,6 @@ p.capacity-scan__tier-missing {
   min-height: 0;
 }
 
-.image-panel__title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--hud-text);
-}
-
 .image-panel__save {
   display: inline-flex;
   align-items: center;
@@ -3146,7 +2499,6 @@ p.capacity-scan__tier-missing {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border: 1px solid var(--hud-line);
 }
 
 /* Étape 205 : « Télécharger » une qualité, dans son panneau — la famille du bouton « Installer », en plus petit
@@ -3155,8 +2507,6 @@ p.capacity-scan__tier-missing {
   display: block;
   width: 100%;
   margin-top: 12px;
-  padding: 8px 12px;
-  font-size: 12px;
 }
 
 .video-install__quality {
@@ -3170,10 +2520,6 @@ p.capacity-scan__tier-missing {
 /* Étape 203 : la vidéo occupe la même scène que l'image, sur fond noir comme un lecteur. */
 .video-panel__video {
   background: #000;
-}
-
-.image-panel__progress {
-  margin-top: 6px;
 }
 
 /* Le champ reste EN BAS même sans image au-dessus (leçon du Montage, étape 189 : il remontait en haut). */
@@ -3194,30 +2540,14 @@ p.capacity-scan__tier-missing {
   flex: 1;
 }
 
-.composer__add {
-  position: relative;
-}
-
 .composer__plus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
   padding: 0;
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
   background: transparent;
-  color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.composer__plus:not(:disabled):hover,
-.composer__plus--open {
-  color: var(--hud-accent-bright);
-  border-color: var(--hud-line-strong);
-  background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
 .composer__plus:disabled {
@@ -3231,21 +2561,13 @@ p.capacity-scan__tier-missing {
   bottom: calc(100% + 8px);
   z-index: 30;
   padding: 8px;
-  background: var(--hud-panel);
-  border: 1px solid var(--hud-line-strong);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 .composer__menu {
-  left: 0;
-  min-width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
-.composer__menu-title,
 .effort-picker__list-head {
   padding: 4px 8px 6px;
   font-size: 12px;
@@ -3265,18 +2587,11 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text);
   background: transparent;
   border: none;
-  border-radius: 10px;
   cursor: pointer;
-}
-
-.composer__menu-item:hover,
-.effort-picker__option:not(:disabled):hover {
-  background: rgba(var(--hud-accent-rgb), 0.1);
 }
 
 .composer__menu-icon {
   display: inline-flex;
-  color: var(--hud-accent);
 }
 
 .composer__menu-label {
@@ -3284,11 +2599,7 @@ p.capacity-scan__tier-missing {
 }
 
 .composer__menu-hint {
-  margin-left: auto;
-  padding-left: 12px;
   white-space: nowrap;
-  font-size: 12px;
-  color: var(--hud-text-faint);
 }
 
 /* Envoi : rond et plein, la seule action remplie de la barre (comme ChatGPT). */
@@ -3297,13 +2608,8 @@ p.capacity-scan__tier-missing {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
   padding: 0;
   border: none;
-  border-radius: 999px;
-  background: var(--hud-accent);
-  color: #151517;
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
@@ -3314,7 +2620,6 @@ p.capacity-scan__tier-missing {
 }
 
 .composer__send:disabled {
-  opacity: 0.35;
   cursor: default;
 }
 
@@ -3358,21 +2663,13 @@ p.capacity-scan__tier-missing {
   max-width: 100%;
   height: 34px;
   padding: 0 10px;
-  font-family: var(--hud-font-body);
-  font-size: 12px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .effort-picker__trigger:not(:disabled):hover,
 .effort-picker__trigger--open {
-  color: var(--hud-text);
   border-color: var(--hud-line);
-  background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
 .effort-picker__trigger:disabled {
@@ -3381,8 +2678,6 @@ p.capacity-scan__tier-missing {
 }
 
 .effort-picker__model {
-  font-weight: 600;
-  color: var(--hud-text);
   white-space: nowrap;
 }
 
@@ -3901,13 +3196,11 @@ a:hover {
    survol gris — le bouton « Plus tard » de la maquette. */
 .options-menu__action,
 .options-page__close,
-.options-menu__scope-dialog-cancel,
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
 .error-panel__actions button,
 .code-panel__result-actions button,
-.code-panel__live-stop,
 .workspace__confirm-yes,
 .workspace__confirm-no,
 .chat-widget__action,
@@ -3920,9 +3213,7 @@ a:hover {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--hud-text);
-  background: transparent;
   border: 1px solid var(--hud-line);
-  border-radius: 999px;
   padding: 8px 16px;
   cursor: pointer;
   transition:
@@ -3933,13 +3224,11 @@ a:hover {
 
 .options-menu__action:not(:disabled):hover,
 .options-page__close:hover,
-.options-menu__scope-dialog-cancel:hover,
 .options-menu__ollama-update-actions button:not(:disabled):hover,
 .app__new-models button:hover,
 .memory-brain__actions button:hover,
 .error-panel__actions button:hover,
 .code-panel__result-actions button:not(:disabled):hover,
-.code-panel__live-stop:not(:disabled):hover,
 .workspace__confirm-yes:not(:disabled):hover,
 .workspace__confirm-no:not(:disabled):hover,
 .chat-widget__action:not(:disabled):hover,
@@ -3951,18 +3240,7 @@ a:hover {
   border-color: var(--hud-line-strong);
 }
 
-/* Action principale d'un écran (installer, commencer, lancer) : pilule pleine claire, comme le bouton
-   « Commencer » de la maquette. */
-.capacity-scan button:not(.capacity-scan__secondary),
-.runtime-setup__actions button:first-child,
-.image-install__button,
-.app__onboarding button {
-  color: var(--jv-accent-ink);
-  background: var(--hud-accent);
-  border-color: transparent;
-}
-
-.capacity-scan button:not(.capacity-scan__secondary):not(:disabled):hover,
+.capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:first-child:not(:disabled):hover,
 .image-install__button:not(:disabled):hover {
   color: var(--jv-accent-ink);
@@ -3972,7 +3250,6 @@ a:hover {
 
 /* Actions compactes posées à côté du sujet (aperçu, ligne à supprimer) : même famille, plus petites. */
 .code-panel__result-actions button,
-.code-panel__live-stop,
 .workspace__confirm-yes,
 .workspace__confirm-no,
 .chat-widget__action {
@@ -3992,15 +3269,6 @@ button:disabled {
   cursor: default;
 }
 
-/* Le clavier doit voir où il est : un anneau net, sans lueur. */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:not(.composer__input):focus-visible {
-  outline: 2px solid var(--hud-line-strong);
-  outline-offset: 2px;
-}
-
 .chat-widget__input:focus-visible {
   outline: none;
   border-color: transparent !important;
@@ -4012,26 +3280,19 @@ textarea:not(.composer__input):focus-visible {
 .options-menu__group,
 .options-menu__model-group,
 .capacity-scan__tier,
-.options-menu__scope-dialog,
 .app__new-models,
 .code-panel__result,
 .memory-brain__note {
-  border-radius: 16px;
   background: var(--hud-panel);
   border: 1px solid var(--hud-line);
 }
 
-.capacity-scan__tier--current {
-  border-color: var(--hud-text-dim);
-}
-
 /* --- Champs de saisie ----------------------------------------------------- */
 
-input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
+input:not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
 textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);
-  border-radius: 10px !important;
   background: var(--hud-panel) !important;
   border: 1px solid var(--hud-line) !important;
   color: var(--hud-text) !important;
@@ -4046,14 +3307,12 @@ textarea::placeholder {
 
 .options-menu__progress-bar,
 .runtime-setup__bar {
-  border-radius: 999px;
   border: none;
   background: var(--jv-hover);
 }
 
 .options-menu__progress-bar-fill,
 .runtime-setup__bar-fill {
-  border-radius: 999px;
   background: var(--hud-accent);
 }
 
@@ -4085,8 +3344,7 @@ textarea::placeholder {
   color: var(--hud-text-faint);
 }
 
-.options-menu__section-title,
-.options-menu__model-group-title {
+.options-menu__section-title {
   font-size: 12px;
   font-weight: 500;
   color: var(--hud-text-faint);
@@ -4143,7 +3401,6 @@ textarea::placeholder {
 .app-shell {
   display: flex;
   height: 100%;
-  background: var(--hud-bg);
 }
 
 /* Bouton « Nouveau… » et ancien déclencheur des Options : 40px, icône + libellé. */
@@ -4182,16 +3439,13 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--hud-bg);
 }
 
 .app-header {
-  height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 14px;
 }
 
 .app-header__title:empty::before {
@@ -4201,9 +3455,6 @@ textarea::placeholder {
 .app-header__title {
   min-width: 0;
   padding-left: 4px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--hud-text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4213,6 +3464,9 @@ textarea::placeholder {
 
 .workspace {
   flex: 1;
+  /* min-width: 0 obligatoire, pas seulement min-height : sans lui, un élément flex refuse de se réduire en
+     dessous de la largeur minimale de son contenu — la colonne plus le contenu débordaient la fenêtre au lieu
+     de la partager (mesuré : 784px de large dans une fenêtre de 760px). */
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -4371,7 +3625,6 @@ textarea::placeholder {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  background: var(--jv-side);
 }
 
 /* --- Écran vide d'un mode ------------------------------------------------- */
@@ -4394,19 +3647,12 @@ textarea::placeholder {
 
 .empty-state__title {
   margin: 6px 0 0;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
   color: var(--hud-text);
 }
 
 .empty-state__description {
   margin: 0;
-  max-width: 460px;
-  font-size: 15px;
-  line-height: 1.55;
   color: var(--hud-text-dim);
-  text-wrap: pretty;
 }
 
 .empty-state__suggestions {
@@ -4418,19 +3664,9 @@ textarea::placeholder {
 }
 
 .empty-state__suggestion {
-  height: 38px;
-  padding: 0 14px;
   font-family: var(--hud-font-body);
   font-size: 14px;
-  color: var(--hud-text);
-  background: transparent;
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
   cursor: pointer;
-}
-
-.empty-state__suggestion:hover {
-  background: var(--jv-hover);
 }
 
 /* Étape 372 : « Autres idées » sous les suggestions du Duel, un simple lien discret. */
@@ -4472,7 +3708,6 @@ textarea::placeholder {
   border: none;
   border-radius: 0;
   background: transparent;
-  font-size: 15px;
   line-height: 1.65;
 }
 
@@ -4493,10 +3728,7 @@ textarea::placeholder {
 }
 
 .chat-panel__avatar {
-  width: 28px;
-  height: 28px;
   flex-shrink: 0;
-  border-radius: 8px;
   margin-top: 1px;
 }
 
@@ -4504,10 +3736,7 @@ textarea::placeholder {
 .chat-panel__message--user {
   align-self: flex-end;
   max-width: 80%;
-  padding: 10px 16px;
   border: none;
-  border-radius: 20px;
-  background: var(--jv-bubble);
   line-height: 1.55;
 }
 
@@ -4611,14 +3840,11 @@ textarea::placeholder {
 }
 
 .chat-panel > .composer {
-  width: calc(100% - 48px);
-  max-width: 760px;
   margin: 0 auto 18px;
 }
 
 .chat-panel pre {
   border: 1px solid var(--hud-line);
-  border-radius: 14px;
   background: var(--jv-code);
 }
 
@@ -4626,43 +3852,19 @@ textarea::placeholder {
 
 .composer {
   gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--hud-line);
-  border-radius: 26px;
-  background: var(--hud-panel);
-}
-
-.composer:focus-within {
-  border-color: var(--hud-line-strong);
 }
 
 .composer__input {
-  padding: 8px 10px 4px;
-  min-height: 44px;
-  font-size: 15px;
   line-height: 1.5;
 }
 
 .composer__plus {
-  width: 36px;
-  height: 36px;
-  color: var(--hud-text-dim);
   border-color: var(--hud-line);
 }
 
 .composer__plus:not(:disabled):hover,
 .composer__plus--open {
-  color: var(--hud-text);
   border-color: var(--hud-line);
-  background: var(--jv-hover);
-}
-
-.composer__menu,
-.effort-picker__panel {
-  background: var(--hud-panel);
-  border: 1px solid var(--hud-line);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
 .composer__menu-item:hover,
@@ -4670,13 +3872,7 @@ textarea::placeholder {
   background: var(--jv-hover);
 }
 
-.composer__menu-icon {
-  color: var(--hud-text-dim);
-}
-
 .composer__mic {
-  width: 36px;
-  height: 36px;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -4684,22 +3880,11 @@ textarea::placeholder {
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 50%;
-  color: var(--hud-text);
   cursor: pointer;
 }
 
 .composer__mic:hover {
   background: var(--jv-hover);
-}
-
-.composer__send {
-  background: var(--hud-accent);
-  color: var(--jv-accent-ink);
-}
-
-.composer__send:disabled {
-  opacity: 0.3;
 }
 
 .composer__attachment {
@@ -4710,7 +3895,6 @@ textarea::placeholder {
 
 .effort-picker__trigger {
   border: none;
-  border-radius: 10px;
   background: transparent;
   color: var(--hud-text-dim);
   font-family: var(--hud-font-body);
@@ -4725,10 +3909,6 @@ textarea::placeholder {
 
 /* --- Code, Image, Vidéo --------------------------------------------------- */
 
-.code-panel {
-  padding: 0 24px 18px;
-}
-
 .code-panel > .composer {
   width: 100%;
   max-width: 760px;
@@ -4738,11 +3918,9 @@ textarea::placeholder {
 .image-panel__home {
   flex: 1;
   align-items: center;
-  justify-content: center;
 }
 
 .image-panel__thumb {
-  border-radius: 12px;
   border: 1px solid var(--hud-line);
   overflow: hidden;
 }
@@ -4769,14 +3947,7 @@ textarea::placeholder {
   color: var(--hud-text);
 }
 
-.code-panel__live {
-  border-radius: 16px;
-  border: 1px solid var(--hud-line);
-  background: var(--hud-panel);
-}
-
 .image-install__card {
-  border-radius: 16px;
   background: var(--hud-panel);
 }
 
@@ -4793,9 +3964,6 @@ textarea::placeholder {
   min-height: 0;
   height: auto;
   overflow-y: auto;
-  justify-content: center;
-  gap: 24px;
-  padding: 16px 24px 32px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4805,18 +3973,14 @@ textarea::placeholder {
 }
 
 .app__voice-footer {
-  gap: 14px;
   width: 100%;
-  max-width: 560px;
 }
 
 .app__status {
   display: block;
   margin: 0;
   font-family: var(--hud-font-body);
-  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.02em;
   color: var(--hud-text);
 }
 
@@ -4825,50 +3989,11 @@ textarea::placeholder {
 }
 
 .app__hint {
-  max-width: 440px;
   font-family: var(--hud-font-body);
-  font-size: 15px;
   line-height: 1.55;
   color: var(--hud-text-dim);
   text-align: center;
   text-wrap: pretty;
-}
-
-.app__conversation:not(.app__conversation--widget) {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-}
-
-.app__conversation:not(.app__conversation--widget) .app__transcript {
-  align-self: flex-end;
-  max-width: 80%;
-  margin: 0;
-  padding: 10px 16px;
-  border-radius: 20px;
-  background: var(--jv-bubble);
-  color: var(--hud-text);
-  font-family: var(--hud-font-body);
-  line-height: 1.55;
-}
-
-.app__conversation:not(.app__conversation--widget) .app__reply {
-  display: flex;
-  gap: 14px;
-  margin: 0;
-  color: var(--hud-text);
-  font-family: var(--hud-font-body);
-  line-height: 1.65;
-}
-
-.app__conversation:not(.app__conversation--widget) .app__reply p {
-  margin: 0;
-  padding-top: 3px;
 }
 
 .app__activity {
@@ -4878,7 +4003,6 @@ textarea::placeholder {
 }
 
 .app__setup-warning {
-  border-radius: 16px;
   border: 1px solid var(--hud-line);
   background: var(--hud-panel);
   font-family: var(--hud-font-body);
@@ -4934,10 +4058,7 @@ textarea::placeholder {
   font-family: var(--hud-font-body);
   font-size: 15px;
   font-weight: 500;
-  color: var(--jv-accent-ink);
-  background: var(--hud-accent);
   border: none;
-  border-radius: 999px;
 }
 
 .app__onboarding button:hover {
@@ -5012,14 +4133,11 @@ textarea::placeholder {
 }
 
 .options-page .options-menu__tab {
-  height: 38px;
-  padding: 0 12px;
   font-family: var(--hud-font-body);
   font-size: 14px;
   font-weight: 400;
   color: var(--hud-text);
   border: none;
-  border-radius: 10px;
 }
 
 .options-page .options-menu__tab:hover {
@@ -5027,19 +4145,7 @@ textarea::placeholder {
 }
 
 .options-page .options-menu__tab--active {
-  background: var(--jv-hover);
   border: none;
-  color: var(--hud-text);
-}
-
-.options-page__tab-header h3 {
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.options-page__tab-header p {
-  font-size: 14px;
-  color: var(--hud-text-dim);
 }
 
 .options-menu__group-rows {
@@ -5047,37 +4153,16 @@ textarea::placeholder {
 }
 
 .options-menu__switch {
-  width: 40px;
-  height: 24px;
   padding: 0;
-  border: none;
-  border-radius: 12px;
-  background: var(--hud-line);
   clip-path: none;
-}
-
-.options-menu__switch--on {
-  background: var(--hud-ok);
 }
 
 .options-menu__switch-knob {
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
   clip-path: none;
-  box-shadow: none;
 }
 
 .options-menu__switch--on .options-menu__switch-knob {
-  left: 19px;
   transform: none;
-}
-
-.memory-brain {
-  background: var(--hud-bg);
 }
 
 /* --- Widget texte (quitter Jaris depuis le Chat) -------------------------- */
@@ -5086,18 +4171,10 @@ textarea::placeholder {
    nouveau design : surface gris anthracite, envoi en rond clair. */
 .chat-widget__bar,
 .chat-widget__idle {
-  background: var(--hud-panel);
   border-color: var(--hud-line);
-  color: var(--hud-text);
-}
-
-.chat-widget__send {
-  background: var(--hud-accent);
-  color: var(--jv-accent-ink);
 }
 
 .chat-widget__answer {
-  background: var(--hud-panel);
   border-color: var(--hud-line);
 }
 
@@ -5121,9 +4198,6 @@ textarea::placeholder {
 .options-page .options-menu__group-rows {
   /* De l'air en haut et en bas de la carte (demande de Léo, voir .options-menu__group plus haut). */
   padding: 4px 18px 18px;
-  border: 1px solid var(--hud-line);
-  border-radius: 16px;
-  background: var(--hud-panel);
 }
 
 /* ==========================================================================
@@ -5143,12 +4217,10 @@ body {
 
 .app-shell {
   flex-direction: column;
-  background: var(--jv-side);
 }
 
 .app-shell__body {
   flex: 1;
-  min-height: 0;
   display: flex;
 }
 
@@ -5174,7 +4246,6 @@ body {
 
 .titlebar__name {
   font-size: 12px;
-  color: var(--hud-text-dim);
 }
 
 /* --- Rail d'icônes -------------------------------------------------------- */
@@ -5242,10 +4313,6 @@ body {
   line-height: 1;
 }
 
-.rail__spacer {
-  flex: 1;
-}
-
 /* --- Colonne de liste (Conversations, Projets, Images, Vidéos) ------------- */
 
 .panel {
@@ -5258,25 +4325,6 @@ body {
 
 .panel[hidden] {
   display: none;
-}
-
-.panel__head {
-  height: 40px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px 0 10px;
-}
-
-.panel__title {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .panel__new:empty {
@@ -5377,33 +4425,19 @@ body {
 /* --- Zone principale : un calque aux coins arrondis posé sur le cadre ----- */
 
 .app-main {
-  background: var(--hud-bg);
   border-top: 1px solid var(--hud-line);
-  border-left: 1px solid var(--hud-line);
   border-top-left-radius: 8px;
-}
-
-.app-header {
-  height: 48px;
-  padding: 0 12px;
-}
-
-.app-header__title {
-  font-size: 14px;
-  font-weight: 500;
 }
 
 /* --- Boutons, cartes, champs : coins Windows 11 ---------------------------- */
 
 .options-menu__action,
 .options-page__close,
-.options-menu__scope-dialog-cancel,
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
 .error-panel__actions button,
 .code-panel__result-actions button,
-.code-panel__live-stop,
 .workspace__confirm-yes,
 .workspace__confirm-no,
 .chat-widget__action,
@@ -5412,11 +4446,12 @@ body {
 .image-install__button,
 .quality-picker__download,
 .app__onboarding button {
-  border-radius: 6px;
   background: var(--hud-panel);
 }
 
-.capacity-scan button:not(.capacity-scan__secondary),
+/* Action principale d'un écran (installer, commencer, lancer) : pilule pleine claire, comme le bouton
+   « Commencer » de la maquette. */
+.capacity-scan button,
 .runtime-setup__actions button:first-child,
 .image-install__button,
 .app__onboarding button {
@@ -5425,38 +4460,13 @@ body {
   border-color: transparent;
 }
 
+/* Le clavier doit voir où il est : un anneau net, sans lueur. */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:not(.composer__input):focus-visible {
   outline: 2px solid var(--hud-accent);
   outline-offset: 2px;
-}
-
-.options-menu__group,
-.options-menu__model-group,
-.capacity-scan__tier,
-.options-menu__scope-dialog,
-.app__new-models,
-.code-panel__result,
-.memory-brain__note,
-.image-install__card,
-.code-panel__live,
-.app__setup-warning {
-  border-radius: 8px;
-}
-
-input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
-textarea:not(.composer__input),
-select {
-  border-radius: 4px !important;
-}
-
-.options-menu__progress-bar,
-.runtime-setup__bar,
-.options-menu__progress-bar-fill,
-.runtime-setup__bar-fill {
-  border-radius: 2px;
 }
 
 .options-page a,
@@ -5466,27 +4476,12 @@ select {
 
 /* --- Écrans vides, Chat, blocs de code ------------------------------------ */
 
-.empty-state__title {
-  font-size: 26px;
-}
-
-.empty-state__description {
-  font-size: 14px;
-}
-
-.empty-state__suggestion {
-  height: 34px;
-  background: var(--hud-panel);
-  border-radius: 6px;
-}
-
 .chat-panel__message {
   font-size: 14px;
 }
 
 .chat-panel__message--user {
   padding: 9px 14px;
-  border-radius: 18px;
 }
 
 .chat-panel__avatar {
@@ -5503,28 +4498,11 @@ select {
 /* --- Barre de saisie : champ Windows 11, trait d'accent en bas au focus ----- */
 
 .composer {
-  padding: 6px;
-  border: 1px solid var(--hud-line);
   border-bottom: 2px solid var(--hud-line);
-  border-radius: 8px;
-  background: var(--hud-panel);
 }
 
 .composer:focus-within {
-  border-color: var(--hud-line);
   border-bottom-color: var(--hud-accent);
-}
-
-.composer__input {
-  font-size: 14px;
-}
-
-.composer__plus,
-.composer__mic,
-.composer__send {
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
 }
 
 .composer__plus {
@@ -5533,33 +4511,9 @@ select {
 
 .composer__send {
   background: var(--hud-accent);
-  color: var(--jv-accent-ink);
-}
-
-.composer__send:disabled {
-  opacity: 0.35;
-}
-
-.composer__menu,
-.effort-picker__panel {
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-}
-
-.composer__menu-item,
-.effort-picker__option {
-  border-radius: 4px;
-}
-
-.effort-picker__trigger {
-  border-radius: 6px;
 }
 
 /* --- Agent vocal ---------------------------------------------------------- */
-
-.voice-screen {
-  gap: 22px;
-}
 
 /* Le bouton fait 160px, le cercle visible 120px au centre : la place autour sert aux anneaux. */
 
@@ -5585,30 +4539,6 @@ select {
 .app__hint--small {
   font-size: 12px;
   color: var(--hud-text-faint);
-}
-
-/* L'échange en cours dans une carte : ce que Léo a dit (discret), puis la réponse de Jaris. */
-.app__conversation:not(.app__conversation--widget) {
-  gap: 10px;
-  padding: 14px 16px;
-  background: var(--hud-panel);
-  border: 1px solid var(--hud-line);
-  border-radius: 8px;
-  line-height: 1.5;
-}
-
-.app__conversation:not(.app__conversation--widget) .app__transcript {
-  align-self: stretch;
-  max-width: none;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--hud-text-dim);
-}
-
-.app__conversation:not(.app__conversation--widget) .app__reply {
-  display: block;
-  line-height: 1.5;
 }
 
 /* --- Options : un écran du rail, façon Paramètres de Windows 11 ------------ */
@@ -5639,11 +4569,9 @@ select {
   position: relative;
   height: 36px;
   padding: 0 14px;
-  border-radius: 6px;
 }
 
 .options-page .options-menu__tab::before {
-  content: '';
   position: absolute;
   left: 0;
   top: 50%;
@@ -5663,36 +4591,12 @@ select {
   font-size: 24px;
 }
 
-.options-page .options-menu__group-rows {
-  border-radius: 8px;
-}
-
-/* Interrupteur Windows 11 : contour gris éteint, plein couleur d'accent allumé. */
-.options-menu__switch {
-  width: 40px;
-  height: 20px;
-  border: 1px solid var(--hud-text-dim);
-  border-radius: 10px;
-  background: transparent;
-}
-
 .options-menu__switch--on {
   border-color: var(--hud-accent);
-  background: var(--hud-accent);
 }
 
 .options-menu__switch-knob {
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  background: var(--hud-text-dim);
   transition: left 0.15s ease;
-}
-
-.options-menu__switch--on .options-menu__switch-knob {
-  left: 23px;
-  background: #ffffff;
 }
 
 /* Intertitres de « Ce que Jaris sait faire » : un cran au-dessus du texte de base (14px en v2). */
@@ -5755,12 +4659,6 @@ select {
 
 .app-sidebar .workspace__item-meta {
   display: none;
-}
-
-/* Agent vocal : la réponse de Jaris en texte normal (elle était en demi-gras, toute la réponse). */
-.app__reply,
-.app__conversation:not(.app__conversation--widget) .app__reply {
-  font-weight: 400;
 }
 
 /* Réglages : la taille de texte des Paramètres de Windows 11 — intitulé 14 px, explication 12 px. */
@@ -5832,12 +4730,6 @@ select {
    cartes de réglages plus arrondies. Écrit en dernier : l'ordre décide.
    ========================================================================== */
 
-/* --- Fenêtre : une barre latérale un cran plus sombre, la zone principale sans cadre --------------- */
-.app-main {
-  border: none;
-  border-radius: 0;
-}
-
 .titlebar__name {
   font-weight: 500;
   color: var(--hud-text-dim);
@@ -5846,13 +4738,11 @@ select {
 /* --- Boutons : pilules ; le bouton principal plein, blanc sur sombre, noir sur clair ------------- */
 .options-menu__action,
 .options-page__close,
-.options-menu__scope-dialog-cancel,
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
 .error-panel__actions button,
 .code-panel__result-actions button,
-.code-panel__live-stop,
 .workspace__confirm-yes,
 .workspace__confirm-no,
 .chat-widget__action,
@@ -5890,9 +4780,6 @@ select {
 
 /* Suggestions de l'écran d'accueil : des pastilles posées sur un trait, comme celles de ChatGPT. */
 .empty-state__suggestion {
-  height: 36px;
-  padding: 0 16px;
-  background: transparent;
   border: 1px solid var(--hud-line-strong);
   color: var(--hud-text-dim);
 }
@@ -5906,17 +4793,15 @@ select {
 .options-menu__group,
 .options-menu__model-group,
 .capacity-scan__tier,
-.options-menu__scope-dialog,
 .app__new-models,
 .code-panel__result,
 .memory-brain__note,
 .image-install__card,
-.code-panel__live,
 .app__setup-warning {
   border-radius: 16px;
 }
 
-input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
+input:not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
 textarea:not(.composer__input),
 select {
   border-radius: 10px !important;
@@ -5957,18 +4842,6 @@ select {
 .composer:focus-within {
   border-color: var(--jv-composer-border);
   box-shadow: var(--jv-composer-shadow);
-}
-
-.composer__input {
-  font-size: 15px;
-}
-
-.composer__plus,
-.composer__mic,
-.composer__send {
-  width: 36px;
-  height: 36px;
-  border-radius: 9999px;
 }
 
 .composer__plus:not(:disabled):hover,
@@ -6107,35 +4980,6 @@ select {
    Les modes, la liste de conversations et les outils vivent dans une seule
    colonne ; le rail compact reste disponible quand la liste est repliée.
    ======================================================================== */
-
-/* Étape 440 (Léo, capture de ChatGPT en noir : « mets l'application full noir ») : le thème sombre passe du gris
-   anthracite au noir pur, comme ChatGPT — fond, barre latérale et barre d'icônes noirs ; seuls les éléments posés
-   dessus (bulles, champ de saisie, menus, cartes) gardent un gris très foncé pour se détacher. Thème clair inchangé. */
-:root {
-  --hud-bg: #000000;
-  --hud-panel: #171717;
-  --hud-panel-raised: #1f1f1f;
-  --jv-side: #000000;
-  --jv-rail: #000000;
-  --jv-mica: rgba(0, 0, 0, 0.92);
-  --jv-hover: rgba(255, 255, 255, 0.07);
-  --jv-bubble: #1b1b1b;
-  --jv-code: #111111;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --hud-bg: #ffffff;
-    --hud-panel: #f4f4f4;
-    --hud-panel-raised: #f4f4f4;
-    --jv-side: #f9f9f9;
-    --jv-rail: #f0f0f0;
-    --jv-mica: rgba(249, 249, 249, 0.92);
-    --jv-hover: rgba(0, 0, 0, 0.06);
-    --jv-bubble: #f4f4f4;
-    --jv-code: #f5f5f5;
-  }
-}
 
 .app-shell__body {
   position: relative;
@@ -6512,22 +5356,26 @@ select {
   color: var(--hud-text);
 }
 
-.voice-screen .app__conversation:not(.app__conversation--widget) {
+/* L'échange en cours, centré comme des sous-titres : ce que Léo a dit (discret), puis la réponse de Jaris en texte
+   normal. Une seule règle par élément : trois couches successives (bulle, carte, sous-titres) se contredisaient ici. */
+.voice-screen .app__conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   width: 100%;
   max-width: 560px;
-  padding: 0;
-  border: none;
-  background: transparent;
+  line-height: 1.5;
   text-align: center;
-  gap: 8px;
 }
 
-.voice-screen .app__conversation:not(.app__conversation--widget) .app__transcript {
-  font-style: normal;
+.voice-screen .app__transcript {
+  margin: 0;
+  line-height: 1.55;
   color: var(--hud-text-dim);
 }
 
-.voice-screen .app__conversation:not(.app__conversation--widget) .app__reply {
+.voice-screen .app__reply {
+  margin: 0;
   font-size: 16px;
   line-height: 1.55;
   color: var(--hud-text);
@@ -7180,14 +6028,6 @@ select {
   flex-direction: column;
   gap: 12px;
   padding-top: 8px;
-}
-
-.repo-panel__summary {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--hud-text);
-  white-space: pre-wrap;
 }
 
 .repo-panel__committed {
@@ -9103,11 +7943,6 @@ ul.reply-list--nested {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-}
-
-.duel-remote__status {
-  font-size: 13px;
-  color: var(--hud-ok);
 }
 
 @container (max-width: 560px) {
