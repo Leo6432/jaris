@@ -115,7 +115,7 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
   const modules = {
     child_process: fakeChildProcess,
     './dataLocation': { getDataRoot: () => dataRoot },
-    './ollama': {
+    '../config': { runWithLocalOllama: (fn) => fn() }, './ollama': {
       unloadOllamaModels: async () => {
         events.push('unload')
         return ['qwen3.5:9b']

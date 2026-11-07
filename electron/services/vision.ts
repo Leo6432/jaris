@@ -1,7 +1,7 @@
 import { desktopCapturer, screen, type NativeImage } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
-import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
+import { getModelGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { autoContextFor, chatWithOllama, listInstalledModels } from './ollama'
 import { replyLanguageName, replyLanguageRule, t } from '../../shared/i18n'
 
@@ -156,7 +156,7 @@ export async function describeImage(
 ): Promise<string> {
   let model = visionModel
   try {
-    const [live, installedModels] = await Promise.all([getLiveGpuStatus(), listInstalledModels()])
+    const [live, installedModels] = await Promise.all([getModelGpuStatus(), listInstalledModels()])
     if (live.freeVramGb !== null) model = pickSafeVisionModel(live.freeVramGb, installedModels, visionModel)
   } catch {
     // Pas grave si le check échoue : on garde le modèle normalement configuré.

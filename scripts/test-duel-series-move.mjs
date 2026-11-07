@@ -45,6 +45,11 @@ function setup(t) {
   const modules = {
     crypto: { randomUUID: (() => { let n = 0; return () => `uuid-${n++}` })() },
     '../config': configModule,
+    // Étape 437 : la machine connectée de la page Machine (ici : celle du profil).
+    './remoteMachine': {
+      connectedMachine: () => (profile.duelRemote?.enabled ? { host: profile.duelRemote.host, vramGb: profile.duelRemote.vramGb, ramGb: profile.duelRemote.ramGb, diskGb: 100 } : null),
+      machineFreeDiskGb: async () => null
+    },
     './assistant': { converse: async () => 'ok' },
     './codeGenerator': {
       generateApp: async (prompt, _onStatus, _current, _image, options) => {
@@ -152,6 +157,10 @@ function setup(t) {
     session,
     calls,
     machines,
+    // Étape 437 : Léo connecte la nouvelle machine sur la page Machine.
+    connect: (host) => {
+      profile = { ...profile, duelRemote: { enabled: true, host, vramGb: 80, ramGb: 128 } }
+    },
     killOld: () => down.add(POD),
     blockOld: (after = 0) => {
       blockAfter = after
@@ -182,7 +191,7 @@ test('crédit épuisé en pleine série : rien n’est perdu, et la série repre
   const deletedBefore = env.calls.deleted.length
 
   // Léo loue une nouvelle machine et donne son adresse.
-  await env.session.saveDuelRemote({ enabled: true, host: POD2, vramGb: 80, ramGb: 128 })
+  env.connect(POD2)
   const moved = await env.session.moveDuelSeries()
   assert.equal(moved.series.waiting, null)
   await waitFor(() => seriesDone(env.session.getDuelView()), 'la série a fini sur la nouvelle machine')
@@ -211,7 +220,7 @@ test('nouvelle machine injoignable : refusé avec une raison, la série reste su
   env.killOld()
   env.killNew()
   await waitFor(() => env.session.getDuelView().series?.waiting === 'ollama' || seriesDone(env.session.getDuelView()), 'la série attend')
-  await env.session.saveDuelRemote({ enabled: true, host: POD2, vramGb: 80, ramGb: 128 })
+  env.connect(POD2)
   await assert.rejects(env.session.moveDuelSeries(), /ne répond pas/)
   assert.ok(env.calls.saved.every((s) => s.remote.host === POD), 'la série gardée pointe toujours sur l’ancienne machine')
   // La nouvelle machine démarre : la reprise marche alors.
@@ -229,7 +238,7 @@ test('machine figée (ni morte ni vivante) : changer de machine reprend aussi le
   await waitFor(() => env.session.getDuelView().batch.some((r) => r.a === 'running' || r.b === 'running') && env.calls.generate.length > 4, 'des duels bloqués sur l’ancienne machine')
   const running = env.session.getDuelView().batch.filter((r) => r.a === 'running' || r.b === 'running').map((r) => r.number)
   assert.ok(running.length >= 1)
-  await env.session.saveDuelRemote({ enabled: true, host: POD2, vramGb: 80, ramGb: 128 })
+  env.connect(POD2)
   await env.session.moveDuelSeries()
   await waitFor(() => seriesDone(env.session.getDuelView()), 'la série a fini sur la nouvelle machine')
   const after = env.session.getDuelView()

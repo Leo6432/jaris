@@ -12468,3 +12468,129 @@ input.reply-ui__field-input {
   color: var(--hud-text-dim);
   text-align: right;
 }
+
+/* ============================================================================
+   Étape 437 — page Machine (machine louée) et sa pastille dans la barre d'icônes.
+   Mêmes jetons que le reste de Jaris ; les champs reprennent ceux de l'ancienne boîte du Duel (.duel-remote__*).
+   ============================================================================ */
+.machine-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 24px 40px;
+  container-type: inline-size;
+}
+.machine-page__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.machine-page__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+.machine-page__lead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--hud-text-dim);
+}
+.machine-page__steps {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--hud-text);
+}
+.machine-page__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 14px;
+  background: var(--hud-panel);
+}
+/* Quatre champs : l'adresse sur toute la largeur, puis carte, RAM et stockage côte à côte. */
+.machine-page__fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.machine-page__fields .duel-remote__field--host {
+  grid-column: 1 / -1;
+}
+.machine-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.machine-page__status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+  overflow-wrap: anywhere;
+}
+.machine-page__dot,
+.rail__machine--on::after {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--hud-ok);
+}
+.machine-page__label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hud-text-dim);
+}
+.machine-page__models {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--hud-text);
+}
+.machine-page__model--failed {
+  color: var(--hud-danger);
+}
+.machine-page__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hud-text-dim);
+  overflow-wrap: anywhere;
+}
+.machine-page__note--warn {
+  color: var(--hud-gold);
+}
+@container (max-width: 520px) {
+  .machine-page__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* La pastille verte sur l'icône Machine : une machine louée fait tourner les modèles. */
+.rail__machine {
+  position: relative;
+  display: flex;
+}
+.rail__machine--on::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--jv-side);
+}

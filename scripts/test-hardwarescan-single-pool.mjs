@@ -516,3 +516,21 @@ test('étape 433 : durée estimée de chaque modèle à tester, d’après les t
   // Rien de mesuré sur ce PC : pas de durée inventée.
   assert.ok(scan.describeModelsToTest().every((m) => m.estimatedMs === null))
 })
+
+// Étape 437 : une carte louée va bien plus vite que celle de ce PC — les durées estimées ne mélangent jamais les deux.
+test('étape 437 : les durées estimées viennent seulement de la machine qui fera le test', () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const lines = [
+    { type: 'campagne', machine: { rented: null } },
+    { type: 'question', model: 'granite4.2:8b', index: 0, pass: 1, ok: true, ms: 9000 },
+    { type: 'campagne', machine: { rented: 'http://10.0.0.5:11434' } },
+    { type: 'question', model: 'granite4.2:8b', index: 0, pass: 1, ok: true, ms: 1000 },
+    // Une ancienne campagne, sans le champ : faite sur ce PC.
+    { type: 'campagne', machine: { platform: 'win32' } },
+    { type: 'question', model: 'granite4.2:8b', index: 1, pass: 1, ok: true, ms: 11000 }
+  ]
+  const traces = lines.map((l) => JSON.stringify(l)).join('\n')
+  assert.equal(JSON.stringify([...scan.caseTimesFromTraces(traces)]), JSON.stringify([['conversation|granite4.2:8b', { ms: 20000, count: 2 }]]))
+  assert.equal(JSON.stringify([...scan.caseTimesFromTraces(traces, 'http://10.0.0.5:11434')]), JSON.stringify([['conversation|granite4.2:8b', { ms: 1000, count: 1 }]]))
+  assert.equal(scan.caseTimesFromTraces(traces, 'http://autre:11434').size, 0, 'une autre machine : rien de mesuré')
+})

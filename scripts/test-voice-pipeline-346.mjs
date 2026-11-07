@@ -46,7 +46,7 @@ const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck, wavDurationMs, s
   './conversationSession': { VOICE_CONTEXT_MAX_AGE_MS: 1, clearSessionHistory: noop, getSessionHistory: async () => [], pushSessionExchange: noop },
   './memoryExtractor': { cancelMemoryExtraction: noop, extractMemoryFromExchange: noop },
   './profileStore': { getProfile: async () => ({ voiceCorrectionEnabled: false }) },
-  './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
+  './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }), getModelGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
   './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok' }) },
   './transcriptCorrector': { CORRECTION_SCHEMA: {}, correctTranscript: async (text) => ({ text, changed: false }) },
   './ollama': { structuredChat: async () => '', preferLoadedModel: async (_c, preferred) => preferred },

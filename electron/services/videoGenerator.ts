@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { unloadOllamaModels } from './ollama'
+import { runWithLocalOllama } from '../config'
 import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
 import {
@@ -354,7 +355,8 @@ export async function generateVideo(
     const drawn = await drawingPrompt(text, onLog, translate)
     if (signal?.aborted) throw new Error(t('engine.cancelled.video'))
 
-    const unloaded = await unloadOllamaModels()
+    // Étape 437 : la carte de CE PC, même quand une machine louée fait tourner les modèles.
+    const unloaded = await runWithLocalOllama(() => unloadOllamaModels())
     if (unloaded.length) onLog(t('video.gpuFreed', { models: unloaded.join(', ') }))
 
     const dir = generatedVideosDir()

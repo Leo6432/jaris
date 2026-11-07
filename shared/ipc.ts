@@ -5,6 +5,7 @@ import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
 import type { DuelAction, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelTurn, DuelVoteSide } from './duel'
+import type { RemoteMachineSettings } from './machine'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -127,10 +128,16 @@ export interface Profile {
    */
   voiceModels?: ModelTiers
   /**
-   * Étape 377 : la machine qui fait tourner les modèles des duels (Ollama d'une autre machine, par exemple sur RunPod).
-   * Gardée même désactivée, pour ne pas retaper l'adresse. Le reste de Jaris utilise toujours l'Ollama de ce PC.
+   * Étape 377 : l'ancienne « autre machine » des duels. Étape 437 : remplacée par la page Machine (`remoteMachine`) ; lue
+   * une seule fois pour pré-remplir l'adresse (savedRemoteMachine, shared/machine.ts), plus jamais écrite.
    */
   duelRemote?: DuelRemoteSettings
+  /**
+   * Étape 437 : la machine louée de la page Machine (adresse d'Ollama, mémoire, disque). Seulement l'ADRESSE est gardée :
+   * Jaris démarre toujours sur ce PC, Léo connecte la machine d'un clic (une machine supprimée depuis ne doit jamais
+   * laisser Jaris muet au démarrage).
+   */
+  remoteMachine?: RemoteMachineSettings
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
   /**
@@ -1525,7 +1532,11 @@ export const IPC_CHANNELS = {
   /** renderer -> main, étape 362 : tout l'historique des duels dans un fichier choisi par Léo. */
   duelExportVotes: 'jaris:duel-export-votes',
   /** renderer -> main, étape 377 : la machine qui fait tourner les modèles des duels (`null` = ce PC). */
-  duelRemoteSave: 'jaris:duel-remote-save',
+  /** Étape 437 : la page Machine — état, connexion (réglages revérifiés côté main), déconnexion, changements. */
+  machineGet: 'jaris:machine-get',
+  machineConnect: 'jaris:machine-connect',
+  machineDisconnect: 'jaris:machine-disconnect',
+  machineChanged: 'jaris:machine-changed',
   /** main -> écran : nouvel état de la session (ou `null` quand il n'y en a plus). */
   duelChanged: 'jaris:duel-changed',
   /**

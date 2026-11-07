@@ -46,7 +46,7 @@ export function setOllamaHost(host: string): void {
  * `runWithOllamaHost` (et tout ce qui en découle, `await` compris) parle à cette adresse ; `runWithLocalOllama` revient à
  * l'Ollama de ce PC à l'intérieur (les outils de Jaris pendant un duel : regarder l'écran, dessiner…).
  */
-interface OllamaScope {
+export interface OllamaScope {
   host: string
   /**
    * Étape 387 : nombre de fils de calcul (num_thread) à demander pour ce modèle, ou rien. Sur le pod de Léo, chaque
@@ -56,6 +56,25 @@ interface OllamaScope {
   threadsFor?: (model: string) => number | undefined
 }
 const hostScope = new AsyncLocalStorage<OllamaScope | null>()
+
+/**
+ * Étape 437 (Léo : « un bouton Machine à gauche… maintenant tout Jaris tourne sur le VPS, si je vais dans Analyse et que
+ * je lance, ça se fait sur le VPS, et après je peux déconnecter ») : la machine louée connectée (remoteMachine.ts). Tant
+ * qu'elle l'est, TOUT ce qui parle aux modèles sans adresse propre va à son Ollama : Chat, Vocal, Code, Duel, Analyse.
+ * Une portée explicite garde la priorité : `runWithOllamaHost` (une autre adresse) et `runWithLocalOllama` (l'Ollama de ce
+ * PC — sa surveillance et sa réparation, les outils d'un duel). `null` : pas de machine, comme avant.
+ */
+let machineScope: OllamaScope | null = null
+
+export function setMachineOllamaHost(scope: OllamaScope | null): void {
+  machineScope = scope
+}
+
+/** La portée qui s'applique : celle du travail en cours si elle existe (`null` = ce PC), sinon la machine connectée. */
+function currentScope(): OllamaScope | null {
+  const store = hostScope.getStore()
+  return store === undefined ? machineScope : store
+}
 
 export function runWithOllamaHost<T>(host: string, fn: () => Promise<T>, threadsFor?: (model: string) => number | undefined): Promise<T> {
   return hostScope.run({ host, threadsFor }, fn)
@@ -83,15 +102,19 @@ export const config = {
   ollama: {
     /** Lu à chaque appel : passe de l'Ollama de Windows à celui de Jaris sans redémarrer (étape 336). */
     get host(): string {
-      return hostScope.getStore()?.host ?? activeOllamaHost
+      return currentScope()?.host ?? activeOllamaHost
+    },
+    /** L'Ollama de CE PC, quelle que soit la machine connectée (étape 437) : sa surveillance, sa réparation. */
+    get localHost(): string {
+      return activeOllamaHost
     },
     /** Étape 377 : vrai pendant un travail envoyé à un Ollama d'une autre machine (rien de ce PC ne s'y applique). */
     get remote(): boolean {
-      return Boolean(hostScope.getStore())
+      return Boolean(currentScope())
     },
     /** Étape 387 : fils de calcul demandés pour ce modèle pendant un travail sur une autre machine (sinon rien). */
     threadsFor(model: string): number | undefined {
-      return hostScope.getStore()?.threadsFor?.(model)
+      return currentScope()?.threadsFor?.(model)
     },
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
     /**

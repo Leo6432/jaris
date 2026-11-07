@@ -1,6 +1,7 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
+import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
 import { contextBridge, ipcRenderer } from 'electron'
 import { ipcErrorMessage } from '../shared/ipcError'
@@ -296,7 +297,10 @@ const api = {
   duelHistory: (): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistory),
   duelHistoryDelete: (which: string[] | 'all'): Promise<DuelHistoryEntry[]> => invoke(IPC_CHANNELS.duelHistoryDelete, which),
   duelExportVotes: (): Promise<DuelExportResult> => invoke(IPC_CHANNELS.duelExportVotes),
-  duelRemoteSave: (settings: DuelRemoteSettings | null): Promise<DuelRemoteSettings | null> => invoke(IPC_CHANNELS.duelRemoteSave, settings),
+  machineGet: (): Promise<MachineView> => invoke(IPC_CHANNELS.machineGet),
+  machineConnect: (settings: RemoteMachineSettings): Promise<MachineView> => invoke(IPC_CHANNELS.machineConnect, settings),
+  machineDisconnect: (): Promise<MachineView> => invoke(IPC_CHANNELS.machineDisconnect),
+  onMachineChanged: (cb: (view: MachineView) => void) => subscribe(IPC_CHANNELS.machineChanged, cb),
   duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),
   duelHistoryCode: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryCode, voteId, side),
   duelSideCode: (side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelSideCode, side),

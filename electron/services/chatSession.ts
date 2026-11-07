@@ -5,7 +5,7 @@ import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
 import { appendConversationEntry, getActiveConversationId, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
-import { getLiveGpuStatus } from './hardwareScan'
+import { getModelGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
 import { readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
@@ -268,7 +268,7 @@ class ChatSession {
 
     // Même sécurité thermique qu'à la voix : inutile de lancer une inférence sur un GPU déjà trop chaud.
     // Le relevé est réutilisé par converse() plus bas au lieu d'en relancer un second.
-    const live = await getLiveGpuStatus()
+    const live = await getModelGpuStatus()
     const gpuStatus = checkGpuTempSafety(live.tempC)
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
       this.running.delete(controller)

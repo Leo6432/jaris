@@ -85,7 +85,7 @@ function loadSystemControl(exitCode) {
   return loadTsModule('electron/services/systemControl.ts', {
     child_process: fakeChildProcess,
     './resourceMonitor': { getSystemLoad: async () => ({ cpuPct: 0, ramPct: 0 }) },
-    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) }
+    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }), getModelGpuStatus: async () => ({ freeVramGb: null, tempC: null }) }
   })
 }
 

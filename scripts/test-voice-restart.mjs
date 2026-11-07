@@ -50,7 +50,7 @@ const { VoicePipeline } = loadTsModule('electron/services/voicePipeline.ts', {
   },
   './memoryExtractor': { cancelMemoryExtraction: noop, extractMemoryFromExchange: noop },
   './profileStore': { getProfile: async () => null },
-  './hardwareScan': { getLiveGpuStatus: async () => null },
+  './hardwareScan': { getLiveGpuStatus: async () => null, getModelGpuStatus: async () => null },
   './resourceMonitor': { checkGpuTempSafety: () => null },
   './transcriptCorrector': { CORRECTION_SCHEMA: {}, correctTranscript: async (text) => text },
   './ollama': { structuredChat: async () => '' },

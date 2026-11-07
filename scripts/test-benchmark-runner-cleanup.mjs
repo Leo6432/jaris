@@ -15,6 +15,10 @@ import ts from 'typescript'
  * exercent runQuickSetup avec un `deleteModel`/`pullModelIfMissing` simulés (aucun vrai réseau, aucun vrai
  * Ollama) pour vérifier QUELS modèles sont réellement supprimés, sans jamais toucher au disque ou au réseau.
  */
+// Étape 437 : la machine louée connectée (aucune par défaut ; un test la connecte pour vérifier où part l'analyse).
+let connectedForTest = null
+const remoteMachineModule = { connectedMachine: () => connectedForTest, MACHINE_DISK_RESERVED_GB: 10 }
+
 function loadModule(relativePath, requireShim) {
   const source = ts.transpileModule(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
@@ -87,7 +91,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     if (id === 'child_process') return { spawn: () => { throw new Error('spawn ne doit jamais être appelé par runQuickSetup') } }
     if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
-    if (id.endsWith('config')) return { config: {} }
+    if (id.endsWith('config')) return { config: {}, runWithLocalOllama: (fn) => fn() }
+    if (id === './remoteMachine') return remoteMachineModule
     if (id === './ollama') return ollamaModule
     if (id === './hardwareScan') return hardwareScanModule
     if (id === './profileStore') return profileStoreModule
@@ -407,10 +412,11 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     procs.push(proc)
     return proc
   }
-  const { testUnscoredModels, stopModelTest } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
+  const { testUnscoredModels, stopModelTest, runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'child_process') return { spawn: fakeSpawn }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
-    if (id.endsWith('config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
+    if (id.endsWith('config')) return { config: { ollama: { host: 'http://10.0.0.5:11434', localHost: 'http://127.0.0.1:11434' } }, runWithLocalOllama: (fn) => fn() }
+    if (id === './remoteMachine') return remoteMachineModule
     if (id === './ollama')
       return {
         ModelTooLargeError: class extends Error {},
@@ -478,4 +484,23 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   const before = procs.length
   assert.deepEqual((await testUnscoredModels(() => {}, ['inconnu:1b'])).models, [], 'rien de valable : rien n’est lancé')
   assert.equal(procs.length, before)
+
+  // Étape 437 : machine louée connectée — le test lui donne sa mémoire et son disque, et ne répare jamais le dossier de
+  // modèles de CE PC (réparation inutile, et sur le mauvais Ollama).
+  connectedForTest = { host: 'http://10.0.0.5:11434', vramGb: 80, ramGb: 64, diskGb: 100 }
+  try {
+    const repairsBefore = events.filter((e) => e.startsWith('repair')).length
+    const onMachine = testUnscoredModels(() => {})
+    await new Promise((resolve) => setImmediate(resolve))
+    const env = procs.at(-1).env
+    assert.equal(env.JARIS_MACHINE, 'http://10.0.0.5:11434')
+    assert.deepEqual([env.JARIS_MACHINE_VRAM_GB, env.JARIS_MACHINE_RAM_GB, env.JARIS_MACHINE_DISK_GB, env.JARIS_RAM_SAFETY_MARGIN_GB], ['80', '64', '100', '4'])
+    assert.equal(events.filter((e) => e.startsWith('repair')).length, repairsBefore, 'pas de réparation du dossier de ce PC')
+    procs.at(-1).emit('close', 0)
+    await onMachine
+    // Et la configuration de ce PC ne se reteste jamais pendant que les modèles tournent ailleurs.
+    await assert.rejects(runQuickSetup(() => {}), /déconnecte-la/)
+  } finally {
+    connectedForTest = null
+  }
 })

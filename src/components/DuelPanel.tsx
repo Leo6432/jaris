@@ -240,36 +240,15 @@ function SeriesStatus({ view }: { view: DuelSessionView }): JSX.Element | null {
 
 /**
  * Étape 388 (Léo : « si j'ai plus de crédit, un système pour que je reprenne ») : la machine louée ne répond plus
- * (crédit épuisé, machine rendue). Les duels finis restent sur ce PC ; la série reprend sur une nouvelle machine dès
- * que son adresse est donnée ici.
+ * (crédit épuisé, machine rendue). Les duels finis restent sur ce PC. Étape 437 : la nouvelle machine se connecte sur la
+ * page Machine (barre de gauche) ; la série reprend ensuite sur la machine connectée.
  */
 function SeriesMoveBox({ view, onMoved }: { view: DuelSessionView; onMoved: (next: DuelSessionView) => void }): JSX.Element | null {
   const down = view.series?.waiting === 'ollama'
   const [open, setOpen] = useState(false)
-  const [host, setHost] = useState('')
-  const [vram, setVram] = useState('')
-  const [ram, setRam] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const shown = down || open
-
-  useEffect(() => {
-    if (!shown) return
-    let alive = true
-    void window.jaris
-      .getProfile()
-      .then((profile) => {
-        const saved = profile?.duelRemote
-        if (!alive || !saved) return
-        setHost((current) => current || saved.host)
-        setVram((current) => current || String(saved.vramGb))
-        setRam((current) => current || String(saved.ramGb))
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [shown])
 
   if (!view.remote || !view.series) return null
 
@@ -277,7 +256,6 @@ function SeriesMoveBox({ view, onMoved }: { view: DuelSessionView; onMoved: (nex
     setSaving(true)
     setError(null)
     try {
-      await window.jaris.duelRemoteSave({ enabled: true, host, vramGb: typedNumber(vram), ramGb: typedNumber(ram) })
       onMoved(await window.jaris.duelSeriesMove())
       setOpen(false)
     } catch (err) {
@@ -301,23 +279,9 @@ function SeriesMoveBox({ view, onMoved }: { view: DuelSessionView; onMoved: (nex
       </h2>
       {down && <p className="duel-home__note">{t('duel.move.downLead')}</p>}
       <p className="duel-home__note">{t('duel.move.lead')}</p>
-      <div className="duel-remote__fields">
-        <label className="duel-remote__field duel-remote__field--host">
-          <span>{t('duel.remote.address')}</span>
-          <input type="url" value={host} spellCheck={false} autoComplete="off" onChange={(event) => setHost(event.target.value)} />
-        </label>
-        <label className="duel-remote__field">
-          <span>{t('duel.remote.vram')}</span>
-          <input type="text" inputMode="decimal" value={vram} onChange={(event) => setVram(event.target.value)} />
-        </label>
-        <label className="duel-remote__field">
-          <span>{t('duel.remote.ram')}</span>
-          <input type="text" inputMode="decimal" value={ram} onChange={(event) => setRam(event.target.value)} />
-        </label>
-      </div>
       <div className="duel-remote__actions">
         <button type="button" className="duel-btn duel-btn--primary" onClick={() => void move()} disabled={saving}>
-          {saving ? t('duel.remote.saving') : t('duel.move.go')}
+          {saving ? t('machine.connecting') : t('duel.move.go')}
         </button>
         {!down && (
           <button type="button" className="duel-btn" onClick={() => setOpen(false)} disabled={saving}>
@@ -608,124 +572,19 @@ interface ModelPickerProps {
  * ne peut pas, il est en gris mais il est quand même présent ». Boutons à cocher (role="checkbox") plutôt que des
  * <input> : la règle générale des champs de saisie leur imposerait un cadre carré.
  */
-/** Un nombre tapé (« 288 », « 7,5 ») ; vide ou illisible = NaN, refusé par le main avec un message clair. */
-function typedNumber(value: string): number {
-  const text = value.trim().replace(',', '.')
-  return text === '' ? Number.NaN : Number(text)
-}
-
 /**
- * Étape 377 (Léo : « tout se passe sur mon PC mais les modèles tournent sur leur site ») : faire tourner les modèles des
- * duels sur une autre machine (une carte louée sur RunPod…). Jaris, ses outils et les actions restent sur ce PC.
+ * Étape 377, puis 437 : la machine des modèles ne se règle plus ici (page Machine, barre de gauche). Le Duel dit
+ * seulement où ils tournent, et pourquoi la machine connectée ne répond pas.
  */
-function DuelRemoteBox({ remote, onChanged }: { remote: DuelPlan['remote'] | undefined; onChanged: () => void }): JSX.Element {
-  const [away, setAway] = useState(false)
-  const [host, setHost] = useState('')
-  const [vram, setVram] = useState('')
-  const [ram, setRam] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    void window.jaris
-      .getProfile()
-      .then((profile) => {
-        const saved = profile?.duelRemote
-        if (!alive || !saved) return
-        setAway(saved.enabled)
-        setHost(saved.host)
-        setVram(String(saved.vramGb))
-        setRam(String(saved.ramGb))
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const save = async (enabled: boolean): Promise<void> => {
-    setSaving(true)
-    setError(null)
-    try {
-      const saved = await window.jaris.duelRemoteSave({ enabled, host, vramGb: typedNumber(vram), ramGb: typedNumber(ram) })
-      if (saved) setHost(saved.host)
-      onChanged()
-    } catch (err) {
-      setError(ipcErrorMessage(err))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const choose = (next: boolean): void => {
-    setAway(next)
-    setError(null)
-    // Revenir à ce PC s'applique tout de suite ; une autre machine attend « Enregistrer et tester ».
-    if (!next) void save(false)
-  }
-
+function DuelMachineNote({ remote }: { remote: DuelPlan['remote'] | undefined }): JSX.Element | null {
+  if (!remote) return null
   return (
-    <section className="duel-home__section duel-remote" aria-labelledby="duel-remote-title">
-      <h2 id="duel-remote-title" className="duel-home__label">
-        {t('duel.remote.title')}
-      </h2>
-      <div className="duel-sizes duel-remote__mode" role="radiogroup" aria-labelledby="duel-remote-title">
-        {([false, true] as const).map((option) => (
-          <button
-            key={String(option)}
-            type="button"
-            role="radio"
-            aria-checked={away === option}
-            className={`duel-size${away === option ? ' duel-size--selected' : ''}`}
-            onClick={() => choose(option)}
-            disabled={saving}
-          >
-            {t(option ? 'duel.remote.away' : 'duel.remote.here')}
-          </button>
-        ))}
-      </div>
-      {away && (
-        <>
-          <p className="duel-home__note">{t('duel.remote.lead')}</p>
-          <div className="duel-remote__fields">
-            <label className="duel-remote__field duel-remote__field--host">
-              <span>{t('duel.remote.address')}</span>
-              <input
-                type="url"
-                value={host}
-                placeholder="https://abc123-11434.proxy.runpod.net"
-                spellCheck={false}
-                autoComplete="off"
-                onChange={(event) => setHost(event.target.value)}
-              />
-            </label>
-            <label className="duel-remote__field">
-              <span>{t('duel.remote.vram')}</span>
-              <input type="text" inputMode="decimal" value={vram} placeholder="288" onChange={(event) => setVram(event.target.value)} />
-            </label>
-            <label className="duel-remote__field">
-              <span>{t('duel.remote.ram')}</span>
-              <input type="text" inputMode="decimal" value={ram} placeholder="188" onChange={(event) => setRam(event.target.value)} />
-            </label>
-          </div>
-          <div className="duel-remote__actions">
-            <button type="button" className="duel-btn" onClick={() => void save(true)} disabled={saving}>
-              {saving ? t('duel.remote.saving') : t('duel.remote.save')}
-            </button>
-            {!saving && !error && remote?.version && (
-              <span className="duel-remote__status" role="status">
-                {t('duel.remote.connected', { version: remote.version })}
-              </span>
-            )}
-          </div>
-          {(error ?? (!saving ? remote?.error : null)) && (
-            <p className="duel-home__note duel-home__note--warn" role="alert">
-              {error ?? remote?.error}
-            </p>
-          )}
-          <p className="duel-home__note">{t('duel.remote.privacy')}</p>
-        </>
+    <section className="duel-home__section duel-remote">
+      <p className="duel-home__note">{t('duel.onMachine', { host: remote.host })}</p>
+      {remote.error && (
+        <p className="duel-home__note duel-home__note--warn" role="alert">
+          {remote.error}
+        </p>
       )}
     </section>
   )
@@ -1536,6 +1395,15 @@ export default function DuelPanel(): JSX.Element {
   const [plan, setPlan] = useState<DuelPlan | null>(null)
   // Étape 377 : relance le calcul du plan quand la machine des modèles change.
   const [planVersion, setPlanVersion] = useState(0)
+  // Étape 437 : connecter ou déconnecter la machine louée (page Machine) change où tournent les duels : on recalcule.
+  // Seulement quand l'état connecté change : le téléchargement des modèles envoie des dizaines d'avancements.
+  useEffect(() => {
+    let lastConnected: boolean | null = null
+    return window.jaris.onMachineChanged((view) => {
+      if (lastConnected !== null && lastConnected !== view.connected) setPlanVersion((n) => n + 1)
+      lastConnected = view.connected
+    })
+  }, [])
   const [size, setSize] = useState<number>(DUEL_DEFAULT_SIZE)
   /** Étape 363 : modèles au hasard, ou choisis à la main. */
   const [pickMode, setPickMode] = useState<'random' | 'fast' | 'manual'>('random')
@@ -1934,7 +1802,7 @@ export default function DuelPanel(): JSX.Element {
             </div>
           </section>
 
-          <DuelRemoteBox remote={plan?.remote} onChanged={() => setPlanVersion((n) => n + 1)} />
+          <DuelMachineNote remote={plan?.remote} />
 
           <section className="duel-home__section" aria-labelledby="duel-size-title">
             <h2 id="duel-size-title" className="duel-home__label">

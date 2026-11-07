@@ -696,6 +696,25 @@ export interface LiveGpuStatus {
  * tenu de ce qui tourne en parallèle (jeu, navigateur...) sur la machine, sans jamais changer les paliers
  * eux-mêmes.
  */
+/**
+ * Étape 437 : l'état de la carte qui fait tourner LES MODÈLES. Sur une machine louée connectée, la carte de ce PC n'y
+ * est pour rien : ni sa mémoire libre (un jeu lancé) ni sa chaleur ne doivent faire prendre un modèle plus petit.
+ */
+export async function getModelGpuStatus(): Promise<LiveGpuStatus> {
+  return modelsRemote() ? { freeVramGb: null, tempC: null } : getLiveGpuStatus()
+}
+
+/** Étape 437 : la taille d'un modèle de Jaris (Go), pour les fils de calcul sur une machine louée ; inconnue : `undefined`. */
+export function modelSizeGb(model: string): number | undefined {
+  return ALL_MODELS.find((c) => c.model === model || `${c.model}:latest` === model)?.vramGb
+}
+
+/** Branché par main.ts sur `config.ollama.remote` (lu à l'appel, dans la portée du travail en cours). */
+let modelsRemote: () => boolean = () => false
+export function setModelsRemoteSource(source: () => boolean): void {
+  modelsRemote = source
+}
+
 export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
   try {
     // Étape 346 : appelé avant CHAQUE réponse — un pilote NVIDIA bloqué ne doit jamais bloquer Jaris avec lui.
@@ -1616,8 +1635,11 @@ const TRACE_ROLE: Record<string, TestRole> = { question: 'conversation', demande
  * (`ms`), mesurée sur le PC de Léo. Toutes les campagnes comptent (le temps ne dépend pas de la version du test) ;
  * un délai dépassé non, sa durée est celle du délai, pas du modèle.
  */
-export function caseTimesFromTraces(tracesText: string): CaseTimes {
+export function caseTimesFromTraces(tracesText: string, machine: string | null = null): CaseTimes {
   const times: CaseTimes = new Map()
+  // Étape 437 : seulement les campagnes faites sur la machine qui fera le prochain test — une carte louée va bien plus
+  // vite que celle de ce PC. `machine.rented` (benchmark-models.mjs) : l'adresse de la machine louée, absente = ce PC.
+  let campaignMachine: string | null = null
   for (const line of tracesText.split('\n')) {
     if (!line.trim()) continue
     let row: Record<string, unknown>
@@ -1626,6 +1648,12 @@ export function caseTimesFromTraces(tracesText: string): CaseTimes {
     } catch {
       continue
     }
+    if (row.type === 'campagne') {
+      const rented = (row.machine as { rented?: unknown } | undefined)?.rented
+      campaignMachine = typeof rented === 'string' && rented ? rented : null
+      continue
+    }
+    if (campaignMachine !== machine) continue
     const role = TRACE_ROLE[String(row.type)]
     if (!role || typeof row.ms !== 'number' || !(row.ms > 0) || row.timeout) continue
     const key = `${role}|${String(row.model)}`

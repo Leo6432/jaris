@@ -858,7 +858,19 @@ async function listInstalledModels() {
  * détecté (ou en cas d'erreur, ou carte AMD/Intel — non détectées par cette commande) : main() retombe
  * alors sur un budget basé sur la RAM seule, jamais sur "aucune limite".
  */
+/**
+ * Étape 437 : test lancé sur la machine louée de la page Machine (son adresse dans JARIS_MACHINE). Ni sa carte, ni sa
+ * mémoire, ni son disque ne se lisent d'ici : Jaris donne ceux que Léo a indiqués, et la place libre se recalcule depuis
+ * son Ollama (taille du disque moins ses modèles).
+ */
+const MACHINE = process.env.JARIS_MACHINE?.trim() || null
+const machineNumber = (name) => {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
 async function detectVramGb() {
+  if (MACHINE) return machineNumber('JARIS_MACHINE_VRAM_GB')
   try {
     const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits', { windowsHide: true })
     const mib = parseInt(stdout.trim().split('\n')[0], 10)
@@ -870,6 +882,7 @@ async function detectVramGb() {
 
 /** Nom de la carte graphique NVIDIA (pour les traces), `null` sans carte NVIDIA. */
 async function detectGpuName() {
+  if (MACHINE) return `machine louée (${MACHINE})`
   try {
     const { stdout } = await execAsync('nvidia-smi --query-gpu=name --format=csv,noheader', { windowsHide: true })
     return stdout.trim().split('\n')[0] || null
@@ -880,6 +893,7 @@ async function detectGpuName() {
 
 /** RAM totale de la machine (Go) : contrairement à la VRAM, Node sait la lire directement, sans commande externe. */
 function detectRamGb() {
+  if (MACHINE) return machineNumber('JARIS_MACHINE_RAM_GB') ?? totalmem() / 1024 ** 3
   return totalmem() / 1024 ** 3
 }
 
@@ -900,7 +914,26 @@ const DISK_SAFETY_MARGIN_GB = Number(process.env.JARIS_DISK_SAFETY_MARGIN_GB ?? 
  * `fs.statfsSync` échoue (plateforme non supportée, permissions) : l'appelant ignore alors ce filtre plutôt
  * que de bloquer tout téléchargement sur une valeur inconnue.
  */
+let machineFreeDiskGb = null
+
+/** Étape 437 : relit la place libre de la machine louée (taille donnée par Léo, moins ses modèles et la part du système). */
+async function refreshMachineFreeDisk() {
+  if (!MACHINE) return
+  const diskGb = machineNumber('JARIS_MACHINE_DISK_GB')
+  if (diskGb === null) return
+  try {
+    const res = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) return
+    const data = await res.json()
+    const usedGb = (data.models ?? []).reduce((sum, m) => sum + (typeof m.size === 'number' ? m.size : 0), 0) / 1024 ** 3
+    machineFreeDiskGb = Math.max(0, diskGb - (machineNumber('JARIS_MACHINE_DISK_RESERVED_GB') ?? 10) - usedGb)
+  } catch {
+    // Pas de réponse : la dernière valeur connue reste.
+  }
+}
+
 function detectFreeDiskGb() {
+  if (MACHINE) return machineFreeDiskGb
   const candidates = [process.env.OLLAMA_MODELS?.trim(), join(homedir(), '.ollama', 'models'), homedir()].filter(Boolean)
   for (const dir of candidates) {
     try {
@@ -973,6 +1006,7 @@ class DiskFullError extends Error {
  */
 async function pullModel(model, budgetGb, diskCtx, onBucket) {
   console.log(`Téléchargement de ${model}…`)
+  await refreshMachineFreeDisk()
   const controller = new AbortController()
   const res = await fetch(`${OLLAMA_HOST}/api/pull`, {
     method: 'POST',
@@ -1672,7 +1706,10 @@ async function main() {
       cpuCount: cpus().length,
       ramGb: Number(ramGb.toFixed(1)),
       vramGb: vramGb === null ? null : Number(vramGb.toFixed(1)),
-      gpu: await detectGpuName()
+      gpu: await detectGpuName(),
+      // Étape 437 : l'adresse de la machine louée qui a fait ce test (`null` : ce PC). Les durées estimées n'utilisent que
+      // les temps mesurés sur la machine qui fera le prochain test (caseTimesFromTraces, hardwareScan.ts).
+      rented: MACHINE
     },
     numCtx: CONVERSATION_NUM_CTX,
     simulatedNow: SCENARIO_NOW.toString(),
@@ -1694,6 +1731,7 @@ async function main() {
   // Vérifié une première fois ici pour le pré-filtre/l'estimation ci-dessous, puis RE-vérifié en direct par
   // pullModel() avant chaque téléchargement individuel (voir son commentaire) : contrairement à la VRAM/RAM,
   // l'espace disque diminue au fil du run, un modèle en fin de liste doit voir l'espace VRAIMENT restant.
+  await refreshMachineFreeDisk()
   const freeDiskGbAtStart = detectFreeDiskGb()
   console.log(
     freeDiskGbAtStart !== null
@@ -2229,7 +2267,9 @@ async function main() {
   // Étape 230 : registre des modèles que le test a téléchargés LUI-MÊME, gardé à côté du fichier de résultats.
   // Sans lui, un test coupé (Jaris fermé, PC éteint) juste après un téléchargement laissait ce modèle sur le
   // disque, et la reprise le prenait ensuite pour un modèle installé par Léo : jamais supprimé (jusqu'à 25 Go).
-  const ledgerPath = `${RESULTS_PATH}.telecharges.json`
+  // Étape 437 : un registre par machine — sinon un test sur la machine louée effaçait des modèles de CE PC (ou l'inverse)
+  // en les prenant pour « téléchargés par le test ».
+  const ledgerPath = MACHINE ? `${RESULTS_PATH}.telecharges-${MACHINE.replace(/[^a-z0-9]+/gi, '_')}.json` : `${RESULTS_PATH}.telecharges.json`
   const readLedger = () => {
     try {
       return new Set(JSON.parse(readFileSync(ledgerPath, 'utf-8')))

@@ -59,7 +59,7 @@ function loadRunEngine() {
     path: nodeRequire('path'),
     './dataLocation': { getDataRoot: () => projectRoot },
     './download': { downloadToFile: async () => 0 },
-    './ollama': { unloadOllamaModels: async () => [] },
+    '../config': { runWithLocalOllama: (fn) => fn() }, './ollama': { unloadOllamaModels: async () => [] },
     './hardwareScan': { detectGpu: async () => ({ name: null, vramGb: 8 }) },
     './systemResources': { detectRamGb: () => 32 },
     '../../shared/imageModel': loadTsModule('shared/imageModel.ts'),

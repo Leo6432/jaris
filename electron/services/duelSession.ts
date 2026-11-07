@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { config, runWithLocalOllama, runWithOllamaHost } from '../config'
+import { connectedMachine, machineFreeDiskGb } from './remoteMachine'
 import { converse, type ConverseRestrictions } from './assistant'
 import { generateApp } from './codeGenerator'
 import { createGeneratedAppPreview } from './generatedAppPreview'
@@ -71,12 +72,9 @@ import {
   nextDuelPair,
   pairKey,
   rankDuels,
-  normalizeRemoteOllamaHost,
-  parseDuelRemote,
   selectDuelModels,
   type DuelCategory,
   type DuelOutcome,
-  type DuelRemoteSettings,
   type DuelSide,
   type DuelVoteSide
 } from '../../shared/duel'
@@ -335,6 +333,15 @@ function sideView(side: SideState): DuelSideView {
   return view
 }
 
+/**
+ * Étape 437 : une session de duels en cours sur CE PC (pas terminée). Connecter une machine pendant ce temps enverrait la
+ * suite de la session ailleurs : la page Machine attend. Une session sur une machine louée garde sa machine (onModels) ;
+ * en connecter une autre sert justement à la reprendre ailleurs (moveDuelSeries).
+ */
+export function localDuelSessionActive(): boolean {
+  return session !== null && session.phase !== 'ended' && session.remote === null
+}
+
 export function getDuelView(): DuelSessionView | null {
   if (!session) return null
   const round = session.round
@@ -441,19 +448,21 @@ async function candidatesFor(category: DuelCategory, profile: Profile | null, re
 
 /** Ce qui doit parler à l'Ollama des modèles : celui de l'autre machine pendant une session à distance, sinon ce PC. */
 function onModels<T>(remote: RemoteMachine | null, fn: () => Promise<T>, sizes?: ReadonlyMap<string, number>): Promise<T> {
-  if (!remote) return fn()
+  // Étape 437 : une session sur CE PC y reste, même si une machine louée est connectée en route.
+  if (!remote) return runWithLocalOllama(fn)
   // Étape 387 : quand les modèles écrivent, peu de fils de calcul pour ceux qui tiennent entiers sur la carte.
   const threadsFor = sizes ? (model: string) => remoteThreadsFor(sizes.get(model) ?? Number.NaN, remote.machine.vramGb) : undefined
   return runWithOllamaHost(remote.host, fn, threadsFor)
 }
 
 /**
- * Étape 377 : l'autre machine réglée et activée, avec la version de son Ollama — ou l'erreur qui dit pourquoi elle ne
- * répond pas (`machine` est alors celle qu'a donnée Léo, sans version : rien ne peut commencer).
+ * Étape 377 : l'autre machine, avec la version de son Ollama — ou l'erreur qui dit pourquoi elle ne répond pas (`machine`
+ * est alors celle qu'a donnée Léo, sans version : rien ne peut commencer). Étape 437 : c'est la machine connectée de la
+ * page Machine (remoteMachine.ts) ; le Duel n'a plus son propre réglage.
  */
-async function remoteMachine(profile: Profile | null): Promise<{ remote: RemoteMachine; error: string | null } | null> {
-  const settings = parseDuelRemote(profile?.duelRemote)
-  if (!settings?.enabled) return null
+async function remoteMachine(): Promise<{ remote: RemoteMachine; error: string | null; diskGb: number } | null> {
+  const settings = connectedMachine()
+  if (!settings) return null
   let version: string | null = null
   let error: string | null = null
   try {
@@ -461,46 +470,20 @@ async function remoteMachine(profile: Profile | null): Promise<{ remote: RemoteM
   } catch (err) {
     error = err instanceof Error ? err.message : String(err)
   }
-  return { remote: { host: settings.host, machine: { vramGb: settings.vramGb, ramGb: settings.ramGb, ollamaVersion: version } }, error }
-}
-
-/**
- * Étape 377 : enregistre la machine des modèles des duels. Les réglages viennent de l'écran : revérifiés ici (adresse
- * web, mémoire plausible). Désactiver garde l'adresse déjà enregistrée, pour ne pas la retaper ; `null` l'oublie.
- */
-export async function saveDuelRemote(value: unknown): Promise<DuelRemoteSettings | null> {
-  if (value === null) {
-    await patchProfile({ duelRemote: undefined })
-    return null
-  }
-  if (!value || typeof value !== 'object') throw new Error(t('duel.error.badRequest'))
-  const raw = value as Record<string, unknown>
-  const parsed = parseDuelRemote(raw)
-  if (parsed) {
-    await patchProfile({ duelRemote: parsed })
-    return parsed
-  }
-  if (raw.enabled === true) {
-    const host = typeof raw.host === 'string' ? normalizeRemoteOllamaHost(raw.host) : null
-    throw new Error(t(host ? 'duel.remote.badNumbers' : 'duel.remote.badAddress'))
-  }
-  const previous = parseDuelRemote((await getProfile())?.duelRemote)
-  const next = previous ? { ...previous, enabled: false } : undefined
-  await patchProfile({ duelRemote: next })
-  return next ?? null
+  return { remote: { host: settings.host, machine: { vramGb: settings.vramGb, ramGb: settings.ramGb, ollamaVersion: version } }, error, diskGb: settings.diskGb }
 }
 
 /** Ce qu'une session proposerait, taille par taille, avant de la lancer : rien n'est téléchargé ici. */
 export async function planDuel(category: DuelCategory): Promise<DuelPlan> {
   const profile = await getProfile()
-  const away = await remoteMachine(profile)
+  const away = await remoteMachine()
   const remote = away?.remote ?? null
   const reachable = !away?.error
   const [candidates, installed, freeDiskGb, machine, list] = await Promise.all([
     candidatesFor(category, profile, remote),
     reachable ? onModels(remote, installedModelsSeen) : Promise.resolve([] as string[]),
-    // Le disque de l'autre machine n'est pas connu : son Ollama refuse lui-même ce qui ne tient pas.
-    remote ? Promise.resolve(null) : detectFreeDiskGb().catch(() => null),
+    // Étape 437 : le disque de la machine louée est connu (taille donnée sur la page Machine, moins ses modèles).
+    remote ? (reachable && connectedMachine() ? machineFreeDiskGb(connectedMachine()!) : Promise.resolve(null)) : detectFreeDiskGb().catch(() => null),
     duelMachine(remote?.machine),
     getDuelModelList(category, profile, remote?.machine)
   ])
@@ -577,7 +560,7 @@ export async function startDuel(
     if (!isDuelSeriesCount(seriesPerModel)) throw new Error(t('duel.error.badRequest'))
   }
   const profile = await getProfile()
-  const away = await remoteMachine(profile)
+  const away = await remoteMachine()
   if (away?.error) throw new Error(away.error)
   const remote = away?.remote ?? null
   const candidates = await candidatesFor(category, profile, remote)
@@ -2048,7 +2031,7 @@ export async function moveDuelSeries(): Promise<DuelSessionView> {
   const current = session
   const series = current?.series
   if (!current || !series || !current.batch || current.phase !== 'ready') throw new Error(t('duel.error.noSeries'))
-  const away = await remoteMachine(await getProfile())
+  const away = await remoteMachine()
   if (!away) throw new Error(t('duel.move.noRemote'))
   if (away.error) throw new Error(t('duel.remote.unreachable', { host: away.remote.host }))
   if (session !== current || current.series !== series) throw new Error(t('duel.error.noSeries'))

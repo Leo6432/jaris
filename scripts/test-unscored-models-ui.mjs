@@ -28,6 +28,9 @@ import UnscoredModelsTest from './src/components/UnscoredModelsTest'
 window.jaris = {
   getUnscoredModels: () => Promise.resolve([{ model: 'ministral-3:14b', needs: [{ test: 'tools', reason: 'redo' }] }, { model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }] }]),
   onModelBenchmarkLine: (cb) => { window.__line = cb; return () => {} },
+  // Étape 437 : où se fera le test (ce PC ici).
+  machineGet: async () => ({ connected: false, saved: null }),
+  onMachineChanged: () => () => {},
   testUnscoredModels: () => new Promise((resolve) => { window.__finish = () => resolve({ models: [], resultsPath: 'x' }) }),
   showUnscoredResults: () => {}
 }

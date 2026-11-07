@@ -107,7 +107,7 @@ function loadVideo({ vramGb = 8, ramGb = 32, platform = 'win32', holdEngine = fa
   const common = {
     child_process: fakeChildProcess,
     './dataLocation': { getDataRoot: () => dataRoot },
-    './ollama': {
+    '../config': { runWithLocalOllama: (fn) => fn() }, './ollama': {
       unloadOllamaModels: async () => {
         events.push('unload')
         return []

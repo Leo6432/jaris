@@ -78,7 +78,7 @@ function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = nul
       pushSessionExchange: (prompt, reply) => { calls.exchanges.push([prompt, reply]) }
     },
     './memoryExtractor': { extractMemoryFromExchange: async () => {}, cancelMemoryExtraction: () => { calls.memoryCancels += 1 } },
-    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
+    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }), getModelGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
     './profileStore': { getProfile: async () => null },
     './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok', message: '' }) },
     './imageGenerator': {

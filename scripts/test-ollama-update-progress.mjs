@@ -182,7 +182,7 @@ function setupMachine({ latest = '0.40.5', installed = null, broken = [], corrup
     if (id.endsWith('/storageRoot')) return { downloadsDir: () => root, getStorageRoot: () => null }
     if (id.endsWith('/config')) {
       return {
-        config: { ollama: { get host() { return machine.host } } },
+        config: { ollama: { get host() { return machine.host }, get localHost() { return machine.host } } },
         setOllamaHost: (host) => (machine.host = host),
         WINDOWS_OLLAMA_HOST: 'http://127.0.0.1:11434'
       }

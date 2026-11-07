@@ -1,6 +1,7 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelRemoteSettings, DuelSide } from '../shared/duel'
+import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
 import type { LanguageSetting } from '../shared/i18n/languages'
 import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
@@ -245,7 +246,10 @@ declare global {
       duelHistory: () => Promise<DuelHistoryEntry[]>
       duelHistoryDelete: (which: string[] | 'all') => Promise<DuelHistoryEntry[]>
       duelExportVotes: () => Promise<DuelExportResult>
-      duelRemoteSave: (settings: DuelRemoteSettings | null) => Promise<DuelRemoteSettings | null>
+      machineGet: () => Promise<MachineView>
+      machineConnect: (settings: RemoteMachineSettings) => Promise<MachineView>
+      machineDisconnect: () => Promise<MachineView>
+      onMachineChanged: (cb: (view: MachineView) => void) => () => void
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
       duelHistoryCode: (voteId: string, side: DuelSide) => Promise<string | null>
       duelSideCode: (side: DuelSide) => Promise<string | null>

@@ -2,10 +2,11 @@ import { spawn, type ChildProcess } from 'child_process'
 import { readFileSync } from 'fs'
 import { app, powerSaveBlocker } from 'electron'
 import { join } from 'path'
-import { config } from '../config'
+import { config, runWithLocalOllama } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
+import { MACHINE_DISK_RESERVED_GB, connectedMachine } from './remoteMachine'
 import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult, ModelTiers, ModelToTest } from '../../shared/ipc'
@@ -26,6 +27,19 @@ import { formatDecimal, t } from '../../shared/i18n'
  * candidats perdants.
  */
 export async function runQuickSetup(onLine: (line: string) => void, onProgress?: PullProgressListener): Promise<CapacityScanResult> {
+  // Étape 437 : la configuration choisit les modèles pour CE PC (sa carte, sa mémoire) : jamais pendant qu'une machine
+  // louée fait tourner les modèles — elle les testerait là-bas pour les choisir ici. Et pendant qu'elle tourne, la page
+  // Machine attend (isModelTestRunning) : ses téléchargements et suppressions restent sur ce PC.
+  if (connectedMachine()) throw new Error(t('machine.disconnectFirst'))
+  quickSetupRunning = true
+  try {
+    return await runWithLocalOllama(() => quickSetup(onLine, onProgress))
+  } finally {
+    quickSetupRunning = false
+  }
+}
+
+async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgressListener): Promise<CapacityScanResult> {
   onLine(t('bench.detecting'))
   // Étape 360 : les modèles déjà en service restent, sauf preuve par les duels qu'un autre est meilleur.
   const inService = await getProfile()
@@ -261,7 +275,8 @@ export function getModelsToTest(): string[] {
 export function getModelsToTestDetails(): ModelToTest[] {
   // Étape 433 : le même fichier donne aussi les temps mesurés sur ce PC, pour estimer la durée de chaque modèle.
   const traces = readCampaignTraces()
-  return describeModelsToTest(campaignCompletion(traces), caseTimesFromTraces(traces))
+  // Étape 437 : les temps de la machine qui fera le test (la machine louée connectée, sinon ce PC).
+  return describeModelsToTest(campaignCompletion(traces), caseTimesFromTraces(traces, connectedMachine()?.host ?? null))
 }
 
 /**
@@ -293,6 +308,12 @@ const STOP_TEST_WAIT_MAX_MS = 5000
  * lancement. La promesse ne se résout qu'une fois le test vraiment sorti (ou au bout de STOP_TEST_WAIT_MAX_MS) : il
  * écrit ses résultats dans le dossier des données, que « Déplacer » copie puis efface juste après.
  */
+/** Étape 437 : un test de modèles ou « Retester la configuration » est en cours (la page Machine attend sa fin). */
+let quickSetupRunning = false
+export function isModelTestRunning(): boolean {
+  return runningTest !== null || preparingTest || quickSetupRunning
+}
+
 export function stopModelTest(): Promise<void> {
   const exit = runningTestExit
   runningTest?.kill()
@@ -321,11 +342,14 @@ export async function testUnscoredModels(
   const resultsPath = unscoredResultsPath()
   if (!models.length) return { models, resultsPath }
   if (runningTest || preparingTest) throw new Error(t('bench.testRunning'))
+  // Étape 437 : la machine louée connectée fait le test (son Ollama, sa mémoire, son disque, donnés sur la page Machine) ;
+  // ce PC garde le script, ses outils et Edge. Figée au lancement : le test reste sur cette machine jusqu'au bout.
+  const machine = connectedMachine()
   // Étape 313 : Ollama doit voir ses modèles AVANT que le script en télécharge — sinon chaque modèle est téléchargé
-  // pour rien, puis « introuvable » à chaque question (dossier lu à travers une jonction, étape 289).
+  // pour rien, puis « introuvable » à chaque question (dossier lu à travers une jonction, étape 289). Seulement sur ce PC.
   preparingTest = true
   try {
-    await repairModelsViewIfNeeded()
+    if (!machine) await repairModelsViewIfNeeded()
   } finally {
     preparingTest = false
   }
@@ -335,15 +359,26 @@ export async function testUnscoredModels(
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        OLLAMA_HOST: config.ollama.host,
+        // Étape 437 : l'Ollama de la machine figée au lancement — jamais celui d'une machine connectée entre-temps.
+        OLLAMA_HOST: machine ? machine.host : config.ollama.localHost,
         JARIS_ONLY_MODELS: models.join(','),
         JARIS_RESULTS_PATH: resultsPath,
         JARIS_RESUME: '1',
         // Étape 230 : chaque modèle téléchargé pour le test est supprimé juste après (sinon ~290 Go restent).
         JARIS_DELETE_AFTER_TEST: '1',
-        JARIS_RAM_SAFETY_MARGIN_GB: '12',
+        // Un serveur loué ne fait tourner que les modèles : peu de marge à garder pour le reste.
+        JARIS_RAM_SAFETY_MARGIN_GB: machine ? '4' : '12',
         // Étape 233 : écrite dans les traces, pour savoir quelle version de Jaris a produit chaque score.
-        JARIS_APP_VERSION: app.getVersion()
+        JARIS_APP_VERSION: app.getVersion(),
+        ...(machine
+          ? {
+              JARIS_MACHINE: machine.host,
+              JARIS_MACHINE_VRAM_GB: String(machine.vramGb),
+              JARIS_MACHINE_RAM_GB: String(machine.ramGb),
+              JARIS_MACHINE_DISK_GB: String(machine.diskGb),
+              JARIS_MACHINE_DISK_RESERVED_GB: String(MACHINE_DISK_RESERVED_GB)
+            }
+          : {})
       }
     })
     runningTest = proc

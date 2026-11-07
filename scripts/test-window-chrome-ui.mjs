@@ -59,8 +59,12 @@ const known = {
   getConversationHistory: async () => [],
   // Étape 392 : une réponse du Chat qui reste en cours tant que le test ne la libère pas.
   sendChatMessage: () => new Promise((resolve) => { window.__finishChat = () => resolve({ role: 'assistant', content: 'Voilà.' }) }),
-  getMemoryGraph: async () => ({ nodes: [{ id: 'Léo', isCenter: true }, { id: 'Travail' }], links: [{ source: 'Léo', target: 'Travail' }] })
+  getMemoryGraph: async () => ({ nodes: [{ id: 'Léo', isCenter: true }, { id: 'Travail' }], links: [{ source: 'Léo', target: 'Travail' }] }),
+  // Étape 437 : la page Machine et sa pastille (les vues émises par le main passent par __machineEmit).
+  machineGet: async () => ({ saved: null, connected: false, connecting: false, version: null, error: null, models: [], pulling: null, freeDiskGb: null, busy: null }),
+  onMachineChanged: (cb) => { (window.__machineListeners ||= []).push(cb); return () => {} }
 }
+window.__machineEmit = (view) => (window.__machineListeners || []).forEach((cb) => cb(view))
 window.jaris = new Proxy(known, {
   get(target, key) {
     if (key in target) return target[key]
@@ -260,7 +264,9 @@ test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas d
     assert.ok(rail0.width <= 64, `barre d’icônes trop large : ${rail0.width}px`)
     // Étape 273 (Léo : « enlève le bouton widget en bas à gauche ») : Cerveau et Options seulement, en bas.
     // Étape 355 : le Duel rejoint les modes ; Léo : Duel et Classement derrière « … ».
-    assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 5 modes, « … » et les 2 outils sont dans la barre d’icônes')
+    // Étape 437 : Machine rejoint Cerveau et Options en bas.
+    assert.equal(await page.locator('.app-rail .rail__item').count(), 9, 'les 5 modes, « … » et les 3 outils sont dans la barre d’icônes')
+    assert.deepEqual(await page.locator('.app-rail__group--end .rail__label').allTextContents(), ['Machine', 'Cerveau', 'Options'])
     assert.equal(await page.locator('.app-rail .rail__item[title*="widget" i]').count(), 0, 'bouton Widget revenu')
     assert.equal(await page.locator('.app-rail .rail__item').first().getAttribute('title'), 'Agent vocal', 'Vocal n’est pas en premier')
     assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
@@ -394,5 +400,31 @@ test('étape 426 : dans la vraie barre latérale, la loupe de recherche est cent
     assert.equal(await page.locator('.app-sidebar .workspace__item').count(), 0)
     await page.press('.app-sidebar .workspace__search', 'Escape')
     assert.equal(await page.locator('.app-sidebar .workspace__item').count(), before)
+  })
+})
+
+// Étape 437 (Léo : « un bouton à gauche, Machine ») : trouvable dans la barre d'icônes, ouvre sa page, et une pastille
+// verte dit qu'une machine louée fait tourner les modèles.
+test('étape 437 : le bouton Machine de la barre d’icônes ouvre sa page ; une pastille quand une machine est connectée', options, async () => {
+  await withPage(async (page) => {
+    const button = page.locator('.app-rail__group--end .rail__item:has-text("Machine")')
+    await button.waitFor()
+    assert.equal(await page.locator('.rail__machine--on').count(), 0)
+    await button.click()
+    await page.waitForSelector('.machine-page')
+    assert.equal(await button.getAttribute('aria-current'), 'page')
+    assert.match(await page.textContent('.machine-page__title'), /Machine louée/)
+    // Revenir à un mode ferme la page.
+    await page.click('.app-rail .rail__item:has-text("Chat")')
+    await page.waitForSelector('.machine-page', { state: 'detached' })
+    await page.evaluate(() => window.__machineEmit({ connected: true }))
+    await page.waitForSelector('.rail__machine--on')
+    const dot = await page.$eval('.rail__machine--on', (el) => {
+      const after = getComputedStyle(el, '::after')
+      return { content: after.content, background: after.backgroundColor, width: after.width }
+    })
+    assert.equal(dot.content, '""')
+    assert.equal(dot.width, '9px')
+    assert.notEqual(dot.background, 'rgba(0, 0, 0, 0)', 'la pastille est bien colorée')
   })
 })

@@ -94,7 +94,7 @@ export function onOllamaVersionStatus(listener: (status: OllamaVersionStatus) =>
 /** Relit la version réellement en service, `null` tant qu'Ollama ne répond pas. */
 async function readLocalOllamaVersion(): Promise<string | null> {
   try {
-    const response = await fetch(`${config.ollama.host}/api/version`)
+    const response = await fetch(`${config.ollama.localHost}/api/version`)
     if (!response.ok) return null
     const version = ((await response.json()) as { version?: string }).version ?? null
     if (version) knownLocalVersion = version
@@ -354,7 +354,7 @@ async function ensureOllamaRunningOnce(log: LogFn): Promise<void> {
 
   embedded = null
   setOllamaHost(WINDOWS_OLLAMA_HOST)
-  const url = `${config.ollama.host}/api/tags`
+  const url = `${config.ollama.localHost}/api/tags`
   if (await isUp(url)) {
     void checkOllamaFreshness()
     return

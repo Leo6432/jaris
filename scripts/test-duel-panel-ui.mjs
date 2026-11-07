@@ -56,6 +56,8 @@ window.__ready = ready
 
 window.jaris = {
   onDuelChanged: (cb) => { listeners.push(cb); return () => {} },
+  // Étape 437 : connecter ou déconnecter la machine louée fait recalculer le plan du duel.
+  onMachineChanged: (cb) => { window.__machineChanged = cb; return () => {} },
   duelState: async () => window.__view,
   duelPlan: async (category) => { window.__calls.push(['plan', category]); return { ...window.__plan, category } },
   duelRankings: async () => window.__rankings,
@@ -103,11 +105,6 @@ window.jaris = {
   duelAudio: async () => null,
   duelDeleteModels: async (models) => { window.__calls.push(['delete', models]); return { deleted: models, failed: [] } },
   getProfile: async () => window.__profile ?? null,
-  duelRemoteSave: async (settings) => {
-    window.__calls.push(['remoteSave', settings])
-    if (window.__remoteSaveError) throw new Error(window.__remoteSaveError)
-    return settings
-  },
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
   duelHistoryDelete: async (which) => {
     window.__calls.push(['historyDelete', which])
@@ -267,55 +264,32 @@ test('accueil : pas assez de place sur le disque ou pas assez de modèles — on
   )
 })
 
-test('étape 377 : les modèles sur une autre machine — adresse, carte et RAM enregistrées, connexion dite, rien ne part si elle ne répond pas', options, async () => {
+// Étape 437 (Léo : « enlève dans Duel le test avec une autre machine ») : plus de réglage ici — la machine se connecte
+// sur la page Machine. Le Duel dit seulement où tournent les modèles, et pourquoi la machine ne répond pas.
+test('étape 437 : plus de réglage de machine dans le Duel ; une ligne dit où tournent les modèles', options, async () => {
   await withPage(async (page) => {
-    await page.waitForSelector('.duel-remote')
-    assert.equal(await page.locator('.duel-remote__mode .duel-size[aria-checked="true"]').textContent(), 'Sur ce PC', 'ce PC par défaut')
-    assert.equal(await page.locator('.duel-remote__fields').count(), 0, 'aucun champ tant que ce PC est choisi')
-    await page.click('.duel-remote__mode .duel-size:has-text("Sur une autre machine")')
-    assert.equal(await page.locator('.duel-remote__fields input').count(), 3)
-    assert.match(await page.textContent('.duel-remote'), /Jaris, ses outils et les actions restent sur ton PC/)
-    assert.match(await page.textContent('.duel-remote'), /passent par cette machine/)
+    await page.waitForSelector('.duel-home__start')
+    assert.equal(await page.locator('.duel-remote').count(), 0, 'sur ce PC : rien à dire')
+    assert.equal(await page.locator('.duel-remote__fields, .duel-remote__mode').count(), 0, 'plus aucun champ ni choix de machine')
+    // Connecter la machine (page Machine) fait recalculer le plan.
     const before = (await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'plan').length
-    await page.fill('.duel-remote__field--host input', 'pod123-11434.proxy.runpod.net')
-    const [vram, ram] = await page.locator('.duel-remote__field:not(.duel-remote__field--host) input').all()
-    await vram.fill('288')
-    await ram.fill('188,5')
     await page.evaluate(() => {
-      window.__plan = { ...window.__plan, machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod123-11434.proxy.runpod.net', version: '0.40.10', error: null } }
+      window.__plan = { ...window.__plan, machine: { vramGb: 80, ramGb: 64 }, remote: { host: 'http://10.0.0.5:11434', version: '0.40.4', error: null } }
+      window.__machineChanged({ connected: false })
+      window.__machineChanged({ connected: true })
     })
-    await page.click('.duel-remote__actions .duel-btn')
-    await page.waitForSelector('.duel-remote__status')
-    const saved = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'remoteSave')
-    assert.deepEqual(saved, ['remoteSave', { enabled: true, host: 'pod123-11434.proxy.runpod.net', vramGb: 288, ramGb: 188.5 }], 'nombres envoyés comme nombres, virgule comprise')
-    assert.ok((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'plan').length > before, 'le plan est recalculé pour l’autre machine')
-    assert.equal(await page.textContent('.duel-remote__status'), 'Connecté : Ollama 0.40.10.')
-    assert.equal(await page.isDisabled('.duel-home__start'), false)
-    // Revenir à ce PC s'applique tout de suite, sans perdre l'adresse.
-    await page.click('.duel-remote__mode .duel-size:has-text("Sur ce PC")')
-    await page.waitForFunction(() => window.__calls.filter((c) => c[0] === 'remoteSave').length === 2)
-    assert.equal((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'remoteSave')[1][1].enabled, false)
+    await page.waitForSelector('.duel-remote')
+    assert.ok((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'plan').length > before, 'plan recalculé à la connexion')
+    assert.match(await page.textContent('.duel-remote'), /tournent sur la machine louée \(http:\/\/10\.0\.0\.5:11434\)/)
   })
-  // Une machine enregistrée qui ne répond pas : la raison s'affiche et rien ne peut commencer.
+  // La machine connectée ne répond pas : la raison s'affiche et rien ne peut commencer.
   await withPage(
     async (page) => {
       await page.waitForSelector('.duel-remote [role="alert"]')
-      assert.equal(await page.inputValue('.duel-remote__field--host input'), 'https://pod123-11434.proxy.runpod.net', 'réglage relu au retour')
       assert.match(await page.textContent('.duel-remote [role="alert"]'), /ne répond pas/)
       assert.equal(await page.isDisabled('.duel-home__start'), true)
     },
-    "window.__profile = { name: 'Léo', duelRemote: { enabled: true, host: 'https://pod123-11434.proxy.runpod.net', vramGb: 288, ramGb: 188 } }; window.__plan = { category: 'conversation', available: 6, freeDiskGb: null, sizes: [{ count: 5, toDownload: 0, downloadGb: 0, fitsDisk: true }], machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod123-11434.proxy.runpod.net', version: null, error: 'La machine des modèles ne répond pas.' } }"
-  )
-  // Une adresse refusée par le main : son message s'affiche.
-  await withPage(
-    async (page) => {
-      await page.waitForSelector('.duel-remote')
-      await page.click('.duel-remote__mode .duel-size:has-text("Sur une autre machine")')
-      await page.click('.duel-remote__actions .duel-btn')
-      await page.waitForSelector('.duel-remote [role="alert"]')
-      assert.match(await page.textContent('.duel-remote [role="alert"]'), /Adresse invalide/)
-    },
-    "window.__remoteSaveError = 'Adresse invalide : colle l’adresse complète.'"
+    "window.__plan = { category: 'conversation', available: 6, freeDiskGb: null, sizes: [{ count: 5, toDownload: 0, downloadGb: 0, fitsDisk: true }], machine: { vramGb: 288, ramGb: 188 }, remote: { host: 'https://pod123-11434.proxy.runpod.net', version: null, error: 'La machine des modèles ne répond pas.' } }"
   )
 })
 
@@ -1189,25 +1163,19 @@ test('étape 388 : « Terminer la session » avec des duels pas votés demande c
   )
 })
 
-test('étape 388 : machine des modèles arrêtée (crédit épuisé) — rien n’est perdu, nouvelle adresse et reprise de la série', options, async () => {
+test('étapes 388 et 437 : machine des modèles arrêtée (crédit épuisé) — rien n’est perdu, nouvelle machine connectée puis reprise de la série', options, async () => {
   await withPage(
     async (page) => {
       await page.waitForSelector('.duel-move')
       const text = await page.textContent('.duel-move')
       assert.match(text, /La machine des modèles ne répond plus/)
       assert.match(text, /Rien n'est perdu : les duels finis restent ici, et tu peux les voter/)
-      // L'ancienne adresse est déjà remplie : Léo n'a qu'à la remplacer.
-      await page.waitForFunction(() => document.querySelector('.duel-move input[type=url]')?.value === 'https://old-11434.proxy.runpod.net')
-      await page.fill('.duel-move input[type=url]', '203.0.113.7:41234')
-      const inputs = page.locator('.duel-move input[inputmode=decimal]')
-      await inputs.nth(0).fill('140')
-      await inputs.nth(1).fill('129')
-      await page.getByRole('button', { name: 'Reprendre sur cette machine' }).click()
+      // Étape 437 : la nouvelle machine se connecte sur la page Machine ; ici, plus aucun champ, on reprend.
+      assert.match(text, /connecte-la dans «\sMachine\s» \(barre de gauche\)/)
+      assert.equal(await page.locator('.duel-move input').count(), 0)
+      await page.getByRole('button', { name: 'Reprendre sur la machine connectée' }).click()
       await page.waitForFunction(() => window.__calls.includes('seriesMove'))
       const calls = await page.evaluate(() => window.__calls)
-      const saved = calls.find((c) => Array.isArray(c) && c[0] === 'remoteSave')
-      assert.deepEqual(saved[1], { enabled: true, host: '203.0.113.7:41234', vramGb: 140, ramGb: 129 })
-      assert.ok(calls.indexOf(saved) < calls.indexOf('seriesMove'), 'l’adresse est enregistrée avant la reprise')
       // La série tourne de nouveau : le cadre d'alerte disparaît, un simple bouton reste.
       await page.waitForSelector('.duel-move__open')
       assert.equal(await page.locator('.duel-move').count(), 0)
@@ -1222,8 +1190,7 @@ test('étape 388 : la nouvelle machine ne répond pas — l’erreur s’affiche
   await withPage(
     async (page) => {
       await page.waitForSelector('.duel-move')
-      await page.waitForFunction(() => document.querySelector('.duel-move input[type=url]')?.value !== '')
-      await page.getByRole('button', { name: 'Reprendre sur cette machine' }).click()
+      await page.getByRole('button', { name: 'Reprendre sur la machine connectée' }).click()
       await page.waitForSelector('.duel-move [role=alert]')
       assert.match(await page.textContent('.duel-move [role=alert]'), /ne répond pas/)
       assert.ok(await page.locator('.duel-batch__item').first().isVisible())

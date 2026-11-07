@@ -48,8 +48,27 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   const [choosing, setChoosing] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
 
+  // Étape 437 : la machine louée connectée (ou non) change où le test se fera — et donc ses durées estimées.
+  const [machineHost, setMachineHost] = useState<string | null>(null)
   useEffect(() => {
     void window.jaris.getUnscoredModels().then(setModels)
+    let alive = true
+    void window.jaris
+      .machineGet()
+      .then((view) => alive && setMachineHost(view.connected ? (view.saved?.host ?? null) : null))
+      .catch(() => {})
+    const stop = window.jaris.onMachineChanged((view) => {
+      if (!alive) return
+      const next = view.connected ? (view.saved?.host ?? null) : null
+      setMachineHost((current) => {
+        if (current !== next) void window.jaris.getUnscoredModels().then((list) => alive && setModels(list))
+        return next
+      })
+    })
+    return () => {
+      alive = false
+      stop()
+    }
   }, [])
 
   useEffect(() => {
@@ -189,11 +208,21 @@ export default function UnscoredModelsTest(): JSX.Element | null {
           {/* Étape 433 (Léo : « ajoute le temps estimé ») : le total, d'après les temps déjà mesurés sur ce PC. */}
           {estimatedTotal > 0 && (
             <p className="options-menu__unscored-text options-menu__unscored-total">
-              {t(models.every((m) => m.estimatedMs) ? 'unscored.total' : 'unscored.totalPartial', { duration: formatEstimate(estimatedTotal) })}
+              {t(
+            machineHost
+              ? models.every((m) => m.estimatedMs)
+                ? 'unscored.totalMachine'
+                : 'unscored.totalPartialMachine'
+              : models.every((m) => m.estimatedMs)
+                ? 'unscored.total'
+                : 'unscored.totalPartial',
+            { duration: formatEstimate(estimatedTotal) }
+          )}
             </p>
           )}
         </>
       )}
+      {machineHost && <p className="options-menu__unscored-text options-menu__unscored-machine">{t('unscored.onMachine', { host: machineHost })}</p>}
       <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (

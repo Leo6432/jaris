@@ -161,7 +161,9 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
   }
   Object.assign(modules, {
     // Étape 366 : ce que le PC peut faire tourner (dessin, modèle de vision par défaut).
-    '../config': { config: { ollama: { visionModel: 'vision-model:8b' } } },
+    '../config': { config: { ollama: { visionModel: 'vision-model:8b' } }, runWithLocalOllama: (fn) => fn(), runWithOllamaHost: (_host, fn) => fn() },
+    // Étape 437 : aucune machine louée connectée — tout se passe sur ce PC.
+    './remoteMachine': { connectedMachine: () => null, machineFreeDiskGb: async () => null },
     './imageGenerator': {
       imageDrawingAvailable: async () => {
         calls.drawChecks++

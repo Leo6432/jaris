@@ -24,5 +24,5 @@ test('chaque appel à nvidia-smi a un délai maximal', () => {
 test('Chat : « Arrêter » marche dès l’envoi, même pendant le relevé de la carte graphique', () => {
   const source = read('electron/services/chatSession.ts')
   const send = source.slice(source.indexOf('cancelMemoryExtraction()'))
-  assert.ok(send.indexOf('this.running.add(controller)') < send.indexOf('await getLiveGpuStatus()'))
+  assert.ok(send.indexOf('this.running.add(controller)') < send.indexOf('await getModelGpuStatus()'))
 })

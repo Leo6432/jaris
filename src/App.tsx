@@ -3,6 +3,7 @@ import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
 import VoiceWidget from '@/components/VoiceWidget'
+import MachinePanel from '@/components/MachinePanel'
 import CodePanel from '@/components/CodePanel'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ImagePanel from '@/components/ImagePanel'
@@ -56,6 +57,8 @@ const MODES: Array<{ id: AppMode; label: MessageKey; title: MessageKey; panel?: 
 /** Léo : Duel et Classement derrière un seul bouton « … » de la barre d'icônes, qui ouvre un petit menu. */
 const MORE_MODES: AppMode[] = ['duel', 'ranking']
 const ICON_MORE = 'M5 12h.01M12 12h.01M19 12h.01'
+/** Étape 437 : un serveur (deux baies), pour la machine louée. */
+const ICON_MACHINE = 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01'
 
 const ICON_BRAIN =
   'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
@@ -240,6 +243,9 @@ export default function App(): JSX.Element {
   )
   // Options est un écran du rail, pas un mode : le mode réel (écoute, widget) reste celui d'avant.
   const [optionsShown, setOptionsShown] = useState(false)
+  // Étape 437 : la page Machine (machine louée), un écran du rail comme Options ; `machineConnected` allume sa pastille.
+  const [machineShown, setMachineShown] = useState(false)
+  const [machineConnected, setMachineConnected] = useState(false)
   // Barre de titre dessinée par Jaris — rien tant que le main n'a pas répondu (et jamais
   // hors Windows, où la fenêtre garde sa barre de titre native).
   const [chrome, setChrome] = useState<WindowChrome | null>(null)
@@ -344,9 +350,16 @@ export default function App(): JSX.Element {
 
   // Le Cerveau s'affiche dans la zone principale, comme Options (étape 265) : en calque plein écran, il passait
   // sous les boutons réduire/agrandir/fermer de Windows, qui recouvraient « Ouvrir le dossier » et « Fermer ».
+  useEffect(() => {
+    if (MODE === 'widget') return undefined
+    void window.jaris.machineGet().then((view) => setMachineConnected(view.connected)).catch(() => {})
+    return window.jaris.onMachineChanged((view) => setMachineConnected(view.connected))
+  }, [])
+
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then((graph) => {
       setOptionsShown(false)
+      setMachineShown(false)
       setMemoryGraph(graph)
       closeSidebarIfNarrow()
     })
@@ -670,7 +683,7 @@ export default function App(): JSX.Element {
     // La section récente n'est visible que pour les écrans qui ont quelque chose à lister. Son conteneur
     // reste monté quand la barre se replie afin que Workspace conserve ses emplacements de portail.
     // Un écran du rail qui n'est pas un mode (Options, Cerveau) remplace le contenu sans changer le mode réel.
-    const screenShown = optionsShown || !!memoryGraph
+    const screenShown = optionsShown || !!memoryGraph || machineShown
     // La colonne de liste ne montre que la liste de l'écran affiché, ou les sections d'Options. Étape 270 (Léo :
     // « pourquoi j'ai une conversation dans le mode vocal, faut pas ça à gauche ») : sans liste à lui (Agent
     // vocal, Cerveau), l'écran n'a pas de colonne — la barre d'icônes, elle, ne bouge pas.
@@ -680,6 +693,7 @@ export default function App(): JSX.Element {
       setAppMode(id)
       setOptionsShown(false)
       setMemoryGraph(null)
+      setMachineShown(false)
       closeSidebarIfNarrow()
     }
 
@@ -707,6 +721,21 @@ export default function App(): JSX.Element {
               <RailMoreMenu active={!screenShown && MORE_MODES.includes(appMode)} current={appMode} onSelect={selectMode} />
             </div>
             <div className="app-rail__group app-rail__group--end">
+              {/* Étape 437 (Léo : « un bouton à gauche, Machine ») : la pastille dit qu'une machine louée fait tourner les modèles. */}
+              <div className={`rail__machine${machineConnected ? ' rail__machine--on' : ''}`}>
+                <RailButton
+                  label={t('machine.rail')}
+                  title={t(machineConnected ? 'machine.rail.connected' : 'machine.rail.title')}
+                  icon={ICON_MACHINE}
+                  active={machineShown}
+                  onClick={() => {
+                    setOptionsShown(false)
+                    setMemoryGraph(null)
+                    setMachineShown(true)
+                    closeSidebarIfNarrow()
+                  }}
+                />
+              </div>
               <RailButton label={t('app.brain')} title={t('app.brain.title')} icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
               <RailButton
                 label={t('options.title')}
@@ -714,6 +743,7 @@ export default function App(): JSX.Element {
                 active={optionsShown}
                 onClick={() => {
                   setMemoryGraph(null)
+                  setMachineShown(false)
                   setOptionsShown(true)
                   closeSidebarIfNarrow()
                 }}
@@ -761,7 +791,7 @@ export default function App(): JSX.Element {
               <span
                 className="app-header__title"
                 ref={screenShown ? undefined : setTitleSlot}
-                data-label={optionsShown ? t('options.title') : memoryGraph ? t('app.brain.title') : t(currentMode.title)}
+                data-label={optionsShown ? t('options.title') : memoryGraph ? t('app.brain.title') : machineShown ? t('machine.title') : t(currentMode.title)}
               />
             </header>
 
@@ -804,6 +834,12 @@ export default function App(): JSX.Element {
             {memoryGraph && (
               <ErrorBoundary label={t('app.boundary.brain')}>
                 <MemoryBrain graph={memoryGraph} />
+              </ErrorBoundary>
+            )}
+
+            {machineShown && (
+              <ErrorBoundary label={t('machine.title')}>
+                <MachinePanel />
               </ErrorBoundary>
             )}
 

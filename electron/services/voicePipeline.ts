@@ -8,7 +8,7 @@ import { LOOKUP_TOOLS, converse } from './assistant'
 import { VOICE_CONTEXT_MAX_AGE_MS, clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getProfile } from './profileStore'
-import { getLiveGpuStatus } from './hardwareScan'
+import { getModelGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
 import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
 import { preferLoadedModel, structuredChat } from './ollama'
@@ -464,7 +464,7 @@ export class VoicePipeline extends EventEmitter {
       // doit être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
       // Ce relevé est réutilisé plus bas dans converse() (passé en paramètre) au lieu d'en relancer un
       // second : un seul `nvidia-smi` par question, pas deux.
-      const live = await getLiveGpuStatus()
+      const live = await getModelGpuStatus()
       const gpuStatus = checkGpuTempSafety(live.tempC)
       if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
         this.emit('log', t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))

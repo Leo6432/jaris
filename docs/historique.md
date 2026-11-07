@@ -11337,3 +11337,64 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Régression : `test-options-reorganization-ui.mjs` (choix, cases, total de la sélection, bouton inactif sans case, seule
   la sélection envoyée ; « Tout tester » n'envoie aucune sélection), `test-benchmark-runner-cleanup.mjs` (liste passée
   au script, nom inconnu ignoré — échoue si la sélection est ignorée). Capture du rendu compilé.
+
+## Étape 437 — Page « Machine » : tout Jaris sur une machine louée (v0.47.0)
+
+- Léo (Hostinger, A100 louée, image « Ollama » proposée) : « enlève dans Duel le test avec une autre machine, ajoute un
+  bouton à gauche Machine, il explique, tu lui dis combien de stockage, de VRAM… et maintenant tout Jaris tourne sur le
+  VPS ; si je vais dans Analyse et que je lance, ça se fait sur le VPS, et après je peux déconnecter ». Deux choix posés
+  à Léo : PC allumé pendant le test (Recommandé, choisi) plutôt que tout faire tourner sur le serveur ; « tout ce qui
+  utilise les modèles » (choisi) plutôt que seulement Analyse et Duel. Image et Vidéo n'utilisent pas Ollama : sur ce PC.
+- Cœur (config.ts) : `setMachineOllamaHost` — la machine connectée devient l'Ollama PAR DÉFAUT de tout Jaris ; une portée
+  explicite garde la priorité (`runWithOllamaHost` : une autre adresse ; `runWithLocalOllama` : ce PC, pour les outils
+  d'un duel). `store === undefined` (aucune portée) ≠ `null` (portée « ce PC ») : la confusion des deux enverrait les
+  outils sur la machine (test qui mord). `config.ollama.localHost` : la surveillance/réparation de l'Ollama de Jaris
+  (dependencyServices.ts) reste sur ce PC quoi qu'il arrive.
+- `remoteMachine.ts` : connecter = réglages revérifiés (adresse, VRAM, RAM, disque ≥ 10 Go), Ollama de la machine
+  interrogé AVANT de basculer (une adresse muette ne laisse jamais Jaris sans modèles), adresse gardée dans le profil
+  (`remoteMachine`, l'ancienne adresse du Duel reprise une fois), puis préparation : les modèles de Jaris absents y sont
+  téléchargés un par un, ÉPINGLÉS à la machine (une déconnexion arrête le téléchargement et rien ne part vers ce PC).
+  Jamais connectée au démarrage (une machine supprimée laisserait Jaris muet). Un test en cours bloque connexion et
+  déconnexion ; une session de duels sur CE PC bloque la connexion (une série sur une machine louée peut, elle, en
+  changer : c'est la reprise de l'étape 388, qui passe maintenant par la page Machine).
+- Ce qui ne doit plus regarder ce PC quand les modèles tournent ailleurs : `getModelGpuStatus` (la mémoire libre et la
+  chaleur de la carte de ce PC ne font plus prendre un modèle plus petit), `runQuickSetup` refusé (« déconnecte-la
+  d'abord » : il choisit les modèles pour CE PC), réparation du dossier de modèles de ce PC sautée avant un test.
+- Analyse sur la machine : `JARIS_MACHINE`, `JARIS_MACHINE_VRAM_GB/RAM_GB/DISK_GB` passés au script ; benchmark-models.mjs
+  les prend à la place de nvidia-smi / totalmem / statfs, recalcule la place libre de la machine (disque − 10 Go − ses
+  modèles, lus sur son Ollama) avant chaque téléchargement, marge RAM 4 Go, et écrit `machine.rented` dans la campagne.
+  Les durées estimées (étape 433) ne prennent que les temps de la machine qui fera le test (`caseTimesFromTraces`).
+- Écran : bouton « Machine » en bas de la barre d'icônes (pastille verte quand connectée), page avec explication en 4
+  étapes (Hostinger : image « Ollama »), adresse, VRAM, RAM, stockage, « Connecter » ; connectée : version d'Ollama, place
+  libre, modèles de Jaris prêts / en téléchargement / en échec, « Déconnecter ». Duel : la boîte « Où tournent les
+  modèles » est retirée (remplacée par une ligne qui dit la machine connectée), le plan se recalcule à la connexion ;
+  « Changer de machine » d'une série renvoie à la page Machine. « Modèles à tester » dit où se fera le test. ~35 textes,
+  24 langues (13 anciens textes du Duel retirés, 5 repris tels quels).
+- Non vérifié en usage réel : une vraie machine Hostinger (comment elle expose le port 11434 de son Ollama, et si
+  elle le protège) — la page reste générique (« l'adresse de son Ollama »).
+- **Relecture adverse avant publication** (un agent, sans mes conclusions), défauts corrigés :
+  1. Registre des modèles téléchargés par le test (`*.telecharges.json`) commun aux deux machines : un test sur la
+     machine louée pouvait faire supprimer un modèle de CE PC (ou l'inverse). Un registre par machine.
+  2. Connexion qui aboutit pendant qu'un test ou un duel démarre (attente de 15 s) : busy revérifié APRÈS l'attente ;
+     le test fige l'adresse de SA machine (`OLLAMA_HOST` = machine ou `localHost`, plus `config.ollama.host`) ; une
+     session de duels sur ce PC est épinglée à ce PC (`onModels(null)` → `runWithLocalOllama`).
+  3. « Retester la configuration » compte comme occupé (la page Machine attend) et tourne épinglé à ce PC.
+  4. Réparation de l'Ollama de ce PC (`serverModelCount`) qui comptait les modèles de la machine louée.
+  5. Machine sans carte graphique (VRAM 0) refusée : acceptée, comme l'ancien réglage du Duel.
+  6. Fils de calcul (étape 387) : la machine connectée passe `threadsFor` (remoteThreadsFor + taille du modèle).
+  7. Image et Vidéo déchargent les modèles de la carte de CE PC (`runWithLocalOllama`) ; Options → Modèles (vue
+     d'ensemble, choix pour ce PC, « Supprimer ») parle de CE PC, même connecté.
+  8. Préparation : plus rien n'est écrit pour une machine déconnectée ou remplacée ; une connexion ratée vers une 2e
+     machine laisse la 1re connectée et ne remplace plus l'adresse gardée.
+  Laissés, dits ici : une génération du mode Code en cours n'est pas épinglée (déconnecter pendant : la suite part sur
+  ce PC) ; le choix de modèle d'un mode fait connecté peut viser un modèle absent de ce PC (repli « Auto » déjà
+  existant, `log.chosenModelGone`) ; l'import Hugging Face vérifie la place de ce PC ; le script de test n'envoie pas
+  `num_thread` à la machine.
+- Régression : `test-machine.mjs` (adresse selon la portée — échoue si `null` et `undefined` se confondent ; connexion
+  muette sans bascule — échoue si on bascule avant de vérifier ; préparation épinglée, déconnexion en route ; gardes ;
+  test lancé pendant la connexion ; 2e machine ratée ; fils de calcul ; VRAM 0 ; lecture des réglages par le script),
+  `test-machine-ui.mjs` (vrai navigateur : pré-rempli, nombres envoyés, état connecté, refus, test en cours),
+  `test-window-chrome-ui.mjs` (bouton Machine en bas, page, pastille), `test-duel-panel-ui.mjs` (plus de réglage dans
+  le Duel, ligne d'information, plan recalculé, reprise de série), `test-benchmark-runner-cleanup.mjs` (réglages de la
+  machine passés au script, pas de réparation de ce PC, configuration refusée connectée),
+  `test-hardwarescan-single-pool.mjs` (durées par machine), faux ponts et faux modules mis à jour.

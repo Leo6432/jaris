@@ -71,6 +71,8 @@ import {
   setDuelStrengthSource,
   setDuelProbability,
   setLocalSpeedResolver,
+  setModelsRemoteSource,
+  modelSizeGb,
   detectGpu
 } from './services/hardwareScan'
 import { buildDuelVotesExport, defaultDuelExportName, getRankingVotes, loadDuelReviews, loadDuelVotes, loadSharedDuelVotes } from './services/duelStore'
@@ -90,7 +92,7 @@ import {
   duelHistoryCode,
   duelSideCode,
   duelRankings,
-  saveDuelRemote,
+  localDuelSessionActive,
   startDuelBatch,
   openBatchRound,
   closeBatchRound,
@@ -115,7 +117,9 @@ import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProb
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { getModelsToTestDetails, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { getModelsToTestDetails, isModelTestRunning, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource, setMachineModelSizeSource } from './services/remoteMachine'
+import { config, runWithLocalOllama } from './config'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
@@ -1413,7 +1417,8 @@ async function startVoicePipeline(): Promise<void> {
     repairOllamaModelsView(log, {
       ...windowsModelsViewDeps,
       modelsDir: () => (usesEmbeddedOllama() ? engineModelsDir() : windowsModelsViewDeps.modelsDir()),
-      serverModelCount: () => listInstalledModels().then((models) => models.length, () => null),
+      // Étape 437 : l'Ollama de CE PC, même quand une machine louée est connectée (sinon « 0 modèle » et un faux redémarrage).
+      serverModelCount: () => runWithLocalOllama(() => listInstalledModels()).then((models) => models.length, () => null),
       restartOllama: () => restartOllama(log)
     })
   setModelsViewRepair(repairModelsView)
@@ -1777,6 +1782,13 @@ app.whenReady().then(async () => {
   // Étape 382 : une série de duels tourne toute une nuit — le PC ne doit pas se mettre en veille (l'écran, lui, peut
   // s'éteindre). Même blocage que le test des modèles (benchmarkRunner.ts).
   let seriesAwake: number | null = null
+  // Étape 437 : la page Machine suit son état partout (pastille de la barre d'icônes, page elle-même) ; un test de
+  // modèles ou un duel en cours a choisi sa machine au départ, elle ne change pas sous leurs pieds.
+  setMachineBusySource(() => (isModelTestRunning() ? 'test' : localDuelSessionActive() ? 'duel' : null))
+  // La carte de ce PC ne compte plus pour choisir un modèle quand ils tournent sur la machine (getModelGpuStatus).
+  setModelsRemoteSource(() => config.ollama.remote)
+  setMachineModelSizeSource((model) => modelSizeGb(model))
+  onMachineChanged((view) => broadcast(IPC_CHANNELS.machineChanged, view))
   setDuelEnvironment({
     onReminderFire: fireReminder,
     emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view),
@@ -1913,8 +1925,10 @@ app.whenReady().then(async () => {
     return openBatchRound(number)
   })
   ipcMain.handle(IPC_CHANNELS.duelBatchClose, () => closeBatchRound())
-  // Étape 377 : la machine qui fait tourner les modèles des duels (revérifiée par saveDuelRemote).
-  ipcMain.handle(IPC_CHANNELS.duelRemoteSave, (_event, settings: unknown) => saveDuelRemote(settings))
+  // Étape 437 : la page Machine (réglages revérifiés par connectMachine ; un test ou un duel en cours la fait attendre).
+  ipcMain.handle(IPC_CHANNELS.machineGet, () => loadMachineView())
+  ipcMain.handle(IPC_CHANNELS.machineConnect, (_event, settings: unknown) => connectMachine(settings))
+  ipcMain.handle(IPC_CHANNELS.machineDisconnect, () => disconnectMachine())
   ipcMain.handle(IPC_CHANNELS.duelHistory, () => duelHistory())
   ipcMain.handle(IPC_CHANNELS.duelHistoryDelete, (_event, which: unknown) => deleteDuelHistory(which))
   // Étape 362 : « Télécharger les votes ». Même garde dialogOpen que les autres « Enregistrer sous » (étape 93).
@@ -2022,7 +2036,8 @@ app.whenReady().then(async () => {
     if (!fullWindow || fullWindow.isDestroyed() || process.platform !== 'win32') return
     fullWindow.setTitleBarOverlay(titleBarOverlay())
   })
-  ipcMain.handle(IPC_CHANNELS.getModelOverview, async () => getModelOverview(await getProfile()))
+  // Étape 437 : Options → Modèles parle des modèles de CE PC, même quand une machine louée fait tourner les modèles.
+  ipcMain.handle(IPC_CHANNELS.getModelOverview, () => runWithLocalOllama(async () => getModelOverview(await getProfile())))
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : le paquet
   // d'Ollama pèse 1,6 Go, soit plusieurs minutes pendant lesquelles le bouton ne doit pas rester muet.
@@ -2185,7 +2200,7 @@ app.whenReady().then(async () => {
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
-  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => {
+  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, () => runWithLocalOllama(async () => {
     const picks = await getMyModelPicks(await getProfile())
     // Étape 174 : le modèle d'image se décide sur le MÊME matériel détecté que les autres rôles.
     const image = pickImageModel(picks.vramGb, picks.ramGb)
@@ -2204,7 +2219,7 @@ app.whenReady().then(async () => {
       image: image.model ? { ...image, installed: await isImageModelInstalled() } : image,
       video: video.quality ? { ...video, installed: await isVideoQualityInstalled(video.quality) } : video
     }
-  })
+  }))
   // Étape 168, remis à l'étape 221 (Léo : « rajoute le bouton analyse pour tester Ling-3.0-tiny ») : test des seuls
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
   ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTestDetails())
@@ -2218,12 +2233,15 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
-  ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {
-    if (typeof model !== 'string' || !(await isUnusedInstalledModel(model, await getProfile()))) {
-      throw new Error(t('main.modelInUse'))
-    }
-    await deleteModel(model)
-  })
+  ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, (_event, model: string): Promise<void> =>
+    // Étape 437 : « Supprimer » efface du disque de CE PC, jamais de la machine louée connectée.
+    runWithLocalOllama(async () => {
+      if (typeof model !== 'string' || !(await isUnusedInstalledModel(model, await getProfile()))) {
+        throw new Error(t('main.modelInUse'))
+      }
+      await deleteModel(model)
+    })
+  )
   // Choix d'un rôle par mode (Chat, Code, Vocal). applyModelChoice vérifie que son modèle actuel est
   // réellement installé dans Ollama avant d'enregistrer ce rôle.
   ipcMain.handle(IPC_CHANNELS.getModelChoice, (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => readModelChoice(mode))

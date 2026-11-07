@@ -6,6 +6,7 @@ import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
 import { unloadOllamaModels } from './ollama'
+import { runWithLocalOllama } from '../config'
 import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
 import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
@@ -518,7 +519,8 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
 
     // Le modèle de conversation est encore chargé sur la carte graphique (il vient de décider de dessiner) :
     // sans ce déchargement, les deux ne tiennent pas ensemble sur une carte 8 Go.
-    const unloaded = await unloadOllamaModels()
+    // Étape 437 : la carte de CE PC, même quand une machine louée fait tourner les modèles.
+    const unloaded = await runWithLocalOllama(() => unloadOllamaModels())
     if (unloaded.length) onLog(t('image.gpuFreed', { models: unloaded.join(', ') }))
 
     const dir = generatedImagesDir()

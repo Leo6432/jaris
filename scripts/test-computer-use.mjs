@@ -84,7 +84,7 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   const bodies = []
   const modules = {
     '../config': { config: { ollama: { host: 'http://test', numCtx: 8192 } } },
-    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null }) },
+    './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null }), getModelGpuStatus: async () => ({ freeVramGb: null }) },
     './ollama': { listInstalledModels: async () => pilot.installed },
     './profileStore': { getProfile: async () => pilot.profile },
     './maiUi': maiUi,

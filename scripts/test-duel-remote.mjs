@@ -50,6 +50,11 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
   const modules = {
     crypto: { randomUUID: (() => { let n = 0; return () => `uuid-${n++}` })() },
     '../config': configModule,
+    // Étape 437 : la machine des duels est la machine connectée de la page Machine (ici : celle du profil, activée).
+    './remoteMachine': {
+      connectedMachine: () => (profile.duelRemote?.enabled ? { host: profile.duelRemote.host, vramGb: profile.duelRemote.vramGb, ramGb: profile.duelRemote.ramGb, diskGb: 100 } : null),
+      machineFreeDiskGb: async () => null
+    },
     './assistant': {
       converse: async (_prompt, _name, _onReminder, _onLog, _history, _signal, _live, _channel, onToken, _a, _b, restrictions) => {
         calls.converse.push({ host: config.ollama.host, remote: config.ollama.remote, threads: MODELS.map((m) => config.ollama.threadsFor(m)) })
@@ -277,22 +282,7 @@ test('réglage désactivé : tout se passe sur ce PC, l’autre machine n’est 
   assert.equal(env.session.getDuelView().remote, false)
 })
 
-test('enregistrer la machine : revérifiée par le main, adresse normalisée, désactiver garde l’adresse', async () => {
-  const env = setup()
-  const saved = await env.session.saveDuelRemote({ enabled: true, host: 'pod123-11434.proxy.runpod.net/', vramGb: 288, ramGb: 188 })
-  assert.deepEqual(saved, POD_SETTINGS)
-  assert.deepEqual(env.profile.duelRemote, POD_SETTINGS)
-  await assert.rejects(env.session.saveDuelRemote({ enabled: true, host: 'n’importe quoi', vramGb: 288, ramGb: 188 }), /Adresse invalide/)
-  await assert.rejects(env.session.saveDuelRemote({ enabled: true, host: POD, vramGb: Number.NaN, ramGb: 188 }), /mémoire de la carte graphique/)
-  assert.deepEqual(env.profile.duelRemote, POD_SETTINGS, 'un réglage refusé ne remplace pas le bon')
-  // Revenir à ce PC sans avoir à retaper l'adresse plus tard.
-  const off = await env.session.saveDuelRemote({ enabled: false, host: '', vramGb: Number.NaN, ramGb: Number.NaN })
-  assert.deepEqual(off, { ...POD_SETTINGS, enabled: false })
-  assert.equal(await env.session.saveDuelRemote(null), null)
-  assert.equal(env.profile.duelRemote, undefined)
-  await assert.rejects(env.session.saveDuelRemote('https://pod'), /invalide/i)
-})
-
+// Étape 437 : les réglages de la machine se revérifient dans remoteMachine.ts (test-machine.mjs), plus dans le Duel.
 test('téléchargement sur l’autre machine : ni la mémoire ni le disque de CE PC ne le bloquent, ni la réparation de son dossier', async () => {
   const realFetch = globalThis.fetch
   const GB = 1024 ** 3

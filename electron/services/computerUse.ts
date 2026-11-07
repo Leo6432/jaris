@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
+import { getModelGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { autoContextFor, listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import type { NativeImage } from 'electron'
@@ -270,7 +270,7 @@ export async function streamOllamaChat(body: Record<string, unknown>, signal?: A
 
 async function resolveVisionModel(preferred: string): Promise<string> {
   try {
-    const [live, installedModels] = await Promise.all([getLiveGpuStatus(), listInstalledModels()])
+    const [live, installedModels] = await Promise.all([getModelGpuStatus(), listInstalledModels()])
     if (live.freeVramGb !== null) return pickSafeVisionModel(live.freeVramGb, installedModels, preferred)
   } catch {
     // Pas grave si le check échoue : on garde le modèle normalement configuré pour cette tâche.
