@@ -313,7 +313,7 @@ export default function ChatPanel(): JSX.Element {
       activeId={conversations?.activeId ?? null}
       onSelect={(id) => void applyConversationChange(window.jaris.selectConversation(id))}
       onDelete={(id) => void applyConversationChange(window.jaris.deleteConversation(id))}
-      emptyLabel={t('code.listEmpty')}
+      emptyLabel={t('chat.listEmpty')}
     >
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
@@ -323,7 +323,9 @@ export default function ChatPanel(): JSX.Element {
           )}
 
           {messages.map((message, index) => (
-            <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
+            // La clé porte la conversation : en changer remonte chaque message (et ses blocs interactifs, qui gardent un
+            // état à eux — cases cochées, choix), au lieu de faire hériter le message n°3 de l'autre conversation.
+            <div key={`${conversations?.activeId ?? ''}:${index}`} className={`chat-panel__message chat-panel__message--${message.role}`}>
               {message.role === 'assistant' && <img className="chat-panel__avatar" src={logo} alt="" />}
               <div className="chat-panel__body">
               {message.web && <WebActivityBlock items={message.web} />}

@@ -9,7 +9,7 @@ import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatModelName } from '@/lib/formatModelName'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
-import { formatDecimal, formatPercent, t } from '@/lib/i18n'
+import { formatDecimal, formatPercent, t, tn } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
 import {
@@ -1535,23 +1535,38 @@ export default function DuelPanel(): JSX.Element {
   const autoPlayed = useRef(new Set<string>())
   const [playing, setPlaying] = useState<DuelSide | null>(null)
 
+  // Chaque lecture a son numéro ; « Suivant », un nouveau duel ou quitter l'écran en changent (stopAudio). Une lecture
+  // revérifie son numéro après CHAQUE attente (le son, le profil, la sortie audio) : sans ça, l'ancienne voix
+  // démarrait après « Suivant », une fois son fichier arrivé.
+  const playToken = useRef(0)
+
   const stopAudio = (): void => {
+    playToken.current++
     audioRef.current?.pause()
     setPlaying(null)
   }
 
   const play = async (side: DuelSide): Promise<void> => {
+    const token = ++playToken.current
+    const stillWanted = (): boolean => token === playToken.current
     const data = await window.jaris.duelAudio(side).catch(() => null)
     const el = audioRef.current
-    if (!data || !el) return
+    if (!stillWanted() || !data || !el) return
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
     audioUrlRef.current = URL.createObjectURL(new Blob([data as BlobPart], { type: 'audio/wav' }))
     el.src = audioUrlRef.current
     const profile = await window.jaris.getProfile().catch(() => null)
+    if (!stillWanted()) return
     await setVoiceOutputDevice(el, profile?.audioOutputDeviceId ?? '')
+    if (!stillWanted()) return
     setPlaying(side)
     await el.play().catch(() => setPlaying(null))
   }
+
+  // L'écran Duel reste monté quand on le quitte (KeepAlive) : sa voix se tait avec lui.
+  useEffect(() => {
+    if (!active) stopAudio()
+  }, [active])
 
   useEffect(
     () => () => {
@@ -1937,7 +1952,7 @@ export default function DuelPanel(): JSX.Element {
                   </div>
                   {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
                   {seriesAllDone && (
-                    <p className="duel-home__note duel-home__note--warn">{t('duel.series.allDone', { count: perModel })}</p>
+                    <p className="duel-home__note duel-home__note--warn">{tn('duel.series.allDone', perModel)}</p>
                   )}
                   {plan && (
                     <p className="duel-home__note duel-series__disk">
@@ -2008,7 +2023,7 @@ export default function DuelPanel(): JSX.Element {
                   </div>
                   {seriesTotal > 0 && <p className="duel-home__note">{t('duel.series.total', { count: seriesTotal })}</p>}
                   {seriesAllDone && (
-                    <p className="duel-home__note duel-home__note--warn">{t('duel.series.allDone', { count: perModel })}</p>
+                    <p className="duel-home__note duel-home__note--warn">{tn('duel.series.allDone', perModel)}</p>
                   )}
                   <button
                     type="button"

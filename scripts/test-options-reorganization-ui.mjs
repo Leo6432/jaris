@@ -45,9 +45,24 @@ FUTURE_MODELS.push({ model: 'exemple-futur:8b', vramGb: 8.3, readsImages: true, 
 window.__orbClicks = 0
 
 const overrides = {
-  getProfile: async () => ({ name: 'Léo' }),
+  // Étape 325 : un profil momentanément illisible (antivirus) — le test dit combien de lectures échouent d'abord.
+  getProfile: async () => {
+    if (window.__profileFailures > 0) {
+      window.__profileFailures--
+      throw new Error("Error invoking remote method 'jaris:get-profile': Error: Le profil est verrouillé par un autre programme.")
+    }
+    return { name: 'Léo' }
+  },
   saveProfile: async () => {},
-  patchProfile: async () => null,
+  patchProfile: async (change) => {
+    // Déjà nettoyée par le preload (ipcErrorMessage à la source), comme toute erreur réelle.
+    if (window.__patchFails) throw new Error('Disque plein : réglage non enregistré.')
+    window.__patched = [...(window.__patched ?? []), change]
+    return null
+  },
+  clearConversationHistory: async () => {
+    window.__historyCleared = true
+  },
   listAudioInputDevices: async () => [],
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
   // Étape 336 : l'installation de l'Ollama de Jaris dure ; le test décide quand elle se termine.
@@ -75,7 +90,7 @@ const overrides = {
       { label: 'les modèles Ollama', path: 'C\\\\models' }
     ]
   }),
-  getConversationHistory: async () => [],
+  getConversationHistory: async () => window.__history ?? [],
   // Étape 180 : le test du mot « Jaris » — le test diffuse lui-même ce que le sidecar aurait compris.
   testWakeWord: async () => {
     if (window.__listeningIssue) return { started: false, reason: window.__listeningIssue }
@@ -168,13 +183,13 @@ function buildPage() {
   return pageHtml
 }
 
-async function withOptions(run) {
+async function withOptions(run, init = '') {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1200, height: 900 })
-    await page.setContent(html)
+    await page.setContent(init ? html.replace('<body>', `<body><script>${init}</script>`) : html)
     await page.waitForSelector('.options-menu__trigger')
     await page.click('.options-menu__trigger')
     await run(page)
@@ -1032,5 +1047,77 @@ test('Modèles : la carte des modèles n’est pas une carte dans la carte (éta
     })
     assert.equal(tier.border, '0px')
     assert.equal(tier.background, 'rgba(0, 0, 0, 0)')
+  })
+})
+
+// Jusqu'à la version 0.49.1, getProfile n'avait ni « catch » ni nouvel essai : un profil illisible au premier essai
+// laissait `profile` à null pour toujours, et chaque interrupteur sortait sans rien dire.
+test('Voix : profil illisible au premier essai -> le vrai message, puis Jaris relit le profil tout seul', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Voix")')
+    const error = page.locator('.options-menu__error')
+    await error.waitFor()
+    assert.equal(await error.textContent(), 'Le profil est verrouillé par un autre programme.')
+    // Relu deux secondes plus tard : le message s'efface, et l'interrupteur enregistre vraiment.
+    await error.waitFor({ state: 'detached', timeout: 6000 })
+    await page.getByRole('switch', { name: "Bips d'interface" }).click()
+    assert.deepEqual(await page.evaluate(() => window.__patched), [{ soundEffectsEnabled: false }])
+  }, 'window.__profileFailures = 1')
+})
+
+test('Voix : un réglage non enregistré revient à sa valeur réelle, et le message dit pourquoi', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Voix")')
+    const beeps = page.getByRole('switch', { name: "Bips d'interface" })
+    assert.equal(await beeps.getAttribute('aria-checked'), 'true')
+    await beeps.click()
+    await page.locator('.options-menu__error').waitFor()
+    assert.equal(await page.textContent('.options-menu__error'), 'Disque plein : réglage non enregistré.')
+    assert.equal(await beeps.getAttribute('aria-checked'), 'true', 'l’interrupteur ne montre pas un état que Jaris n’applique pas')
+  }, 'window.__patchFails = true')
+})
+
+// Un dialogue natif (window.confirm) fait perdre le focus à la fenêtre : Jaris se repliait en widget (piège de l'étape 93).
+test('Général : « Supprimer l’historique » demande confirmation dans la page, jamais par un dialogue natif', options, async () => {
+  await withOptions(async (page) => {
+    const dialogs = []
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.message())
+      void dialog.dismiss()
+    })
+    await page.click('.options-menu__tab:has-text("Général")')
+    await page.getByRole('button', { name: "Supprimer l'historique" }).click()
+    const confirm = page.getByRole('group', { name: "Supprimer définitivement tout l'historique des conversations ?" })
+    await confirm.waitFor()
+    await confirm.getByRole('button', { name: 'Annuler' }).click()
+    assert.equal(await page.evaluate(() => window.__historyCleared ?? false), false, 'Annuler ne supprime rien')
+    await page.getByRole('button', { name: "Supprimer l'historique" }).click()
+    await page.getByRole('group', { name: "Supprimer définitivement tout l'historique des conversations ?" }).getByRole('button', { name: 'Supprimer' }).click()
+    await page.waitForFunction(() => window.__historyCleared === true)
+    await page.waitForSelector('.options-menu__history-empty')
+    assert.deepEqual(dialogs, [], 'aucun dialogue natif')
+  }, "window.__history = [{ id: 'h1', timestamp: Date.now(), transcript: 'Quelle heure est-il ?', reply: 'Il est midi.' }]")
+})
+
+test('accessibilité : onglet affiché marqué, voix nommées, menus du micro et du haut-parleur nommés, pas de <main> imbriqué', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Voix")')
+    await page.waitForSelector('.options-menu__voice-picker')
+    assert.deepEqual(
+      await page.$$eval('.options-menu__tab', (tabs) => tabs.map((tab) => [tab.textContent, tab.getAttribute('aria-current')])),
+      [['Ce que Jaris sait faire', null], ['Voix', 'page'], ['Modèles', null], ['Jaris partout', null], ['Outils MCP', null], ['Général', null]]
+    )
+    // Pastilles de voix : plus seulement « M1 », mais ce qu'elle est, et laquelle est choisie.
+    const m1 = page.getByRole('button', { name: 'M1 : Vive, énergique' })
+    assert.equal(await m1.getAttribute('aria-pressed'), 'false')
+    assert.equal(await page.getByRole('button', { name: 'M3 : Autoritaire, confiante' }).getAttribute('aria-pressed'), 'true')
+    // Les menus déroulants portent le nom de leur ligne (SettingRow), et sa description.
+    const mic = page.getByRole('combobox', { name: 'Micro utilisé' })
+    assert.equal(await mic.count(), 1)
+    assert.match(await mic.evaluate((el) => document.getElementById(el.getAttribute('aria-describedby')).textContent), /Changer de micro|Aucun micro/)
+    assert.equal(await page.getByRole('combobox', { name: 'Haut-parleur utilisé' }).count(), 1)
+    assert.equal(await page.locator('main').count(), 0, 'App.tsx a déjà son <main> : Options n’en ajoute pas un second')
+    await page.click('.options-menu__tab:has-text("Général")')
+    assert.equal(await page.getByRole('combobox', { name: 'Langue' }).count(), 1)
   })
 })

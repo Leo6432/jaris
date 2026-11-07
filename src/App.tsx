@@ -23,6 +23,7 @@ import ModelEffortPicker from '@/components/ModelEffortPicker'
 import { ShellSlotsContext } from '@/lib/shellContext'
 import logo160 from '@/assets/jaris-logo-160.png'
 import { t, tn, useLanguage } from '@/lib/i18n'
+import { ipcErrorMessage } from '@/lib/ipcError'
 import type { MessageKey } from '../shared/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../shared/i18n/languages'
 
@@ -228,6 +229,10 @@ export default function App(): JSX.Element {
   const [nameInput, setNameInput] = useState('')
   const [onboardingLanguage, setOnboardingLanguage] = useState<LanguageSetting>(() => window.jaris.getLanguageState?.()?.setting ?? 'auto')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
+  // Le Cerveau n'a pas pu être lu (bouton du rail) : le vrai message, au lieu d'un clic sans effet.
+  const [brainError, setBrainError] = useState<string | null>(null)
+  // Premier écran : prénom ou langue non enregistrés — dit sous le formulaire, au lieu d'un bouton muet.
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
   // Étape 252 : ce que Jaris fait pendant une demande vocale (« Je réfléchis… 12 s »), `null` hors demande.
   const [voiceActivity, setVoiceActivity] = useState<string | null>(null)
@@ -357,12 +362,16 @@ export default function App(): JSX.Element {
   }, [])
 
   const openMemoryBrain = (): void => {
-    void window.jaris.getMemoryGraph().then((graph) => {
-      setOptionsShown(false)
-      setMachineShown(false)
-      setMemoryGraph(graph)
-      closeSidebarIfNarrow()
-    })
+    setBrainError(null)
+    window.jaris
+      .getMemoryGraph()
+      .then((graph) => {
+        setOptionsShown(false)
+        setMachineShown(false)
+        setMemoryGraph(graph)
+        closeSidebarIfNarrow()
+      })
+      .catch((err: unknown) => setBrainError(ipcErrorMessage(err)))
   }
 
   // Fenêtre étroite : la barre ouverte passe par-dessus le contenu (index.css) ; choisir un écran la referme,
@@ -429,10 +438,14 @@ export default function App(): JSX.Element {
     event.preventDefault()
     const name = nameInput.trim()
     if (!name) return
-    void window.jaris.saveProfile({ name }).then(() => {
-      setProfileName(name)
-      setCapacityScanDone(false)
-    })
+    setOnboardingError(null)
+    window.jaris
+      .saveProfile({ name })
+      .then(() => {
+        setProfileName(name)
+        setCapacityScanDone(false)
+      })
+      .catch((err: unknown) => setOnboardingError(ipcErrorMessage(err)))
   }
 
   useEffect(() => {
@@ -642,8 +655,14 @@ export default function App(): JSX.Element {
                 value={onboardingLanguage}
                 onChange={(event) => {
                   const next = event.target.value as LanguageSetting
+                  const previous = onboardingLanguage
                   setOnboardingLanguage(next)
-                  void window.jaris.setLanguage(next)
+                  setOnboardingError(null)
+                  // Refusée : le menu revient sur la langue réellement en place, et le message dit pourquoi.
+                  window.jaris.setLanguage(next).catch((err: unknown) => {
+                    setOnboardingLanguage(previous)
+                    setOnboardingError(ipcErrorMessage(err))
+                  })
                 }}
               >
                 <option value="auto">{t('language.auto', { language: languageInfo(window.jaris.getLanguageState?.()?.systemCode ?? language).name })}</option>
@@ -654,6 +673,11 @@ export default function App(): JSX.Element {
                 ))}
               </select>
             </label>
+            {onboardingError && (
+              <p className="options-menu__error" role="alert">
+                {onboardingError}
+              </p>
+            )}
           </form>
         </div>
       )
@@ -822,6 +846,13 @@ export default function App(): JSX.Element {
                   {t('app.jarisOutdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
                 </p>
                 <button onClick={() => setAppPopupDismissed(true)}>{t('common.close')}</button>
+              </div>
+            )}
+
+            {brainError && (
+              <div className="app__new-models" role="alert">
+                <p>{brainError}</p>
+                <button onClick={() => setBrainError(null)}>{t('common.close')}</button>
               </div>
             )}
 

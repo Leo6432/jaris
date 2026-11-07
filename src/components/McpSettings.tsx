@@ -46,6 +46,9 @@ function McpIcon({ id }: { id: string | null }): JSX.Element {
   )
 }
 
+/** Exemple du champ « Ajouter » : le serveur de référence « memory » du projet MCP, identique dans toutes les langues. */
+export const MCP_EXAMPLE = '{"mcpServers": {"memory": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"]}}}'
+
 const catalogDescription = (id: string): string => t(`mcp.catalog.${id}.description` as MessageKey)
 
 export default function McpSettings(): JSX.Element {
@@ -164,7 +167,8 @@ function CustomServer({ onAdded, onCancel }: { onAdded: (list: McpServerView[]) 
         className="mcp-add__input"
         value={pasted}
         onChange={(event) => setPasted(event.target.value)}
-        placeholder={'{"mcpServers": {"mon-serveur": {"command": "npx", "args": ["-y", "paquet-du-serveur"]}}}'}
+        // Un vrai serveur officiel (le même nom dans toutes les langues) plutôt que « mon-serveur » écrit en français partout.
+        placeholder={MCP_EXAMPLE}
         rows={5}
         spellCheck={false}
         aria-label={t('mcp.add.title')}

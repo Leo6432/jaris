@@ -1,3 +1,5 @@
+import { Children, cloneElement, isValidElement, useId } from 'react'
+
 /**
  * Briques communes des pages de réglages (Options), sorties d'OptionsMenu.tsx à l'étape 214 pour que
  * l'onglet Téléphone (PhoneAccessSettings.tsx) se présente exactement comme les autres, sans les recopier.
@@ -11,7 +13,13 @@
  * — Léo comparait "Micro utilisé" (un menu) et "Comment se déclencher" (des cases) et n'y voyait aucun point
  * commun. `stacked` réserve le cas où le contrôle a besoin de toute la largeur (le curseur de longueur de
  * contexte, un visualiseur de micro) plutôt que de rester coincé à droite d'une ligne étroite.
+ *
+ * L'intitulé NOMME le contrôle (aria-labelledby) et la description le décrit (aria-describedby) : sans ce lien, un
+ * menu déroulant (micro, haut-parleur) n'avait aucun nom pour un lecteur d'écran. Seuls les champs natifs sans nom
+ * à eux le reçoivent : un bouton garde son propre texte, un interrupteur (`Toggle`) son `label`.
  */
+const NAMED_BY_ROW = new Set(['select', 'input', 'textarea'])
+
 export function SettingRow({
   label,
   description,
@@ -25,13 +33,29 @@ export function SettingRow({
   className?: string
   children: React.ReactNode
 }): JSX.Element {
+  const labelId = useId()
+  const descriptionId = useId()
+  const control = Children.map(children, (child) => {
+    if (!isValidElement<Record<string, unknown>>(child) || typeof child.type !== 'string' || !NAMED_BY_ROW.has(child.type)) return child
+    if (child.props['aria-label'] || child.props['aria-labelledby']) return child
+    return cloneElement(child, {
+      'aria-labelledby': labelId,
+      'aria-describedby': description ? descriptionId : undefined
+    })
+  })
   return (
     <div className={`options-menu__row${stacked ? ' options-menu__row--stacked' : ''}${className ? ` ${className}` : ''}`}>
       <div className="options-menu__row-text">
-        <span className="options-menu__row-label">{label}</span>
-        {description && <p className="options-menu__row-description">{description}</p>}
+        <span className="options-menu__row-label" id={labelId}>
+          {label}
+        </span>
+        {description && (
+          <p className="options-menu__row-description" id={descriptionId}>
+            {description}
+          </p>
+        )}
       </div>
-      <div className="options-menu__row-control">{children}</div>
+      <div className="options-menu__row-control">{control}</div>
     </div>
   )
 }

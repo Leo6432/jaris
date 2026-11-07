@@ -323,7 +323,12 @@
       })
       .then(function (data) {
         checkAuth(res, path)
-        if (!res.ok) throw new Error(data.error || tr('pwa.errorStatus', { status: res.status }))
+        if (!res.ok) {
+          // Le statut HTTP voyage avec le message : c'est sur lui qu'on décide, jamais sur un texte traduit.
+          var error = new Error(data.error || tr('pwa.errorStatus', { status: res.status }))
+          error.status = res.status
+          throw error
+        }
         return data
       })
   }
@@ -353,8 +358,10 @@
         })
         .catch(function (err) {
           if (!token) return onEnd(null, err)
-          // Jaris redémarré entre-temps : ce travail n'existe plus sur le PC.
-          if (/introuvable/i.test(err.message)) return onEnd(null, err)
+          // Jaris redémarré entre-temps : ce travail n'existe plus sur le PC (404). Décidé sur le statut, jamais sur
+          // le message : celui-ci est traduit (« Message introuvable. », « Message not found. »), et hors français le
+          // téléphone réessayait sans fin en restant « occupé », même après rechargement de la page.
+          if (err.status === 404) return onEnd(null, err)
           setStatus(tr('pwa.retrying'))
           setTimeout(tick, POLL_MS * 3)
         })
@@ -740,7 +747,7 @@
     if (!text || conversationBusy) return
     input.value = ''
     autosize()
-    addMessage('user', text)
+    var sent = addMessage('user', text)
     var pending = addMessage('assistant', tr('pwa.thinking'), { pending: true })
     setConversationBusy(true)
     api('POST', '/api/message', { text: text })
@@ -749,6 +756,13 @@
       })
       .catch(function (err) {
         pending.item.remove()
+        // Le message n'est pas parti : il revient dans le champ (s'il est resté vide), prêt à être renvoyé, au lieu
+        // d'être perdu avec la bulle.
+        sent.item.remove()
+        if (!input.value) {
+          input.value = text
+          autosize()
+        }
         addMessage('assistant', err.message, { error: true })
         setConversationBusy(false)
       })

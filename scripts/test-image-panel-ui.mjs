@@ -35,7 +35,11 @@ window.__images = window.__images || [
 ]
 
 window.jaris = {
-  getImageStudioStatus: async () => window.__status,
+  // __statusFails / __listFails : lectures impossibles (le test dit quand ça repasse).
+  getImageStudioStatus: async () => {
+    if (window.__statusFails) throw new Error("Error invoking remote method 'jaris:get-image-studio-status': Error: Le dossier du moteur d'images est verrouillé.")
+    return window.__status
+  },
   installImageStudio: () => {
     window.__calls.push('install')
     return new Promise((resolve) => { window.__finishInstall = () => { window.__status = { ...window.__status, installed: true }; resolve() } })
@@ -53,7 +57,10 @@ window.jaris = {
     })
   },
   cancelStudioImage: () => { window.__calls.push('cancel'); window.__failGen('Dessin annulé.') },
-  listGeneratedImages: async () => window.__images,
+  listGeneratedImages: async () => {
+    if (window.__listFails) throw new Error("Error invoking remote method 'jaris:list-generated-images': Error: Le dossier des images est inaccessible.")
+    return window.__images
+  },
   readGeneratedImage: async (fileName) => { window.__calls.push(['read', fileName]); return PNG },
   deleteGeneratedImage: async (fileName) => { window.__calls.push(['delete', fileName]); window.__images = window.__images.filter((i) => i.fileName !== fileName) },
   openGeneratedImages: async (fileName) => { window.__calls.push(['open', fileName]) },
@@ -268,4 +275,23 @@ test('le champ de saisie garde sa marge en bas de l’écran (étape 354)', opti
     const gap = await page.evaluate(() => innerHeight - document.querySelector('.image-panel > .composer').getBoundingClientRect().bottom)
     assert.ok(gap >= 12, `le champ est à ${gap}px du bas de la fenêtre`)
   })
+})
+
+// Jusqu'à la version 0.49.1, ces lectures n'avaient pas de « catch » : un échec laissait le mode Image vide pour toujours.
+test('état du mode Image illisible : le vrai message et « Réessayer », jamais un écran vide', options, async () => {
+  await withPage(async (page) => {
+    const alert = page.locator('.image-panel [role="alert"]')
+    await alert.waitFor()
+    assert.equal(await alert.textContent(), "Le dossier du moteur d'images est verrouillé.")
+    await page.evaluate(() => (window.__statusFails = false))
+    await page.getByRole('button', { name: 'Réessayer' }).click()
+    await page.waitForSelector('.image-panel__thumb img')
+  }, 'window.__statusFails = true')
+})
+
+test('galerie d’images illisible : le vrai message s’affiche au lieu d’une galerie vide en silence', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.composer')
+    await page.waitForFunction(() => /Le dossier des images est inaccessible\./.test(document.querySelector('.image-panel')?.textContent ?? ''))
+  }, 'window.__listFails = true')
 })

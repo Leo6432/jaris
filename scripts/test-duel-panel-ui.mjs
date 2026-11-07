@@ -23,7 +23,9 @@ const entryPath = join(projectRoot, 'tmp-duel-panel-entry.tsx')
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
+import { useState } from 'react'
 import DuelPanel from './src/components/DuelPanel'
+import { ScreenActiveContext } from './src/lib/shellContext'
 
 const side = (patch = {}) => ({ status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null, ...patch })
 window.__side = side
@@ -102,7 +104,8 @@ window.jaris = {
     return (window.__view = { ...window.__view, series: { ...window.__view.series, waiting: null } })
   },
   duelClose: async () => { window.__calls.push('close') },
-  duelAudio: async () => null,
+  // __duelAudio : le test décide quand le son d'une réponse arrive (sinon, pas de son).
+  duelAudio: (which) => (window.__duelAudio ? window.__duelAudio(which) : Promise.resolve(null)),
   duelDeleteModels: async (models) => { window.__calls.push(['delete', models]); return { deleted: models, failed: [] } },
   getProfile: async () => window.__profile ?? null,
   duelHistory: async () => { window.__calls.push('history'); return window.__history || [] },
@@ -171,7 +174,17 @@ window.__summary = {
   downloaded: [{ model: 'granite4.2:8b', sizeGb: 5.2, inUse: true }, { model: 'ministral-3:8b', sizeGb: 6.0, inUse: false }]
 }
 
-createRoot(document.getElementById('root')).render(<DuelPanel />)
+// Comme KeepAlive (App.tsx) : l'écran Duel reste monté quand on le quitte, seul son état « affiché » change.
+function Root() {
+  const [active, setActive] = useState(true)
+  window.__setActive = setActive
+  return (
+    <ScreenActiveContext.Provider value={active}>
+      <DuelPanel />
+    </ScreenActiveContext.Provider>
+  )
+}
+createRoot(document.getElementById('root')).render(<Root />)
 `
 
 let pageHtml = null
@@ -1422,4 +1435,68 @@ test('étape 415 : en duel Code, un champ pour demander une modification aux deu
     assert.match(earlier, /Ajoute un bouton remise à zéro/)
     assert.doesNotMatch(earlier, /Aucune réponse/, 'une application n’est pas « aucune réponse »')
   }, init, { width: 760, height: 900 })
+})
+
+// Jusqu'à la version 0.49.1 : t('duel.series.allDone', { count }) écrivait « ont déjà 1 duels chacun ».
+test('série : « 1 duel chacun » au singulier, « 2 duels chacun » au pluriel', options, async () => {
+  const plan = (duels) =>
+    `window.__plan = { category: 'code', available: 4, freeDiskGb: 120, downloadBudgetGb: 115, sizes: [{ count: 4, toDownload: 0, downloadGb: 0, fitsDisk: true }], machine: { vramGb: 8, ramGb: 32 }, models: [` +
+    ['granite4.2:8b', 'qwen3.5:9b', 'ministral-3:8b', 'gemma4:12b'].map((model) => `{ model: '${model}', vramGb: 6, reason: null, installed: true, duels: ${duels} }`).join(',') +
+    `] }`
+  for (const [perModel, expected] of [[1, /déjà 1 duel chacun :/], [2, /déjà 2 duels chacun :/]]) {
+    await withPage(async (page) => {
+      await page.click('.duel-category:has-text("Code")')
+      await page.click('.duel-pickmode button:has-text("Je choisis")')
+      await page.click('.duel-series__mode button:has-text("Série")')
+      await page.click('button:has-text("Tout cocher")')
+      await settle(page)
+      // Le nombre de duels par modèle descend jusqu'à la valeur voulue.
+      while (Number(await page.textContent('.duel-series__value')) > perModel) await page.click('.duel-series__step >> nth=0')
+      await settle(page)
+      assert.match(await page.textContent('.duel-home'), expected)
+      assert.doesNotMatch(await page.textContent('.duel-home'), /1 duels/)
+    }, plan(5))
+  }
+})
+
+/** Un duel Vocal dont la réponse A a un son : il se joue tout seul, dès qu'il arrive (le test décide quand). */
+const VOICE_ROUND = `
+  window.__category = 'voice'
+  window.__media = []
+  HTMLMediaElement.prototype.play = function () { window.__media.push('play'); return Promise.resolve() }
+  HTMLMediaElement.prototype.pause = function () { window.__media.push('pause') }
+  window.__duelAudio = () => new Promise((resolve) => (window.__giveAudio = () => resolve(new Uint8Array([82, 73, 70, 70]))))
+  const done = { status: 'done', text: 'Il est midi.', activity: null, startedAt: null, durationMs: 2000, actions: [], previewUrl: null, audio: true, audioError: null, error: null, trouble: null }
+  const idle = { ...done, status: 'idle', text: '', durationMs: null, audio: false }
+  window.__view = { id: 'session-1', category: 'voice', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: 'Quelle heure est-il ?', a: done, b: idle } }
+`
+
+test('duel Vocal : une voix arrêtée avant l’arrivée de son son ne démarre jamais après coup', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForFunction(() => typeof window.__giveAudio === 'function')
+    // Le modèle B démarre (comme après « Suivant ») : la voix de A doit se taire, même si son son n'est pas encore là.
+    await page.evaluate(() => window.__emit({ ...window.__view, round: { ...window.__view.round, b: { ...window.__view.round.a, status: 'running', audio: false } } }))
+    await settle(page)
+    await page.evaluate(() => window.__giveAudio())
+    await page.waitForTimeout(300)
+    assert.deepEqual(await page.evaluate(() => window.__media.filter((m) => m === 'play')), [], 'l’ancienne voix ne démarre pas')
+  }, VOICE_ROUND)
+})
+
+test('duel Vocal : quitter l’écran Duel coupe la voix ; une voix attendue ne démarre pas pendant ce temps', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForFunction(() => typeof window.__giveAudio === 'function')
+    await page.evaluate(() => window.__giveAudio())
+    await page.waitForFunction(() => window.__media.includes('play'))
+    await page.evaluate(() => window.__setActive(false))
+    await page.waitForFunction(() => window.__media[window.__media.length - 1] === 'pause')
+  }, VOICE_ROUND)
+  await withPage(async (page) => {
+    await page.waitForFunction(() => typeof window.__giveAudio === 'function')
+    await page.evaluate(() => window.__setActive(false))
+    await settle(page)
+    await page.evaluate(() => window.__giveAudio())
+    await page.waitForTimeout(300)
+    assert.equal(await page.evaluate(() => window.__media.includes('play')), false)
+  }, VOICE_ROUND)
 })

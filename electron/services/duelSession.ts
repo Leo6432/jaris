@@ -91,7 +91,7 @@ import type {
   DuelSummary,
   Profile
 } from '../../shared/ipc'
-import { formatDecimal, t, type MessageKey } from '../../shared/i18n'
+import { formatDecimal, t, tn, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
 
 /**
@@ -574,13 +574,13 @@ export async function startDuel(
   // Étape 384 : les duels déjà votés comptent (votes de ce PC et votes livrés avec Jaris).
   const seriesPlan =
     seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), 'code'))
-  if (seriesPlan && !seriesPlan.length) throw new Error(t('duel.series.allDone', { count: seriesPerModel as number }))
+  if (seriesPlan && !seriesPlan.length) throw new Error(tn('duel.series.allDone', seriesPerModel as number))
   // Étape 399 : chaque modèle fait au moins N duels, en comptant les votes déjà faits ET ceux de Claude encore à vérifier.
   const judgePlan =
     judgePerModel === undefined
       ? null
       : planDuelSeries(shuffled, judgePerModel, Math.random, countDuelsByModel([...getAllDuelVotes(), ...getDuelReviews()], 'conversation'))
-  if (judgePlan && !judgePlan.length) throw new Error(t('duel.series.allDone', { count: judgePerModel as number }))
+  if (judgePlan && !judgePlan.length) throw new Error(tn('duel.series.allDone', judgePerModel as number))
   session = {
     id: randomUUID(),
     remote,

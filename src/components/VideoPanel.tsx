@@ -17,6 +17,7 @@ import VideoDurationPicker from './VideoDurationPicker'
 import VideoQualityPicker from './VideoQualityPicker'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { t } from '@/lib/i18n'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 const DURATION_KEY = 'jaris.videoSeconds'
 /** Comme l'écran Image : les dernières créations en vignettes sur l'accueil (étape 213). */
@@ -61,6 +62,7 @@ export default function VideoPanel(): JSX.Element {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [ratio, setRatio] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   /** Étape 291 : la demande en cours, rappelée au centre pendant la création (le champ est vidé dès l'envoi). */
   const [pendingPrompt, setPendingPrompt] = useState('')
@@ -87,13 +89,22 @@ export default function VideoPanel(): JSX.Element {
     return next
   }
 
+  const loadStatus = (): void => {
+    setStatusError(null)
+    refreshStatus().catch((err: unknown) => setStatusError(ipcErrorMessage(err)))
+  }
+  // Une galerie illisible le dit (vrai message), au lieu de rester vide en silence.
+  const loadVideos = (): void => {
+    refreshVideos().catch((err: unknown) => setError(ipcErrorMessage(err)))
+  }
+
   useEffect(() => {
-    void refreshStatus()
-    void refreshVideos()
+    loadStatus()
+    loadVideos()
   }, [])
   useEffect(() => window.jaris.onVideoStudioLog(setLogLine), [])
   // Vidéo créée depuis le téléphone : elle apparaît aussi ici sans avoir à rouvrir le mode.
-  useEffect(() => window.jaris.onStudioGalleryChanged?.(() => void refreshVideos()), [])
+  useEffect(() => window.jaris.onStudioGalleryChanged?.(loadVideos), [])
 
   useEffect(() => {
     if (!generating) return
@@ -280,7 +291,23 @@ export default function VideoPanel(): JSX.Element {
     clearFeedback()
   }
 
-  if (!status) return <div className="image-panel image-panel--loading" />
+  if (!status) {
+    // Lecture de l'état impossible : le vrai message et « Réessayer », jamais un écran vide pour toujours.
+    if (!statusError) return <div className="image-panel image-panel--loading" />
+    return (
+      <div className="image-panel image-install">
+        <div className="image-install__card">
+          <h2>{t('app.mode.video')}</h2>
+          <p className="code-panel__error" role="alert">
+            {statusError}
+          </p>
+          <button className="image-install__button" onClick={loadStatus}>
+            {t('common.retry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const current = status.qualities.find((q) => q.id === quality) ?? null
 

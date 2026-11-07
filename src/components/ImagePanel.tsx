@@ -12,6 +12,7 @@ import { imageStepFromLog } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
 import { t } from '@/lib/i18n'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 /** Nombre d'images montrées en vignettes sur l'accueil du mode Image (chacune voyage en entier par l'IPC). */
 const GALLERY_SIZE = 8
@@ -40,6 +41,7 @@ export default function ImagePanel(): JSX.Element {
   const ratio = loadedRatio && loadedRatio.url === selectedUrl ? loadedRatio.ratio : null
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   /** Étape 291 : la demande en cours, rappelée au centre pendant le dessin (le champ est vidé dès l'envoi). */
   const [pendingPrompt, setPendingPrompt] = useState('')
@@ -53,13 +55,25 @@ export default function ImagePanel(): JSX.Element {
     return list
   }
 
+  const loadStatus = (): void => {
+    setStatusError(null)
+    window.jaris
+      .getImageStudioStatus()
+      .then(setStatus)
+      .catch((err: unknown) => setStatusError(ipcErrorMessage(err)))
+  }
+  // Une galerie illisible le dit (vrai message), au lieu de rester vide en silence.
+  const loadImages = (): void => {
+    refreshImages().catch((err: unknown) => setError(ipcErrorMessage(err)))
+  }
+
   useEffect(() => {
-    void window.jaris.getImageStudioStatus().then(setStatus)
-    void refreshImages()
+    loadStatus()
+    loadImages()
   }, [])
   useEffect(() => window.jaris.onImageStudioLog(setLogLine), [])
   // Image créée depuis le téléphone : elle apparaît aussi ici sans avoir à rouvrir le mode.
-  useEffect(() => window.jaris.onStudioGalleryChanged?.(() => void refreshImages()), [])
+  useEffect(() => window.jaris.onStudioGalleryChanged?.(loadImages), [])
 
   useEffect(() => {
     if (!generating) return
@@ -197,7 +211,23 @@ export default function ImagePanel(): JSX.Element {
     clearFeedback()
   }
 
-  if (!status) return <div className="image-panel image-panel--loading" />
+  if (!status) {
+    // Lecture de l'état impossible : le vrai message et « Réessayer », jamais un écran vide pour toujours.
+    if (!statusError) return <div className="image-panel image-panel--loading" />
+    return (
+      <div className="image-panel image-install">
+        <div className="image-install__card">
+          <h2>{t('app.mode.image')}</h2>
+          <p className="code-panel__error" role="alert">
+            {statusError}
+          </p>
+          <button className="image-install__button" onClick={loadStatus}>
+            {t('common.retry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (!ready) {
     return (

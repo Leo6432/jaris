@@ -189,8 +189,8 @@ export default function Workspace({
                   <button
                     className="workspace__delete"
                     onClick={() => setPendingDelete(item.id)}
-                    title={`${item.removeLabel?.action ?? t('common.delete')} ${item.title}`}
-                    aria-label={`${item.removeLabel?.action ?? t('common.delete')} ${item.title}`}
+                    title={t('workspace.itemAction', { action: item.removeLabel?.action ?? t('common.delete'), title: item.title })}
+                    aria-label={t('workspace.itemAction', { action: item.removeLabel?.action ?? t('common.delete'), title: item.title })}
                   >
                     <DeleteIcon />
                   </button>

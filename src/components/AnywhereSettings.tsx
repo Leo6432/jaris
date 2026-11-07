@@ -75,7 +75,8 @@ export default function AnywhereSettings(): JSX.Element {
   const [phone, setPhone] = useState<PhoneAccessStatus | null>(null)
 
   useEffect(() => {
-    void window.jaris.getPhoneAccess().then(setPhone)
+    // Illisible : la case reste « à activer », et les réglages juste en dessous (PhoneAccessSettings) disent l'erreur.
+    window.jaris.getPhoneAccess().then(setPhone).catch(() => {})
     return window.jaris.onPhoneAccessChanged((next) => setPhone(next))
   }, [])
 

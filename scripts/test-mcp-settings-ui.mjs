@@ -219,6 +219,11 @@ test('« + Ajouter » : son propre serveur collé ; erreur réelle ; une fois aj
     await page.waitForSelector('.mcp-card')
     await page.getByRole('button', { name: 'Ajouter un serveur' }).click()
     const form = page.locator('.mcp-add')
+    // Jusqu'à la version 0.49.1, l'exemple disait « mon-serveur » et « paquet-du-serveur » dans toutes les langues : un
+    // vrai serveur de référence du projet MCP, au même nom partout, et un exemple qui se colle tel quel.
+    const example = await form.locator('.mcp-add__input').getAttribute('placeholder')
+    assert.doesNotMatch(example, /mon-serveur|paquet-du-serveur/)
+    assert.deepEqual(JSON.parse(example), { mcpServers: { memory: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'] } } })
     await form.locator('.mcp-add__input').fill('bonjour')
     await form.getByRole('button', { name: 'Ajouter', exact: true }).click()
     await page.waitForSelector('.mcp-add .mcp-error')

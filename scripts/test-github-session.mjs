@@ -163,7 +163,15 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       },
       requestDeviceCode: async () => ({ deviceCode: 'd', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresAt: Infinity, intervalMs: 1 }),
       pollDeviceToken: async () => 'gho_nouveau',
-      pollDeviceTokenSet: async () => state.nextLogin ?? { token: 'gho_nouveau', refreshToken: null, expiresAt: null }
+      pollDeviceTokenSet: async (_clientId, _device, { signal } = {}) => {
+        // holdLogin : le code n'est pas encore validé sur github.com — comme le vrai, « Annuler » arrête l'attente.
+        if (state.holdLogin) {
+          await new Promise((_resolve, reject) =>
+            signal.addEventListener('abort', () => reject(Object.assign(new Error('Connexion annulée.'), { name: 'AbortError' })), { once: true })
+          )
+        }
+        return state.nextLogin ?? { token: 'gho_nouveau', refreshToken: null, expiresAt: null }
+      }
     },
     './ollama': { getModelThinking: async () => null },
     './profileStore': { getProfile: async () => ({}) },
@@ -190,6 +198,21 @@ test('connexion par code : le code est rendu à l’écran, puis le compte conne
   assert.equal(Object.keys(code).includes('deviceCode'), false, 'le code interne ne doit jamais partir vers l’écran')
   assert.deepEqual(await session.finishGithubLogin(), { available: true, connected: true, login: 'leo' })
   assert.equal(state.token, 'gho_nouveau')
+})
+
+// L'écran reconnaît une annulation à cette réponse, jamais en comparant un message traduit (GithubPicker.tsx).
+test('« Annuler » pendant l’attente du code : la fin de connexion répond { cancelled: true }, sans erreur ni jeton', async () => {
+  const { session, state } = setup()
+  state.holdLogin = true
+  await session.startGithubLogin()
+  const finished = session.finishGithubLogin()
+  session.cancelGithubLogin()
+  assert.deepEqual(await finished, { cancelled: true })
+  assert.equal(state.token, null)
+  // Une nouvelle connexion repart normalement.
+  state.holdLogin = false
+  await session.startGithubLogin()
+  assert.deepEqual(await session.finishGithubLogin(), { available: true, connected: true, login: 'leo' })
 })
 
 test('l’agent prépare des changements ; un fichier remis à l’identique disparaît de la liste', async () => {

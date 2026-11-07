@@ -55,6 +55,9 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [opening, setOpening] = useState<string | null>(null)
+  // Pendant que GitHub donne le code : « Se connecter » est grisé (un double clic demandait deux codes, le second
+  // annulant le premier).
+  const [connecting, setConnecting] = useState(false)
   const { rootRef, panelRef, panelStyle } = usePickerPanel(open, setOpen, [status, code, repos, error])
 
   useEffect(() => {
@@ -90,17 +93,21 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
   if (!status?.available) return null
 
   const connect = async (): Promise<void> => {
+    if (connecting) return
+    setConnecting(true)
     setError(null)
     try {
       setCode(await window.jaris.githubStartLogin())
       const next = await window.jaris.githubFinishLogin()
+      // Annulée : rien à dire, le panneau revient simplement sur « Se connecter ».
+      if ('cancelled' in next) return
       setStatus(next)
       setRepos(null)
     } catch (err) {
-      const message = ipcErrorMessage(err)
-      if (message !== t('github.loginCancelled')) setError(message)
+      setError(ipcErrorMessage(err))
     } finally {
       setCode(null)
+      setConnecting(false)
     }
   }
 
@@ -179,8 +186,8 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
                   </p>
                 )}
                 <p className="github-picker__text">{t('github.login.intro')}</p>
-                <button type="button" className="github-picker__primary" onClick={() => void connect()}>
-                  {t('github.login.button')}
+                <button type="button" className="github-picker__primary" onClick={() => void connect()} disabled={connecting} aria-busy={connecting || undefined}>
+                  {connecting ? t('github.login.connecting') : t('github.login.button')}
                 </button>
               </div>
             )
