@@ -4,6 +4,7 @@ import type { PhoneAccessStatus, PhonePairing } from '../../shared/ipc'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import { t } from '@/lib/i18n'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 /** « 12345678 » -> « 1234 5678 » : plus facile à recopier sur un téléphone. */
 export function formatPairingCode(code: string): string {
@@ -28,9 +29,18 @@ export default function PhoneAccessSettings(): JSX.Element {
   const [now, setNow] = useState(Date.now())
   const [error, setError] = useState<string | null>(null)
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
+
+  const loadStatus = (): void => {
+    setStatusError(null)
+    window.jaris
+      .getPhoneAccess()
+      .then(setStatus)
+      .catch((err: unknown) => setStatusError(ipcErrorMessage(err)))
+  }
 
   useEffect(() => {
-    void window.jaris.getPhoneAccess().then(setStatus)
+    loadStatus()
     return window.jaris.onPhoneAccessChanged((next) => setStatus(next))
   }, [])
 
@@ -81,7 +91,20 @@ export default function PhoneAccessSettings(): JSX.Element {
       setPairing(pairing)
     })
 
-  if (!status) return <div className="options-menu__section" />
+  // Lecture impossible : le vrai message et « Réessayer », jamais un onglet vide pour toujours.
+  if (!status)
+    return (
+      <div className="options-menu__section">
+        {statusError && (
+          <div className="phone-access__step phone-access__step--error" role="alert">
+            <p>{statusError}</p>
+            <button className="options-menu__action" onClick={loadStatus}>
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
+      </div>
+    )
 
   const enabled = status.state !== 'off' && status.state !== 'unsupported'
 
@@ -179,7 +202,9 @@ export default function PhoneAccessSettings(): JSX.Element {
             <p className="phone-access__empty">{t('phone.devices.none')}</p>
           ) : (
             status.devices.map((device) => (
-              <SettingRow key={device.id} label={device.name} description={t('phone.device.meta', { created: formatRecentDate(Date.parse(device.createdAt)).toLowerCase(), seen: formatRecentDate(Date.parse(device.lastSeenAt)).toLowerCase() })}>
+              // Les dates telles que formatRecentDate les écrit : « Verbunden: 12. März » garde sa majuscule (toLowerCase()
+              // écrivait « märz » en allemand) ; le texte les présente en « libellé : valeur », donc sans en changer la casse.
+              <SettingRow key={device.id} label={device.name} description={t('phone.device.meta', { created: formatRecentDate(Date.parse(device.createdAt)), seen: formatRecentDate(Date.parse(device.lastSeenAt)) })}>
                 <button className="options-menu__action" disabled={busy} onClick={() => void run(() => window.jaris.removePhoneDevice(device.id))}>
                   {t('phone.device.disconnect')}
                 </button>

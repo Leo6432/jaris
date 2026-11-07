@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { loadPhoneModules, makeWav } from './phone-test-loader.mjs'
+import { i18nModule } from './i18n-test-module.mjs'
+import { readFileSync } from 'node:fs'
 
 /**
  * Étapes 214-215 : la page du téléphone, ouverte dans un vrai navigateur au format téléphone, contre le VRAI
@@ -218,6 +220,51 @@ test('Chat : plus de dictaphone ; écrire affiche la progression puis la répons
     await page.reload()
     await page.waitForFunction(() => document.querySelectorAll('.message').length >= 2)
     assert.match(await page.textContent('.messages'), /dessine un chat/)
+  })
+})
+
+// Le serveur répond 404 avec un message TRADUIT (« Message not found. ») quand Jaris a redémarré entre-temps. Jusqu'à la
+// version 0.49.1, la page cherchait « introuvable » dans ce message : hors français, elle réessayait sans fin et la
+// conversation restait « occupée », même après rechargement (le travail était gardé dans sessionStorage).
+test('Chat, en anglais : un travail disparu du PC (Jaris redémarré) libère la conversation au lieu de réessayer sans fin', options, async () => {
+  i18nModule.setLanguage('en', JSON.parse(readFileSync(new URL('../shared/i18n/locales/en.json', import.meta.url), 'utf8')))
+  let release = null
+  try {
+    await withPhone(
+      async ({ page, server, base }) => {
+        await open(page, server, base)
+        await page.fill('#input', 'hello')
+        await page.click('#send')
+        await page.waitForSelector('.message--pending')
+        assert.equal(await page.isDisabled('#send'), true)
+        server.jobs.clear()
+        await page.waitForSelector('.message--pending', { state: 'detached', timeout: 10000 })
+        assert.equal(await page.isDisabled('#send'), false, 'la conversation n’est plus « occupée »')
+        assert.equal(await page.evaluate(() => sessionStorage.getItem('jaris.phone.job')), null, 'plus de travail fantôme au rechargement')
+        assert.doesNotMatch(await page.textContent('#top-status'), /Connection lost/i)
+      },
+      { sendMessage: () => new Promise((resolve) => (release = resolve)) }
+    )
+  } finally {
+    release?.({ reply: 'ok' })
+    i18nModule.setLanguage('fr')
+  }
+})
+
+test('Chat : un envoi qui échoue remet le texte dans le champ au lieu de le perdre', options, async () => {
+  await withPhone(async ({ page, server, base, received }) => {
+    await open(page, server, base)
+    await page.route('**/api/message', (route) => route.abort())
+    await page.fill('#input', 'un long message important')
+    await page.click('#send')
+    await page.waitForSelector('.message--error')
+    assert.equal(await page.inputValue('#input'), 'un long message important')
+    assert.equal(await page.locator('.message--user').count(), 0, 'pas de bulle pour un message qui n’est pas parti')
+    assert.equal(await page.isDisabled('#send'), false)
+    await page.unroute('**/api/message')
+    await page.click('#send')
+    await page.waitForFunction(() => /Réponse à : un long message important/.test(document.querySelector('.messages')?.textContent || ''))
+    assert.deepEqual(received.messages, ['un long message important'])
   })
 })
 

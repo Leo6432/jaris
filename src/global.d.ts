@@ -196,7 +196,8 @@ declare global {
       // Étape 277 : GitHub dans le mode Code (le jeton ne quitte jamais le main).
       githubStatus: () => Promise<GithubStatus>
       githubStartLogin: () => Promise<GithubDeviceCode>
-      githubFinishLogin: () => Promise<GithubStatus>
+      /** `{ cancelled: true }` : connexion annulée (« Annuler », ou remplacée par une nouvelle) — rien à afficher. */
+      githubFinishLogin: () => Promise<GithubStatus | { cancelled: true }>
       githubCancelLogin: () => void
       githubLogout: () => Promise<void>
       githubListRepos: () => Promise<GithubRepoSummary[]>

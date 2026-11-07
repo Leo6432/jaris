@@ -58,7 +58,13 @@ const picks = {
   pilot: { model: 'MAI-UI 8B', reason: null }
 }
 window.jaris = {
-  getMyModelPicks: async () => picks,
+  getMyModelPicks: async () => {
+    if (window.__picksFailures > 0) {
+      window.__picksFailures--
+      throw new Error("Error invoking remote method 'jaris:get-my-model-picks': Error: Le fichier des scores est verrouillé par un autre programme.")
+    }
+    return picks
+  },
   onModelBenchmarkLine: (cb) => { window.__line = cb; return () => { window.__line = null } },
   onModelPullProgress: (cb) => { window.__pull = cb; return () => { window.__pull = null } },
   runQuickSetup: () => new Promise((resolve) => { window.__finishSetup = resolve }),
@@ -87,7 +93,7 @@ function build() {
 
 // La coque réelle du premier lancement (App.tsx, setupShell) : barre de titre + zone de l'écran.
 const pageHtml = (screen) =>
-  `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div id="root"><div class="app-shell app-shell--titlebar app-shell--setup"><div class="titlebar" style="height:40px"></div><div class="app-shell__setup" id="setup"></div></div></div><script>window.__screen=${JSON.stringify(screen)}</script><script>${bundle}</script></body></html>`
+  `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div id="root"><div class="app-shell app-shell--titlebar app-shell--setup"><div class="titlebar" style="height:40px"></div><div class="app-shell__setup" id="setup"></div></div></div><script>window.__screen=${JSON.stringify(screen)};window.__picksFailures=${screen === 'capacity-unreadable' ? 1 : 0}</script><script>${bundle}</script></body></html>`
 
 async function withScreen(screen, { width = 1000, height = 760, colorScheme = 'light' } = {}, run) {
   build()
@@ -97,7 +103,7 @@ async function withScreen(screen, { width = 1000, height = 760, colorScheme = 'l
     await page.emulateMedia({ colorScheme })
     await page.setViewportSize({ width, height })
     await page.setContent(pageHtml(screen))
-    await page.waitForSelector(screen === 'runtime' ? '.runtime-setup__status' : '.capacity-scan__tier-table')
+    await page.waitForSelector(screen === 'runtime' ? '.runtime-setup__status' : screen === 'capacity-unreadable' ? '.capacity-scan__warning' : '.capacity-scan__tier-table')
     await run(page)
   } finally {
     await browser.close()
@@ -315,4 +321,18 @@ test('« Configuration terminée » : la ligne Vidéo, après Image, avec la mê
       assert.match(items[at + 1], /^Pilotage d'écran : /)
     })
   }
+})
+
+// Jusqu'à la version 0.49.1, une lecture ratée des modèles prévus laissait « Continuer » grisé pour toujours, sans un
+// mot : l'écran du tout premier lancement devenait une impasse.
+test('modèles prévus illisibles : le vrai message, « Réessayer », et « Continuer » reste possible', options, async () => {
+  await withScreen('capacity-unreadable', {}, async (page) => {
+    const warning = page.locator('.capacity-scan__warning')
+    assert.match(await warning.textContent(), /Le fichier des scores est verrouillé par un autre programme\./)
+    assert.doesNotMatch(await warning.textContent(), /invoking remote method/)
+    assert.equal(await page.isDisabled('.capacity-scan__footer > button'), false, '« Continuer » n’est pas une impasse')
+    await warning.getByRole('button', { name: 'Réessayer' }).click()
+    await page.waitForSelector('.capacity-scan__tier-table')
+    assert.equal(await page.locator('.capacity-scan__warning').count(), 0)
+  })
 })

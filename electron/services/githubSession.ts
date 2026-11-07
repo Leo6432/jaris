@@ -220,8 +220,12 @@ export async function startGithubLogin(): Promise<GithubDeviceCode> {
   return { userCode: device.userCode, verificationUri: device.verificationUri }
 }
 
-/** Attend que le code soit validé sur github.com, puis enregistre le jeton (chiffré). */
-export async function finishGithubLogin(): Promise<GithubStatus> {
+/**
+ * Attend que le code soit validé sur github.com, puis enregistre le jeton (chiffré). « Annuler » (ou une nouvelle
+ * connexion qui remplace celle-ci) n'est pas une erreur : la réponse est `{ cancelled: true }`, que l'écran reconnaît
+ * sans comparer un texte traduit (il comparait jusqu'ici le message à t('github.loginCancelled')).
+ */
+export async function finishGithubLogin(): Promise<GithubStatus | { cancelled: true }> {
   const pending = pendingLogin
   if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
@@ -239,7 +243,7 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
     if (!previous || previous.login === null || previous.login !== status.login) sessions.clear()
     return status
   } catch (err) {
-    if (isAbortError(err)) throw new GithubError(0, t('github.loginCancelled'))
+    if (isAbortError(err)) return { cancelled: true }
     throw err
   } finally {
     if (pendingLogin === pending) pendingLogin = null

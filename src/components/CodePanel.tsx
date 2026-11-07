@@ -704,6 +704,8 @@ export default function CodePanel(): JSX.Element {
     if (generating) return
     setRepo(null)
     setCommitted(null)
+    // Comme openRepo : une image jointe pour l'élément précédent ne part pas avec la demande suivante d'un autre.
+    setAttachment(null)
     try {
       const result = await window.jaris.loadGeneratedApp(path)
       switchConversation(appConversationKey(result.path))
@@ -720,6 +722,9 @@ export default function CodePanel(): JSX.Element {
    * du renderer.
    */
   const remove = async (path: string): Promise<void> => {
+    // Même garde que les autres actions de la liste : pendant un travail, sa conversation s'enregistre sous l'élément
+    // ouvert — l'effacer maintenant casserait cet enregistrement.
+    if (generating) return
     setError(null)
     try {
       await window.jaris.deleteGeneratedApp(path)
@@ -753,6 +758,9 @@ export default function CodePanel(): JSX.Element {
 
   /** Retiré de la liste seulement (et sa conversation oubliée) : le dépôt reste sur GitHub. */
   const removeRepoFromList = (fullName: string): void => {
+    // Retirer le dépôt en cours de travail fermait le dépôt sous les pieds du travail : sa conversation n'était plus
+    // enregistrée nulle part (même garde que openRecent, startOver, openRepoFromList).
+    if (generating) return
     setRecentRepos(forgetRepo(fullName))
     if (repo && repo.fullName.toLowerCase() === fullName.toLowerCase()) closeRepo()
   }

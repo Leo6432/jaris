@@ -26,6 +26,7 @@ import { formatModelName } from '../lib/formatModelName'
 import { migrateLegacyCodeConversations } from '../lib/codeConversations'
 import { selectedInputDevice } from '../lib/inputDeviceChoice'
 import { currentLocale, t, tn } from '../lib/i18n'
+import { ipcErrorMessage } from '../lib/ipcError'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
 
@@ -216,6 +217,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const [previewing, setPreviewing] = useState(false)
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
+  // « Supprimer l'historique » demande confirmation DANS la page (comme la liste à gauche ou les serveurs MCP) : un
+  // dialogue natif fait perdre le focus à la fenêtre (piège de l'étape 93).
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false)
   const [myPicks, setMyPicks] = useState<MyModelPicksData | null>(null)
   /**
    * Curseur de longueur de contexte (Léo : "jaris voit les model et regarde la vram et propose une barre
@@ -266,12 +270,37 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const [systemLanguage, setSystemLanguage] = useState(() => window.jaris.getLanguageState?.()?.systemCode ?? 'fr')
   const [savingLanguage, setSavingLanguage] = useState(false)
 
+  // Étape 325 (comme App.tsx) : un profil momentanément illisible (antivirus) est relu, au lieu de laisser `profile` à
+  // null pour toujours — chaque interrupteur ne faisait alors plus rien, sans un mot. Le vrai message s'affiche
+  // pendant ce temps, et s'efface dès que la lecture réussit.
+  const profileLoadError = useRef<string | null>(null)
   useEffect(() => {
-    window.jaris.getProfile().then((p) => {
-      setProfile(p)
-      const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
-      if (savedIndex !== -1) setVoiceIndex(savedIndex)
-    })
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = (): void => {
+      window.jaris
+        .getProfile()
+        .then((p) => {
+          if (cancelled) return
+          const shown = profileLoadError.current
+          profileLoadError.current = null
+          if (shown) setError((current) => (current === shown ? null : current))
+          setProfile(p)
+          const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
+          if (savedIndex !== -1) setVoiceIndex(savedIndex)
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return
+          profileLoadError.current = ipcErrorMessage(err)
+          setError(profileLoadError.current)
+          timer = setTimeout(load, 2000)
+        })
+    }
+    load()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   // Prévient main.ts (`optionsOpen`) à chaque ouverture/fermeture — Léo : "quand on est dans les option,
@@ -500,7 +529,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   }
 
   const handleClearHistory = async (): Promise<void> => {
-    if (!window.confirm(t('options.history.confirmClear'))) return
+    setConfirmClearHistory(false)
     setError(null)
     setClearingHistory(true)
     try {
@@ -659,14 +688,22 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
    * Le profil renvoyé remplace ensuite cette copie, à jour.
    */
   const saveProfileFlag = async (change: Partial<Profile>): Promise<void> => {
-    if (!profile) return
+    if (!profile) {
+      // Profil pas encore relu : dit pourquoi le clic n'a rien changé, au lieu de ne rien faire en silence.
+      if (profileLoadError.current) setError(profileLoadError.current)
+      return
+    }
+    const previous = Object.fromEntries(Object.keys(change).map((key) => [key, profile[key as keyof Profile]])) as Partial<Profile>
     setError(null)
     setProfile((prev) => (prev ? { ...prev, ...change } : prev))
     try {
       const fresh = await window.jaris.patchProfile(change)
       if (fresh) setProfile(fresh)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      // Non enregistré : le réglage revient sur la valeur réellement gardée (sinon l'interrupteur montrerait un état
+      // que Jaris n'applique pas), et le message dit pourquoi.
+      setProfile((prev) => (prev ? { ...prev, ...previous } : prev))
+      setError(ipcErrorMessage(err))
     }
   }
 
@@ -762,26 +799,50 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
           passer pour un panneau de configuration de plus. */}
       <span className="options-page__navigation-label">{t('options.nav.discover')}</span>
       <nav className="options-menu__tabs">
-        <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
+        <button
+          className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'capacites' ? 'page' : undefined}
+          onClick={() => setTab('capacites')}
+        >
           {t('options.tab.capabilities')}
         </button>
       </nav>
       <span className="options-page__navigation-label options-page__navigation-label--next">{t('options.nav.settings')}</span>
       <nav className="options-menu__tabs">
-        <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
+        <button
+          className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'voix' ? 'page' : undefined}
+          onClick={() => setTab('voix')}
+        >
           {t('options.tab.voice')}
         </button>
-        <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
+        <button
+          className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'modeles' ? 'page' : undefined}
+          onClick={() => setTab('modeles')}
+        >
           {t('options.tab.models')}
         </button>
-        <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
+        <button
+          className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'telephone' ? 'page' : undefined}
+          onClick={() => setTab('telephone')}
+        >
           {t('options.tab.phone')}
         </button>
         {/* Étape 418 : les serveurs MCP de Léo (McpSettings.tsx). */}
-        <button className={`options-menu__tab${tab === 'mcp' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('mcp')}>
+        <button
+          className={`options-menu__tab${tab === 'mcp' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'mcp' ? 'page' : undefined}
+          onClick={() => setTab('mcp')}
+        >
           {t('options.tab.mcp')}
         </button>
-        <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
+        <button
+          className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`}
+          aria-current={tab === 'general' ? 'page' : undefined}
+          onClick={() => setTab('general')}
+        >
           {t('options.tab.general')}
         </button>
       </nav>
@@ -824,7 +885,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         {!navSlot && navigation}
         {navSlot && createPortal(navigation, navSlot)}
 
-        <main className="options-page__workspace">
+        <section className="options-page__workspace">
           <div className="options-page__content">
         {TAB_META[tab] && (
           <div className="options-page__tab-header">
@@ -903,7 +964,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                       className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
                       onClick={() => void chooseVoice(i)}
                       disabled={previewing}
-                      aria-label={v.id}
+                      aria-label={t('common.labelValue', { label: v.id, value: t(v.description) })}
+                      aria-pressed={i === voiceIndex}
                     />
                   ))}
                 </div>
@@ -1311,19 +1373,32 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 </ul>
               )}
               {history !== null && (
-                <SettingRow label={t('options.history.folder')} description={t('options.history.folder.hint')}>
+                <SettingRow
+                  label={t('options.history.folder')}
+                  description={confirmClearHistory ? t('options.history.confirmClear') : t('options.history.folder.hint')}
+                >
                   <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
                     {t('common.openFolder')}
                   </button>
-                  {history.length > 0 && (
-                    <button
-                      className="options-menu__action options-menu__action--danger"
-                      onClick={() => void handleClearHistory()}
-                      disabled={clearingHistory}
-                    >
-                      {clearingHistory ? t('common.deleting') : t('options.history.clear')}
-                    </button>
-                  )}
+                  {history.length > 0 &&
+                    (confirmClearHistory ? (
+                      <span className="phone-access__confirm" role="group" aria-label={t('options.history.confirmClear')}>
+                        <button className="options-menu__action options-menu__action--danger" onClick={() => void handleClearHistory()}>
+                          {t('common.delete')}
+                        </button>
+                        <button className="options-menu__action" onClick={() => setConfirmClearHistory(false)}>
+                          {t('common.cancel')}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="options-menu__action options-menu__action--danger"
+                        onClick={() => setConfirmClearHistory(true)}
+                        disabled={clearingHistory}
+                      >
+                        {clearingHistory ? t('common.deleting') : t('options.history.clear')}
+                      </button>
+                    ))}
                 </SettingRow>
               )}
             </SettingGroup>
@@ -1344,7 +1419,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         <audio ref={audioRef} hidden />
         {error && <div className="options-menu__error">{error}</div>}
           </div>
-        </main>
+        </section>
       </div>
     </div>
   )

@@ -277,6 +277,24 @@ test('changer de conversation recharge VRAIMENT le fil affiché', options, async
   })
 })
 
+// Jusqu'à la version 0.49.1, la clé d'un message était son seul numéro : le message n°2 d'une autre conversation
+// reprenait l'état interne du bloc affiché avant lui (cases cochées d'une liste de courses, choix déjà fait).
+test('changer de conversation : une liste cochable ne garde pas les cases cochées de l’autre conversation', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.__threads.a.splice(0, Infinity, { role: 'user', content: 'liste de courses pour un gâteau' }, { role: 'assistant', content: '- sucre\n- beurre' })
+      window.__threads.b.splice(0, Infinity, { role: 'user', content: 'liste de courses pour des crêpes' }, { role: 'assistant', content: '- farine\n- œufs' })
+    })
+    await page.click('.workspace__list li:nth-child(2) .workspace__item')
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('farine'))
+    await page.locator('.reply-ui__tick').first().click()
+    assert.equal(await page.locator('.reply-ui__tick input').first().isChecked(), true)
+    await page.click('.workspace__list li:nth-child(1) .workspace__item')
+    await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('sucre'))
+    assert.deepEqual(await page.locator('.reply-ui__tick input').evaluateAll((boxes) => boxes.map((box) => box.checked)), [false, false])
+  })
+})
+
 test('"Nouvelle conversation" ouvre un fil vide', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.chat-panel__message')

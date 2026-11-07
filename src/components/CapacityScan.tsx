@@ -5,6 +5,7 @@ import MyModelPicks from './MyModelPicks'
 import ModelPullBar from './ModelPullBar'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { formatDecimal, t, tn } from '@/lib/i18n'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -35,10 +36,19 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
   const [pull, setPull] = useState<ModelPullProgress | null>(null)
   const [result, setResult] = useState<CapacityScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Lecture des modèles prévus impossible : dit, avec « Réessayer ». Sans ce relais, « Continuer » restait grisé pour
+  // toujours, sans un mot, au tout premier lancement.
+  const [picksError, setPicksError] = useState<string | null>(null)
 
-  useEffect(() => {
-    void window.jaris.getMyModelPicks().then(setPicks)
-  }, [])
+  const loadPicks = (): void => {
+    setPicksError(null)
+    window.jaris
+      .getMyModelPicks()
+      .then(setPicks)
+      .catch((err: unknown) => setPicksError(ipcErrorMessage(err)))
+  }
+
+  useEffect(loadPicks, [])
 
   useEffect(() => {
     if (!installing) return
@@ -72,11 +82,21 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         {!result && !installing && !error && (
           <>
             <p>{t('setup.intro')}</p>
-            {picks === null ? <p className="capacity-scan__status">{t('options.retest.detecting')}</p> : <MyModelPicks picks={picks} title={t('setup.picks.title')} beforeInstall />}
+            {picks !== null ? (
+              <MyModelPicks picks={picks} title={t('setup.picks.title')} beforeInstall />
+            ) : picksError ? (
+              <div className="capacity-scan__warning" role="alert">
+                <p>{t('setup.picks.failed', { error: picksError })}</p>
+                <button onClick={loadPicks}>{t('common.retry')}</button>
+              </div>
+            ) : (
+              <p className="capacity-scan__status">{t('options.retest.detecting')}</p>
+            )}
             {/* Étape 354 : la légende de la carte est longue ; « Continuer », la seule action qui fait avancer, reste
-                visible au bas de l'écran pendant qu'on fait défiler. */}
+                visible au bas de l'écran pendant qu'on fait défiler. La carte n'est qu'un aperçu : illisible, elle
+                n'empêche pas l'installation, qui fait ses propres choix (runQuickSetup). */}
             <div className="capacity-scan__footer">
-              <button onClick={start} disabled={picks === null}>
+              <button onClick={start} disabled={picks === null && !picksError}>
                 {t('common.continue')}
               </button>
             </div>

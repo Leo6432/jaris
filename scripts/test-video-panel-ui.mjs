@@ -36,7 +36,11 @@ window.__videos = window.__videos || [
 ]
 
 window.jaris = {
-  getVideoStudioStatus: async () => window.__status,
+  // __statusFails / __listFails : lectures impossibles (le test dit quand ça repasse).
+  getVideoStudioStatus: async () => {
+    if (window.__statusFails) throw new Error("Error invoking remote method 'jaris:get-video-studio-status': Error: Le dossier du moteur vidéo est verrouillé.")
+    return window.__status
+  },
   installVideoStudio: (quality) => {
     window.__calls.push(['install', quality])
     return new Promise((resolve) => {
@@ -61,7 +65,10 @@ window.jaris = {
     })
   },
   cancelStudioVideo: () => { window.__calls.push('cancel'); window.__failGen('Vidéo annulée.') },
-  listGeneratedVideos: async () => window.__videos,
+  listGeneratedVideos: async () => {
+    if (window.__listFails) throw new Error("Error invoking remote method 'jaris:list-generated-videos': Error: Le dossier des vidéos est inaccessible.")
+    return window.__videos
+  },
   readGeneratedVideo: async (fileName) => { window.__calls.push(['read', fileName]); return window.__realVideo || new Uint8Array([26, 69, 223, 163]) },
   deleteGeneratedVideo: async (fileName) => { window.__calls.push(['delete', fileName]); window.__videos = window.__videos.filter((v) => v.fileName !== fileName) },
   openGeneratedVideos: async (fileName) => { window.__calls.push(['open', fileName]) },
@@ -399,4 +406,23 @@ test('qualité (étape 207) : une grosse machine a trois crans, jusqu’à « Or
     },
     "window.__status = { supported: true, capable: true, reason: null, qualities: [{ id: 'q6', label: 'Q6', installed: true, downloadLabel: '0 o' }, { id: 'q8', label: 'Q8', installed: false, downloadLabel: '11,5 Go' }, { id: 'original', label: 'Original', installed: false, downloadLabel: '21,4 Go' }] }"
   )
+})
+
+// Jusqu'à la version 0.49.1, ces lectures n'avaient pas de « catch » : un échec laissait le mode Vidéo vide pour toujours.
+test('état du mode Vidéo illisible : le vrai message et « Réessayer », jamais un écran vide', options, async () => {
+  await withPage(async (page) => {
+    const alert = page.locator('.image-panel [role="alert"]')
+    await alert.waitFor()
+    assert.equal(await alert.textContent(), 'Le dossier du moteur vidéo est verrouillé.')
+    await page.evaluate(() => (window.__statusFails = false))
+    await page.getByRole('button', { name: 'Réessayer' }).click()
+    await page.waitForSelector('.composer')
+  }, FAKE_STORAGE + 'window.__statusFails = true')
+})
+
+test('galerie de vidéos illisible : le vrai message s’affiche au lieu d’une galerie vide en silence', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.composer')
+    await page.waitForFunction(() => /Le dossier des vidéos est inaccessible\./.test(document.querySelector('.image-panel')?.textContent ?? ''))
+  }, FAKE_STORAGE + 'window.__listFails = true')
 })

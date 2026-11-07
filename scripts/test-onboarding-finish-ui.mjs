@@ -31,7 +31,23 @@ import App from './src/App'
 const entry = { model: 'qwen3.5:4b', vramGb: 3.4, usedIn: [], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }
 window.__onboardingFinished = 0
 const known = {
-  getProfile: async () => ({ name: 'Léo', capacityScanDone: false, models: {} }),
+  getProfile: async () => (window.__noProfile ? null : { name: 'Léo', capacityScanDone: Boolean(window.__scanDone), models: {} }),
+  // Échecs simulés, avec le préfixe technique qu'Electron ajoute à toute erreur IPC (jamais montré à Léo).
+  saveProfile: async (patch) => {
+    if (window.__saveFailures > 0) {
+      window.__saveFailures--
+      throw new Error("Error invoking remote method 'jaris:save-profile': Error: Le disque est plein : ton prénom n'a pas pu être enregistré.")
+    }
+    window.__saved = patch
+  },
+  setLanguage: async (setting) => {
+    if (window.__languageFails) throw new Error("Error invoking remote method 'jaris:set-language': Error: Réglage de langue illisible.")
+    return { setting, code: setting, systemCode: 'fr' }
+  },
+  getMemoryGraph: async () => {
+    if (window.__brainFails) throw new Error("Error invoking remote method 'jaris:get-memory-graph': Error: Le dossier de la mémoire est inaccessible.")
+    return { nodes: [{ id: 'Léo', isCenter: true }], links: [] }
+  },
   getRuntimeSetupStatus: async () => ({ ready: true, missing: [] }),
   getSetupStatus: async () => ({ ready: true, missing: [] }),
   getWindowChrome: async () => ({ titleBar: true }),
@@ -116,4 +132,57 @@ test('« Continuer » de « Configuration terminée » affiche l’accueil dans 
   } finally {
     await browser.close()
   }
+})
+
+async function withApp(init, run) {
+  const html = buildPage()
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 760 } })
+    const errors = []
+    page.on('pageerror', (err) => errors.push(err.message))
+    await page.setContent(html.replace('<body>', `<body><script>${init}</script>`))
+    await run(page)
+    assert.deepEqual(errors, [], 'aucune erreur non rattrapée')
+  } finally {
+    await browser.close()
+  }
+}
+
+// Jusqu'à la version 0.49.1, ces trois actions n'avaient aucun « catch » : un échec ne laissait qu'un bouton muet.
+test('premier écran : prénom non enregistré -> le vrai message sous le formulaire, puis un nouvel essai passe', options, async () => {
+  await withApp('window.__noProfile = true; window.__saveFailures = 1', async (page) => {
+    await page.fill('.app__onboarding input', 'Léo')
+    await page.click('.app__onboarding button[type=submit]')
+    const alert = page.locator('.app__onboarding [role=alert]')
+    await alert.waitFor()
+    assert.equal(await alert.textContent(), "Le disque est plein : ton prénom n'a pas pu être enregistré.")
+    await page.click('.app__onboarding button[type=submit]')
+    await page.waitForSelector('.capacity-scan')
+    assert.deepEqual(await page.evaluate(() => window.__saved), { name: 'Léo' })
+  })
+})
+
+test('premier écran : langue refusée -> le menu revient sur la langue en place et le message le dit', options, async () => {
+  await withApp('window.__noProfile = true; window.__languageFails = true', async (page) => {
+    const select = page.locator('.app__onboarding-language select')
+    const before = await select.inputValue()
+    await select.selectOption('en')
+    const alert = page.locator('.app__onboarding [role=alert]')
+    await alert.waitFor()
+    assert.equal(await alert.textContent(), 'Réglage de langue illisible.')
+    assert.equal(await select.inputValue(), before)
+  })
+})
+
+test('bouton Cerveau : mémoire illisible -> le vrai message dans un bandeau, jamais un clic sans effet', options, async () => {
+  await withApp('window.__scanDone = true; window.__brainFails = true', async (page) => {
+    await page.click('.app-rail button[title="Cerveau de Jaris"]')
+    const banner = page.locator('.app-main [role=alert]')
+    await banner.waitFor()
+    assert.match(await banner.textContent(), /Le dossier de la mémoire est inaccessible\./)
+    assert.doesNotMatch(await banner.textContent(), /invoking remote method/)
+    await banner.getByRole('button', { name: 'Fermer' }).click()
+    assert.equal(await page.locator('.app-main [role=alert]').count(), 0)
+  })
 })

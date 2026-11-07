@@ -433,6 +433,22 @@ test('supprimer demande confirmation, puis retire vraiment la ligne', options, a
   })
 })
 
+// Jusqu'à la version 0.49.1 : « Supprimer liste de courses » (ordre des mots imposé, pas traduisible), et une liste de
+// projets vide disait « Aucune conversation pour l'instant. » sous « Projets / Nouvelle application ».
+test('la corbeille nomme l’action et le projet par le catalogue ; sans projet, la liste parle de projets', options, async () => {
+  await withPage(async (page) => {
+    const trash = page.locator('.workspace__list li:first-child .workspace__delete')
+    assert.equal(await trash.getAttribute('aria-label'), 'Supprimer\u00a0: «\u00a0liste de courses\u00a0»')
+    assert.equal(await trash.getAttribute('title'), 'Supprimer\u00a0: «\u00a0liste de courses\u00a0»')
+    for (let left = 2; left > 0; left--) {
+      await page.click('.workspace__list li:first-child .workspace__delete')
+      await page.click('.workspace__confirm-yes')
+      await page.waitForFunction((n) => document.querySelectorAll('.workspace__list li').length === n - 1, left)
+    }
+    assert.equal(await page.textContent('.workspace__empty'), "Aucun projet pour l'instant.")
+  })
+})
+
 test("la corbeille d'une ligne n'ouvre jamais l'application par erreur", options, async () => {
   await withPage(async (page) => {
     // Les deux boutons sont dans la MÊME ligne : un clic sur la corbeille ne doit pas déclencher l'ouverture

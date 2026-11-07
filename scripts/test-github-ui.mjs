@@ -70,13 +70,19 @@ window.jaris = {
   setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
   githubStatus: () => Promise.resolve(window.__status),
-  githubStartLogin: () => Promise.resolve({ userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' }),
+  githubStartLogin: () => {
+    window.__calls.startLogin = (window.__calls.startLogin ?? 0) + 1
+    const code = { userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' }
+    // __slowStart : GitHub met un moment à donner le code — le test décide quand il arrive.
+    return window.__slowStart ? new Promise((resolve) => (window.__giveCode = () => resolve(code))) : Promise.resolve(code)
+  },
   githubFinishLogin: () => new Promise((resolve, reject) => {
     window.__approve = () => {
       window.__status = { available: true, connected: true, login: 'leo' }
       resolve(window.__status)
     }
-    window.__denyLogin = () => reject(new Error("Error invoking remote method 'jaris:github-finish-login': GithubError: Connexion annulée."))
+    // Comme le vrai main (githubSession.ts) : une connexion annulée n'est pas une erreur, elle répond { cancelled: true }.
+    window.__denyLogin = () => resolve({ cancelled: true })
   }),
   githubCancelLogin: () => window.__denyLogin?.(),
   // Pendant un « Déplacer », le vrai main refuse la déconnexion (github.err.dataMoving) : __logoutRefused le simule.
@@ -332,6 +338,60 @@ test('annuler la connexion ne montre pas d’erreur, et revient au bouton « Se 
     await page.click('.github-picker__secondary >> text=Annuler')
     await page.waitForSelector('.github-picker__primary')
     assert.equal(await page.locator('.github-picker__error').count(), 0)
+  })
+})
+
+// Jusqu'à la version 0.49.1, « Se connecter » restait cliquable pendant que GitHub donnait le code : un double clic
+// demandait deux codes (le second annulant le premier), et l'annulation était reconnue en comparant un texte traduit.
+test('« Se connecter » est grisé (« Connexion… ») pendant que GitHub donne le code : un double clic ne demande qu’un code', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => (window.__slowStart = true))
+    await page.click('.repo-picker__trigger')
+    const button = page.locator('.github-picker__primary')
+    await button.click()
+    assert.equal(await button.isDisabled(), true)
+    assert.equal(await button.textContent(), 'Connexion…')
+    await button.click({ force: true })
+    await page.evaluate(() => window.__giveCode())
+    await page.waitForSelector('.github-picker__code')
+    assert.equal(await page.evaluate(() => window.__calls.startLogin), 1)
+    await page.click('.github-picker__secondary >> text=Annuler')
+    await page.waitForSelector('.github-picker__primary:not([disabled])')
+    assert.equal(await page.textContent('.github-picker__primary'), 'Se connecter à GitHub')
+    assert.equal(await page.locator('.github-picker__error').count(), 0)
+  })
+})
+
+// Étape 288 : pendant un travail, sa conversation s'enregistre sous l'élément ouvert. Retirer ce dépôt de la liste à ce
+// moment-là le fermait sous les pieds du travail (les autres actions de la liste avaient déjà cette garde).
+test('pendant un travail sur un dépôt, le retirer de la liste ne le ferme pas', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__calls.run.length === 1)
+    await page.click('.workspace__list li:has-text("leo/projet") .workspace__delete')
+    await page.click('.workspace__confirm-yes')
+    assert.equal(await page.locator('.branch-picker__trigger').count(), 1, 'le dépôt reste ouvert')
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card')
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
+  })
+})
+
+test('ouvrir une application de la liste efface l’image jointe pour l’élément précédent (comme ouvrir un dépôt)', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.evaluate(() => {
+      window.__nextPickedFile = { name: 'site.png', type: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqPn/HwAFAAJ/wlZ9CwAAAABJRU5ErkJggg==' }
+    })
+    await page.click('.composer__plus')
+    await page.click('.composer__menu-item:has-text("Joindre une image")')
+    await page.waitForSelector('.composer__attachment img')
+    await page.click('.workspace__item:has-text("liste de courses")')
+    await page.waitForSelector('.branch-picker__trigger', { state: 'detached' })
+    assert.equal(await page.locator('.composer__attachment').count(), 0, 'l’image ne part pas avec une demande pour une autre application')
   })
 })
 
@@ -893,6 +953,14 @@ test('« aperçu et code dans code » d’un dépôt : la liste de ses fichiers,
     await page.waitForFunction(() => document.querySelector('.code-browser__code')?.textContent === 'console.log("ok")\n')
     assert.deepEqual(await page.$$eval('.code-browser__tab-name', (tabs) => tabs.map((tab) => tab.textContent)), ['index.html', 'app.js'])
     assert.equal(await page.getAttribute('.code-browser__row--active', 'title'), 'src/app.js')
+    // Jusqu'à la version 0.49.1 : un « tablist » qui contenait aussi les boutons « fermer » (enfants interdits). Une liste
+    // des fichiers ouverts : chaque élément a son bouton d'ouverture (le fichier affiché est marqué) et son bouton « fermer ».
+    assert.equal(await page.locator('[role="tablist"], [role="tab"]').count(), 0)
+    const openFiles = page.getByRole('list', { name: 'Fichiers ouverts' })
+    assert.equal(await openFiles.getByRole('listitem').count(), 2)
+    assert.equal(await openFiles.getByRole('button', { name: 'app.js', exact: true }).getAttribute('aria-current'), 'true')
+    assert.equal(await openFiles.getByRole('button', { name: 'index.html', exact: true }).getAttribute('aria-current'), null)
+    assert.equal(await openFiles.getByRole('button', { name: 'Fermer app.js' }).count(), 1)
 
     // Fermer l'onglet ouvert revient au voisin.
     await page.click('.code-browser__tab--active .code-browser__tab-close')

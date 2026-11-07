@@ -230,7 +230,7 @@ const api = {
   // Étape 277 : GitHub dans le mode Code. L'arrêt d'un travail en cours passe par cancelCodeGen.
   githubStatus: (): Promise<GithubStatus> => invoke(IPC_CHANNELS.githubStatus),
   githubStartLogin: (): Promise<GithubDeviceCode> => invoke(IPC_CHANNELS.githubStartLogin),
-  githubFinishLogin: (): Promise<GithubStatus> => invoke(IPC_CHANNELS.githubFinishLogin),
+  githubFinishLogin: (): Promise<GithubStatus | { cancelled: true }> => invoke(IPC_CHANNELS.githubFinishLogin),
   githubCancelLogin: (): void => ipcRenderer.send(IPC_CHANNELS.githubCancelLogin),
   githubLogout: (): Promise<void> => invoke(IPC_CHANNELS.githubLogout),
   githubListRepos: (): Promise<GithubRepoSummary[]> => invoke(IPC_CHANNELS.githubListRepos),

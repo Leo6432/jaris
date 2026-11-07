@@ -362,13 +362,14 @@ export default function CodeBrowser({ files, changes, initialPath, load, version
 
       <div className="code-browser__main">
         {tabs.length > 0 && (
-          <div className="code-browser__tabs" role="tablist" aria-label={t('code.browser.openFiles')}>
+          // Une LISTE des fichiers ouverts, pas un « tablist » : chaque fichier a deux boutons (l'ouvrir, le fermer), et un
+          // tablist ne peut contenir que des onglets — le bouton « fermer » y était un enfant interdit.
+          <div className="code-browser__tabs" role="list" aria-label={t('code.browser.openFiles')}>
             {tabs.map((path) => (
-              <div key={path} className={`code-browser__tab${path === active ? ' code-browser__tab--active' : ''}`}>
+              <div key={path} role="listitem" className={`code-browser__tab${path === active ? ' code-browser__tab--active' : ''}`}>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={path === active}
+                  aria-current={path === active ? 'true' : undefined}
                   className="code-browser__tab-name"
                   title={path}
                   onClick={() => setActive(path)}

@@ -25,6 +25,11 @@ const entryPath = join(projectRoot, 'tmp-phone-tab-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import OptionsMenu from './src/components/OptionsMenu'
+import { setLanguage } from './shared/i18n'
+import de from './shared/i18n/locales/de.json'
+
+// __lang : l'écran dans une autre langue (étape 293), comme après un changement dans Options → Général.
+if (window.__lang === 'de') setLanguage('de', de)
 
 window.__calls = []
 window.__phone = { state: 'off', devices: [] }
@@ -35,7 +40,11 @@ window.__emitPhone = (status) => { window.__phone = status; for (const listener 
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   listAudioInputDevices: async () => [],
-  getPhoneAccess: async () => window.__phone,
+  // __phoneFails : l'état du téléphone ne peut pas être lu (le test dit quand ça repasse).
+  getPhoneAccess: async () => {
+    if (window.__phoneFails) throw new Error("Error invoking remote method 'jaris:get-phone-access': Error: Le service Tailscale ne répond pas.")
+    return window.__phone
+  },
   onPhoneAccessChanged: (cb) => { listeners.add(cb); return () => listeners.delete(cb) },
   setPhoneAccessEnabled: async (enabled) => {
     window.__calls.push(['enable', enabled])
@@ -89,16 +98,16 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPhoneTab(run) {
+async function withPhoneTab(run, { init = '', ready = '.phone-access', tab = 'Jaris partout' } = {}) {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1200, height: 900 })
-    await page.setContent(buildPage())
+    await page.setContent(init ? buildPage().replace('<body>', `<body><script>${init}</script>`) : buildPage())
     await page.waitForSelector('.options-menu__trigger')
     await page.click('.options-menu__trigger')
-    await page.click('.options-menu__tab:has-text("Jaris partout")')
-    await page.waitForSelector('.phone-access')
+    await page.click(`.options-menu__tab:has-text("${tab}")`)
+    await page.waitForSelector(ready)
     await run(page)
   } finally {
     await browser.close()
@@ -244,4 +253,40 @@ test('les boutons sont habillés par le CSS de Jaris, pas le style par défaut d
       assert.notEqual(s.bg, 'nonergb(239, 239, 239)', `${s.text} : fond par défaut`)
     }
   })
+})
+
+// Jusqu'à la version 0.49.1, getPhoneAccess n'avait pas de « catch » : un état illisible laissait l'onglet vide pour toujours.
+test('état du téléphone illisible : le vrai message et « Réessayer », jamais un onglet vide', options, async () => {
+  await withPhoneTab(
+    async (page) => {
+      const alert = page.locator('.options-menu__section [role="alert"]')
+      assert.equal(await alert.locator('p').textContent(), 'Le service Tailscale ne répond pas.')
+      await page.evaluate(() => (window.__phoneFails = false))
+      await alert.getByRole('button', { name: 'Réessayer' }).click()
+      await page.waitForSelector('.phone-access [role="switch"]')
+      assert.equal(await page.locator('.options-menu__section [role="alert"]').count(), 0)
+    },
+    { init: 'window.__phoneFails = true', ready: '.options-menu__section [role="alert"]' }
+  )
+})
+
+// Jusqu'à la version 0.49.1, les dates passaient par toLowerCase() : « Verbunden 12. märz » en allemand.
+test('téléphones connectés : les dates gardent leur casse (« Aujourd’hui », « März »), en « libellé : valeur »', options, async () => {
+  const devices = (created) => [{ id: 'd1', name: 'iPhone', createdAt: created, lastSeenAt: new Date().toISOString() }]
+  const march = new Date(new Date().getFullYear() - 1, 2, 12, 10, 0).toISOString()
+  await withPhoneTab(async (page) => {
+    await page.evaluate((s) => window.__emitPhone(s), READY(devices(new Date().toISOString())))
+    const meta = page.locator('.options-menu__row:has-text("iPhone") .options-menu__row-description')
+    await meta.waitFor()
+    assert.match(await meta.textContent(), /^Connecté\u00a0: Aujourd'hui, \d\d:\d\d · Actif\u00a0: Aujourd'hui, \d\d:\d\d$/)
+  })
+  await withPhoneTab(
+    async (page) => {
+      await page.evaluate((s) => window.__emitPhone(s), READY(devices(march)))
+      const meta = page.locator('.options-menu__row:has-text("iPhone") .options-menu__row-description')
+      await meta.waitFor()
+      assert.match(await meta.textContent(), /^Verbunden: 12\. März \d{4} · Aktiv: Heute, \d\d:\d\d$/)
+    },
+    { init: "window.__lang = 'de'", tab: 'Jaris überall' }
+  )
 })

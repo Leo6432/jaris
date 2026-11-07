@@ -35,7 +35,8 @@ const catalogs = [
 
 test('les onglets d’Options affichent bien les libellés du catalogue', () => {
   const menu = readFileSync(join(root, 'src/components/OptionsMenu.tsx'), 'utf8')
-  const tabKeys = [...menu.matchAll(/setTab\('\w+'\)\}>\s*\{t\('([\w.]+)'\)\}\s*<\/button>/g)].map((m) => m[1])
+  // Le bouton peut s'étaler sur plusieurs lignes (aria-current de l'onglet affiché) : « > » sur sa propre ligne.
+  const tabKeys = [...menu.matchAll(/setTab\('\w+'\)\}\s*>\s*\{t\('([\w.]+)'\)\}\s*<\/button>/g)].map((m) => m[1])
   assert.deepEqual(tabKeys.sort(), ['options.tab.capabilities', 'options.tab.general', 'options.tab.mcp', 'options.tab.models', 'options.tab.phone', 'options.tab.voice'])
 })
 
