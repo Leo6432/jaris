@@ -12594,3 +12594,11 @@ input.reply-ui__field-input {
   pointer-events: none;
   box-shadow: 0 0 0 2px var(--jv-side);
 }
+
+/* Étape 438 : « Préparer le fichier à m'envoyer » et ce qu'il a préparé. */
+.options-menu__unscored-export {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}

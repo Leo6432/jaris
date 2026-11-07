@@ -117,7 +117,7 @@ import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProb
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { getModelsToTestDetails, isModelTestRunning, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, markTestResultsSent, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource, setMachineModelSizeSource } from './services/remoteMachine'
 import { config, runWithLocalOllama } from './config'
 import { chatSession } from './services/chatSession'
@@ -216,6 +216,7 @@ import {
   type PickedImageFile,
   type SaveImageResult,
   type DuelExportResult,
+  type TestResultsExportResult,
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
@@ -2231,6 +2232,34 @@ app.whenReady().then(async () => {
     )
   )
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
+  // Étape 438 : l'extrait compressé des résultats pas encore envoyés, enregistré où Léo veut (dialogue natif gardé).
+  ipcMain.handle(IPC_CHANNELS.exportTestResults, async (): Promise<TestResultsExportResult> => {
+    const built = buildTestResultsExport()
+    if (!built.rows) return { saved: false, empty: true }
+    const day = new Date().toISOString().slice(0, 10)
+    const dialogOptions = {
+      title: t('main.dialog.saveTests'),
+      defaultPath: join(app.getPath('documents'), `jaris-tests-${day}.jsonl.gz`),
+      filters: [{ name: t('main.dialog.testsFilter'), extensions: ['gz'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await writeFile(/\.gz$/i.test(target) ? target : `${target}.gz`, built.data)
+      // Retenu seulement une fois le fichier écrit : un envoi raté se refait en entier.
+      if (built.lastAt) await markTestResultsSent(built.lastAt)
+      return { saved: true, rows: built.rows, models: built.models.length, sizeKb: Math.max(1, Math.round(built.data.length / 1024)) }
+    } catch (err) {
+      return { saved: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
   ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, (_event, model: string): Promise<void> =>

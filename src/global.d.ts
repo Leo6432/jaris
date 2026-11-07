@@ -57,6 +57,7 @@ import type {
   PickedImageFile,
   SaveImageResult,
   DuelExportResult,
+  TestResultsExportResult,
   GeneratedImageSummary,
   GeneratedVideoSummary,
   ImageStudioStatus,
@@ -246,6 +247,7 @@ declare global {
       duelHistory: () => Promise<DuelHistoryEntry[]>
       duelHistoryDelete: (which: string[] | 'all') => Promise<DuelHistoryEntry[]>
       duelExportVotes: () => Promise<DuelExportResult>
+      exportTestResults: () => Promise<TestResultsExportResult>
       machineGet: () => Promise<MachineView>
       machineConnect: (settings: RemoteMachineSettings) => Promise<MachineView>
       machineDisconnect: () => Promise<MachineView>

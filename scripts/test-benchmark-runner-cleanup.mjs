@@ -15,6 +15,9 @@ import ts from 'typescript'
  * exercent runQuickSetup avec un `deleteModel`/`pullModelIfMissing` simulés (aucun vrai réseau, aucun vrai
  * Ollama) pour vérifier QUELS modèles sont réellement supprimés, sans jamais toucher au disque ou au réseau.
  */
+import realZlib from 'node:zlib'
+const writtenAtomic = []
+
 // Étape 437 : la machine louée connectée (aucune par défaut ; un test la connecte pour vérifier où part l'analyse).
 let connectedForTest = null
 const remoteMachineModule = { connectedMachine: () => connectedForTest, MACHINE_DISK_RESERVED_GB: 10 }
@@ -89,6 +92,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
 
   const { runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'child_process') return { spawn: () => { throw new Error('spawn ne doit jamais être appelé par runQuickSetup') } }
+    if (id === 'zlib') return realZlib
+    if (id === './atomicFile') return { writeFileAtomic: async (file, content) => writtenAtomic.push([file, content]) }
     if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
     if (id.endsWith('config')) return { config: {}, runWithLocalOllama: (fn) => fn() }
@@ -414,6 +419,8 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   }
   const { testUnscoredModels, stopModelTest, runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'child_process') return { spawn: fakeSpawn }
+    if (id === 'zlib') return realZlib
+    if (id === './atomicFile') return { writeFileAtomic: async (file, content) => writtenAtomic.push([file, content]) }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
     if (id.endsWith('config')) return { config: { ollama: { host: 'http://10.0.0.5:11434', localHost: 'http://127.0.0.1:11434' } }, runWithLocalOllama: (fn) => fn() }
     if (id === './remoteMachine') return remoteMachineModule
@@ -503,4 +510,37 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   } finally {
     connectedForTest = null
   }
+})
+
+// Étape 438 (Léo : « je dois diviser le fichier, trop lourd ; garde seulement ce qui n'est pas encore sur le tableau ») :
+// l'extrait à m'envoyer — seulement après le dernier envoi, sans les messages ni la liste des outils, compressé.
+test('étape 438 : l’extrait des résultats ne garde que le nouveau, sans les parties lourdes, compressé', () => {
+  const { buildTestResultsExport } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
+    if (id === 'zlib') return realZlib
+    if (id === 'path') return { join: (...parts) => parts.join('/') }
+    if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
+    return new Proxy({}, { get: () => () => {} })
+  })
+  const big = 'x'.repeat(5000)
+  const traces = [
+    { type: 'campagne', versions: { conversation: 6 }, tools: [{ name: 'open_app', description: big }] },
+    { type: 'question', model: 'old:1b', at: '2026-11-06T10:00:00.000Z', ok: true, messages: [big], response: { content: 'ancien' } },
+    { type: 'campagne', versions: { conversation: 6 }, tools: [{ name: 'open_app', description: big }] },
+    { type: 'demande', model: 'granite4.2:8b', at: '2026-11-07T12:50:00.000Z', ok: true, replay: true, messages: [big], response: { content: 'refait' } },
+    { type: 'code', model: 'qwen2.5-coder:7b', at: '2026-11-07T12:54:00.000Z', ok: false, html: '<p>app</p>' }
+  ].map((r) => JSON.stringify(r)).join('\n')
+  const first = buildTestResultsExport(traces, null)
+  assert.equal(first.rows, 3, 'la première fois : tout')
+  const since = buildTestResultsExport(traces, '2026-11-06T23:59:00.000Z')
+  assert.equal(since.rows, 2)
+  assert.deepEqual(since.models, ['granite4.2:8b', 'qwen2.5-coder:7b'])
+  assert.equal(since.lastAt, '2026-11-07T12:54:00.000Z')
+  const lines = realZlib.gunzipSync(since.data).toString('utf8').trim().split('\n').map((l) => JSON.parse(l))
+  assert.deepEqual(lines.map((l) => l.type), ['campagne', 'demande', 'code'], 'l’en-tête de SA campagne, puis ses lignes')
+  assert.equal('tools' in lines[0], false, 'la liste des outils se relit dans le code')
+  assert.equal('messages' in lines[1], false, 'les messages aussi')
+  assert.equal(lines[1].response.content, 'refait', 'la réponse reste : elle est relue avant de recopier un score')
+  assert.equal(lines[2].html, '<p>app</p>')
+  assert.ok(since.data.length < 1000, `bien plus petit que le fichier brut (${since.data.length} octets)`)
+  assert.equal(buildTestResultsExport(traces, '2026-11-07T12:54:00.000Z').rows, 0, 'rien de nouveau : rien à envoyer')
 })

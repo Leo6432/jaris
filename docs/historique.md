@@ -11401,3 +11401,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Dernier passage de la suite : `test-data-location.mjs` a attrapé le registre de la machine écrit sous un nom variable
   (un fichier de données qui n'aurait pas suivi « Déplacer »). Nom fixe `…telecharges-machine.json` avec l'adresse de la
   machine DEDANS (celui d'une autre machine est ignoré), ajouté à `MODEL_TEST_ENTRIES` (storageRoot.ts).
+
+## Étape 438 — Scores de la campagne du 06-07/11 ; « Préparer le fichier à m'envoyer » (v0.47.1)
+
+- Léo a dû couper son fichier de résultats en deux (4 Mo) et son fichier brut fait 48 Mo : « tu ne peux pas juste
+  garder les informations pas encore sur le tableau ? ». Nouveau bouton dans « Modèles à tester » :
+  `buildTestResultsExport` (benchmarkRunner.ts) prend les lignes des traces écrites APRÈS le dernier fichier préparé
+  (la première fois : tout), retire les messages envoyés au modèle et la liste des outils de l'en-tête de campagne
+  (reconstruits depuis le code de la même version), garde les réponses (toutes relues avant de recopier un score),
+  compresse en gzip ; enregistré où Léo veut (dialogue natif gardé, `jaris-tests-AAAA-MM-JJ.jsonl.gz`). Le point
+  d'arrêt (`benchmark-nouveaux-modeles.envoye.json`, dans OWNED_ENTRIES) n'avance qu'une fois le fichier écrit. Le
+  fichier brut n'est jamais touché. Texte « Envoie le fichier .md » remplacé, 7 textes, 24 langues.
+- Pourquoi son test de 3 modèles n'avait changé que les traces : des modèles « à refaire » seulement — le script rejoue
+  leurs cas et s'arrête sans réécrire le tableau `.md` (branche `replayTimedOut` sans `persistResults`). Leurs nouveaux
+  résultats sont dans les traces : à envoyer avec le nouveau bouton.
+- Scores recopiés depuis les deux parties du fichier (07/11 00:41), après relecture de toutes les réponses des
+  nouveaux scores (détail dans verified-tool-scores.md) : questions gemma4:31b 78/78, nemotron-3.5-bolt:e4b 75/78,
+  Spark-X2.6-4B 72/78 ; demandes nemotron 46 → 45/48, Spark 43 → 40/48. Les écarts avec les AUTRES modèles du fichier
+  sont ses scores bruts d'avant relecture : rien changé. Choix des modèles comparés avant/après sur une grille de 4 à
+  80 Go : identiques (les nouveaux n'ont pas encore de votes de duel). Piste notée, pas faite : Jaris ne retire pas la
+  balise « <channel|> » qu'un modèle de la famille Gemma laisse parfois en fin de réponse.
+- Régression : `test-benchmark-runner-cleanup.mjs` (extrait : seulement après le dernier envoi, en-tête de SA campagne,
+  sans outils ni messages, réponse gardée, compressé, rien de nouveau = rien — échoue si les messages restent),
+  `test-unscored-models-ui.mjs` (bouton, message préparé / rien de nouveau), `test-verified-scores.mjs` (40 demandes).

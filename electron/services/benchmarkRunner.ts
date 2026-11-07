@@ -1,10 +1,12 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { readFileSync } from 'fs'
+import { gzipSync } from 'zlib'
 import { app, powerSaveBlocker } from 'electron'
 import { join } from 'path'
 import { config, runWithLocalOllama } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
+import { writeFileAtomic } from './atomicFile'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
 import { MACHINE_DISK_RESERVED_GB, connectedMachine } from './remoteMachine'
 import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
@@ -261,6 +263,78 @@ function readCampaignTraces(): string {
   } catch {
     return '' // Pas encore de campagne.
   }
+}
+
+/**
+ * Étape 438 (Léo : « je dois diviser le fichier, trop lourd ; tu ne peux pas juste garder les informations pas encore
+ * sur le tableau ? ») : le fichier brut des tests (traces, 48 Mo chez Léo) grossit à chaque campagne. Pour m'envoyer
+ * ses résultats, Jaris en prépare un extrait : seulement les lignes écrites APRÈS le dernier envoi préparé (la première
+ * fois : tout), sans ce qui se reconstruit depuis le code (les messages envoyés au modèle, la liste des outils), et
+ * compressé. Chaque ligne garde la réponse du modèle : toutes sont relues avant de recopier un score. L'en-tête de
+ * campagne (versions des tests, machine) précède ses lignes. Le fichier brut lui-même n'est jamais touché.
+ */
+export function sentMarkerPath(): string {
+  return join(getDataRoot(), 'benchmark-nouveaux-modeles.envoye.json')
+}
+
+export interface TestResultsExport {
+  /** Contenu compressé (gzip) du fichier à envoyer. */
+  data: Buffer
+  /** Lignes de résultats (sans les en-têtes de campagne). */
+  rows: number
+  models: string[]
+  /** Date (ISO) de la dernière ligne incluse : le prochain envoi commencera après. */
+  lastAt: string | null
+}
+
+function readSentMarker(): string | null {
+  try {
+    const value = (JSON.parse(readFileSync(sentMarkerPath(), 'utf8')) as { lastAt?: unknown }).lastAt
+    return typeof value === 'string' && value ? value : null
+  } catch {
+    return null
+  }
+}
+
+export function buildTestResultsExport(tracesText = readCampaignTraces(), since: string | null = readSentMarker()): TestResultsExport {
+  const out: string[] = []
+  const models = new Set<string>()
+  let campaign: string | null = null
+  let rows = 0
+  let lastAt: string | null = null
+  for (const line of tracesText.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown>
+    try {
+      row = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (row.type === 'campagne') {
+      // Les outils exacts (plusieurs dizaines de Ko) se relisent dans le code de cette version de Jaris.
+      const { tools: _tools, ...header } = row
+      campaign = JSON.stringify(header)
+      continue
+    }
+    const at = typeof row.at === 'string' ? row.at : null
+    if (since && (!at || at <= since)) continue
+    if (campaign) {
+      out.push(campaign)
+      campaign = null
+    }
+    // Les messages envoyés au modèle se reconstruisent depuis le test (même version) ; la réponse, elle, reste.
+    const { messages: _messages, ...kept } = row
+    out.push(JSON.stringify(kept))
+    rows++
+    if (typeof row.model === 'string') models.add(row.model)
+    if (at && (!lastAt || at > lastAt)) lastAt = at
+  }
+  return { data: gzipSync(Buffer.from(out.join('\n') + (out.length ? '\n' : ''), 'utf8')), rows, models: [...models], lastAt }
+}
+
+/** Retient jusqu'où les résultats ont été préparés : le prochain fichier ne reprendra que la suite. */
+export async function markTestResultsSent(lastAt: string): Promise<void> {
+  await writeFileAtomic(sentMarkerPath(), JSON.stringify({ lastAt }))
 }
 
 function currentCampaign(): ReturnType<typeof campaignCompletion> {

@@ -46,6 +46,9 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   // Étape 436 (Léo : « pouvoir choisir : tout tester comme maintenant, ou choisir comme les duels, avec le temps — si
   // j'ai beaucoup de temps, je choisis les gros modèles et j'éteins le PC après ; sinon les petits »).
   const [choosing, setChoosing] = useState(false)
+  // Étape 438 : le petit fichier à m'envoyer (seulement les résultats pas encore envoyés, compressé).
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
 
   // Étape 437 : la machine louée connectée (ou non) change où le test se fera — et donc ses durées estimées.
@@ -118,6 +121,34 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   if (!models.length && phase === 'idle') {
     return <p className="capacity-scan__status">{t('unscored.allScored')}</p>
   }
+
+  const exportResults = async (): Promise<void> => {
+    setExporting(true)
+    setExported(null)
+    try {
+      const result = await window.jaris.exportTestResults()
+      if (result.empty) setExported(t('unscored.exportEmpty'))
+      else if (result.saved) setExported(t('unscored.exported', { rows: result.rows ?? 0, models: result.models ?? 0, size: result.sizeKb ?? 0 }))
+      else if (result.error) setExported(t('unscored.exportFailed', { error: result.error }))
+    } catch (err) {
+      setExported(t('unscored.exportFailed', { error: ipcErrorMessage(err) }))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const exportBlock = (
+    <div className="options-menu__unscored-export">
+      <button className="options-menu__action" onClick={() => void exportResults()} disabled={exporting || phase === 'running'}>
+        {exporting ? t('common.loading') : t('unscored.export')}
+      </button>
+      {exported && (
+        <p className="options-menu__unscored-text" role="status">
+          {exported}
+        </p>
+      )}
+    </div>
+  )
 
   const run = async (): Promise<void> => {
     setPhase('running')
@@ -226,9 +257,12 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (
-        <button className="options-menu__action" onClick={() => setPhase('confirming')} disabled={choosing && chosen.length === 0}>
-          {t(choosing ? 'unscored.testSelection' : 'unscored.test')}
-        </button>
+        <>
+          <button className="options-menu__action" onClick={() => setPhase('confirming')} disabled={choosing && chosen.length === 0}>
+            {t(choosing ? 'unscored.testSelection' : 'unscored.test')}
+          </button>
+          {exportBlock}
+        </>
       )}
 
       {phase === 'confirming' && (
@@ -285,9 +319,10 @@ export default function UnscoredModelsTest(): JSX.Element | null {
             </div>
           )}
           {phase === 'done' && (
-            <p className="options-menu__unscored-text">
-              {t('unscored.send')}
-            </p>
+            <>
+              <p className="options-menu__unscored-text">{t('unscored.send')}</p>
+              {exportBlock}
+            </>
           )}
         </div>
       )}

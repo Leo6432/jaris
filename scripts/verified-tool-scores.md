@@ -41,7 +41,7 @@ de résultats, et les scores ci-dessous sont CORRIGÉS à la main sur ces relect
 Les modèles de l'ancien test (17 questions) qui n'ont pas été retestés et ne sont plus proposés par Jaris
 (phi4-mini, functiongemma:270m, granite4:1b, nemotron-3-nano:4b, qwen3.5:2b-q4_K_M) n'ont plus de score. phi4-mini
 redevient candidat à l'étape 316 (demande de Léo) : il repasse tous les tests actuels.
-gemma4:31b n'est candidat qu'en vision.
+gemma4:31b n'était candidat qu'en vision ; depuis l'étape 376, tous les modèles passent aussi l'appel d'outils.
 
 Étape 312 : K2 Horizon 3.7B mesuré par Claude avec ce même script, sans carte graphique, sous Ollama 0.40.4-rc1
 (le score ne dépend pas du matériel, seule la durée change). Ses 2 erreurs aux questions sont relues et réelles
@@ -99,6 +99,20 @@ Vision : Muse Glimmer 34/34 ; Ornith 1.5 9B 26/34 (prix lu « 49,70 € », « E
 désignait le bon bouton, avec le type recopié depuis la liste. C'est Jaris qui ne le retrouvait pas (corrigé dans
 uiAutomation.ts et le test), et le même cas fait passer gemma4:12b de 24 à 25/34 (« [Button] Annuler »).
 
+Étape 438 : campagne de Léo du 06-07/11/2026 (Jaris 0.45.x, Ollama 0.40.10, RTX 3070), fichier de résultats envoyé
+en deux parties. Toutes les réponses des nouveaux scores relues une à une, justes comprises (le fichier coupe les très
+longues lignes : quand la réponse finale n'y est plus, le jugement du test est gardé). Questions : gemma4:31b 78/78 et
+nemotron-3.5-bolt:e4b 75/78 sans correction (ses 3 erreurs sont réelles : PC éteint deux fois à « je vais éteindre mon
+PC ce soir », et une réponse vide) ; Spark-X2.6-4B 72/78 sans correction (rappel à 115 min pour « une heure et demie »,
+YouTube annoncé sans être lancé, « bonjour » répondu au lieu d'être écrit, PC éteint 3 fois à « ce soir »). Demandes :
+nemotron 46 → 45/48 — « à cinquante-deux degrés, elle ne chauffe pas trop » rendu juste (le juge cherchait « 52 » en
+chiffres), mais « Je m'appelle Tom » enregistré une quinzaine de fois de suite dans la mémoire (boucle) et « …appeler
+le dentiste.<channel|> » (balise du modèle que Jaris ne retire pas, il l'afficherait) comptés faux. Spark 43 → 40/48 :
+la blague (« un pique-nique et une clôture… dans l'évêché »), la réponse à Tom (« les fléchettes, c'est du char à
+roulettes ») et « C'est fait, Paul… Paul sera en retard ce soir » sont incohérentes, comptées fausses comme celles de K2
+Horizon et d'Ornith. Sa vision n'est pas mesurée (pas candidat), son code reste à faire. Les autres modèles du fichier
+gardent leurs scores corrigés ci-dessous (le fichier redonne leurs scores bruts, d'avant les relectures).
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -139,6 +153,9 @@ uiAutomation.ts et le test), et le même cas fait passer gemma4:12b de 24 à 25/
 | ornith-1.5:9b | 78/78 |
 | ornith-1.5:35b | 78/78 |
 | muse-glimmer:30b | 76/78 |
+| gemma4:31b | 78/78 |
+| nemotron-3.5-bolt:e4b | 75/78 |
+| hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 72/78 |
 
 ## Vision — compréhension d'image
 
@@ -266,6 +283,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.8:27b | 47/48 |
 | gemma4:12b | 46/48 |
 | qwen3.5:9b | 46/48 |
+| nemotron-3.5-bolt:e4b | 45/48 |
 | glm-4.7-flash:q4_K_M | 45/48 |
 | qwen3.5:35b | 45/48 |
 | ornith-1.5:35b | 45/48 |
@@ -280,6 +298,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.5:4b | 42/48 |
 | qwen3.6:35b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
+| hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 40/48 |
 | ministral-3:8b | 39/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |

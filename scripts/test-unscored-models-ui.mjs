@@ -31,6 +31,8 @@ window.jaris = {
   // Étape 437 : où se fera le test (ce PC ici).
   machineGet: async () => ({ connected: false, saved: null }),
   onMachineChanged: () => () => {},
+  // Étape 438 : le fichier à m'envoyer.
+  exportTestResults: async () => (window.__exportCalls = (window.__exportCalls || 0) + 1, window.__exportResult ?? { saved: true, rows: 42, models: 3, sizeKb: 180 }),
   testUnscoredModels: () => new Promise((resolve) => { window.__finish = () => resolve({ models: [], resultsPath: 'x' }) }),
   showUnscoredResults: () => {}
 }
@@ -101,6 +103,23 @@ test('étape 314 : une réponse de plusieurs minutes affiche depuis combien de t
     await page.evaluate(() => window.__line('##WORKING## hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M 0'))
     await page.waitForFunction(() => !document.querySelector('.options-menu__progress-label')?.textContent.includes('répond toujours'))
     assert.match(await label(), /^Test de .+…$/)
+  } finally {
+    await browser.close()
+  }
+})
+
+test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a préparé, ou qu’il n’y a rien de nouveau', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.click('button >> text=Préparer le fichier à m\'envoyer')
+    await page.waitForSelector('.options-menu__unscored-export [role="status"]')
+    assert.match(await page.textContent('.options-menu__unscored-export [role="status"]'), /Fichier prêt : 42 résultats de 3 modèles \(180 Ko\)/)
+    await page.evaluate(() => { window.__exportResult = { saved: false, empty: true } })
+    await page.click('button >> text=Préparer le fichier à m\'envoyer')
+    await page.waitForFunction(() => document.querySelector('.options-menu__unscored-export [role="status"]')?.textContent.startsWith('Rien de nouveau'))
+    assert.equal(await page.evaluate(() => window.__exportCalls), 2)
   } finally {
     await browser.close()
   }

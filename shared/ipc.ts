@@ -687,6 +687,17 @@ export const IMAGE_TYPES_BY_EXTENSION: Record<string, string> = {
 
 /** Résultat de « Enregistrer l'image » (étape 185) : `saved` false si Léo a annulé ou si l'écriture a échoué. */
 /** Étape 362 : résultat de « Télécharger les votes » (rien sur une simple annulation). */
+/** Étape 438 : « Préparer le fichier à m'envoyer » (Tous les modèles → Modèles à tester). */
+export interface TestResultsExportResult {
+  saved: boolean
+  /** Rien de nouveau depuis le dernier fichier préparé. */
+  empty?: boolean
+  rows?: number
+  models?: number
+  sizeKb?: number
+  error?: string
+}
+
 export interface DuelExportResult {
   saved: boolean
   /** Nombre de votes écrits dans le fichier. */
@@ -1531,6 +1542,8 @@ export const IPC_CHANNELS = {
   duelBatchClose: 'jaris:duel-batch-close',
   /** renderer -> main, étape 362 : tout l'historique des duels dans un fichier choisi par Léo. */
   duelExportVotes: 'jaris:duel-export-votes',
+  /** renderer -> main : prépare l'extrait compressé des résultats de tests pas encore envoyés (étape 438). */
+  exportTestResults: 'jaris:export-test-results',
   /** renderer -> main, étape 377 : la machine qui fait tourner les modèles des duels (`null` = ce PC). */
   /** Étape 437 : la page Machine — état, connexion (réglages revérifiés côté main), déconnexion, changements. */
   machineGet: 'jaris:machine-get',

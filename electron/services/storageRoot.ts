@@ -74,7 +74,9 @@ const MODEL_TEST_ENTRIES = [
   'benchmark-nouveaux-modeles.traces.jsonl',
   'benchmark-nouveaux-modeles.md.telecharges.json',
   // Étape 437 : celui d'un test fait sur une machine louée (page Machine).
-  'benchmark-nouveaux-modeles.md.telecharges-machine.json'
+  'benchmark-nouveaux-modeles.md.telecharges-machine.json',
+  // Étape 438 : jusqu'où les résultats ont déjà été préparés pour Léo (« Préparer le fichier à m'envoyer »).
+  'benchmark-nouveaux-modeles.envoye.json'
 ]
 
 /**
