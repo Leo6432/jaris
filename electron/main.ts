@@ -590,7 +590,7 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
     // par-dessus (titleBarOverlay) — Jaris dessine le reste de la barre (logo, nom, zone de déplacement).
     ...(chrome.titleBar ? { titleBarStyle: 'hidden' as const, titleBarOverlay: titleBarOverlay() } : {}),
     // Le fond de la barre latérale (index.css, --jv-side) : rien ne clignote d'une autre couleur au démarrage.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#181818' : '#f9f9f9',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#f9f9f9',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       sandbox: false

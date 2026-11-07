@@ -11451,3 +11451,18 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   intégrée) et la « partie 2 » est identique à celle déjà reçue : rien de nouveau à intégrer.
 - Régression : `test-machine.mjs` (connexion sans aucun téléchargement, hôte des modèles inchangé, plus de bascule
   globale — échoue avec le code de la v0.47), `test-machine-ui.mjs` (textes, plus de liste de modèles).
+
+## Étape 440 — Thème sombre en noir pur, comme ChatGPT (v0.49.0)
+
+- Léo, capture de ChatGPT en noir : « fais une maquette Jaris comme ça, noir mais beau », puis « ne rien changer »
+  (question à choix), puis peu après « mets l'application full noir ». Sa dernière demande l'emporte sur son refus du
+  06/11 (étape 434, « non, on fait rien ») et sur celui de la maquette de ce soir.
+- Thème sombre seulement (le clair ne change pas) : `--hud-bg`, `--jv-side`, `--jv-rail` à `#000`, `--jv-mica`
+  noir ; ce qui est posé dessus garde un gris très foncé pour se voir (panneaux `#171717`/`#1f1f1f`, bulles et champ
+  de saisie `#1b1b1b` avec un trait à 6 %, code `#111`). La liste n'est plus un panneau encadré et arrondi en sombre
+  (`@media not (prefers-color-scheme: light)`) : un seul trait la sépare de la conversation, comme ChatGPT. Fond de la
+  fenêtre native au démarrage : `#000000` (main.ts), sinon un éclair gris avant le premier rendu.
+- Les widgets restent en capsule noire (étape 432). Maquette grise des widgets montrée, pas encore de réponse de Léo.
+- Vérifié dans un navigateur sur le rendu compilé : Chat (1200 et 760 px), Vocal, Code, Image, menu « + » ; thème
+  clair identique. Régression : `test-black-theme-ui.mjs` (noir, liste sans cadre, trait, champ visible ; clair
+  inchangé — échoue avec le CSS de la v0.48).

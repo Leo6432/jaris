@@ -2,7 +2,7 @@
    Jaris — design sobre (maquette Claude Design « Jaris.dc.html », variante Graphite)
    --------------------------------------------------------------------------
    Fini le thème HUD/science-fiction : une interface d'assistant IA classique façon ChatGPT —
-   fond gris anthracite, barre latérale plus sombre, coins arrondis, Geist partout, aucune lueur.
+   fond noir en thème sombre (étape 440, comme ChatGPT), coins arrondis, Geist partout, aucune lueur.
    Un seul jeu de tokens (:root ci-dessous), utilisé partout ailleurs dans ce fichier.
    Polices embarquées dans le bundle (src/main.tsx), jamais Google Fonts : Jaris doit marcher hors ligne.
    ========================================================================== */
@@ -57,9 +57,9 @@
   --jv-code: #171717;
   --jv-accent-ink: #0d0d0d;
   --jv-frame: rgba(255, 255, 255, 0.1);
-  /* Champ de saisie : gris plein en sombre ; blanc posé sur un trait et une ombre en clair. */
-  --jv-composer: #303030;
-  --jv-composer-border: transparent;
+  /* Champ de saisie : gris foncé plein sur le noir en sombre (étape 440) ; blanc posé sur un trait et une ombre en clair. */
+  --jv-composer: #1b1b1b;
+  --jv-composer-border: rgba(255, 255, 255, 0.06);
   --jv-composer-shadow: none;
 
   /* Geist (embarquée, src/main.tsx) avant Segoe UI : une police d'appli moderne, pas celle de Windows. */
@@ -6108,16 +6108,19 @@ select {
    colonne ; le rail compact reste disponible quand la liste est repliée.
    ======================================================================== */
 
+/* Étape 440 (Léo, capture de ChatGPT en noir : « mets l'application full noir ») : le thème sombre passe du gris
+   anthracite au noir pur, comme ChatGPT — fond, barre latérale et barre d'icônes noirs ; seuls les éléments posés
+   dessus (bulles, champ de saisie, menus, cartes) gardent un gris très foncé pour se détacher. Thème clair inchangé. */
 :root {
-  --hud-bg: #212121;
-  --hud-panel: #2f2f2f;
-  --hud-panel-raised: #2f2f2f;
-  --jv-side: #171717;
-  --jv-rail: #1e1e1e;
-  --jv-mica: rgba(23, 23, 23, 0.9);
+  --hud-bg: #000000;
+  --hud-panel: #171717;
+  --hud-panel-raised: #1f1f1f;
+  --jv-side: #000000;
+  --jv-rail: #000000;
+  --jv-mica: rgba(0, 0, 0, 0.92);
   --jv-hover: rgba(255, 255, 255, 0.07);
-  --jv-bubble: #2f2f2f;
-  --jv-code: #1e1e1e;
+  --jv-bubble: #1b1b1b;
+  --jv-code: #111111;
 }
 
 @media (prefers-color-scheme: light) {
@@ -6377,6 +6380,20 @@ select {
   border-left: 1px solid var(--hud-line);
   border-radius: 0;
   background: var(--hud-bg);
+}
+
+/* Étape 440 : tout noir, la liste n'est plus un panneau encadré posé sur le fond — un seul trait la sépare de la
+   conversation, comme ChatGPT. En thème clair, le cadre arrondi reste. */
+@media not (prefers-color-scheme: light) {
+  .app-sidebar {
+    border-top: 0;
+    border-left: 0;
+    border-top-left-radius: 0;
+  }
+  .app-sidebar[hidden] + .app-main {
+    border-top: 0;
+    border-top-left-radius: 0;
+  }
 }
 
 .app-main > .chat-panel,
