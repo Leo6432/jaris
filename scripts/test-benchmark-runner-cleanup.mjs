@@ -417,7 +417,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     procs.push(proc)
     return proc
   }
-  const { testUnscoredModels, stopModelTest, runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
+  const { testUnscoredModels, stopModelTest, stopModelTestByUser, runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'child_process') return { spawn: fakeSpawn }
     if (id === 'zlib') return realZlib
     if (id === './atomicFile') return { writeFileAtomic: async (file, content) => writtenAtomic.push([file, content]) }
@@ -465,6 +465,25 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   await stopped
   assert.equal(active.size, 0, 'aucun blocage ne doit survivre au test')
   assert.equal(events.filter((e) => e === 'stop').length, 2)
+
+  // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application ») : le bouton finit le test
+  // sur « arrêté » (pas une panne), la veille est rétablie ; demandé pendant la vérification d'Ollama, rien ne démarre.
+  const byUser = testUnscoredModels(() => {})
+  await new Promise((resolve) => setImmediate(resolve))
+  const launched = procs.length
+  await stopModelTestByUser()
+  await assert.rejects(byUser, /^Error: Test arrêté\./)
+  assert.equal(active.size, 0)
+  const early = testUnscoredModels(() => {})
+  await stopModelTestByUser()
+  await assert.rejects(early, /^Error: Test arrêté\./)
+  assert.equal(procs.length, launched, 'arrêté avant le lancement : le script ne démarre pas')
+  await stopModelTestByUser() // plus rien à arrêter : sans effet
+  // Le test suivant n'hérite pas de l'arrêt : il se termine normalement.
+  const after = testUnscoredModels(() => {})
+  await new Promise((resolve) => setImmediate(resolve))
+  procs.at(-1).emit('close', 0)
+  await after
 
   // « Déplacer » copie puis efface les résultats du test juste après l'avoir arrêté : l'arrêt attend sa vraie sortie.
   const third = testUnscoredModels(() => {}).catch(() => {})

@@ -166,6 +166,7 @@ const api = {
   getUnscoredModels: (): Promise<ModelToTest[]> => invoke(IPC_CHANNELS.getUnscoredModels),
   testUnscoredModels: (models?: string[]): Promise<{ models: string[]; resultsPath: string }> =>
     invoke(IPC_CHANNELS.testUnscoredModels, models),
+  stopUnscoredTest: (): Promise<void> => invoke(IPC_CHANNELS.stopUnscoredTest),
   showUnscoredResults: (): Promise<void> => invoke(IPC_CHANNELS.showUnscoredResults),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => subscribe(IPC_CHANNELS.modelPullProgress, cb),

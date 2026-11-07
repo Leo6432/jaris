@@ -388,6 +388,18 @@ export function isModelTestRunning(): boolean {
   return runningTest !== null || preparingTest || quickSetupRunning
 }
 
+/**
+ * Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test ») : le
+ * bouton « Arrêter le test ». Même arrêt qu'à la fermeture de Jaris (le script reprend au prochain lancement, JARIS_RESUME),
+ * mais le test en cours finit sur « arrêté », pas sur une panne ; demandé pendant la préparation, il ne démarre pas.
+ */
+let stopAsked = false
+export function stopModelTestByUser(): Promise<void> {
+  if (!runningTest && !preparingTest) return Promise.resolve()
+  stopAsked = true
+  return stopModelTest()
+}
+
 export function stopModelTest(): Promise<void> {
   const exit = runningTestExit
   runningTest?.kill()
@@ -416,6 +428,7 @@ export async function testUnscoredModels(
   const resultsPath = unscoredResultsPath()
   if (!models.length) return { models, resultsPath }
   if (runningTest || preparingTest) throw new Error(t('bench.testRunning'))
+  stopAsked = false
   // Étape 437 : la machine louée connectée fait le test (son Ollama, sa mémoire, son disque, donnés sur la page Machine) ;
   // ce PC garde le script, ses outils et Edge. Figée au lancement : le test reste sur cette machine jusqu'au bout.
   const machine = connectedMachine()
@@ -427,6 +440,7 @@ export async function testUnscoredModels(
   } finally {
     preparingTest = false
   }
+  if (stopAsked) throw new Error(t('unscored.stopped'))
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
       windowsHide: true,
@@ -493,7 +507,8 @@ export async function testUnscoredModels(
       if (runningTest === proc) runningTest = null
       if (runningTestExit === exit) runningTestExit = null
       if (buffer.trim()) onLine(buffer)
-      if (code === 0) resolve({ models, resultsPath })
+      if (stopAsked) reject(new Error(t('unscored.stopped')))
+      else if (code === 0) resolve({ models, resultsPath })
       else reject(new Error(t('bench.testStopped', { code: code ?? '?' })))
     })
   })

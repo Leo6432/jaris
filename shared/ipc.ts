@@ -1320,6 +1320,8 @@ export const IPC_CHANNELS = {
   getUnscoredModels: 'jaris:get-unscored-models',
   /** renderer -> main : teste ces modèles avec le script de test (étape 168), résout à la fin. */
   testUnscoredModels: 'jaris:test-unscored-models',
+  /** renderer -> main : arrête le test en cours (étape 441) ; ce qui est fini reste, le prochain lancement reprend. */
+  stopUnscoredTest: 'jaris:stop-unscored-test',
   /** renderer -> main : montre le fichier de résultats de ce test dans l'Explorateur. */
   showUnscoredResults: 'jaris:show-unscored-results',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */

@@ -138,6 +138,7 @@ declare global {
       runQuickSetup: () => Promise<CapacityScanResult>
       getUnscoredModels: () => Promise<ModelToTest[]>
       testUnscoredModels: (models?: string[]) => Promise<{ models: string[]; resultsPath: string }>
+      stopUnscoredTest: () => Promise<void>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void

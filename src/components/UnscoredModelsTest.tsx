@@ -16,7 +16,7 @@ import type { ModelToTest } from '../../shared/ipc'
  * retéléchargé.
  */
 type Row = { model: string; status: 'done' | 'skipped' | 'replayed'; correct?: number; total?: number; reason?: string }
-type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error'
+type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error' | 'stopped'
 
 function describeNeed(need: ModelToTest['needs'][number]): string {
   const test = t(need.test === 'tools' ? 'unscored.need.tools' : need.test === 'vision' ? 'unscored.need.vision' : 'unscored.need.code')
@@ -50,6 +50,8 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   const [exporting, setExporting] = useState(false)
   const [exported, setExported] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
+  // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test »).
+  const [stopping, setStopping] = useState(false)
 
   // Étape 437 : la machine louée connectée (ou non) change où le test se fera — et donc ses durées estimées.
   const [machineHost, setMachineHost] = useState<string | null>(null)
@@ -155,15 +157,44 @@ export default function UnscoredModelsTest(): JSX.Element | null {
     setPercent(0)
     setRows([])
     setError(null)
+    setStopping(false)
     try {
       await window.jaris.testUnscoredModels(choosing ? chosen.map((m) => m.model) : undefined)
       setPercent(100)
       setPhase('done')
     } catch (err) {
-      setError(ipcErrorMessage(err))
-      setPhase('error')
+      const message = ipcErrorMessage(err)
+      // Arrêté par le bouton : pas une panne. Le main le dit avec cette phrase (benchmarkRunner.ts, stopModelTestByUser).
+      if (message === t('unscored.stopped')) setPhase('stopped')
+      else {
+        setError(message)
+        setPhase('error')
+      }
+    } finally {
+      setStopping(false)
     }
   }
+
+  const stop = async (): Promise<void> => {
+    setStopping(true)
+    try {
+      await window.jaris.stopUnscoredTest()
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    }
+    // Lancé depuis un autre écran (ce test-ci n'attend aucune fin) : la page revient à son état normal.
+    if (phase === 'error') {
+      setStopping(false)
+      setError(null)
+      setPhase('idle')
+    }
+  }
+  // Un test lancé ailleurs (avant un retour sur cette page) : « déjà en cours » doit aussi pouvoir s'arrêter ici.
+  const stopButton = (
+    <button className="options-menu__action options-menu__action--stop" onClick={() => void stop()} disabled={stopping}>
+      {stopping ? t('unscored.stopping') : t('unscored.stop')}
+    </button>
+  )
 
   return (
     <div className="options-menu__unscored">
@@ -280,10 +311,16 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         </div>
       )}
 
-      {(phase === 'running' || phase === 'done' || phase === 'error') && (
+      {(phase === 'running' || phase === 'done' || phase === 'error' || phase === 'stopped') && (
         <div className="options-menu__progress">
           <div className="options-menu__progress-label">
-            {phase === 'running' ? current : phase === 'done' ? t('unscored.done') : t('unscored.interrupted')}
+            {phase === 'running'
+              ? current
+              : phase === 'done'
+                ? t('unscored.done')
+                : phase === 'stopped'
+                  ? t('unscored.stopped')
+                  : t('unscored.interrupted')}
           </div>
           <div className="options-menu__progress-bar">
             <div className="options-menu__progress-bar-fill" style={{ width: `${percent}%` }} />
@@ -306,19 +343,21 @@ export default function UnscoredModelsTest(): JSX.Element | null {
             </ul>
           )}
           {phase === 'error' && error && <p className="options-menu__error">{error}</p>}
+          {phase === 'running' && <div className="options-menu__unscored-actions">{stopButton}</div>}
+          {phase === 'error' && error === t('bench.testRunning') && <div className="options-menu__unscored-actions">{stopButton}</div>}
           {phase !== 'running' && (
             <div className="options-menu__unscored-actions">
               <button className="options-menu__action" onClick={() => void window.jaris.showUnscoredResults()}>
                 {t('unscored.openResults')}
               </button>
-              {phase === 'error' && (
+              {(phase === 'error' || phase === 'stopped') && (
                 <button className="options-menu__action" onClick={() => void run()}>
                   {t('unscored.resumeButton')}
                 </button>
               )}
             </div>
           )}
-          {phase === 'done' && (
+          {(phase === 'done' || phase === 'stopped') && (
             <>
               <p className="options-menu__unscored-text">{t('unscored.send')}</p>
               {exportBlock}

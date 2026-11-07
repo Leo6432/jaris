@@ -24,6 +24,7 @@ const entryPath = join(projectRoot, 'tmp-unscored-models-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import UnscoredModelsTest from './src/components/UnscoredModelsTest'
+import { t } from '@/lib/i18n'
 
 window.jaris = {
   getUnscoredModels: () => Promise.resolve([{ model: 'ministral-3:14b', needs: [{ test: 'tools', reason: 'redo' }] }, { model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }] }]),
@@ -33,7 +34,18 @@ window.jaris = {
   onMachineChanged: () => () => {},
   // Étape 438 : le fichier à m'envoyer.
   exportTestResults: async () => (window.__exportCalls = (window.__exportCalls || 0) + 1, window.__exportResult ?? { saved: true, rows: 42, models: 3, sizeKb: 180 }),
-  testUnscoredModels: () => new Promise((resolve) => { window.__finish = () => resolve({ models: [], resultsPath: 'x' }) }),
+  testUnscoredModels: () => window.__busy
+    ? Promise.reject(new Error(t('bench.testRunning')))
+    : new Promise((resolve, reject) => {
+        window.__finish = () => resolve({ models: [], resultsPath: 'x' })
+        window.__killed = () => reject(new Error(t('unscored.stopped')))
+      }),
+  // Étape 441 : comme le main, l'arrêt fait finir le test en cours sur « arrêté ».
+  stopUnscoredTest: async () => {
+    window.__stops = (window.__stops || 0) + 1
+    window.__killed?.()
+    window.__busy = false
+  },
   showUnscoredResults: () => {}
 }
 createRoot(document.getElementById('root')).render(<UnscoredModelsTest />)
@@ -120,6 +132,51 @@ test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a pr
     await page.click('button >> text=Préparer le fichier à m\'envoyer')
     await page.waitForFunction(() => document.querySelector('.options-menu__unscored-export [role="status"]')?.textContent.startsWith('Rien de nouveau'))
     assert.equal(await page.evaluate(() => window.__exportCalls), 2)
+  } finally {
+    await browser.close()
+  }
+})
+
+test('étape 441 : « Arrêter le test » pendant le test, sans quitter Jaris ; il finit sur « arrêté » et peut reprendre', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 } })
+    await page.setContent(buildPage())
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    await page.evaluate(() => window.__line('##MODEL_DONE## ministral-3:14b 70 78'))
+    // Trouvable : le bouton est là pendant tout le test, sous la progression.
+    const stop = page.locator('.options-menu__progress button', { hasText: 'Arrêter le test' })
+    assert.equal(await stop.count(), 1)
+    assert.equal(await stop.isVisible(), true)
+    await stop.click()
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.startsWith('Test arrêté.'))
+    assert.equal(await page.evaluate(() => window.__stops), 1)
+    assert.equal(await page.locator('.options-menu__error').count(), 0, 'un arrêt voulu n’est pas une panne')
+    // Ce qui est fini reste affiché, et on peut reprendre ou envoyer ce qui est fait.
+    assert.match(await page.textContent('.options-menu__unscored-results'), /70\/78/)
+    assert.equal(await page.locator('button', { hasText: 'Reprendre le test' }).count(), 1)
+    assert.equal(await page.locator('button', { hasText: 'Préparer le fichier à m’envoyer' }).count() + await page.locator('button', { hasText: "Préparer le fichier à m'envoyer" }).count(), 1)
+    assert.equal(await page.locator('button', { hasText: 'Arrêter le test' }).count(), 0)
+  } finally {
+    await browser.close()
+  }
+})
+
+test('étape 441 : un test déjà lancé ailleurs (« déjà en cours ») s’arrête aussi d’ici', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.evaluate(() => { window.__busy = true })
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    await page.waitForSelector('.options-menu__error')
+    assert.match(await page.textContent('.options-menu__error'), /arrête-le avec/)
+    await page.click('button >> text=Arrêter le test')
+    await page.waitForSelector('button >> text=Tester ces modèles')
+    assert.equal(await page.evaluate(() => window.__stops), 1)
+    assert.equal(await page.locator('.options-menu__error').count(), 0)
   } finally {
     await browser.close()
   }

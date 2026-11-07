@@ -115,7 +115,7 @@ import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProb
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, markTestResultsSent, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, markTestResultsSent, runQuickSetup, stopModelTest, stopModelTestByUser, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource } from './services/remoteMachine'
 import { config, runWithLocalOllama } from './config'
 import { chatSession } from './services/chatSession'
@@ -2228,6 +2228,8 @@ app.whenReady().then(async () => {
       Array.isArray(chosen) ? chosen.filter((m): m is string => typeof m === 'string') : undefined
     )
   )
+  // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test »).
+  ipcMain.handle(IPC_CHANNELS.stopUnscoredTest, () => stopModelTestByUser())
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
   // Étape 438 : l'extrait compressé des résultats pas encore envoyés, enregistré où Léo veut (dialogue natif gardé).
   ipcMain.handle(IPC_CHANNELS.exportTestResults, async (): Promise<TestResultsExportResult> => {

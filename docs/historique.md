@@ -11466,3 +11466,21 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Vérifié dans un navigateur sur le rendu compilé : Chat (1200 et 760 px), Vocal, Code, Image, menu « + » ; thème
   clair identique. Régression : `test-black-theme-ui.mjs` (noir, liste sans cadre, trait, champ visible ; clair
   inchangé — échoue avec le CSS de la v0.48).
+
+## Étape 441 — Bouton « Arrêter le test » dans Analyse (v0.49.1)
+
+- Léo (GLM-4.6V-Flash bloqué plus de 10 min sur une question, 2 h de test pour 50 min annoncées) : « ajoute pouvoir
+  arrêter les tests, là je dois quitter l'application pour arrêter le test ».
+- `stopModelTestByUser` (benchmarkRunner.ts, canal `stopUnscoredTest`) : même arrêt qu'à la fermeture (le script
+  reprend au prochain lancement, JARIS_RESUME), mais le test finit sur « Test arrêté » et non sur « s'est arrêté avant
+  la fin (code …) » ; demandé pendant la vérification d'Ollama, le script ne démarre pas. Le drapeau est remis à zéro à
+  chaque lancement.
+- Écran (UnscoredModelsTest.tsx) : « Arrêter le test » sous la progression pendant tout le test ; nouvel état
+  « arrêté » (pas une erreur) avec « Reprendre le test » et « Préparer le fichier à m'envoyer ». Un test lancé avant un
+  retour sur la page (« déjà en cours ») s'arrête aussi d'ici ; ce message ne dit plus « ferme Jaris pour l'arrêter ».
+  24 langues (le grec et le slovène gardent leur mot pour « test » : δοκιμή, preizkus).
+- Pas fait : couper plus tôt une réponse qui réfléchit sans fin pendant le test (20 min par question, puis jusqu'à 2 h
+  au rejeu) — proposé à Léo, en attente de sa réponse.
+- Régression : `test-benchmark-runner-cleanup.mjs` (arrêt pendant le test et pendant la préparation, test suivant
+  normal), `test-unscored-models-ui.mjs` (bouton trouvable, état « arrêté » sans erreur, reprise et envoi possibles,
+  arrêt depuis « déjà en cours » — échoue sans le bouton).
