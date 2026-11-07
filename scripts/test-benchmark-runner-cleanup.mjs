@@ -422,7 +422,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     if (id === 'zlib') return realZlib
     if (id === './atomicFile') return { writeFileAtomic: async (file, content) => writtenAtomic.push([file, content]) }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
-    if (id.endsWith('config')) return { config: { ollama: { host: 'http://10.0.0.5:11434', localHost: 'http://127.0.0.1:11434' } }, runWithLocalOllama: (fn) => fn() }
+    if (id.endsWith('config')) return { config: { ollama: { host: 'http://10.0.0.5:11434', localHost: 'http://127.0.0.1:11434' } }, runWithLocalOllama: (fn) => { events.push('local-scope'); return fn() } }
     if (id === './remoteMachine') return remoteMachineModule
     if (id === './ollama')
       return {
@@ -505,8 +505,10 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     assert.equal(events.filter((e) => e.startsWith('repair')).length, repairsBefore, 'pas de réparation du dossier de ce PC')
     procs.at(-1).emit('close', 0)
     await onMachine
-    // Et la configuration de ce PC ne se reteste jamais pendant que les modèles tournent ailleurs.
-    await assert.rejects(runQuickSetup(() => {}), /déconnecte-la/)
+    // Étape 439 : la configuration de ce PC se reteste aussi machine connectée — toujours sur l'Ollama de ce PC.
+    const scopesBefore = events.filter((e) => e === 'local-scope').length
+    await runQuickSetup(() => {}).catch((err) => assert.doesNotMatch(String(err), /déconnecte-la/))
+    assert.equal(events.filter((e) => e === 'local-scope').length, scopesBefore + 1, 'dans la portée de ce PC')
   } finally {
     connectedForTest = null
   }

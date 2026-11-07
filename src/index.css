@@ -12548,24 +12548,6 @@ input.reply-ui__field-input {
   border-radius: 50%;
   background: var(--hud-ok);
 }
-.machine-page__label {
-  margin: 4px 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--hud-text-dim);
-}
-.machine-page__models {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 13px;
-  color: var(--hud-text);
-}
-.machine-page__model--failed {
-  color: var(--hud-danger);
-}
 .machine-page__note {
   margin: 0;
   font-size: 13px;

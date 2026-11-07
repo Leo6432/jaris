@@ -7,8 +7,9 @@ import { loadTsModule } from './load-ts-module.mjs'
 /**
  * Étape 437 (Léo : « un bouton Machine à gauche… tout Jaris tourne sur le VPS, si je vais dans Analyse et que je lance,
  * ça se fait sur le VPS, et après je peux déconnecter »). Ce qui est vérifié ici : où partent VRAIMENT les demandes aux
- * modèles (machine connectée, ce PC, portée explicite), la connexion qui ne bascule jamais vers une adresse muette, la
- * préparation épinglée à la machine (une déconnexion en route ne télécharge jamais la suite sur ce PC), et les gardes.
+ * modèles (ce PC sauf portée explicite), la connexion qui ne bascule jamais vers une adresse muette, et les gardes.
+ * Étape 439 (Léo : « pour pas que ça installe des modèles dès qu'on met la machine, il met que quand il fait duel
+ * classement, pas direct ») : connecter ne télécharge RIEN et ne déplace ni Chat, ni Vocal, ni Code.
  */
 function loadConfig() {
   return loadTsModule('electron/config.ts', {
@@ -22,20 +23,20 @@ function loadConfig() {
 const duel = loadTsModule('shared/duel.ts')
 const machine = loadTsModule('shared/machine.ts', { './duel': duel })
 
-test('l’adresse des modèles : la machine connectée par défaut, mais une portée explicite garde la priorité', async () => {
+test('l’adresse des modèles : ce PC, sauf dans une portée explicite (Duel, Analyse)', async () => {
   const config = loadConfig()
   const local = config.config.ollama.host
   assert.equal(config.config.ollama.remote, false)
-  config.setMachineOllamaHost({ host: 'https://machine.example' })
-  assert.equal(config.config.ollama.host, 'https://machine.example', 'Chat, Vocal, Code : vers la machine')
-  assert.equal(config.config.ollama.remote, true, 'rien de ce PC ne s’y applique (disque, mémoire, vitesse)')
-  assert.equal(config.config.ollama.localHost, local, 'la surveillance de l’Ollama de ce PC reste sur ce PC')
-  assert.equal(await config.runWithLocalOllama(async () => config.config.ollama.host), local, 'les outils d’un duel restent sur ce PC')
-  assert.equal(await config.runWithLocalOllama(async () => config.config.ollama.remote), false)
-  assert.equal(await config.runWithOllamaHost('https://autre.example', async () => config.config.ollama.host), 'https://autre.example')
-  config.setMachineOllamaHost(null)
-  assert.equal(config.config.ollama.host, local, 'déconnectée : retour à ce PC')
-  assert.equal(config.config.ollama.remote, false)
+  assert.equal(config.setMachineOllamaHost, undefined, 'plus de bascule de tout Jaris vers la machine')
+  assert.equal(await config.runWithOllamaHost('https://machine.example', async () => config.config.ollama.host), 'https://machine.example')
+  assert.equal(await config.runWithOllamaHost('https://machine.example', async () => config.config.ollama.remote), true)
+  assert.equal(
+    await config.runWithOllamaHost('https://machine.example', () => config.runWithLocalOllama(async () => config.config.ollama.host)),
+    local,
+    'les outils d’un duel restent sur ce PC'
+  )
+  assert.equal(config.config.ollama.localHost, local)
+  assert.equal(config.config.ollama.host, local, 'hors portée : ce PC')
 })
 
 test('réglages de la machine : revérifiés, et l’ancienne adresse du Duel reprise une fois', () => {
@@ -53,10 +54,9 @@ test('réglages de la machine : revérifiés, et l’ancienne adresse du Duel re
   assert.equal(saved.host, 'http://1.2.3.4', 'la page Machine prime')
 })
 
-function loadService({ reachable = true, installed = [], onVersion = null } = {}) {
+function loadService({ reachable = true, onVersion = null } = {}) {
   const config = loadConfig()
-  const calls = { pulls: [], lists: [], versions: [], patched: [] }
-  let releasePull = null
+  const calls = { pulls: [], versions: [], patched: [] }
   const ollama = {
     fetchOllamaVersion: async () => {
       calls.versions.push(config.config.ollama.host)
@@ -64,17 +64,11 @@ function loadService({ reachable = true, installed = [], onVersion = null } = {}
       if (!reachable) throw new Error('La machine des modèles ne répond pas.')
       return '0.40.4'
     },
-    listInstalledModels: async () => {
-      calls.lists.push(config.config.ollama.host)
-      return installed
-    },
-    pullModelIfMissing: (model, _status, onProgress, signal) =>
-      new Promise((resolve, reject) => {
-        calls.pulls.push([model, config.config.ollama.host])
-        onProgress?.({ model, completed: 1, total: 2, percent: 50 })
-        releasePull = () => resolve(true)
-        signal?.addEventListener('abort', () => reject(new Error('arrêté')))
-      })
+    // Ne doit JAMAIS servir (étape 439) : gardé pour prouver qu'aucun téléchargement ne part à la connexion.
+    pullModelIfMissing: async (model) => {
+      calls.pulls.push(model)
+      return true
+    }
   }
   const profile = { models: { flash: 'qwen3.5:2b', medium: 'qwen3.5:9b', large: 'qwen3.5:9b' }, visionModel: 'qwen3-vl:8b' }
   const service = loadTsModule('electron/services/remoteMachine.ts', {
@@ -84,7 +78,7 @@ function loadService({ reachable = true, installed = [], onVersion = null } = {}
     './ollama': ollama,
     './profileStore': { getProfile: async () => profile, patchProfile: async (change) => calls.patched.push(change) }
   })
-  return { service, config, calls, release: () => releasePull?.() }
+  return { service, config, calls }
 }
 
 const SETTINGS = { host: 'http://10.0.0.5:11434', vramGb: 80, ramGb: 64, diskGb: 100 }
@@ -100,61 +94,49 @@ test('connecter : une adresse qui ne répond pas ne fait jamais basculer Jaris',
   await assert.rejects(service.connectMachine({ host: 'nulle part', vramGb: 80, ramGb: 64, diskGb: 100 }), /Vérifie les réglages/)
 })
 
-test('connecter : tout Jaris passe sur la machine, ses modèles y sont téléchargés ; déconnecter en route ne télécharge rien sur ce PC', async () => {
+test('connecter : rien n’est téléchargé, Chat/Vocal/Code restent sur ce PC, la place libre s’affiche', async () => {
   const realFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ models: [{ size: 6 * 1024 ** 3 }] }) })
   try {
-    const { service, config, calls, release } = loadService({ installed: ['qwen3.5:2b'] })
+    const { service, config, calls } = loadService()
     const local = config.config.ollama.host
     const view = await service.connectMachine(SETTINGS)
     assert.equal(view.connected, true)
     assert.equal(view.version, '0.40.4')
-    assert.equal(config.config.ollama.host, SETTINGS.host)
+    assert.equal(config.config.ollama.host, local, 'Chat, Vocal et Code restent sur ce PC')
+    assert.equal(service.connectedMachine().host, SETTINGS.host, 'le Duel et l’Analyse la trouvent ici')
     assert.deepEqual(calls.patched.map((c) => c.remoteMachine.host), [SETTINGS.host], 'l’adresse est gardée pour la prochaine fois')
     await tick()
     await tick()
     let now = service.machineView()
-    assert.deepEqual(now.models.map((m) => [m.model, m.installed]), [['qwen3.5:2b', true], ['qwen3.5:9b', false], ['qwen3-vl:8b', false]], 'chaque modèle une fois')
     assert.equal(now.freeDiskGb, 84, '100 Go − 10 réservés − 6 de modèles')
-    assert.deepEqual(calls.pulls, [['qwen3.5:9b', SETTINGS.host]])
-    assert.deepEqual(now.pulling, { model: 'qwen3.5:9b', percent: 50 })
-    release()
-    await tick()
-    await tick()
-    assert.deepEqual(calls.pulls.at(-1), ['qwen3-vl:8b', SETTINGS.host], 'le suivant, toujours sur la machine')
-
-    // Déconnexion pendant le 2e téléchargement : il s'arrête, et rien ne part vers ce PC.
+    assert.deepEqual(calls.pulls, [], 'aucun modèle téléchargé à la connexion')
+    assert.equal('models' in now, false)
+    assert.equal('pulling' in now, false)
     service.disconnectMachine()
-    assert.equal(config.config.ollama.host, local)
-    await tick()
-    await tick()
-    assert.equal(calls.pulls.length, 2)
-    assert.ok(calls.pulls.every(([, host]) => host === SETTINGS.host))
     now = service.machineView()
     assert.equal(now.connected, false)
-    assert.equal(now.pulling, null)
+    assert.equal(service.connectedMachine(), null)
     assert.equal(now.saved.host, SETTINGS.host, 'l’adresse reste pré-remplie')
   } finally {
     globalThis.fetch = realFetch
   }
 })
 
-test('pendant un test de modèles, ni connexion ni déconnexion ; pendant des duels sur ce PC, pas de connexion', async () => {
+test('pendant un test de modèles, ni connexion ni déconnexion', async () => {
   const realFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ models: [] }) })
   try {
-    const { service } = loadService({ installed: ['qwen3.5:2b', 'qwen3.5:9b', 'qwen3-vl:8b'] })
+    const { service } = loadService()
     let busy = 'test'
     service.setMachineBusySource(() => busy)
     await assert.rejects(service.connectMachine(SETTINGS), /test de modèles est en cours/)
-    busy = 'duel'
-    await assert.rejects(service.connectMachine(SETTINGS), /session de duels/)
     busy = null
     assert.equal((await service.connectMachine(SETTINGS)).connected, true)
     busy = 'test'
     assert.throws(() => service.disconnectMachine(), /test de modèles est en cours/)
-    busy = 'duel'
-    assert.equal(service.disconnectMachine().connected, false, 'une session sur la machine garde sa machine : déconnecter reste possible')
+    busy = null
+    assert.equal(service.disconnectMachine().connected, false)
   } finally {
     globalThis.fetch = realFetch
   }
@@ -180,11 +162,11 @@ test('un test lancé PENDANT la connexion (attente de la machine) garde sa machi
   let busy = null
   const { service, config } = loadService({ onVersion: () => { busy = 'test' } })
   service.setMachineBusySource(() => busy)
-  const local = config.config.ollama.host
   const view = await service.connectMachine(SETTINGS)
   assert.equal(view.connected, false)
   assert.match(view.error, /test de modèles est en cours/)
-  assert.equal(config.config.ollama.host, local)
+  assert.equal(service.connectedMachine(), null)
+  void config
 })
 
 test('une connexion ratée vers une 2e machine laisse la 1re connectée, et ne remplace pas son adresse gardée', async () => {
@@ -197,27 +179,21 @@ test('une connexion ratée vers une 2e machine laisse la 1re connectée, et ne r
     const service = loadTsModule('electron/services/remoteMachine.ts', {
       '../config': config,
       '../../shared/machine': machine,
-      '../../shared/duel': duel,
       './ollama': {
         fetchOllamaVersion: async () => {
           if (!reachable) throw new Error('ne répond pas')
           return '0.40.4'
-        },
-        listInstalledModels: async () => ['qwen3.5:9b'],
-        pullModelIfMissing: async () => false
+        }
       },
       './profileStore': { getProfile: async () => ({ models: { flash: 'qwen3.5:9b' } }), patchProfile: async (c) => patched.push(c) }
     })
-    service.setMachineModelSizeSource((model) => (model === 'qwen3.5:9b' ? 6.6 : undefined))
     await service.connectMachine(SETTINGS)
-    // Étape 387 : un modèle qui tient sur la carte de la machine ne demande que 4 fils de calcul.
-    assert.equal(config.config.ollama.threadsFor('qwen3.5:9b'), 4)
     reachable = false
     const view = await service.connectMachine({ ...SETTINGS, host: 'http://10.0.0.9:11434' })
     assert.equal(view.connected, true)
     assert.equal(view.version, '0.40.4')
     assert.match(view.error, /ne répond pas/)
-    assert.equal(config.config.ollama.host, SETTINGS.host)
+    assert.equal(service.connectedMachine().host, SETTINGS.host)
     assert.deepEqual(patched.map((c) => c.remoteMachine.host), [SETTINGS.host], 'la mauvaise adresse n’est pas gardée')
   } finally {
     globalThis.fetch = realFetch

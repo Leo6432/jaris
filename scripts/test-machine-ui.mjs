@@ -8,7 +8,8 @@ import test from 'node:test'
 
 /**
  * Étape 437 : la page Machine dans un VRAI navigateur, avec le CSS compilé — ce que Léo tape part tel quel au main
- * (nombres compris), l'état connecté montre la machine, ses modèles et « Déconnecter », une erreur se lit.
+ * (nombres compris), l'état connecté montre la machine et « Déconnecter », une erreur se lit. Étape 439 : la page dit
+ * que seuls le Duel et l'Analyse y tournent, et qu'elle ne télécharge rien à la connexion.
  */
 let chromium = null
 try {
@@ -23,7 +24,7 @@ const entryPath = join(projectRoot, 'tmp-machine-ui-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import MachinePanel from './src/components/MachinePanel'
-const off = { saved: { host: 'http://10.0.0.5:11434', vramGb: 80, ramGb: 64, diskGb: 100 }, connected: false, connecting: false, version: null, error: null, models: [], pulling: null, freeDiskGb: null, busy: null }
+const off = { saved: { host: 'http://10.0.0.5:11434', vramGb: 80, ramGb: 64, diskGb: 100 }, connected: false, connecting: false, version: null, error: null, freeDiskGb: null, busy: null }
 window.__calls = []
 window.__listeners = []
 window.__emit = (view) => window.__listeners.forEach((cb) => cb(view))
@@ -33,11 +34,7 @@ window.jaris = {
   machineConnect: async (settings) => {
     window.__calls.push(['connect', settings])
     if (window.__refuse) throw new Error(window.__refuse)
-    return { ...off, saved: { ...settings, host: 'http://10.0.0.5:11434' }, connected: true, version: '0.40.4', models: [
-      { model: 'qwen3.5:9b', installed: true, error: null },
-      { model: 'qwen3-vl:8b', installed: false, error: null },
-      { model: 'gemma4:31b', installed: false, error: 'plus de place sur le disque' }
-    ], pulling: { model: 'qwen3-vl:8b', percent: 42 }, freeDiskGb: 61.5 }
+    return { ...off, saved: { ...settings, host: 'http://10.0.0.5:11434' }, connected: true, version: '0.40.4', freeDiskGb: 61.5 }
   },
   machineDisconnect: async () => { window.__calls.push(['disconnect']); return off }
 }
@@ -63,7 +60,8 @@ test('page Machine : explique, pré-remplit, envoie les réglages tapés, puis m
     const page = await browser.newPage({ viewport: { width: 760, height: 900 } })
     await page.setContent(buildPage())
     await page.waitForSelector('.machine-page__steps')
-    assert.match(await page.textContent('.machine-page__lead'), /Tant qu'elle est connectée, les modèles de Jaris tournent dessus/)
+    assert.match(await page.textContent('.machine-page__lead'), /Tant qu'elle est connectée, le Duel et l'Analyse font tourner leurs modèles dessus/)
+    assert.match(await page.textContent('.machine-page__steps'), /Rien n'est téléchargé tout de suite/)
     assert.equal(await page.locator('.machine-page__steps li').count(), 4)
     assert.match(await page.textContent('.machine-page__steps'), /«\sOllama\s»/)
     // Pré-rempli avec la dernière machine : Léo n'a qu'à corriger.
@@ -77,8 +75,9 @@ test('page Machine : explique, pré-remplit, envoie les réglages tapés, puis m
     const card = await page.textContent('.machine-page__card--on')
     assert.match(card, /Connectée à http:\/\/10\.0\.0\.5:11434 — Ollama 0\.40\.4/)
     assert.match(card, /Place libre estimée sur la machine : 61,5 Go/)
-    const models = await page.locator('.machine-page__models li').allTextContents()
-    assert.deepEqual(models, ['qwen3.5:9b : prêt', 'qwen3-vl:8b : téléchargement : 42 %', 'gemma4:31b : échec : plus de place sur le disque'])
+    assert.match(card, /Le Duel et l'Analyse tournent sur cette machine/)
+    assert.match(card, /Chat, Vocal et Code restent sur ton PC/)
+    assert.equal(await page.locator('.machine-page__models').count(), 0, 'plus de liste de modèles téléchargés')
     // Les champs disparaissent une fois connectée ; seul « Déconnecter » reste.
     assert.equal(await page.locator('.machine-page__fields').count(), 0)
     await page.click('button:has-text("Déconnecter")')
@@ -106,7 +105,7 @@ test('page Machine : un refus se lit, et un test en cours bloque le bouton', opt
     await page.click('button:has-text("Connecter")')
     await page.waitForSelector('.machine-page__note--warn[role="alert"]')
     assert.match(await page.textContent('[role="alert"]'), /ne répond pas/)
-    await page.evaluate(() => window.__emit({ saved: null, connected: false, connecting: false, version: null, error: null, models: [], pulling: null, freeDiskGb: null, busy: 'test' }))
+    await page.evaluate(() => window.__emit({ saved: null, connected: false, connecting: false, version: null, error: null, freeDiskGb: null, busy: 'test' }))
     await page.waitForSelector('button:has-text("Connecter"):disabled')
     assert.match(await page.textContent('.machine-page__inner'), /test de modèles est en cours/)
   } finally {

@@ -11429,3 +11429,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   appels d'outils) et ne retire que les lignes de suivi `demande-*` (déjà contenues dans la ligne finale) et la liste
   `tools` de l'en-tête de campagne (identique partout, la plus lourde). Test : la ligne exportée contient bien
   « Ouvre le bloc-notes. » et aucune ligne `demande-requete`.
+
+## Étape 439 — Machine louée : rien n'est téléchargé à la connexion (v0.48.0)
+
+Léo, premier essai réel sur Hostinger (A100 80 Go, image « Ollama », 100 Go annoncés) : « pour pas que ça installe des
+modèles dès qu'on met la machine, il met que quand il fait duel classement, pas direct ». À la connexion, Jaris
+téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque d'Ollama était plein après ~30 Go
+(« no space left on device ») alors que Jaris estimait 88 Go libres.
+
+- Choix de Léo (question à choix) : Chat, Vocal et Code restent sur ce PC. Seuls le Duel et l'Analyse vont à la machine,
+  chacun par sa propre portée (duelSession.ts `onModels`, `OLLAMA_HOST` du script de test) : ils téléchargent, testent
+  puis suppriment leurs modèles. La bascule globale `setMachineOllamaHost` (config.ts) est retirée, avec la préparation
+  (`prepareMachine`), la liste des modèles de la page Machine et le blocage « session de duels sur ce PC » (sans bascule
+  globale, une session locale reste locale). La configuration de ce PC n'exige plus de déconnecter la machine.
+- Constaté sur Hostinger, pas encore corrigé dans Jaris : (1) le port 11434 n'est pas joignable de l'extérieur, même
+  exposé comme « service » (Ollama n'écoute que sur 127.0.0.1) ; un tunnel SSH marche :
+  `ssh -N -L 11500:127.0.0.1:11434 ubuntu@IP -p PORT`, puis l'adresse `http://127.0.0.1:11500` dans Jaris. (2) Le disque
+  réel d'Ollama est bien plus petit que le stockage annoncé : la place libre estimée (taille donnée − 10 Go − modèles)
+  est fausse sur cette machine. Ollama ne dit pas la place libre ; seule une erreur de téléchargement la révèle.
+- Fichiers envoyés par Léo : `traces_partie1.jsonl` ne contient que la campagne du 04-05/10 (Jaris 0.28.6, déjà
+  intégrée) et la « partie 2 » est identique à celle déjà reçue : rien de nouveau à intégrer.
+- Régression : `test-machine.mjs` (connexion sans aucun téléchargement, hôte des modèles inchangé, plus de bascule
+  globale — échoue avec le code de la v0.47), `test-machine-ui.mjs` (textes, plus de liste de modèles).

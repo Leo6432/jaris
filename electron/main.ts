@@ -72,7 +72,6 @@ import {
   setDuelProbability,
   setLocalSpeedResolver,
   setModelsRemoteSource,
-  modelSizeGb,
   detectGpu
 } from './services/hardwareScan'
 import { buildDuelVotesExport, defaultDuelExportName, getRankingVotes, loadDuelReviews, loadDuelVotes, loadSharedDuelVotes } from './services/duelStore'
@@ -92,7 +91,6 @@ import {
   duelHistoryCode,
   duelSideCode,
   duelRankings,
-  localDuelSessionActive,
   startDuelBatch,
   openBatchRound,
   closeBatchRound,
@@ -118,7 +116,7 @@ import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
 import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, markTestResultsSent, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
-import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource, setMachineModelSizeSource } from './services/remoteMachine'
+import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource } from './services/remoteMachine'
 import { config, runWithLocalOllama } from './config'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
@@ -1784,11 +1782,10 @@ app.whenReady().then(async () => {
   // s'éteindre). Même blocage que le test des modèles (benchmarkRunner.ts).
   let seriesAwake: number | null = null
   // Étape 437 : la page Machine suit son état partout (pastille de la barre d'icônes, page elle-même) ; un test de
-  // modèles ou un duel en cours a choisi sa machine au départ, elle ne change pas sous leurs pieds.
-  setMachineBusySource(() => (isModelTestRunning() ? 'test' : localDuelSessionActive() ? 'duel' : null))
+  // modèles en cours a choisi sa machine au départ, elle ne change pas sous ses pieds.
+  setMachineBusySource(() => (isModelTestRunning() ? 'test' : null))
   // La carte de ce PC ne compte plus pour choisir un modèle quand ils tournent sur la machine (getModelGpuStatus).
   setModelsRemoteSource(() => config.ollama.remote)
-  setMachineModelSizeSource((model) => modelSizeGb(model))
   onMachineChanged((view) => broadcast(IPC_CHANNELS.machineChanged, view))
   setDuelEnvironment({
     onReminderFire: fireReminder,

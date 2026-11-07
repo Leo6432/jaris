@@ -3,7 +3,8 @@ import { DUEL_REMOTE_MAX_RAM_GB, DUEL_REMOTE_MAX_VRAM_GB, normalizeRemoteOllamaH
 /**
  * Étape 437 (Léo : « un bouton Machine à gauche, il explique, tu lui dis combien de stockage, de VRAM, etc. ; et
  * maintenant tout Jaris tourne sur le VPS ») : la machine louée (Hostinger, RunPod…) dont l'Ollama fait tourner les
- * modèles de Jaris tant qu'elle est connectée. Jaris, ses outils, la voix, l'image et la vidéo restent sur ce PC.
+ * modèles du Duel et de l'Analyse tant qu'elle est connectée (étape 439 : plus Chat, Vocal ni Code, qui obligeaient à y
+ * télécharger les modèles de Jaris). Jaris, ses outils, la voix, l'image et la vidéo restent sur ce PC.
  * Mémoire et disque sont donnés par Léo : Ollama ne dit ni la carte ni le disque de la machine qui le fait tourner.
  */
 export interface RemoteMachineSettings {
@@ -47,7 +48,7 @@ export function savedRemoteMachine(profile: { remoteMachine?: unknown; duelRemot
 export interface MachineView {
   /** Les derniers réglages enregistrés (pré-remplis), connectés ou non. */
   saved: RemoteMachineSettings | null
-  /** Connectée : tout ce qui parle aux modèles va à cette machine. */
+  /** Connectée : le Duel et l'Analyse y font tourner leurs modèles (étape 439 : Chat, Vocal et Code restent sur ce PC). */
   connected: boolean
   /** Connexion en cours (vérification de l'adresse). */
   connecting: boolean
@@ -55,12 +56,8 @@ export interface MachineView {
   version: string | null
   /** Pourquoi la dernière action n'a pas marché (adresse injoignable, disque plein…), rédigé pour Léo. */
   error: string | null
-  /** Les modèles de Jaris et leur présence sur la machine (préparée à la connexion). */
-  models: { model: string; installed: boolean; error: string | null }[]
-  /** Téléchargement en cours sur la machine. */
-  pulling: { model: string; percent: number | null } | null
   /** Place libre estimée sur son disque (Go), d'après sa taille et les modèles qu'elle a. */
   freeDiskGb: number | null
-  /** Un test ou un duel tourne : connecter ou déconnecter attend sa fin. */
-  busy: 'test' | 'duel' | null
+  /** Un test de modèles tourne : connecter ou déconnecter attend sa fin. */
+  busy: 'test' | null
 }

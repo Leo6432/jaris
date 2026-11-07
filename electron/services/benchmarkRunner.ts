@@ -29,10 +29,8 @@ import { formatDecimal, t } from '../../shared/i18n'
  * candidats perdants.
  */
 export async function runQuickSetup(onLine: (line: string) => void, onProgress?: PullProgressListener): Promise<CapacityScanResult> {
-  // Étape 437 : la configuration choisit les modèles pour CE PC (sa carte, sa mémoire) : jamais pendant qu'une machine
-  // louée fait tourner les modèles — elle les testerait là-bas pour les choisir ici. Et pendant qu'elle tourne, la page
-  // Machine attend (isModelTestRunning) : ses téléchargements et suppressions restent sur ce PC.
-  if (connectedMachine()) throw new Error(t('machine.disconnectFirst'))
+  // Étape 437 : la configuration choisit les modèles pour CE PC (sa carte, sa mémoire) : toujours sur ce PC, même quand une
+  // machine louée est connectée. Pendant qu'elle tourne, la page Machine attend (isModelTestRunning).
   quickSetupRunning = true
   try {
     return await runWithLocalOllama(() => quickSetup(onLine, onProgress))

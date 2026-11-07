@@ -58,22 +58,12 @@ export interface OllamaScope {
 const hostScope = new AsyncLocalStorage<OllamaScope | null>()
 
 /**
- * Étape 437 (Léo : « un bouton Machine à gauche… maintenant tout Jaris tourne sur le VPS, si je vais dans Analyse et que
- * je lance, ça se fait sur le VPS, et après je peux déconnecter ») : la machine louée connectée (remoteMachine.ts). Tant
- * qu'elle l'est, TOUT ce qui parle aux modèles sans adresse propre va à son Ollama : Chat, Vocal, Code, Duel, Analyse.
- * Une portée explicite garde la priorité : `runWithOllamaHost` (une autre adresse) et `runWithLocalOllama` (l'Ollama de ce
- * PC — sa surveillance et sa réparation, les outils d'un duel). `null` : pas de machine, comme avant.
+ * La portée qui s'applique : celle du travail en cours (`null` = ce PC), sinon ce PC. Étape 437 : connecter la machine
+ * louée faisait tout passer dessus ; étape 439 (Léo : « pour pas que ça installe des modèles dès qu'on met la machine »),
+ * seuls le Duel et l'Analyse y vont, chacun par sa propre portée (duelSession.ts, OLLAMA_HOST du script de test).
  */
-let machineScope: OllamaScope | null = null
-
-export function setMachineOllamaHost(scope: OllamaScope | null): void {
-  machineScope = scope
-}
-
-/** La portée qui s'applique : celle du travail en cours si elle existe (`null` = ce PC), sinon la machine connectée. */
 function currentScope(): OllamaScope | null {
-  const store = hostScope.getStore()
-  return store === undefined ? machineScope : store
+  return hostScope.getStore() ?? null
 }
 
 export function runWithOllamaHost<T>(host: string, fn: () => Promise<T>, threadsFor?: (model: string) => number | undefined): Promise<T> {

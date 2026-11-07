@@ -61,7 +61,7 @@ const known = {
   sendChatMessage: () => new Promise((resolve) => { window.__finishChat = () => resolve({ role: 'assistant', content: 'Voilà.' }) }),
   getMemoryGraph: async () => ({ nodes: [{ id: 'Léo', isCenter: true }, { id: 'Travail' }], links: [{ source: 'Léo', target: 'Travail' }] }),
   // Étape 437 : la page Machine et sa pastille (les vues émises par le main passent par __machineEmit).
-  machineGet: async () => ({ saved: null, connected: false, connecting: false, version: null, error: null, models: [], pulling: null, freeDiskGb: null, busy: null }),
+  machineGet: async () => ({ saved: null, connected: false, connecting: false, version: null, error: null, freeDiskGb: null, busy: null }),
   onMachineChanged: (cb) => { (window.__machineListeners ||= []).push(cb); return () => {} }
 }
 window.__machineEmit = (view) => (window.__machineListeners || []).forEach((cb) => cb(view))

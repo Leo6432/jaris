@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { MachineView } from '../../shared/machine'
 import { ipcErrorMessage } from '../lib/ipcError'
-import { formatModelName } from '../lib/formatModelName'
 import { formatDecimal, t } from '@/lib/i18n'
 
 /**
  * Étape 437 (Léo : « un bouton à gauche, Machine, il explique, tu lui dis combien de stockage, de VRAM, etc. ; et
  * maintenant tout Jaris tourne sur le VPS, si je vais dans Analyse et que je lance, ça se fait sur le VPS, et après je
- * peux déconnecter ») : connecter une machine louée (Hostinger, RunPod…). Tant qu'elle est connectée, ses modèles font
- * tourner Chat, Vocal, Code, Duel et Analyse ; Jaris, la voix, l'image et la vidéo restent sur ce PC, qui reste allumé.
+ * peux déconnecter ») : connecter une machine louée (Hostinger, RunPod…). Tant qu'elle est connectée, le Duel et l'Analyse
+ * y font tourner leurs modèles (étape 439 : rien n'y est téléchargé à la connexion) ; le reste de Jaris reste sur ce PC.
  * Les réglages sont revérifiés côté main (connectMachine) ; l'écran ne fait que les transmettre.
  */
 
@@ -79,7 +78,7 @@ export default function MachinePanel(): JSX.Element {
   const connected = view?.connected === true
   const connecting = sending || view?.connecting === true
   const shownError = error ?? view?.error ?? null
-  const busyNote = view?.busy === 'test' ? t('machine.busyTest') : view?.busy === 'duel' && !connected ? t('machine.busyDuel') : null
+  const busyNote = view?.busy === 'test' ? t('machine.busyTest') : null
 
   return (
     <div className="machine-page">
@@ -103,30 +102,6 @@ export default function MachinePanel(): JSX.Element {
               </p>
             )}
             {view.freeDiskGb !== null && <p className="machine-page__note">{t('machine.free', { gb: formatDecimal(view.freeDiskGb) })}</p>}
-            {view.models.length > 0 && (
-              <>
-                <h2 className="machine-page__label">{t('machine.models')}</h2>
-                <ul className="machine-page__models">
-                  {view.models.map((entry) => {
-                    const pulling = view.pulling?.model === entry.model
-                    const state = entry.installed
-                      ? t('machine.model.ready')
-                      : pulling
-                        ? view.pulling?.percent != null
-                          ? t('machine.model.pulling', { percent: Math.round(view.pulling.percent) })
-                          : t('machine.model.pullingStart')
-                        : entry.error
-                          ? t('machine.model.failed', { error: entry.error })
-                          : t('machine.model.waiting')
-                    return (
-                      <li key={entry.model} className={entry.error && !entry.installed ? 'machine-page__model--failed' : undefined}>
-                        {t('common.labelValue', { label: formatModelName(entry.model), value: state })}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </>
-            )}
             <p className="machine-page__note">{t('machine.connectedHint')}</p>
             <div className="machine-page__actions">
               <button type="button" className="duel-btn" onClick={() => void disconnect()} disabled={connecting || view.busy === 'test'}>
@@ -173,7 +148,7 @@ export default function MachinePanel(): JSX.Element {
                   type="button"
                   className="duel-btn duel-btn--primary"
                   onClick={() => void connect()}
-                  disabled={connecting || view?.busy === 'test' || view?.busy === 'duel'}
+                  disabled={connecting || view?.busy === 'test'}
                 >
                   {connecting ? t('machine.connecting') : t('machine.connect')}
                 </button>

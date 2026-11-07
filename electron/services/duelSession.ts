@@ -333,15 +333,6 @@ function sideView(side: SideState): DuelSideView {
   return view
 }
 
-/**
- * Étape 437 : une session de duels en cours sur CE PC (pas terminée). Connecter une machine pendant ce temps enverrait la
- * suite de la session ailleurs : la page Machine attend. Une session sur une machine louée garde sa machine (onModels) ;
- * en connecter une autre sert justement à la reprendre ailleurs (moveDuelSeries).
- */
-export function localDuelSessionActive(): boolean {
-  return session !== null && session.phase !== 'ended' && session.remote === null
-}
-
 export function getDuelView(): DuelSessionView | null {
   if (!session) return null
   const round = session.round
