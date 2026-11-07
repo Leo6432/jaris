@@ -11424,3 +11424,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 - Régression : `test-benchmark-runner-cleanup.mjs` (extrait : seulement après le dernier envoi, en-tête de SA campagne,
   sans outils ni messages, réponse gardée, compressé, rien de nouveau = rien — échoue si les messages restent),
   `test-unscored-models-ui.mjs` (bouton, message préparé / rien de nouveau), `test-verified-scores.mjs` (40 demandes).
+- Suite (v0.47.2, question de Léo « mais tu as bien le prompt pour vérifier la réponse ? ») : non, l'extrait retirait
+  `messages`, donc le texte de la question. Il garde maintenant chaque ligne de résultat ENTIÈRE (question, réponse,
+  appels d'outils) et ne retire que les lignes de suivi `demande-*` (déjà contenues dans la ligne finale) et la liste
+  `tools` de l'en-tête de campagne (identique partout, la plus lourde). Test : la ligne exportée contient bien
+  « Ouvre le bloc-notes. » et aucune ligne `demande-requete`.

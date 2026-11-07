@@ -514,7 +514,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
 
 // Étape 438 (Léo : « je dois diviser le fichier, trop lourd ; garde seulement ce qui n'est pas encore sur le tableau ») :
 // l'extrait à m'envoyer — seulement après le dernier envoi, sans les messages ni la liste des outils, compressé.
-test('étape 438 : l’extrait des résultats ne garde que le nouveau, sans les parties lourdes, compressé', () => {
+test('étape 438 : l’extrait des résultats ne garde que le nouveau, chaque résultat entier (question comprise), compressé', () => {
   const { buildTestResultsExport } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'zlib') return realZlib
     if (id === 'path') return { join: (...parts) => parts.join('/') }
@@ -522,24 +522,28 @@ test('étape 438 : l’extrait des résultats ne garde que le nouveau, sans les 
     return new Proxy({}, { get: () => () => {} })
   })
   const big = 'x'.repeat(5000)
+  const question = [{ role: 'system', ref: 'abc123' }, { role: 'user', content: 'Ouvre le bloc-notes.' }]
   const traces = [
     { type: 'campagne', versions: { conversation: 6 }, tools: [{ name: 'open_app', description: big }] },
-    { type: 'question', model: 'old:1b', at: '2026-11-06T10:00:00.000Z', ok: true, messages: [big], response: { content: 'ancien' } },
+    { type: 'question', model: 'old:1b', at: '2026-11-06T10:00:00.000Z', ok: true, messages: question, response: { content: 'ancien' } },
     { type: 'campagne', versions: { conversation: 6 }, tools: [{ name: 'open_app', description: big }] },
-    { type: 'demande', model: 'granite4.2:8b', at: '2026-11-07T12:50:00.000Z', ok: true, replay: true, messages: [big], response: { content: 'refait' } },
-    { type: 'code', model: 'qwen2.5-coder:7b', at: '2026-11-07T12:54:00.000Z', ok: false, html: '<p>app</p>' }
+    { type: 'demande-requete', model: 'granite4.2:8b', at: '2026-11-07T12:49:00.000Z', messages: [{ role: 'user', content: big }] },
+    { type: 'question', model: 'granite4.2:8b', at: '2026-11-07T12:50:00.000Z', ok: true, replay: true, messages: question, response: { content: 'refait' } },
+    { type: 'code', model: 'qwen2.5-coder:7b', at: '2026-11-07T12:54:00.000Z', ok: false, prompt: 'Un compteur', html: '<p>app</p>' }
   ].map((r) => JSON.stringify(r)).join('\n')
   const first = buildTestResultsExport(traces, null)
-  assert.equal(first.rows, 3, 'la première fois : tout')
+  assert.equal(first.rows, 3, 'la première fois : tout (sauf le suivi en cours)')
   const since = buildTestResultsExport(traces, '2026-11-06T23:59:00.000Z')
   assert.equal(since.rows, 2)
   assert.deepEqual(since.models, ['granite4.2:8b', 'qwen2.5-coder:7b'])
   assert.equal(since.lastAt, '2026-11-07T12:54:00.000Z')
   const lines = realZlib.gunzipSync(since.data).toString('utf8').trim().split('\n').map((l) => JSON.parse(l))
-  assert.deepEqual(lines.map((l) => l.type), ['campagne', 'demande', 'code'], 'l’en-tête de SA campagne, puis ses lignes')
+  assert.deepEqual(lines.map((l) => l.type), ['campagne', 'question', 'code'], 'l’en-tête de SA campagne, puis ses lignes, sans le suivi')
   assert.equal('tools' in lines[0], false, 'la liste des outils se relit dans le code')
-  assert.equal('messages' in lines[1], false, 'les messages aussi')
-  assert.equal(lines[1].response.content, 'refait', 'la réponse reste : elle est relue avant de recopier un score')
+  // Léo : « tu as bien le prompt pour vérifier la réponse ? » — la question, la réponse et le reste, intacts.
+  assert.equal(lines[1].messages.at(-1).content, 'Ouvre le bloc-notes.')
+  assert.equal(lines[1].response.content, 'refait')
+  assert.equal(lines[2].prompt, 'Un compteur')
   assert.equal(lines[2].html, '<p>app</p>')
   assert.ok(since.data.length < 1000, `bien plus petit que le fichier brut (${since.data.length} octets)`)
   assert.equal(buildTestResultsExport(traces, '2026-11-07T12:54:00.000Z').rows, 0, 'rien de nouveau : rien à envoyer')

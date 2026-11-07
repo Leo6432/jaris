@@ -269,9 +269,11 @@ function readCampaignTraces(): string {
  * Étape 438 (Léo : « je dois diviser le fichier, trop lourd ; tu ne peux pas juste garder les informations pas encore
  * sur le tableau ? ») : le fichier brut des tests (traces, 48 Mo chez Léo) grossit à chaque campagne. Pour m'envoyer
  * ses résultats, Jaris en prépare un extrait : seulement les lignes écrites APRÈS le dernier envoi préparé (la première
- * fois : tout), sans ce qui se reconstruit depuis le code (les messages envoyés au modèle, la liste des outils), et
- * compressé. Chaque ligne garde la réponse du modèle : toutes sont relues avant de recopier un score. L'en-tête de
- * campagne (versions des tests, machine) précède ses lignes. Le fichier brut lui-même n'est jamais touché.
+ * fois : tout), compressé. Chaque ligne de résultat reste ENTIÈRE — la question posée (ses messages, la consigne de
+ * Jaris n'y étant déjà qu'une référence), la réponse du modèle, ses appels : tout est relu avant de recopier un score
+ * (Léo : « tu as bien le prompt pour vérifier la réponse ? »). Seuls partent les doublons : les lignes de suivi d'une
+ * demande en cours (« demande-requete »…, chaque tour avec toute la conversation, déjà dans la ligne finale) et la
+ * liste des outils de l'en-tête de campagne (dans le code de la même version). Le fichier brut n'est jamais touché.
  */
 export function sentMarkerPath(): string {
   return join(getDataRoot(), 'benchmark-nouveaux-modeles.envoye.json')
@@ -316,15 +318,15 @@ export function buildTestResultsExport(tracesText = readCampaignTraces(), since:
       campaign = JSON.stringify(header)
       continue
     }
+    // Suivi d'une demande en cours : chaque tour avec toute la conversation, que la ligne finale reprend déjà.
+    if (typeof row.type === 'string' && row.type.startsWith('demande-')) continue
     const at = typeof row.at === 'string' ? row.at : null
     if (since && (!at || at <= since)) continue
     if (campaign) {
       out.push(campaign)
       campaign = null
     }
-    // Les messages envoyés au modèle se reconstruisent depuis le test (même version) ; la réponse, elle, reste.
-    const { messages: _messages, ...kept } = row
-    out.push(JSON.stringify(kept))
+    out.push(line.trim())
     rows++
     if (typeof row.model === 'string') models.add(row.model)
     if (at && (!lastAt || at > lastAt)) lastAt = at
