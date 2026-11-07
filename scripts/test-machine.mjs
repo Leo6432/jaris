@@ -170,6 +170,9 @@ test('le script de test lit la machine louée : sa carte, sa mémoire, son disqu
   assert.match(script, /console\.log\(`Téléchargement de \$\{model\}…`\)\s*await refreshMachineFreeDisk\(\)/)
   assert.match(script, /await refreshMachineFreeDisk\(\)\s*const freeDiskGbAtStart = detectFreeDiskGb\(\)/)
   assert.match(script, /rented: MACHINE/)
+  // Le registre des modèles téléchargés par le test : à part pour la machine, et seulement pour CETTE machine.
+  assert.match(script, /return new Set\(saved\?\.machine === MACHINE && Array\.isArray\(saved\.models\) \? saved\.models : \[\]\)/)
+  assert.match(script, /if \(MACHINE\) writeFileSync\(machineLedgerPath, JSON\.stringify\(\{ machine: MACHINE, models: \[\.\.\.downloadedByTest\] \}\)/)
 })
 
 // Relecture adverse de l'étape 437 : les cas limites qu'elle a trouvés.

@@ -72,7 +72,9 @@ export const PHONE_TUNNEL_DIR = 'phone-tunnel'
 const MODEL_TEST_ENTRIES = [
   'benchmark-nouveaux-modeles.md',
   'benchmark-nouveaux-modeles.traces.jsonl',
-  'benchmark-nouveaux-modeles.md.telecharges.json'
+  'benchmark-nouveaux-modeles.md.telecharges.json',
+  // Étape 437 : celui d'un test fait sur une machine louée (page Machine).
+  'benchmark-nouveaux-modeles.md.telecharges-machine.json'
 ]
 
 /**

@@ -2267,19 +2267,25 @@ async function main() {
   // Étape 230 : registre des modèles que le test a téléchargés LUI-MÊME, gardé à côté du fichier de résultats.
   // Sans lui, un test coupé (Jaris fermé, PC éteint) juste après un téléchargement laissait ce modèle sur le
   // disque, et la reprise le prenait ensuite pour un modèle installé par Léo : jamais supprimé (jusqu'à 25 Go).
-  // Étape 437 : un registre par machine — sinon un test sur la machine louée effaçait des modèles de CE PC (ou l'inverse)
-  // en les prenant pour « téléchargés par le test ».
-  const ledgerPath = MACHINE ? `${RESULTS_PATH}.telecharges-${MACHINE.replace(/[^a-z0-9]+/gi, '_')}.json` : `${RESULTS_PATH}.telecharges.json`
+  // Étape 437 : la machine louée a SON registre (nom fixe, qui suit « Déplacer »), avec son adresse dedans — sinon un test
+  // sur la machine effaçait des modèles de CE PC (ou l'inverse) en les prenant pour « téléchargés par le test ». Le
+  // registre d'une autre machine (rendue depuis) ne vaut rien pour celle-ci : ignoré.
+  const ledgerPath = `${RESULTS_PATH}.telecharges.json`
+  const machineLedgerPath = `${RESULTS_PATH}.telecharges-machine.json`
   const readLedger = () => {
     try {
-      return new Set(JSON.parse(readFileSync(ledgerPath, 'utf-8')))
+      if (!MACHINE) return new Set(JSON.parse(readFileSync(ledgerPath, 'utf-8')))
+      const saved = JSON.parse(readFileSync(machineLedgerPath, 'utf-8'))
+      return new Set(saved?.machine === MACHINE && Array.isArray(saved.models) ? saved.models : [])
     } catch {
       return new Set()
     }
   }
   const downloadedByTest = DELETE_AFTER_TEST ? readLedger() : new Set()
   const saveLedger = () => {
-    if (DELETE_AFTER_TEST) writeFileSync(ledgerPath, JSON.stringify([...downloadedByTest]), 'utf-8')
+    if (!DELETE_AFTER_TEST) return
+    if (MACHINE) writeFileSync(machineLedgerPath, JSON.stringify({ machine: MACHINE, models: [...downloadedByTest] }), 'utf-8')
+    else writeFileSync(ledgerPath, JSON.stringify([...downloadedByTest]), 'utf-8')
   }
   const initiallyInstalledSet = new Set(installed.filter((m) => !downloadedByTest.has(m)))
   // Un modèle téléchargé par un run précédent, dont tous les tests sont déjà faits (repris) : supprimé tout de suite.

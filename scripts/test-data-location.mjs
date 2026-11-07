@@ -1231,7 +1231,9 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
   assert.ok(script.includes("const TRACES_PATH = `${RESULTS_PATH.replace(/\\.md$/i, '')}.traces.jsonl`"), 'nom des traces changé dans le script')
   assert.ok(script.includes('const ledgerPath = `${RESULTS_PATH}.telecharges.json`'), 'nom du registre changé dans le script')
   const results = 'benchmark-nouveaux-modeles.md'
-  for (const name of [results.replace(/\.md$/i, '') + '.traces.jsonl', `${results}.telecharges.json`, 'code-conversations.json']) {
+  // Étape 437 : le registre d'un test fait sur la machine louée.
+  assert.ok(script.includes('const machineLedgerPath = `${RESULTS_PATH}.telecharges-machine.json`'), 'nom du registre de la machine changé dans le script')
+  for (const name of [results.replace(/\.md$/i, '') + '.traces.jsonl', `${results}.telecharges.json`, `${results}.telecharges-machine.json`, 'code-conversations.json']) {
     assert.ok(owned.has(name), `« ${name} » doit suivre « Déplacer »`)
   }
 })

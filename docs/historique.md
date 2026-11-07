@@ -11398,3 +11398,6 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   le Duel, ligne d'information, plan recalculé, reprise de série), `test-benchmark-runner-cleanup.mjs` (réglages de la
   machine passés au script, pas de réparation de ce PC, configuration refusée connectée),
   `test-hardwarescan-single-pool.mjs` (durées par machine), faux ponts et faux modules mis à jour.
+- Dernier passage de la suite : `test-data-location.mjs` a attrapé le registre de la machine écrit sous un nom variable
+  (un fichier de données qui n'aurait pas suivi « Déplacer »). Nom fixe `…telecharges-machine.json` avec l'adresse de la
+  machine DEDANS (celui d'une autre machine est ignoré), ajouté à `MODEL_TEST_ENTRIES` (storageRoot.ts).
