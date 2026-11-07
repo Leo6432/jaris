@@ -182,9 +182,12 @@ export class PhoneTunnel extends EventEmitter {
     return exited
   }
 
-  /** Déconnecte ce PC du compte Tailscale (il faudra se reconnecter pour réactiver). */
-  logout(): Promise<void> {
-    this.stop()
+  /**
+   * Déconnecte ce PC du compte Tailscale (il faudra se reconnecter pour réactiver). Relecture croisée : le tunnel en
+   * cours n'était pas attendu — « --logout » démarrait pendant qu'il écrivait encore son état dans le MÊME dossier.
+   */
+  async logout(): Promise<void> {
+    await this.stop()
     return new Promise((resolve, reject) => {
       let done = false
       const proc = this.run(['--logout'], (event) => {

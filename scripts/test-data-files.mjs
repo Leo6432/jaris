@@ -43,13 +43,22 @@ function faultyFsPromises() {
       }
       return realFsPromises.rename(from, to)
     },
+    // Une écriture directe PAR-DESSUS le fichier (ce que plus aucun magasin ne doit faire) subit la même coupure.
+    writeFile: async (path, data, ...rest) => {
+      if (!faults.cutWrite) return realFsPromises.writeFile(path, data, ...rest)
+      faults.cutWrite = false
+      const bytes = Buffer.from(data)
+      await realFsPromises.writeFile(path, bytes.subarray(0, Math.floor(bytes.length / 2)))
+      throw errno('EIO')
+    },
     open: async (path, flags) => {
       const handle = await realFsPromises.open(path, flags)
       if (!faults.cutWrite) return handle
       faults.cutWrite = false
       return {
         writeFile: async (content) => {
-          await handle.writeFile(String(content).slice(0, Math.floor(String(content).length / 2)))
+          if (typeof content === 'string') await handle.writeFile(content.slice(0, Math.floor(content.length / 2)))
+          else await handle.writeFile(Buffer.from(content).subarray(0, Math.floor(content.length / 2)))
           throw errno('EIO')
         },
         sync: () => handle.sync(),
@@ -234,6 +243,20 @@ test('note de mémoire verrouillée un instant : l’ajout est refusé au lieu d
   assert.deepEqual(readdirSync(join(dataRoot, 'memory')), ['Adresse.md'])
 })
 
+// Relecture croisée : deux ajouts simultanés à la même note (l'outil « remember » et la mémoire automatique de fin
+// d'échange) relisaient tous les deux l'ancien contenu : le second écrit effaçait le premier.
+test('note de mémoire : des ajouts simultanés à la même note sont tous gardés', async (t) => {
+  const dataRoot = tempDir(t)
+  const { memory } = loadStores(dataRoot)
+  await memory.rememberNote('Léo', 'Aime le jazz.')
+  const facts = ['Habite à Lyon.', 'A un chat nommé Pixel.', 'Se lève à 7 h.', 'Joue de la guitare.']
+  await Promise.all(facts.map((fact) => memory.rememberNote('Léo', fact)))
+  const leo = readFileSync(join(dataRoot, 'memory', 'Léo.md'), 'utf8')
+  for (const fact of ['Aime le jazz.', ...facts]) assert.ok(leo.includes(fact), `« ${fact} » perdu`)
+  assert.ok(leo.startsWith('# Léo\n'))
+  assert.deepEqual(readdirSync(join(dataRoot, 'memory')), ['Léo.md'])
+})
+
 test('langue tronquée : rangée de côté, Jaris repart sur la langue de Windows', async (t) => {
   const dataRoot = tempDir(t)
   writeFileSync(join(dataRoot, 'language.json'), '{"setting":"d')
@@ -254,6 +277,71 @@ test('les magasins de données n’écrivent plus jamais directement par-dessus 
   }
   const code = readFileSync(new URL('../electron/services/codeConversationsStore.ts', import.meta.url), 'utf8')
   assert.ok(code.includes('writeFileAtomicSync('), 'le mode Code partage la même écriture (atomicFile.ts), sans la recopier')
+})
+
+/**
+ * Relecture croisée : le jeton GitHub, la clé Claude et la trace de connexion GitHub étaient encore écrits PAR-DESSUS leur
+ * fichier. Une coupure en pleine écriture laissait un jeton tronqué, donc indéchiffrable : déconnecté de GitHub (et le
+ * jeton de renouvellement, à usage unique, perdu avec).
+ */
+function fakeSafeStorage() {
+  return {
+    isEncryptionAvailable: () => true,
+    encryptString: (text) => Buffer.concat([Buffer.from([0xff, 0x00, 0xfe]), Buffer.from(text, 'utf8')]),
+    decryptString: (data) => {
+      if (data.length < 3 || data[0] !== 0xff || data[1] !== 0x00 || data[2] !== 0xfe) throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.')
+      return data.subarray(3).toString('utf8')
+    }
+  }
+}
+
+function loadSecrets(dataRoot, fsPromises) {
+  const atomicFile = loadAtomicFile(fsPromises)
+  const common = { electron: { safeStorage: fakeSafeStorage() }, 'fs/promises': fsPromises, path: nodePath, './atomicFile': atomicFile, './dataLocation': { getDataRoot: () => dataRoot } }
+  return { github: loadTsModule('electron/services/github.ts', common), claude: loadTsModule('electron/services/claudeKey.ts', common) }
+}
+
+test('jeton GitHub et clé Claude : une coupure en pleine écriture laisse l’ancien intact', async (t) => {
+  const dataRoot = tempDir(t)
+  const { faults, fsPromises } = faultyFsPromises()
+  const { github, claude } = loadSecrets(dataRoot, fsPromises)
+
+  await github.saveGithubToken({ token: 'gho_a', refreshToken: 'ghr_a', expiresAt: 1 })
+  faults.cutWrite = true
+  await assert.rejects(github.saveGithubToken({ token: 'gho_b', refreshToken: 'ghr_b', expiresAt: 2 }), /EIO/)
+  assert.deepEqual({ ...(await github.readGithubToken()) }, { token: 'gho_a', unreadable: false, refreshToken: 'ghr_a', expiresAt: 1 }, 'jeton tronqué : déconnecté')
+  // Des octets quelconques (le chiffrement de Windows) passent tels quels, sans réencodage.
+  await github.saveGithubToken({ token: 'gho_c', refreshToken: 'ghr_c', expiresAt: 3 })
+  assert.equal((await github.readGithubToken()).token, 'gho_c')
+
+  const first = `sk-ant-${'a'.repeat(30)}`
+  await claude.saveClaudeKey(first)
+  faults.cutWrite = true
+  await assert.rejects(claude.saveClaudeKey(`sk-ant-${'b'.repeat(30)}`), /EIO/)
+  assert.equal(await claude.loadClaudeKey(), first, 'clé tronquée : perdue')
+})
+
+test('trace de connexion GitHub : un échec d’écriture ne fait pas échouer la connexion, mais il laisse une trace', async (t) => {
+  const dataRoot = tempDir(t)
+  const { github } = loadSecrets(dataRoot, realFsPromises)
+  const record = { connectedAt: 1, login: 'leo', memoryOnly: false, rejectedAt: null }
+  await github.writeConnectionRecord(record)
+  assert.deepEqual(await github.readConnectionRecord(), record)
+  // Un dossier à la place du fichier : impossible d'écrire.
+  rmSync(join(dataRoot, 'github-connection.json'))
+  mkdirSync(join(dataRoot, 'github-connection.json'))
+  const logged = t.mock.method(console, 'error', () => {})
+  await github.writeConnectionRecord({ ...record, rejectedAt: 2 })
+  assert.equal(logged.mock.callCount(), 1, 'échec avalé sans laisser de trace')
+  assert.match(String(logged.mock.calls[0].arguments[0]), /\[github\]/)
+})
+
+test('jeton GitHub, clé Claude, téléphones : plus jamais écrits directement par-dessus leur fichier', () => {
+  for (const name of ['github', 'claudeKey', 'phoneDevices']) {
+    const source = readFileSync(new URL(`../electron/services/${name}.ts`, import.meta.url), 'utf8')
+    assert.ok(!/\bwriteFile\(/.test(source), `${name}.ts écrit encore par-dessus un fichier (writeFile) au lieu de writeFileAtomic`)
+    assert.ok(source.includes('writeFileAtomic('), `${name}.ts doit écrire d’un seul tenant (writeFileAtomic)`)
+  }
 })
 
 test('un profil verrouillé au démarrage ne laisse plus Jaris invisible : réessayé, puis expliqué, jamais l’écran de premier lancement', () => {
@@ -289,6 +377,40 @@ test('patchProfile : deux réglages envoyés en même temps sont gardés tous le
   await profile.saveProfile({ name: 'Léo' })
   await Promise.all([profile.patchProfile({ soundEffectsEnabled: false }), profile.patchProfile({ activationKeyEnabled: false })])
   assert.deepEqual(await profile.getProfile(), { name: 'Léo', soundEffectsEnabled: false, activationKeyEnabled: false })
+})
+
+// Relecture croisée : un champ calculé à partir de sa valeur actuelle (réflexion choisie pour UN mode) se calcule sur le
+// profil relu dans la file, jamais sur une copie lue avant une longue attente.
+test('patchProfile avec une fonction : calculé sur le profil relu dans la file, sans effacer un réglage fait entre-temps', async (t) => {
+  const dataRoot = tempDir(t)
+  const { profile } = loadStores(dataRoot)
+  await profile.saveProfile({ name: 'Léo', thinkChoices: { chat: { model: 'a', think: 'low' } } })
+  await Promise.all([
+    profile.patchProfile((current) => ({ thinkChoices: { ...current.thinkChoices, voice: { model: 'b', think: false } } })),
+    profile.patchProfile({ audioInputDeviceName: 'Micro USB' }),
+    profile.patchProfile((current) => ({ thinkChoices: { ...current.thinkChoices, code: { model: 'c', think: 'high' } } }))
+  ])
+  const saved = await profile.getProfile()
+  assert.deepEqual(Object.keys(saved.thinkChoices).sort(), ['chat', 'code', 'voice'])
+  assert.equal(saved.audioInputDeviceName, 'Micro USB')
+})
+
+test('main.ts ne réécrit plus jamais le profil entier lu avant une attente : seulement les champs changés', () => {
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const calls = [...main.matchAll(/\bsaveProfile\(([^)\n]*)/g)].map((m) => m[1])
+  // Le seul enregistrement entier : celui que l'écran demande lui-même (premier lancement), rien d'autre.
+  assert.deepEqual(calls, ['profile'], `réécriture entière du profil dans main.ts : ${calls.join(' | ')}`)
+  for (const handler of ['setAudioInputDevice', 'setWakewordEnabled', 'setPhoneAccessEnabled', 'logoutPhoneAccess', 'acknowledgeNewModels']) {
+    const at = main.indexOf(`IPC_CHANNELS.${handler},`)
+    assert.ok(at !== -1, handler)
+    assert.match(main.slice(at, main.indexOf('\n  })', at)), /patchProfile\(/, `${handler} doit passer par patchProfile`)
+  }
+  for (const name of ['saveThinkChoice', 'saveModelChoice']) {
+    const at = main.indexOf(`async function ${name}(`)
+    assert.match(main.slice(at, main.indexOf('\n}\n', at)), /patchProfile\(\(current\) =>/, `${name} doit calculer sur le profil relu`)
+  }
+  const bench = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(bench, /saveProfile\(/, 'la configuration réécrit encore le profil entier lu avant les téléchargements')
 })
 
 test('notes : un titre bizarre ou très long se relit toujours, et le Cerveau ne plante jamais (étape 328)', async (t) => {

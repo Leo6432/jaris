@@ -82,7 +82,45 @@ export function setGithubDataMoving(moving: boolean): void {
 
 const dataMovingError = (): GithubError => new GithubError(0, t('github.err.dataMoving'))
 
+/**
+ * Relecture croisée : un jeton renouvelé que Windows a refusé d'écrire (antivirus qui tient le fichier…). Chez GitHub,
+ * le jeton de renouvellement qui vient de servir est déjà mort : perdre le nouveau, c'était être déconnecté pour de bon.
+ * Il sert donc tout de suite (en mémoire), et son écriture est retentée à chaque demande à GitHub et toutes les
+ * 30 secondes, jusqu'à ce qu'elle passe.
+ */
+let unsavedTokenSet: GithubTokenSet | null = null
+let tokenSaveRetry: ReturnType<typeof setTimeout> | null = null
+const TOKEN_SAVE_RETRY_MS = 30_000
+
+async function saveRenewedToken(): Promise<void> {
+  const pending = unsavedTokenSet
+  // Pendant un déplacement des données, rien n'est écrit dans l'ancien dossier (voir dataMoving) : réessayé après.
+  if (!pending || dataMoving) return
+  try {
+    await saveGithubToken(pending)
+    if (unsavedTokenSet === pending) unsavedTokenSet = null
+  } catch (err) {
+    console.error('[github] Jeton renouvelé pas encore enregistré, réessayé bientôt :', err)
+    if (!tokenSaveRetry) {
+      tokenSaveRetry = setTimeout(() => {
+        tokenSaveRetry = null
+        void saveRenewedToken()
+      }, TOKEN_SAVE_RETRY_MS)
+      tokenSaveRetry.unref?.()
+    }
+  }
+}
+
+/** Plus rien à écrire (déconnexion, nouvelle connexion) : un essai en attente ne doit jamais ressusciter l'ancien jeton. */
+function dropUnsavedToken(): void {
+  unsavedTokenSet = null
+  if (tokenSaveRetry) clearTimeout(tokenSaveRetry)
+  tokenSaveRetry = null
+}
+
 async function getClient(): Promise<GithubClient | null> {
+  // Sans attendre : la demande part avec le jeton en mémoire, l'écriture se fait à côté.
+  if (unsavedTokenSet) void saveRenewedToken()
   if (!client) {
     const stored = await readGithubToken()
     tokenUnreadable = stored.unreadable
@@ -113,9 +151,12 @@ function renewToken(): Promise<GithubClient | null> {
   renewing = (async () => {
     try {
       const next = await refreshGithubToken(clientId(), refreshToken)
-      await saveGithubToken(next)
+      // D'abord en mémoire : l'ancien jeton de renouvellement vient d'être consommé chez GitHub, le nouveau est le seul
+      // qui reste. Une écriture refusée ne fait ni échouer la demande ni perdre le jeton (saveRenewedToken réessaie).
       tokenSet = next
       client = new GithubClient(next.token)
+      unsavedTokenSet = next
+      await saveRenewedToken()
       return client
     } catch (err) {
       if (!isAuthError(err)) throw err
@@ -137,6 +178,7 @@ async function forget(rejected = false): Promise<void> {
   client = null
   tokenSet = null
   login = null
+  dropUnsavedToken()
   await clearGithubToken()
   if (!rejected) {
     sessions.clear()
@@ -229,6 +271,7 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
     // Code validé pendant qu'un déplacement commençait : le jeton partirait dans l'ancien dossier, effacé à la fin.
     if (dataMoving) throw dataMovingError()
     const previous = await readConnectionRecord()
+    dropUnsavedToken()
     const encrypted = await saveGithubToken(next)
     await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
     tokenSet = next

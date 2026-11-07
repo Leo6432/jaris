@@ -120,6 +120,36 @@ test('message vocal du téléphone : commande envoyée, réponse rattachée à S
   await assert.rejects(failing, /format audio inattendu/)
 })
 
+// Relecture croisée : le programme d'écoute qui s'arrête (plantage, changement de micro, « Déplacer ») laissait un
+// message vocal du téléphone attendre 2 minutes une réponse qui ne viendrait jamais, puis « trop de temps ».
+test('message vocal en cours quand l’écoute s’arrête : il échoue tout de suite, avec la vraie raison', async () => {
+  const client = new VoiceClient()
+  const ready = client.start()
+  emitLine({ event: 'ready' })
+  await ready
+  const crashed = client.transcribeFile('a.wav')
+  lastProc.emit('exit', 3)
+  await assert.rejects(crashed, /^Error: La transcription n'a pas pu se terminer\u00a0: l'écoute s'est arrêtée toute seule \(code 3\)\.$/)
+
+  const again = client.start()
+  emitLine({ event: 'ready' })
+  await again
+  const first = lastProc
+  const stopped = client.transcribeFile('b.wav')
+  client.stop()
+  await assert.rejects(stopped, /l'écoute a été arrêtée sur le PC/)
+  // Une écoute relancée juste après : l'ancienne qui finit de sortir ne touche ni au nouveau programme ni à ses messages.
+  const third = client.start()
+  emitLine({ event: 'ready' })
+  await third
+  const pending = client.transcribeFile('c.wav')
+  const id = JSON.parse(lastProc.stdin.written.at(-1).slice('transcribe-file '.length)).id
+  first.emit('exit', null)
+  emitLine({ event: 'file_transcript', id, text: 'toujours là' })
+  assert.equal(await pending, 'toujours là')
+  assert.equal(listeningUnavailableReason(client.getStatus()), null)
+})
+
 test('message vocal pendant que l’écoute charge encore : la vraie raison, pas une attente sans fin', async () => {
   const client = new VoiceClient()
   void client.start().catch(() => {})

@@ -230,6 +230,40 @@ process.stdin.resume()
   }
 })
 
+// Relecture croisée : « Se déconnecter de Tailscale » lançait « --logout » sans attendre la sortie du tunnel en cours,
+// qui écrivait encore son état dans le MÊME dossier.
+test('se déconnecter de Tailscale attend la vraie sortie du tunnel avant « --logout »', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-tunnel-logout-'))
+  const path = join(dir, 'jaris-tunnel')
+  const lastWrite = join(dir, 'derniere-ecriture')
+  writeFileSync(
+    path,
+    `const fs = require('fs')
+const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n')
+if (process.argv.includes('--logout')) {
+  emit(fs.existsSync(${JSON.stringify(lastWrite)}) ? { event: 'logged_out' } : { event: 'error', message: 'le tunnel écrit encore son état' })
+  process.exit(0)
+}
+emit({ event: 'preparing', text: 'en route' })
+process.stdin.on('end', () => setTimeout(() => {
+  fs.writeFileSync(${JSON.stringify(lastWrite)}, 'état enregistré')
+  process.exit(0)
+}, 300))
+process.stdin.resume()
+`
+  )
+  const tunnel = new PhoneTunnel(path, dir)
+  try {
+    tunnel.start(4321)
+    await waitFor(tunnel, (s) => s.message === 'en route')
+    await tunnel.logout()
+    assert.ok(existsSync(lastWrite))
+  } finally {
+    await tunnel.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('couper l’accès téléphone attend l’arrêt du tunnel', async () => {
   const { PhoneAccessManager } = phoneModules.load('phoneAccessManager')
   const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-disable-'))

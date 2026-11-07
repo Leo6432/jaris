@@ -41,6 +41,7 @@ import (
 
 	"tailscale.com/client/local"
 	"tailscale.com/envknob"
+	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/logtail"
 	"tailscale.com/tailcfg"
@@ -69,9 +70,39 @@ func fail(err error) {
 	os.Exit(1)
 }
 
+// clientAddrKey : la clé, dans le contexte d'une requête, de l'adresse de l'appareil qui l'a envoyée.
+type clientAddrKey struct{}
+
+// clientAddress : l'adresse de l'appareil qui a ouvert la connexion. Par Funnel, toute connexion arrive du relais de
+// Tailscale (RemoteAddr : le relais, le même pour tout internet) ; la vraie adresse de l'appareil est dans
+// ipn.FunnelConn.Src. Jaris s'en sert pour limiter les essais d'appairage appareil par appareil (phoneServer.ts) :
+// un inconnu sur internet ne doit pas pouvoir bloquer le téléphone de Léo.
+func clientAddress(c net.Conn) string {
+	if tc, ok := c.(*tls.Conn); ok {
+		c = tc.NetConn()
+	}
+	if fc, ok := c.(*ipn.FunnelConn); ok {
+		if !fc.Src.IsValid() {
+			return ""
+		}
+		return fc.Src.Addr().Unmap().String()
+	}
+	host, _, err := net.SplitHostPort(c.RemoteAddr().String())
+	if err != nil {
+		return ""
+	}
+	return host
+}
+
+// withClientAddress (ConnContext du serveur HTTP) : l'adresse de l'appareil, pour chaque requête de sa connexion.
+func withClientAddress(ctx context.Context, c net.Conn) context.Context {
+	return context.WithValue(ctx, clientAddrKey{}, clientAddress(c))
+}
+
 // newProxy transmet chaque requête au serveur local de Jaris. FlushInterval -1 : les réponses partent dès
 // qu'elles sont écrites, sans tampon. Les en-têtes X-Forwarded-* venus d'internet sont retirés : rien de ce
-// qu'envoie un inconnu ne doit pouvoir se faire passer pour une information du tunnel.
+// qu'envoie un inconnu ne doit pouvoir se faire passer pour une information du tunnel. X-Jaris-Client (l'adresse de
+// l'appareil) est posé ici seulement, jamais repris de la requête.
 func newProxy(target *url.URL) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
@@ -80,6 +111,10 @@ func newProxy(target *url.URL) http.Handler {
 			r.Out.Header.Del("X-Forwarded-For")
 			r.Out.Header.Del("X-Forwarded-Host")
 			r.Out.Header.Del("X-Forwarded-Proto")
+			r.Out.Header.Del("X-Jaris-Client")
+			if addr, _ := r.In.Context().Value(clientAddrKey{}).(string); addr != "" {
+				r.Out.Header.Set("X-Jaris-Client", addr)
+			}
 			r.Out.Header.Set("X-Jaris-Tunnel", "1")
 		},
 		FlushInterval: -1,
@@ -95,6 +130,7 @@ func newProxy(target *url.URL) http.Handler {
 func newHTTPServer(handler http.Handler) *http.Server {
 	return &http.Server{
 		Handler:           handler,
+		ConnContext:       withClientAddress,
 		ReadHeaderTimeout: 15 * time.Second,
 		ReadTimeout:       2 * time.Minute,
 		WriteTimeout:      2 * time.Minute,

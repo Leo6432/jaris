@@ -208,9 +208,63 @@ export function cleanServerName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').slice(0, 40)
 }
 
-/** Ce que les Options affichent d'un serveur : sa commande ou son adresse. */
+/** Ce qui remplace une clé dans ce que les Options affichent. */
+export const HIDDEN_SECRET = '•••'
+
+/**
+ * Un morceau d'adresse ou de commande qui ressemble à une clé : un préfixe de clé connu (« sk- », « ghp_ », « xoxb- »…),
+ * ou une longue suite sans espace mêlant lettres et chiffres (« /mcp/a1B2c3D4e5F6g7H8i9/sse », un identifiant secret).
+ * Un mot ordinaire (« server-filesystem », « mcp ») n'en est pas une.
+ */
+export function looksLikeSecret(text: string): boolean {
+  if (text.length >= 12 && /^(?:sk|pk|rk)[-_]|^(?:ghp|gho|ghs|ghu|ghr|github_pat)_|^xox[abposr]-|^AKIA|^AIza|^ya29\.|^eyJ[\w-]+\./.test(text)) return true
+  if (text.length < 20 || !/^[\w.~+/=-]+$/.test(text)) return false
+  return (text.match(/\d/g) ?? []).length >= 2 && (text.match(/[a-z]/gi) ?? []).length >= 2
+}
+
+/** Une option de commande qui annonce une clé : sa valeur (l'argument suivant, ou après « = ») est masquée. */
+const SECRET_FLAG = /^--?(?:[\w-]*(?:token|secret|password|passwd|api[-_]?key|access[-_]?key|auth)[\w-]*|key)$/i
+
+function maskUrl(raw: string): string {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return looksLikeSecret(raw) ? HIDDEN_SECRET : raw.replace(/\?.*$/s, `?${HIDDEN_SECRET}`)
+  }
+  const decode = (segment: string): string => {
+    try {
+      return decodeURIComponent(segment)
+    } catch {
+      return segment
+    }
+  }
+  const path = url.pathname
+    .split('/')
+    .map((segment) => (looksLikeSecret(decode(segment)) ? HIDDEN_SECRET : segment))
+    .join('/')
+  const user = url.username || url.password ? `${HIDDEN_SECRET}@` : ''
+  return `${url.protocol}//${user}${url.host}${path}${url.search ? `?${HIDDEN_SECRET}` : ''}${url.hash ? `#${HIDDEN_SECRET}` : ''}`
+}
+
+function maskArgs(words: readonly string[]): string[] {
+  return words.map((word, index) => {
+    const flag = /^(--?[\w-]+)=(.+)$/s.exec(word)
+    if (flag && (SECRET_FLAG.test(flag[1]) || looksLikeSecret(flag[2]))) return `${flag[1]}=${HIDDEN_SECRET}`
+    if (index > 0 && SECRET_FLAG.test(words[index - 1]) && !word.startsWith('-')) return HIDDEN_SECRET
+    if (/^https?:\/\//i.test(word)) return maskUrl(word)
+    // Mot par mot : « Authorization: Bearer sk-… » (option --header de mcp-remote) garde son nom, pas sa clé.
+    return word.replace(/[^\s"',;]+/g, (part) => (looksLikeSecret(part) ? HIDDEN_SECRET : part))
+  })
+}
+
+/**
+ * Ce que les Options affichent d'un serveur : sa commande ou son adresse. Relecture croisée : l'adresse s'affichait EN
+ * ENTIER, clé comprise (« ?api_key=… », « /mcp/sk-…/sse ») ; une capture d'écran envoyée pour de l'aide la donnait à
+ * tout le monde. La requête, ce qui ressemble à une clé et la valeur d'une option « --token » sont masqués.
+ */
 export function transportSummary(transport: McpTransportConfig): string {
-  return transport.kind === 'http' ? transport.url : joinCommandLine([transport.command, ...transport.args])
+  return transport.kind === 'http' ? maskUrl(transport.url) : joinCommandLine([transport.command, ...maskArgs(transport.args)])
 }
 
 /** Les noms (jamais les valeurs) des secrets d'un serveur. */

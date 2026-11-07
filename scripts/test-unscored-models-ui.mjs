@@ -38,7 +38,9 @@ window.jaris = {
     ? Promise.reject(new Error(t('bench.testRunning')))
     : new Promise((resolve, reject) => {
         window.__finish = () => resolve({ models: [], resultsPath: 'x' })
-        window.__killed = () => reject(new Error(t('unscored.stopped')))
+        // Relecture croisée : comme le main, un arrêt par le bouton RÉSOUT le test avec « stopped » (plus une phrase traduite).
+        window.__killed = () => resolve({ models: [], resultsPath: 'x', stopped: true })
+        window.__fail = (message) => reject(new Error(message))
       }),
   // Étape 441 : comme le main, l'arrêt fait finir le test en cours sur « arrêté ».
   stopUnscoredTest: async () => {
@@ -48,6 +50,7 @@ window.jaris = {
   },
   showUnscoredResults: () => {}
 }
+window.__stoppedText = t('unscored.stopped')
 createRoot(document.getElementById('root')).render(<UnscoredModelsTest />)
 `
 
@@ -177,6 +180,26 @@ test('étape 441 : un test déjà lancé ailleurs (« déjà en cours ») s’ar
     await page.waitForSelector('button >> text=Tester ces modèles')
     assert.equal(await page.evaluate(() => window.__stops), 1)
     assert.equal(await page.locator('.options-menu__error').count(), 0)
+  } finally {
+    await browser.close()
+  }
+})
+
+// Relecture croisée : l'écran décidait « arrêté » en comparant le message d'erreur à SA traduction de « Test arrêté » —
+// la langue changée pendant le test, un arrêt voulu s'affichait comme une panne. C'est maintenant un champ du résultat :
+// un message, quel qu'il soit, reste une panne affichée telle quelle.
+test('« arrêté » vient du résultat, jamais d’une phrase comparée : une vraie panne reste une panne', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    await page.waitForSelector('.options-menu__progress button')
+    // La phrase même de « Test arrêté », mais en ÉCHEC (comme un main d'une autre langue) : affichée comme une panne.
+    await page.evaluate(() => window.__fail(window.__stoppedText))
+    await page.waitForSelector('.options-menu__error')
+    assert.match(await page.textContent('.options-menu__error'), /^Test arrêté\./)
   } finally {
     await browser.close()
   }

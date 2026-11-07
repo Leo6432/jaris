@@ -37,7 +37,7 @@ function loadModule(relativePath, requireShim) {
  * @param {Set<string>} [skippedRoles] rôles ('flash'/'medium'/'large'/'vision'/'code') dont le pull doit échouer
  *   avec ModelTooLargeError, pour simuler un modèle ignoré faute de VRAM/disque.
  */
-function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick, vramGb = 8, ramGb = 32, imageInstallError = null, videoInstalled = false } = {}) {
+function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick, vramGb = 8, ramGb = 32, imageInstallError = null, videoInstalled = false, whileDeleting } = {}) {
   const imageInstalls = []
   const videoChecks = []
   // Le 3e argument de pullModelIfMissing (avancement du téléchargement, pour la barre de l'écran de configuration).
@@ -66,6 +66,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
   ollamaModule.deleteModel = async (model) => {
     if (failDeleteFor.has(model)) throw new Error(`Échec de la suppression de ${model} (Ollama a répondu 500)`)
     deletedModels.push(model)
+    // Pendant ce temps, Léo change un réglage ailleurs (Options, micro…) : écrit dans le profil, comme le vrai.
+    if (whileDeleting && profile) profile = { ...profile, ...whileDeleting(profile) }
   }
 
   const hardwareScanModule = {
@@ -83,10 +85,16 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     }
   }
 
+  // Comme le vrai profileStore.ts : patchProfile change seulement les champs donnés, sur le profil relu à ce moment-là.
   const profileStoreModule = {
     getProfile: async () => profile,
     saveProfile: async (next) => {
       profile = next
+    },
+    patchProfile: async (change) => {
+      if (!profile) return null
+      profile = { ...profile, ...(typeof change === 'function' ? change(profile) : change) }
+      return profile
     }
   }
 
@@ -153,6 +161,29 @@ test("un changement de palier supprime l'ancien modèle remplacé", async () => 
   await t.run()
   assert.deepEqual(t.deletedModels, ['ministral-3:3b'], `seul l'ancien modèle Rapide (remplacé) doit être supprimé : ${t.deletedModels.join(', ')}`)
   assert.equal(t.getProfile().models.flash, picked.flash, 'le profil doit refléter le nouveau choix')
+})
+
+// Relecture croisée : la configuration lisait le profil, téléchargeait et supprimait des modèles (plusieurs minutes),
+// puis réécrivait le profil ENTIER lu au début : un micro choisi entre-temps revenait à l'ancien.
+test('un réglage changé pendant la configuration n’est pas effacé par elle', async () => {
+  const picked = { flash: 'qwen3.5:4b', medium: 'qwen3.5:9b', large: 'qwen3.5:27b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const before = {
+    name: 'Léo',
+    models: { flash: 'ministral-3:3b', medium: 'qwen3.5:9b', large: 'qwen3.5:27b' },
+    visionModel: 'qwen3-vl:4b',
+    codeModel: 'qwen2.5-coder:7b',
+    audioInputDeviceName: 'Micro intégré',
+    blockedModels: { 'vieux:1b': 'bloqué' }
+  }
+  const t = setup(picked, before, new Set(), new Set(), {
+    whileDeleting: (current) => ({ audioInputDeviceName: 'Micro USB', blockedModels: { ...current.blockedModels, 'autre:2b': 'bloqué aussi' } })
+  })
+  await t.run()
+  assert.deepEqual(t.deletedModels, ['ministral-3:3b'])
+  assert.equal(t.getProfile().audioInputDeviceName, 'Micro USB', 'le micro choisi pendant la configuration a été effacé')
+  assert.deepEqual(Object.keys(t.getProfile().blockedModels).sort(), ['autre:2b', 'vieux:1b'])
+  assert.equal(t.getProfile().models.flash, 'qwen3.5:4b')
+  assert.equal(t.getProfile().capacityScanDone, true)
 })
 
 test('un modèle encore utilisé par un autre rôle ne doit JAMAIS être supprimé', async () => {
@@ -468,22 +499,26 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
 
   // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application ») : le bouton finit le test
   // sur « arrêté » (pas une panne), la veille est rétablie ; demandé pendant la vérification d'Ollama, rien ne démarre.
+  // Relecture croisée : « arrêté » est un champ du résultat, plus une phrase traduite que l'écran comparait à la sienne
+  // (la langue changée entre-temps, l'arrêt s'affichait comme une panne).
   const byUser = testUnscoredModels(() => {})
   await new Promise((resolve) => setImmediate(resolve))
   const launched = procs.length
   await stopModelTestByUser()
-  await assert.rejects(byUser, /^Error: Test arrêté\./)
+  const stoppedResult = await byUser
+  assert.equal(stoppedResult.stopped, true, 'arrêté par le bouton : le résultat le dit, sans passer par une phrase')
+  assert.equal(stoppedResult.resultsPath, '/fake/data/benchmark-nouveaux-modeles.md')
   assert.equal(active.size, 0)
   const early = testUnscoredModels(() => {})
   await stopModelTestByUser()
-  await assert.rejects(early, /^Error: Test arrêté\./)
+  assert.equal((await early).stopped, true)
   assert.equal(procs.length, launched, 'arrêté avant le lancement : le script ne démarre pas')
   await stopModelTestByUser() // plus rien à arrêter : sans effet
   // Le test suivant n'hérite pas de l'arrêt : il se termine normalement.
   const after = testUnscoredModels(() => {})
   await new Promise((resolve) => setImmediate(resolve))
   procs.at(-1).emit('close', 0)
-  await after
+  assert.equal((await after).stopped, undefined, 'un test fini normalement n’est pas « arrêté »')
 
   // « Déplacer » copie puis efface les résultats du test juste après l'avoir arrêté : l'arrêt attend sa vraie sortie.
   const third = testUnscoredModels(() => {}).catch(() => {})

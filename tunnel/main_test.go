@@ -6,13 +6,17 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
-	"os"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tailscale.com/ipn"
 )
 
 // Le relais transmet la requête telle quelle au serveur local de Jaris, mais jamais les en-têtes
@@ -151,5 +155,60 @@ func captureStdout(buf *bytes.Buffer) func() {
 		w.Close()
 		<-done
 		os.Stdout = old
+	}
+}
+
+// Par Funnel, toutes les connexions arrivent du même relais de Tailscale : l'adresse donnée à Jaris doit être celle de
+// l'appareil (ipn.FunnelConn.Src), à travers le chiffrement TLS, jamais celle du relais.
+func TestClientAddressFromFunnel(t *testing.T) {
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	funnel := &ipn.FunnelConn{Conn: a, Src: netip.MustParseAddrPort("203.0.113.7:51234")}
+	if got := clientAddress(funnel); got != "203.0.113.7" {
+		t.Fatalf("adresse transmise : %q, attendu celle de l'appareil", got)
+	}
+	if got := clientAddress(tls.Server(funnel, &tls.Config{})); got != "203.0.113.7" {
+		t.Fatalf("à travers TLS : %q", got)
+	}
+	mapped := &ipn.FunnelConn{Conn: a, Src: netip.MustParseAddrPort("[::ffff:198.51.100.4]:443")}
+	if got := clientAddress(mapped); got != "198.51.100.4" {
+		t.Fatalf("IPv4 écrite en IPv6 : %q", got)
+	}
+	if got := clientAddress(&ipn.FunnelConn{Conn: a}); got != "" {
+		t.Fatalf("adresse inconnue : %q, attendu rien", got)
+	}
+}
+
+// L'adresse de l'appareil arrive à Jaris dans X-Jaris-Client, posée par le tunnel : jamais celle qu'envoie le client.
+func TestProxySetsClientAddress(t *testing.T) {
+	var got *http.Request
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		w.Write([]byte("ok"))
+	}))
+	defer backend.Close()
+	target, _ := url.Parse(backend.URL)
+
+	front := httptest.NewUnstartedServer(newProxy(target))
+	front.Config.ConnContext = withClientAddress
+	front.Start()
+	defer front.Close()
+
+	req, _ := http.NewRequest("POST", front.URL+"/api/pair", strings.NewReader(`{"code":"12345678"}`))
+	req.Header.Set("X-Jaris-Client", "6.6.6.6")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if got == nil {
+		t.Fatal("requête jamais transmise")
+	}
+	if addr := got.Header.Get("X-Jaris-Client"); addr != "127.0.0.1" {
+		t.Fatalf("X-Jaris-Client = %q, attendu l'adresse de la connexion (127.0.0.1), jamais celle envoyée par le client", addr)
+	}
+	if newHTTPServer(nil).ConnContext == nil {
+		t.Fatal("le serveur du tunnel doit relever l'adresse de chaque connexion")
 	}
 }

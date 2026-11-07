@@ -14,7 +14,8 @@ import {
   installImageModel,
   isImageModelInstalled,
   listGeneratedImages,
-  readGeneratedImageDataUrl
+  readGeneratedImageDataUrl,
+  waitForEngineExit
 } from './services/imageGenerator'
 import { toEnglishPrompt } from './services/promptTranslator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
@@ -59,7 +60,7 @@ import { setMcpBrowserOpener, setMcpSecretBox } from './services/mcpAuth'
 import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
-import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
+import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind, type StoredThinkChoice } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { alignOllamaModelsVariable, repairOllamaModelsView, windowsModelsViewDeps } from './services/ollamaModelsVariable'
 import {
@@ -1218,28 +1219,37 @@ async function saveThinkChoice(mode: ModelChoiceMode, think: unknown): Promise<v
   if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
   const profile = await getProfile()
   if (!profile) throw new Error('Profil introuvable.')
-  const thinkChoices = { ...profile.thinkChoices }
-  if (think === null) {
-    delete thinkChoices[mode]
-  } else {
+  let choice: StoredThinkChoice | null = null
+  if (think !== null) {
     // La valeur vient de l'écran : revérifiée ICI contre ce que le modèle annonce vraiment.
     const installed = await listInstalledModels()
     const model = thinkingModelFor(profile, mode, installed, buildModelChoiceInfo(profile, mode, installed).autoModel)
     if (!model) throw new Error(t('main.chooseModelFirst'))
     if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(t('main.thinkRejected', { model }))
-    thinkChoices[mode] = { model, think }
+    choice = { model, think }
   }
-  await saveProfile({ ...profile, thinkChoices })
+  // Relecture croisée : seulement ce mode, sur le profil RELU après l'attente d'Ollama (patchProfile) — jamais la copie
+  // prise avant, qui effaçait ce qui avait changé entre-temps (micro, autre mode…).
+  await patchProfile((current) => {
+    const thinkChoices = { ...current.thinkChoices }
+    if (choice) thinkChoices[mode] = choice
+    else delete thinkChoices[mode]
+    return { thinkChoices }
+  })
 }
 
 async function saveModelChoice(mode: ModelChoiceMode, model: string | null): Promise<void> {
-  const profile = await getProfile()
-  if (!profile) throw new Error('Profil introuvable.')
+  if (!(await getProfile())) throw new Error('Profil introuvable.')
   const installed = model === null ? [] : await listInstalledModels()
-  // Étape 192 : la réflexion était choisie pour l'ancien modèle ; elle repart en Auto avec le nouveau.
-  const thinkChoices = { ...profile.thinkChoices }
-  delete thinkChoices[mode]
-  await saveProfile(applyModelChoice({ ...profile, thinkChoices }, mode, model, installed))
+  // Étape 192 : la réflexion était choisie pour l'ancien modèle ; elle repart en Auto avec le nouveau. Sur le profil
+  // relu après l'attente d'Ollama (patchProfile), pas sur une copie prise avant.
+  const updated = await patchProfile((current) => {
+    const thinkChoices = { ...current.thinkChoices }
+    delete thinkChoices[mode]
+    const { modelChoices } = applyModelChoice({ ...current, thinkChoices }, mode, model, installed)
+    return { thinkChoices, modelChoices }
+  })
+  if (!updated) throw new Error('Profil introuvable.')
 }
 
 function tunnelBinaryPath(): string {
@@ -1741,12 +1751,12 @@ app.whenReady().then(async () => {
   // index (le sidecar Python ouvre son micro une seule fois au démarrage, voir voice_server.py — pas moyen
   // de changer de micro sans relancer tout le pipeline, y compris le rechargement des modèles).
   ipcMain.handle(IPC_CHANNELS.setAudioInputDevice, async (_event, deviceIndex: number | null): Promise<void> => {
-    const profile = await getProfile()
-    if (!profile) return
+    if (!(await getProfile())) return
     // Étape 346 : le nom est gardé avec le numéro — c'est lui qui retrouve le micro quand la liste change.
     const devices = deviceIndex === null ? [] : await listAudioInputDevices().catch(() => [] as AudioInputDevice[])
     const deviceName = devices.find((device) => device.index === deviceIndex)?.name ?? null
-    await saveProfile({ ...profile, audioInputDeviceIndex: deviceIndex, audioInputDeviceName: deviceName })
+    // Relecture croisée : seulement le micro (patchProfile), jamais tout le profil lu avant la liste des micros.
+    if (!(await patchProfile({ audioInputDeviceIndex: deviceIndex, audioInputDeviceName: deviceName }))) return
     pipeline?.stop()
     await startVoicePipeline()
   })
@@ -1755,9 +1765,7 @@ app.whenReady().then(async () => {
   // démarrage). Les deux autres bascules d'Activation (touche "+", clic sur l'orbe) sont de simples champs
   // du profil enregistrés via saveProfile, relus à la volée côté renderer (App.tsx) sans passer par ici.
   ipcMain.handle(IPC_CHANNELS.setWakewordEnabled, async (_event, enabled: boolean): Promise<void> => {
-    const profile = await getProfile()
-    if (!profile) return
-    await saveProfile({ ...profile, activationWakeWordEnabled: enabled })
+    if (!(await patchProfile({ activationWakeWordEnabled: enabled }))) return
     pipeline?.stop()
     await startVoicePipeline()
   })
@@ -2086,6 +2094,13 @@ app.whenReady().then(async () => {
     // Ollama et les sidecars Python doivent tous les deux libérer leurs fichiers avant de déplacer quoi
     // que ce soit, sinon la copie échoue ou laisse des données à moitié écrites.
     log(t('main.move.stopping'))
+    // Relecture croisée : ce qui dessine, filme ou écrit du code s'arrête aussi, AVANT la copie — le moteur d'image et
+    // de vidéo (sd.exe) garde ouverts les fichiers du dossier image-generation, que la copie lit puis efface ; une
+    // création demandée depuis le téléphone pareil. Leur sortie est attendue plus bas (waitForEngineExit).
+    codeGenAbort?.abort()
+    imageStudioAbort?.abort()
+    videoStudioAbort?.abort()
+    const phoneStudioStopped = phoneAccess?.stopStudioJobs().catch(() => {})
     pipeline?.stop()
     ttsClient.stop()
     await stopOllamaCompletely()
@@ -2095,7 +2110,9 @@ app.whenReady().then(async () => {
     await stopModelTest()
     // Étape 355 : un duel en cours s'arrête aussi (les modèles écrivent sur le PC, et un téléchargement remplit le disque).
     abortDuel()
+    await phoneStudioStopped
     await phoneAccess?.disable().catch(() => {})
+    await waitForEngineExit()
 
     // Pendant la copie (souvent des dizaines de minutes), le mode Code reste utilisable. Tout ce qu'il écrirait dans
     // l'ancien dossier des données serait perdu — déjà copié ou sur le point de l'être, ce dossier est effacé à la fin :
@@ -2183,7 +2200,7 @@ app.whenReady().then(async () => {
     if (!profile?.capacityScanDone) return []
     const currentIds = getAllCandidateModelIds()
     if (!profile.knownModelCandidates) {
-      await saveProfile({ ...profile, knownModelCandidates: currentIds })
+      await patchProfile({ knownModelCandidates: currentIds })
       return []
     }
     const known = new Set(profile.knownModelCandidates)
@@ -2194,9 +2211,7 @@ app.whenReady().then(async () => {
     return fresh
   })
   ipcMain.handle(IPC_CHANNELS.acknowledgeNewModels, async (): Promise<void> => {
-    const profile = await getProfile()
-    if (!profile) return
-    await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
+    await patchProfile({ knownModelCandidates: getAllCandidateModelIds() })
   })
   ipcMain.handle(IPC_CHANNELS.getMyModelPicks, () => runWithLocalOllama(async () => {
     const picks = await getMyModelPicks(await getProfile())
@@ -2326,8 +2341,7 @@ app.whenReady().then(async () => {
   // Téléphone (étape 214) : Options → Téléphone.
   ipcMain.handle(IPC_CHANNELS.getPhoneAccess, (): Promise<PhoneAccessStatus> => getPhoneAccess().status())
   ipcMain.handle(IPC_CHANNELS.setPhoneAccessEnabled, async (_event, enabled: boolean): Promise<PhoneAccessStatus> => {
-    const profile = await getProfile()
-    if (profile) await saveProfile({ ...profile, phoneAccessEnabled: enabled })
+    await patchProfile({ phoneAccessEnabled: enabled })
     const manager = getPhoneAccess()
     if (enabled) {
       phoneLinksAutoOpen = true
@@ -2343,8 +2357,7 @@ app.whenReady().then(async () => {
     return getPhoneAccess().status()
   })
   ipcMain.handle(IPC_CHANNELS.logoutPhoneAccess, async (): Promise<PhoneAccessStatus> => {
-    const profile = await getProfile()
-    if (profile) await saveProfile({ ...profile, phoneAccessEnabled: false })
+    await patchProfile({ phoneAccessEnabled: false })
     await getPhoneAccess().logout()
     return getPhoneAccess().status()
   })

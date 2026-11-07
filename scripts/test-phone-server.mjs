@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -134,13 +134,15 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
   })
   const port = await server.listen()
   const base = `http://127.0.0.1:${port}`
-  const request = (path, { method = 'GET', token, body, type } = {}) =>
+  const request = (path, { method = 'GET', token, body, type, headers = {} } = {}) =>
     fetch(base + path, {
       method,
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'Content-Type': type ?? 'application/json' } : {}) },
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'Content-Type': type ?? 'application/json' } : {}), ...headers },
       body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body)
     })
-  const pairWith = async (code) => request('/api/pair', { method: 'POST', body: { code, name: 'iPhone' } })
+  const pairWith = async (code, headers) => request('/api/pair', { method: 'POST', body: { code, name: 'iPhone' }, headers })
+  // Comme jaris-tunnel : l'adresse de l'appareil qui envoie la requête, posée par le tunnel (tunnel/main.go).
+  const viaTunnel = (address) => ({ 'X-Jaris-Tunnel': '1', 'X-Jaris-Client': address })
   const paired = async () => {
     const { code } = server.createPairingCode()
     const res = await pairWith(code)
@@ -163,6 +165,7 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
     models,
     request,
     pairWith,
+    viaTunnel,
     paired,
     waitJob,
     close: async () => {
@@ -267,6 +270,56 @@ test('appairage : pas plus de 10 essais par minute, même avec des codes différ
   }
 })
 
+// Relecture croisée : l'adresse Funnel est publique. La limite d'essais était COMMUNE à tout internet et 5 mauvais
+// codes, de n'importe qui, annulaient le code de Léo : un inconnu pouvait l'empêcher de connecter son téléphone.
+test('appairage : un inconnu sur internet ne bloque plus le code de Léo, ni par la limite par minute ni par ses erreurs', async () => {
+  const clock = 7_000_000
+  const t = await start({ now: () => clock })
+  try {
+    const { code } = t.server.createPairingCode()
+    const wrong = code === '00000000' ? '11111111' : '00000000'
+    const stranger = t.viaTunnel('203.0.113.7')
+    for (let i = 0; i < 5; i++) assert.equal((await t.pairWith(wrong, stranger)).status, 403)
+    assert.equal((await t.pairWith(code, stranger)).status, 403, 'après 5 erreurs, CET appareil ne peut plus se servir du code')
+    for (let i = 0; i < 4; i++) await t.pairWith(wrong, stranger)
+    assert.equal((await t.pairWith(wrong, stranger)).status, 429, 'cet appareil a dépassé sa limite par minute')
+    // Le téléphone de Léo, ailleurs sur internet : le même code marche toujours.
+    const res = await t.pairWith(code, t.viaTunnel('198.51.100.20'))
+    assert.equal(res.status, 200)
+    assert.ok((await res.json()).token)
+  } finally {
+    await t.close()
+  }
+})
+
+test('appairage : une force brute répartie sur beaucoup d’adresses fait quand même tomber le code', async () => {
+  const clock = 8_000_000
+  const t = await start({ now: () => clock })
+  try {
+    const { code } = t.server.createPairingCode()
+    const wrong = code === '00000000' ? '11111111' : '00000000'
+    for (let i = 0; i < 100; i++) assert.equal((await t.pairWith(wrong, t.viaTunnel(`192.0.2.${i}`))).status, 403)
+    const res = await t.pairWith(code, t.viaTunnel('198.51.100.20'))
+    assert.equal(res.status, 403)
+    assert.match((await res.json()).error, /expiré/)
+  } finally {
+    await t.close()
+  }
+})
+
+test('appairage : une adresse IPv6 compte pour son réseau ; sans le tunnel, l’adresse donnée par la requête est ignorée', async () => {
+  const { load } = loadPhoneModules()
+  const { pairingSource } = load('phoneServer')
+  const req = (headers) => ({ headers, socket: { remoteAddress: '127.0.0.1' } })
+  const tunnel = (address) => req({ 'x-jaris-tunnel': '1', 'x-jaris-client': address })
+  assert.equal(pairingSource(tunnel('2001:db8:1:2::1')), pairingSource(tunnel('2001:db8:1:2:ffff:ffff:ffff:ffff')))
+  assert.notEqual(pairingSource(tunnel('2001:db8:1:2::1')), pairingSource(tunnel('2001:db8:1:3::1')))
+  assert.notEqual(pairingSource(tunnel('203.0.113.7')), pairingSource(tunnel('203.0.113.8')))
+  // Sans le marqueur du tunnel, ou une valeur qui n'est pas une adresse : la connexion elle-même (ce PC).
+  assert.equal(pairingSource(req({ 'x-jaris-client': '203.0.113.7' })), 'local:127.0.0.1')
+  assert.equal(pairingSource(tunnel('pas une adresse')), 'local:127.0.0.1')
+})
+
 test('déconnecter un téléphone coupe immédiatement son accès, sans toucher aux autres', async () => {
   const t = await start()
   try {
@@ -276,6 +329,124 @@ test('déconnecter un téléphone coupe immédiatement son accès, sans toucher 
     await t.devices.remove(device.id)
     assert.equal((await t.request('/api/history', { token: first })).status, 401)
     assert.equal((await t.request('/api/history', { token: second })).status, 200)
+  } finally {
+    await t.close()
+  }
+})
+
+/**
+ * Relecture croisée : chaque requête du téléphone met à jour « vu le » sans attendre. Ces mises à jour se croisaient
+ * (relecture puis écriture hors de toute file, un seul temporaire partagé) : un téléphone retiré revenait, et une liste
+ * mélangée ou verrouillée un instant était prise pour vide — tous les téléphones oubliés.
+ */
+function deviceStore(fsOverrides = {}) {
+  const { load } = loadPhoneModules(fsOverrides)
+  const { PhoneDeviceStore } = load('phoneDevices')
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-devices-'))
+  const file = join(dir, 'phone-devices.json')
+  return { store: new PhoneDeviceStore(file), dir, file, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+test('téléphones : « vu le », retraits et appairages simultanés passent un par un, aucun n’en efface un autre', async () => {
+  const { store, file, cleanup } = deviceStore()
+  try {
+    const t0 = Date.parse('2026-11-01T10:00:00Z')
+    const added = []
+    for (const name of ['iPhone', 'Pixel', 'Tablette']) added.push((await store.add(name, t0)).device)
+    const [iphone, pixel, tablet] = added
+    // Comme pendant une réponse suivie : des « vu le » lancés sans attendre, pendant que Léo retire un téléphone et
+    // en appaire un autre. allSettled : en vrai, un « vu le » raté est ignoré (phoneServer.ts) ; c'est la liste qui compte.
+    const outcomes = await Promise.allSettled([
+      ...Array.from({ length: 10 }, (_, i) => store.touch(iphone.id, t0 + 120_000 + i)),
+      store.touch(pixel.id, t0 + 120_000),
+      store.remove(pixel.id),
+      store.touch(pixel.id, t0 + 180_000),
+      store.add('Montre', t0 + 120_000),
+      store.touch(tablet.id, t0 + 120_000)
+    ])
+    const list = await store.list()
+    assert.deepEqual(list.map((d) => d.name).sort(), ['Montre', 'Tablette', 'iPhone'], 'le téléphone retiré est revenu, ou un autre a disparu')
+    assert.equal(list.find((d) => d.id === iphone.id).lastSeenAt, new Date(t0 + 120_000).toISOString())
+    assert.equal(list.find((d) => d.id === tablet.id).lastSeenAt, new Date(t0 + 120_000).toISOString())
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).devices.length, 3)
+    assert.deepEqual(outcomes.filter((o) => o.status === 'rejected').map((o) => o.reason.message), [])
+  } finally {
+    cleanup()
+  }
+})
+
+test('téléphones : une liste verrouillée un instant n’est jamais prise pour vide ni réécrite', async () => {
+  const busy = new Set()
+  const realPromises = await import('node:fs/promises')
+  const fsPromises = {
+    ...realPromises,
+    readFile: async (path, ...rest) => {
+      if (busy.has(path)) throw Object.assign(new Error('EBUSY: simulé'), { code: 'EBUSY' })
+      return realPromises.readFile(path, ...rest)
+    }
+  }
+  const { store, file, cleanup } = deviceStore({ 'fs/promises': fsPromises })
+  try {
+    const first = (await store.add('iPhone')).device
+    await store.add('Pixel')
+    const before = readFileSync(file, 'utf8')
+    busy.add(file)
+    await assert.rejects(store.add('Inconnu'), /phone-devices\.json.*EBUSY/)
+    await assert.rejects(store.remove(first.id), /EBUSY/)
+    await assert.rejects(store.list(), /EBUSY/, 'une liste illisible n’est pas une liste vide')
+    assert.equal(readFileSync(file, 'utf8'), before, 'la liste a été réécrite à partir d’une lecture ratée')
+    busy.clear()
+    assert.deepEqual((await store.list()).map((d) => d.name), ['iPhone', 'Pixel'])
+  } finally {
+    cleanup()
+  }
+})
+
+test('téléphones : une liste abîmée est rangée de côté (jamais écrasée sans copie) ; absente, c’est une liste vide', async () => {
+  const { store, dir, file, cleanup } = deviceStore()
+  try {
+    assert.deepEqual(await store.list(), [])
+    writeFileSync(file, '{"devices":[{"id":"a","name":"iPh')
+    assert.deepEqual(await store.list(), [])
+    const aside = join(dir, 'fichiers-illisibles')
+    assert.deepEqual(readdirSync(aside).map((name) => readFileSync(join(aside, name), 'utf8')), ['{"devices":[{"id":"a","name":"iPh'])
+    await store.add('iPhone')
+    assert.deepEqual((await store.list()).map((d) => d.name), ['iPhone'])
+    assert.deepEqual(readdirSync(dir).sort(), ['fichiers-illisibles', 'phone-devices.json'], 'aucun temporaire ne traîne')
+  } finally {
+    cleanup()
+  }
+})
+
+// Relecture croisée : « Déplacer » copiait les données pendant qu'une image demandée depuis le téléphone se dessinait.
+test('« Déplacer » : les créations du téléphone s’arrêtent, et l’arrêt attend leur vraie fin', async () => {
+  let seenSignal = null
+  let finish
+  const t = await start({
+    generateImage: (_prompt, _onStatus, signal) =>
+      new Promise((_resolve, reject) => {
+        seenSignal = signal
+        // Comme le vrai moteur : il met un instant à sortir après l'arrêt.
+        signal.addEventListener('abort', () => {
+          finish = () => reject(new Error('Dessin annulé.'))
+        })
+      })
+  })
+  try {
+    await t.server.stopStudioJobs() // rien en cours : immédiat
+    const token = await t.paired()
+    const { jobId } = await (await t.request('/api/image', { method: 'POST', token, body: { prompt: 'un chat' } })).json()
+    for (let i = 0; i < 100 && !seenSignal; i++) await new Promise((r) => setTimeout(r, 5))
+    let stopped = false
+    const stopping = t.server.stopStudioJobs().then(() => {
+      stopped = true
+    })
+    await new Promise((r) => setTimeout(r, 30))
+    assert.equal(seenSignal.aborted, true, 'la création n’a pas été arrêtée')
+    assert.equal(stopped, false, 'rendu la main avant la vraie fin de la création')
+    finish()
+    await stopping
+    assert.equal((await t.waitJob(token, jobId)).state, 'cancelled')
   } finally {
     await t.close()
   }

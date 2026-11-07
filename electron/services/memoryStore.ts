@@ -56,20 +56,40 @@ export async function listMemoryTitles(): Promise<string[]> {
  * (`replace` absent/false), le comportement d'origine est inchangé : une info vraiment nouvelle s'ajoute à la
  * suite de la précédente, jamais à sa place.
  */
+/**
+ * Une modification à la fois PAR NOTE (relecture puis écriture). Relecture croisée : deux ajouts simultanés à la même
+ * note (l'outil « remember » et la mémoire automatique de fin d'échange, par exemple) relisaient tous les deux l'ancien
+ * contenu, et le second écrit effaçait le premier.
+ */
+const noteChains = new Map<string, Promise<unknown>>()
+function exclusiveNote<T>(path: string, task: () => Promise<T>): Promise<T> {
+  // Windows ne distingue pas « Vacances.md » de « vacances.md » : la même note, la même file.
+  const key = path.toLowerCase()
+  const run = (noteChains.get(key) ?? Promise.resolve()).then(task, task)
+  const settled = run.catch(() => undefined)
+  noteChains.set(key, settled)
+  void settled.then(() => {
+    if (noteChains.get(key) === settled) noteChains.delete(key)
+  })
+  return run
+}
+
 export async function rememberNote(title: string, content: string, replace = false): Promise<string> {
   await ensureMemoryDir()
   const path = notePath(title)
   const timestamp = new Date().toLocaleString('fr-FR')
 
-  // Étape 325 : seule une note ABSENTE est une nouvelle note. Avant, une note verrouillée un instant (antivirus) était
-  // prise pour une nouvelle, et réécrite avec ce seul ajout : tout son contenu était perdu. Elle fait maintenant échouer
-  // l'ajout (DataFileUnreadableError) sans rien écrire.
-  let existing = ''
-  if (!replace) existing = (await readFileWithRetries(path)) ?? ''
+  await exclusiveNote(path, async () => {
+    // Étape 325 : seule une note ABSENTE est une nouvelle note. Avant, une note verrouillée un instant (antivirus) était
+    // prise pour une nouvelle, et réécrite avec ce seul ajout : tout son contenu était perdu. Elle fait maintenant échouer
+    // l'ajout (DataFileUnreadableError) sans rien écrire.
+    let existing = ''
+    if (!replace) existing = (await readFileWithRetries(path)) ?? ''
 
-  const entry = `\n\n_${timestamp}_\n${content}`
-  // D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne note intacte.
-  await writeFileAtomic(path, existing ? existing + entry : `# ${sanitizeTitle(title)}${entry}`)
+    const entry = `\n\n_${timestamp}_\n${content}`
+    // D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne note intacte.
+    await writeFileAtomic(path, existing ? existing + entry : `# ${sanitizeTitle(title)}${entry}`)
+  })
   return `Noté dans la mémoire ("${title}").`
 }
 

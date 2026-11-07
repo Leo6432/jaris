@@ -18,6 +18,7 @@ const claudeKey = loadTsModule('electron/services/claudeKey.ts', {
   electron: { safeStorage: {} },
   'fs/promises': {},
   path: { join: (...p) => p.join('/') },
+  './atomicFile': {},
   './dataLocation': { getDataRoot: () => '/donnees' }
 })
 

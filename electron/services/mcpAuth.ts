@@ -1,9 +1,9 @@
 import { createServer, type Server } from 'http'
-import { mkdir, readFile, rm } from 'fs/promises'
+import { mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { writeFileAtomic } from './atomicFile'
+import { DataFileUnreadableError, readFileWithRetries, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 import { t } from '../../shared/i18n'
 
@@ -51,18 +51,38 @@ export function setMcpBrowserOpener(next: (url: string) => void | Promise<void>)
 const authDir = (): string => join(getDataRoot(), 'mcp-auth')
 const authFile = (serverId: string): string => join(authDir(), `${serverId.replace(/[^A-Za-z0-9-]/g, '')}.bin`)
 
+/**
+ * Ce que Jaris a reçu de ce serveur. Relecture croisée : TOUTE erreur de lecture rendait « rien » et le gardait en
+ * mémoire ; la demande suivante (le port de retour, par exemple) réécrivait alors le fichier SANS les clés — un fichier
+ * verrouillé un instant par un antivirus suffisait à perdre la connexion. Seul un fichier ABSENT veut dire « rien » ;
+ * illisible (verrouillé, indéchiffrable, abîmé) : une erreur rédigée pour Léo, rien gardé en mémoire, rien réécrit.
+ */
 async function load(serverId: string): Promise<AuthState> {
   const cached = memory.get(serverId)
   if (cached) return cached
   let state: AuthState = {}
   if (box) {
+    let raw: string | null
     try {
-      const raw = await readFile(authFile(serverId), 'utf8')
-      state = JSON.parse(box.decrypt(Buffer.from(raw, 'base64'))) as AuthState
-    } catch {
-      state = {}
+      raw = await readFileWithRetries(authFile(serverId))
+    } catch (err) {
+      // « Un autre programme l'utilise, réessaie » est déjà une phrase complète ; une autre panne garde son vrai détail.
+      if (err instanceof DataFileUnreadableError) throw new McpSignInError(err.message)
+      throw new McpSignInError(t('mcp.error.authUnreadable', { detail: (err as NodeJS.ErrnoException)?.code ?? String((err as Error)?.message ?? err) }))
+    }
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(box.decrypt(Buffer.from(raw, 'base64'))) as unknown
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('format')
+        state = parsed as AuthState
+      } catch (err) {
+        throw new McpSignInError(t('mcp.error.authUnreadable', { detail: err instanceof Error ? err.message : String(err) }))
+      }
     }
   }
+  // Une lecture partie en même temps a pu remplir la mémoire (et une écriture la changer) : la sienne fait foi.
+  const raced = memory.get(serverId)
+  if (raced) return raced
   memory.set(serverId, state)
   return state
 }

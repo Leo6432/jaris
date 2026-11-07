@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import type { AddressInfo } from 'net'
+import { isIP, type AddressInfo } from 'net'
 import type { ChatMessage, ModelChoiceInfo, PhoneDevice } from '../../shared/ipc'
 import type { PhoneDeviceStore } from './phoneDevices'
 import { currentLanguage, currentLocale, t, type MessageKey } from '../../shared/i18n'
@@ -106,6 +106,8 @@ interface Job {
   error?: string
   finishedAt?: number
   abort?: AbortController
+  /** Se résout quand le travail est fini (réussi, raté ou arrêté). */
+  settled?: Promise<void>
 }
 
 /** Fichiers de la page, servis par leur nom exact uniquement : aucun chemin venu de la requête n'est suivi. */
@@ -137,8 +139,17 @@ export function phonePageI18nScript(): string {
 export const POWER_OFF_DELAY_S = 60
 
 export const PAIRING_CODE_TTL_MS = 10 * 60_000
-const PAIRING_ATTEMPTS_PER_CODE = 5
-const PAIRING_ATTEMPTS_PER_MINUTE = 10
+/** Mauvais codes permis à UN appareil pour un même code : au-delà, cet appareil-là ne peut plus s'en servir. */
+export const PAIRING_ATTEMPTS_PER_CODE = 5
+/** Essais par minute pour UN appareil. */
+export const PAIRING_ATTEMPTS_PER_MINUTE = 10
+/**
+ * Mauvais codes tous appareils confondus avant que le code ne tombe : la protection contre une force brute répartie sur
+ * beaucoup d'adresses. 100 essais pour 100 millions de codes possibles : une chance sur un million.
+ */
+export const PAIRING_FAILURES_PER_CODE = 100
+/** Appareils suivis au plus pour la limite par minute (la mémoire ne grossit pas sans fin). */
+const MAX_TRACKED_SOURCES = 10_000
 const MAX_JSON_BYTES = 64 * 1024
 /** ~2 min 40 de voix en WAV 16 kHz mono 16 bits : largement assez pour un message vocal. */
 export const MAX_VOICE_BYTES = 5 * 1024 * 1024
@@ -218,10 +229,39 @@ export function isExpectedWav(buffer: Buffer): boolean {
   return format === 1 && channels === 1 && rate === 16000 && bits === 16
 }
 
+/**
+ * L'appareil qui tente de s'appairer. Tout arrive de 127.0.0.1 (le tunnel) : c'est jaris-tunnel qui donne l'adresse de
+ * l'appareil (X-Jaris-Client, avec X-Jaris-Tunnel), posée par lui et jamais reprise de ce qu'envoie internet. Une adresse
+ * IPv6 compte pour son réseau (/64) : un seul abonné en a des milliards. Sans elle : la connexion elle-même (ce PC).
+ */
+export function pairingSource(req: IncomingMessage): string {
+  const header = req.headers['x-jaris-client']
+  const client = req.headers['x-jaris-tunnel'] === '1' && typeof header === 'string' ? header.trim().toLowerCase() : ''
+  const family = client ? isIP(client) : 0
+  // Une IPv4 écrite à la façon IPv6 (::ffff:a.b.c.d) compte pour elle-même (le tunnel la donne déjà en IPv4).
+  if (family === 4 || (family === 6 && client.includes('.'))) return `ip:${client}`
+  if (family === 6) return `ip6:${ipv6Network(client)}`
+  return `local:${req.socket.remoteAddress ?? ''}`
+}
+
+/** Les 4 premiers groupes (le réseau /64) d'une adresse IPv6 valide, forme abrégée « :: » comprise. */
+function ipv6Network(address: string): string {
+  const halves = address.split('::')
+  const left = halves[0] ? halves[0].split(':') : []
+  const right = halves.length > 1 && halves[1] ? halves[1].split(':') : []
+  const groups = halves.length > 1 ? [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left
+  return groups
+    .slice(0, 4)
+    .map((group) => (Number.parseInt(group, 16) || 0).toString(16))
+    .join(':')
+}
+
 export class PhoneServer {
   private server: Server | null = null
-  private pairing: { code: string; expiresAt: number; attemptsLeft: number } | null = null
-  private pairAttempts: number[] = []
+  /** Le code affiché sur le PC ; ses mauvais essais, au total et par appareil (pairingSource). */
+  private pairing: { code: string; expiresAt: number; failures: number; failuresBySource: Map<string, number> } | null = null
+  /** Essais récents de chaque appareil (pairingSource), pour la limite par minute. */
+  private pairAttempts = new Map<string, number[]>()
   private jobs = new Map<string, Job>()
   private busy: Record<Lane, boolean> = { conversation: false, studio: false }
   /** Heure prévue de l'extinction demandée depuis le téléphone, ou null. */
@@ -260,7 +300,7 @@ export class PhoneServer {
   createPairingCode(): { code: string; expiresAt: number } {
     const code = String(randomInt(0, 100_000_000)).padStart(8, '0')
     const expiresAt = this.now() + PAIRING_CODE_TTL_MS
-    this.pairing = { code, expiresAt, attemptsLeft: PAIRING_ATTEMPTS_PER_CODE }
+    this.pairing = { code, expiresAt, failures: 0, failuresBySource: new Map() }
     return { code, expiresAt }
   }
 
@@ -273,27 +313,58 @@ export class PhoneServer {
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
     const device = token ? await this.deps.devices.findByToken(token) : null
     if (!device) throw new HttpError(401, t('phone.err.notPaired'))
-    void this.deps.devices.touch(device.id, this.now()).catch(() => {})
+    // « Vu le » : au plus une fois par minute (la page interroge le PC toutes les secondes pendant une réponse). Sans
+    // attendre : la requête n'en dépend pas ; un échec (fichier verrouillé un instant) laisse la liste intacte.
+    const now = this.now()
+    if (!(now - Date.parse(device.lastSeenAt) < 60_000)) {
+      void this.deps.devices.touch(device.id, now).catch((err: unknown) => console.warn('[phone] « vu le » non enregistré :', err))
+    }
     return device
   }
 
+  /** Oublie les appareils sans essai depuis une minute, puis les plus anciens si la liste reste trop longue. */
+  private forgetOldPairAttempts(now: number): void {
+    if (this.pairAttempts.size <= MAX_TRACKED_SOURCES) return
+    for (const [source, attempts] of this.pairAttempts) if (attempts.every((at) => now - at >= 60_000)) this.pairAttempts.delete(source)
+    for (const source of this.pairAttempts.keys()) {
+      if (this.pairAttempts.size <= MAX_TRACKED_SOURCES) break
+      this.pairAttempts.delete(source)
+    }
+  }
+
+  /**
+   * Relecture croisée : la limite d'essais était COMMUNE à tout internet (l'adresse publique Funnel), et 5 mauvais codes,
+   * de qui que ce soit, annulaient le code de Léo : un inconnu pouvait l'empêcher de connecter son téléphone. Désormais
+   * chaque appareil a sa limite (pairingSource) et ses 5 essais ; seul un très grand nombre d'échecs au total (une force
+   * brute répartie) fait tomber le code.
+   */
   private async pair(req: IncomingMessage): Promise<{ token: string }> {
     const now = this.now()
-    this.pairAttempts = this.pairAttempts.filter((t) => now - t < 60_000)
-    if (this.pairAttempts.length >= PAIRING_ATTEMPTS_PER_MINUTE) throw new HttpError(429, t('phone.err.tooManyAttempts'))
-    this.pairAttempts.push(now)
+    const source = pairingSource(req)
+    const recent = (this.pairAttempts.get(source) ?? []).filter((at) => now - at < 60_000)
+    if (recent.length >= PAIRING_ATTEMPTS_PER_MINUTE) throw new HttpError(429, t('phone.err.tooManyAttempts'))
+    recent.push(now)
+    this.pairAttempts.delete(source)
+    this.pairAttempts.set(source, recent)
+    this.forgetOldPairAttempts(now)
 
     const body = await readJson(req)
     const code = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : ''
     const name = typeof body.name === 'string' ? body.name : t('phone.defaultName')
     const pairing = this.pairing
+    const expired = (): HttpError => new HttpError(403, t('phone.err.codeExpired', { path: `${t('options.title')} → ${t('options.tab.phone')}` }))
     if (!pairing || now > pairing.expiresAt) {
       this.pairing = null
-      throw new HttpError(403, t('phone.err.codeExpired', { path: `${t('options.title')} → ${t('options.tab.phone')}` }))
+      throw expired()
     }
+    // Cet appareil s'est déjà trompé 5 fois sur CE code : il ne peut plus s'en servir, même avec le bon (comme avant pour
+    // Léo, qui affiche alors un nouveau code) — mais le code reste valable pour les autres.
+    const failed = pairing.failuresBySource.get(source) ?? 0
+    if (failed >= PAIRING_ATTEMPTS_PER_CODE) throw expired()
     if (code !== pairing.code) {
-      pairing.attemptsLeft -= 1
-      if (pairing.attemptsLeft <= 0) this.pairing = null
+      pairing.failuresBySource.set(source, failed + 1)
+      pairing.failures += 1
+      if (pairing.failures >= PAIRING_FAILURES_PER_CODE) this.pairing = null
       throw new HttpError(403, t('phone.err.badCode'))
     }
     // Usage unique : le même code ne connecte jamais un second appareil.
@@ -316,7 +387,7 @@ export class PhoneServer {
       if (this.jobs.size <= KEPT_JOBS) break
       if (old.state !== 'running') this.jobs.delete(id)
     }
-    void work(job)
+    job.settled = work(job)
       .then(() => {
         job.state = 'done'
       })
@@ -334,6 +405,16 @@ export class PhoneServer {
         this.busy[lane] = false
       })
     return job
+  }
+
+  /**
+   * Relecture croisée : arrête les créations en cours (images, vidéos) et attend qu'elles soient vraiment finies.
+   * « Déplacer » (main.ts) l'appelle avant de copier les données : le moteur de dessin garde ses fichiers ouverts.
+   */
+  async stopStudioJobs(): Promise<void> {
+    const running = [...this.jobs.values()].filter((job) => job.lane === 'studio' && job.state === 'running')
+    for (const job of running) job.abort?.abort()
+    await Promise.all(running.map((job) => job.settled))
   }
 
   private async answer(job: Job, text: string, mode: 'chat' | 'voice'): Promise<void> {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import http from 'node:http'
 import path from 'node:path'
@@ -217,6 +217,59 @@ test('étape 419 : « Découvrir » — l’adresse vient du catalogue, la conne
   } finally {
     await env.done()
     globalThis.fetch = realFetch
+  }
+})
+
+/**
+ * Relecture croisée : TOUTE erreur de lecture de `mcp-auth/<serveur>.bin` rendait « aucune connexion », gardé en
+ * mémoire ; la demande suivante (le port de retour) réécrivait alors le fichier SANS les clés. Un antivirus qui tient le
+ * fichier un instant suffisait à perdre la connexion à Canva, Notion…
+ */
+test('connexion enregistrée illisible : jamais prise pour vide, jamais réécrite sans ses clés, et dite clairement', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'jaris-mcp-auth-'))
+  const busy = new Set()
+  const realFsp = require('fs/promises')
+  const fsp = {
+    ...realFsp,
+    readFile: async (file, ...rest) => {
+      if (busy.has(file)) throw Object.assign(new Error('EBUSY: simulé'), { code: 'EBUSY' })
+      return realFsp.readFile(file, ...rest)
+    }
+  }
+  const loadAuth = () => {
+    const atomic = loadTsModule('electron/services/atomicFile.ts', { fs: require('fs'), 'fs/promises': fsp, path: require('path') })
+    const auth = loadTsModule('electron/services/mcpAuth.ts', { http: require('http'), 'fs/promises': fsp, path: require('path'), './atomicFile': atomic, './dataLocation': { getDataRoot: () => root } })
+    auth.setMcpSecretBox(BOX)
+    return auth
+  }
+  try {
+    const file = path.join(root, 'mcp-auth', 'canva.bin')
+    mkdirSync(path.dirname(file), { recursive: true })
+    const saved = { client: { client_id: 'jaris' }, tokens: { access_token: 'cle-canva', token_type: 'bearer' }, port: 45678 }
+    writeFileSync(file, BOX.encrypt(JSON.stringify(saved)).toString('base64'))
+    const before = readFileSync(file, 'utf8')
+
+    // Verrouillé : une erreur rédigée pour Léo, rien réécrit, et rien gardé en mémoire comme « vide ».
+    busy.add(file)
+    let auth = loadAuth()
+    await assert.rejects(auth.mcpAuthPort('canva'), (err) => err instanceof auth.McpSignInError && /canva\.bin.*EBUSY/.test(err.message))
+    assert.equal(readFileSync(file, 'utf8'), before, 'le fichier a été réécrit sans ses clés')
+    busy.clear()
+    assert.equal(await auth.mcpAuthPort('canva'), 45678)
+    assert.equal(await auth.hasMcpTokens('canva'), true)
+
+    // Indéchiffrable (chiffrement de Windows changé, fichier abîmé) : pareil, avec la vraie raison.
+    writeFileSync(file, 'pas du tout chiffré')
+    auth = loadAuth()
+    await assert.rejects(auth.mcpAuthPort('canva'), /Rien n'a été effacé/)
+    assert.equal(readFileSync(file, 'utf8'), 'pas du tout chiffré')
+
+    // Absent : aucune connexion, comme avant (« À connecter »).
+    rmSync(file)
+    auth = loadAuth()
+    assert.equal(await auth.hasMcpTokens('canva'), false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })
 

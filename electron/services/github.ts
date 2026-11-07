@@ -1,8 +1,9 @@
 import { safeStorage } from 'electron'
-import { readFile, rm, writeFile } from 'fs/promises'
+import { readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import type { GithubRepoSummary } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
+import { writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 /**
@@ -276,7 +277,22 @@ function tokenPath(): string {
   return join(getDataRoot(), GITHUB_TOKEN_FILE)
 }
 
-/** Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire. */
+/**
+ * Écritures et effacement du fichier du jeton, l'un après l'autre : un effacement (déconnexion) demandé pendant une
+ * écriture encore en cours ne peut jamais être suivi du renommage de cette écriture, qui ferait revenir le jeton.
+ */
+let tokenFileChain: Promise<unknown> = Promise.resolve()
+function onTokenFile<T>(task: () => Promise<T>): Promise<T> {
+  const run = tokenFileChain.then(task, task)
+  tokenFileChain = run.catch(() => undefined)
+  return run
+}
+
+/**
+ * Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire.
+ * Relecture croisée : écrit d'un seul tenant (atomicFile.ts) — écrit par-dessus, une coupure ou un antivirus en pleine
+ * écriture laissait un jeton tronqué, donc illisible : déconnecté.
+ */
 export async function saveGithubToken(token: string | GithubTokenSet): Promise<boolean> {
   const text = serializeTokenSet(token)
   if (!safeStorage.isEncryptionAvailable()) {
@@ -284,7 +300,8 @@ export async function saveGithubToken(token: string | GithubTokenSet): Promise<b
     return false
   }
   memoryToken = null
-  await writeFile(tokenPath(), safeStorage.encryptString(text))
+  const encrypted = safeStorage.encryptString(text)
+  await onTokenFile(() => writeFileAtomic(tokenPath(), encrypted))
   return true
 }
 
@@ -326,7 +343,7 @@ export async function loadGithubToken(): Promise<string | null> {
 
 export async function clearGithubToken(): Promise<void> {
   memoryToken = null
-  await rm(tokenPath(), { force: true })
+  await onTokenFile(() => rm(tokenPath(), { force: true }))
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -369,9 +386,14 @@ export async function readConnectionRecord(): Promise<GithubConnectionRecord | n
   }
 }
 
-/** Une trace qui ne s'écrit pas ne doit jamais faire échouer la connexion elle-même. */
+/**
+ * Une trace qui ne s'écrit pas ne doit jamais faire échouer la connexion elle-même — mais elle n'est plus avalée sans
+ * laisser de trace : c'est elle qui explique une déconnexion (étape 297). D'un seul tenant (atomicFile.ts).
+ */
 export async function writeConnectionRecord(record: GithubConnectionRecord): Promise<void> {
-  await writeFile(recordPath(), JSON.stringify(record, null, 2), 'utf-8').catch(() => {})
+  await writeFileAtomic(recordPath(), JSON.stringify(record, null, 2)).catch((err: unknown) => {
+    console.error('[github] Trace de connexion non enregistrée :', err)
+  })
 }
 
 export async function clearConnectionRecord(): Promise<void> {

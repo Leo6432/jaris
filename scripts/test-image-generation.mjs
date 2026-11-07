@@ -314,6 +314,29 @@ test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', as
   t.cleanup()
 })
 
+// Relecture croisée : « Déplacer » copiait les données pendant qu'un dessin tournait encore — sd.exe garde ouverts les
+// fichiers du dossier image-generation. Le dessin est maintenant arrêté avant la copie, et sa VRAIE sortie attendue.
+test('« Déplacer » : waitForEngineExit attend que le moteur arrêté soit vraiment sorti', async () => {
+  const t = await installed({ holdEngine: true })
+  await t.gen.waitForEngineExit() // rien ne tourne : immédiat
+  const controller = new AbortController()
+  const drawing = t.gen.generateImage('cat', () => {}, controller.signal)
+  for (const end = Date.now() + 5000; !t.gen.lastSpawn && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
+  assert.ok(t.gen.lastSpawn, 'sd-cli aurait dû être lancé')
+  controller.abort()
+  await assert.rejects(drawing, /annulé/)
+  let exited = false
+  const waiting = t.gen.waitForEngineExit().then(() => {
+    exited = true
+  })
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(exited, false, 'rendu la main alors que le moteur tourne encore (fichiers encore ouverts)')
+  t.gen.lastSpawn.emit('exit', 1)
+  await waiting
+  assert.equal(exited, true)
+  t.cleanup()
+})
+
 test('une image n’est relue que par son NOM, jamais par un chemin venu de l’historique', async () => {
   const t = await installed()
   const image = await t.gen.generateImage('cat')

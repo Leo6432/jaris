@@ -159,17 +159,18 @@ export default function UnscoredModelsTest(): JSX.Element | null {
     setError(null)
     setStopping(false)
     try {
-      await window.jaris.testUnscoredModels(choosing ? chosen.map((m) => m.model) : undefined)
-      setPercent(100)
-      setPhase('done')
-    } catch (err) {
-      const message = ipcErrorMessage(err)
-      // Arrêté par le bouton : pas une panne. Le main le dit avec cette phrase (benchmarkRunner.ts, stopModelTestByUser).
-      if (message === t('unscored.stopped')) setPhase('stopped')
-      else {
-        setError(message)
-        setPhase('error')
+      const result = await window.jaris.testUnscoredModels(choosing ? chosen.map((m) => m.model) : undefined)
+      // Arrêté par le bouton : pas une panne. Le main le dit par ce champ (benchmarkRunner.ts, stopModelTestByUser),
+      // jamais par une phrase traduite (la langue peut changer pendant le test).
+      if (result?.stopped) {
+        setPhase('stopped')
+      } else {
+        setPercent(100)
+        setPhase('done')
       }
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+      setPhase('error')
     } finally {
       setStopping(false)
     }

@@ -306,12 +306,14 @@ function startJaris(userData, options) {
     electron: { safeStorage: chromiumSafeStorage(session.app) },
     'fs/promises': fsPromises,
     path: nodePath,
+    './atomicFile': loadAtomicFile(nodeRequire('node:fs')),
     './dataLocation': session.dataLocation
   })
   const { PhoneDeviceStore } = loadTsModule('electron/services/phoneDevices.ts', {
     crypto: nodeRequire('node:crypto'),
     'fs/promises': fsPromises,
-    path: nodePath
+    path: nodePath,
+    './atomicFile': loadAtomicFile(nodeRequire('node:fs'))
   })
   const dataRoot = session.dataLocation.getDataRoot()
   return { ...session, github, devices: new PhoneDeviceStore(join(dataRoot, 'phone-devices.json')), dataRoot }
@@ -1269,6 +1271,12 @@ test('« Déplacer » arrête d’abord ce qui écrit dans les données : accès
   // ATTENDUS (await) : un programme encore en train de sortir garde ses fichiers ouverts, et Windows refuse alors de
   // les effacer de l'ancien dossier.
   for (const stop of ['await stopModelTest()', 'await phoneAccess?.disable()']) {
+    const at = handler.indexOf(stop)
+    assert.ok(at !== -1 && at < moveAt, `${stop} doit venir avant relocateEverything`)
+  }
+  // Relecture croisée : le dessin, la vidéo et le code en cours (sur le PC ET depuis le téléphone) s'arrêtent aussi, et
+  // la vraie sortie du moteur de dessin (sd.exe, qui garde ses fichiers ouverts) est attendue avant la copie.
+  for (const stop of ['codeGenAbort?.abort()', 'imageStudioAbort?.abort()', 'videoStudioAbort?.abort()', 'phoneAccess?.stopStudioJobs()', 'await phoneStudioStopped', 'await waitForEngineExit()']) {
     const at = handler.indexOf(stop)
     assert.ok(at !== -1 && at < moveAt, `${stop} doit venir avant relocateEverything`)
   }

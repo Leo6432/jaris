@@ -352,7 +352,7 @@ export async function generateVideo(
     }
     if (signal?.aborted) throw new Error(t('engine.cancelled.video'))
     // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
-    const drawn = await drawingPrompt(text, onLog, translate)
+    const drawn = await drawingPrompt(text, onLog, translate, signal)
     if (signal?.aborted) throw new Error(t('engine.cancelled.video'))
 
     // Étape 437 : la carte de CE PC, même quand une machine louée fait tourner les modèles.

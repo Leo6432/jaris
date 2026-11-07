@@ -77,6 +77,11 @@ export class PhoneAccessManager extends EventEmitter {
     await tunnelStopped
   }
 
+  /** Arrête les images et vidéos demandées depuis le téléphone, et attend leur fin (« Déplacer », main.ts). */
+  stopStudioJobs(): Promise<void> {
+    return this.server.stopStudioJobs()
+  }
+
   /** Nouveau code, uniquement quand l'adresse est prête (sinon le téléphone n'aurait rien à ouvrir). */
   createPairing(): PhonePairing {
     const tunnel = this.tunnel.state

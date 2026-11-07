@@ -42,12 +42,17 @@ export function saveProfile(profile: Profile): Promise<void> {
  * prise à son ouverture et la réécrivait en entier à chaque réglage : tout ce que Jaris avait changé entre-temps
  * (modèles après « Retester la configuration », micro, modèle choisi dans le Chat…) revenait à l'ancienne valeur.
  * null sans profil (premier lancement) : rien n'est créé à partir d'un simple réglage.
+ *
+ * Relecture croisée : `change` peut aussi être une fonction du profil relu ICI, dans la file — pour un champ qui se
+ * calcule à partir de sa valeur actuelle (réflexion choisie pour UN mode, modèles bloqués…). Lire le profil, attendre
+ * Ollama, puis réécrire le profil entier (main.ts, benchmarkRunner.ts) effaçait ce qui avait changé pendant l'attente :
+ * le micro choisi pendant qu'Options enregistrait la voix, par exemple.
  */
-export function patchProfile(change: Partial<Profile>): Promise<Profile | null> {
+export function patchProfile(change: Partial<Profile> | ((current: Profile) => Partial<Profile>)): Promise<Profile | null> {
   return exclusive(async () => {
     const current = await getProfile()
     if (!current) return null
-    const updated = { ...current, ...change }
+    const updated = { ...current, ...(typeof change === 'function' ? change(current) : change) }
     await writeFileAtomic(profilePath, JSON.stringify(updated, null, 2))
     return updated
   })

@@ -218,19 +218,22 @@ export class VoiceClient extends EventEmitter {
       })
 
       proc.on('exit', (code) => {
+        const reason = settled ? t('voice.stopped', { code: String(code) }) : t('voice.stoppedEarly', { code: String(code) })
+        // Relecture croisée : un message vocal du téléphone en cours de transcription attendait 2 minutes une réponse qui
+        // ne viendrait plus jamais. Il échoue tout de suite, avec la vraie raison.
+        this.rejectFileTranscripts(proc, reason)
         // Un arrêt voulu (stop) a déjà détaché ce process : son statut n'a plus à changer.
-        if (this.proc === proc && this.status.state !== 'failed') {
-          this.setStatus({
-            state: 'failed',
-            message: settled ? t('voice.stopped', { code: String(code) }) : t('voice.stoppedEarly', { code: String(code) })
-          })
+        if (this.proc === proc && this.status.state !== 'failed') this.setStatus({ state: 'failed', message: reason })
+        // Seulement s'il est encore le programme en cours : un nouveau, lancé juste après un arrêt, reste en place.
+        if (this.proc === proc) {
+          this.proc = null
+          this.ready = null
         }
-        this.proc = null
-        this.ready = null
         if (!settled) rejectReady(new Error(t('voice.stoppedEarly', { code: String(code) })))
       })
 
       proc.on('error', (err) => {
+        this.rejectFileTranscripts(proc, err.message)
         if (this.proc === proc) this.setStatus({ state: 'failed', message: err.message })
         if (!settled) rejectReady(err)
       })
@@ -240,14 +243,25 @@ export class VoiceClient extends EventEmitter {
   }
 
   stop(): void {
-    this.proc?.kill()
+    const proc = this.proc
+    proc?.kill()
     this.proc = null
     this.ready = null
+    if (proc) this.rejectFileTranscripts(proc, t('voice.listeningStopped'))
     this.setStatus({ state: 'off' })
   }
 
   private wakePaused = false
-  private fileTranscripts = new Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>()
+  private fileTranscripts = new Map<string, { resolve: (text: string) => void; reject: (err: Error) => void; proc: VoiceServerProcess }>()
+
+  /** Les transcriptions demandées à `proc` ne recevront jamais de réponse : elles échouent maintenant, avec la raison. */
+  private rejectFileTranscripts(proc: VoiceServerProcess, reason: string): void {
+    for (const [id, pending] of this.fileTranscripts) {
+      if (pending.proc !== proc) continue
+      this.fileTranscripts.delete(id)
+      pending.reject(new Error(t('voice.transcriptionInterrupted', { reason })))
+    }
+  }
 
   /**
    * Transcrit un fichier WAV 16 kHz mono (message vocal du téléphone, étape 214) avec le modèle déjà chargé
@@ -256,7 +270,8 @@ export class VoiceClient extends EventEmitter {
   transcribeFile(path: string, timeoutMs = 120_000): Promise<string> {
     // Sans micro (étape 346), le programme d'écoute tourne quand même : les messages du téléphone restent transcrits.
     const reason = this.status.state === 'noMic' ? null : listeningUnavailableReason(this.status)
-    if (reason || !this.proc) return Promise.reject(new Error(reason ?? t('voice.notRunningPc')))
+    const proc = this.proc
+    if (reason || !proc) return Promise.reject(new Error(reason ?? t('voice.notRunningPc')))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -271,9 +286,10 @@ export class VoiceClient extends EventEmitter {
         reject: (err) => {
           clearTimeout(timer)
           reject(err)
-        }
+        },
+        proc
       })
-      this.proc?.stdin.write(`transcribe-file ${JSON.stringify({ id, path })}\n`)
+      proc.stdin.write(`transcribe-file ${JSON.stringify({ id, path })}\n`)
     })
   }
 

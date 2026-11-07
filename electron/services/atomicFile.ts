@@ -107,12 +107,14 @@ export function writeFileAtomicSync(file: string, content: string, options: Atom
 /** Une écriture à la fois par fichier : deux écritures simultanées partageraient le même temporaire. */
 const writeQueues = new Map<string, Promise<void>>()
 
-async function writeNow(file: string, content: string): Promise<void> {
+async function writeNow(file: string, content: string | Uint8Array): Promise<void> {
   await mkdir(dirname(file), { recursive: true })
   const temporary = `${file}${TEMPORARY_SUFFIX}`
   const handle = await open(temporary, 'w')
   try {
-    await handle.writeFile(content, 'utf-8')
+    // Un texte en UTF-8 ; des octets (jeton chiffré par Windows, par exemple) tels quels.
+    if (typeof content === 'string') await handle.writeFile(content, 'utf-8')
+    else await handle.writeFile(content)
     await handle.sync()
   } finally {
     await handle.close()
@@ -134,9 +136,10 @@ async function writeNow(file: string, content: string): Promise<void> {
 
 /**
  * Écrit `file` d'un seul tenant (version asynchrone des magasins de données). Les écritures d'un même fichier passent
- * l'une après l'autre, dans l'ordre demandé : la dernière demandée est celle qui reste.
+ * l'une après l'autre, dans l'ordre demandé : la dernière demandée est celle qui reste. `content` : un texte (UTF-8) ou
+ * des octets (jeton GitHub et clé Claude chiffrés par Windows).
  */
-export function writeFileAtomic(file: string, content: string): Promise<void> {
+export function writeFileAtomic(file: string, content: string | Uint8Array): Promise<void> {
   const previous = writeQueues.get(file) ?? Promise.resolve()
   const next = previous.catch(() => {}).then(() => writeNow(file, content))
   writeQueues.set(file, next)

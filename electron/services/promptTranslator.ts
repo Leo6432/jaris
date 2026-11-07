@@ -21,14 +21,71 @@ export const TRANSLATE_SYSTEM_PROMPT = [
 ].join('\n')
 
 export interface TranslateDeps {
-  chat: (messages: OllamaMessage[], model: string) => Promise<string>
+  chat: (messages: OllamaMessage[], model: string, signal?: AbortSignal) => Promise<string>
   model: () => Promise<string>
 }
 
+/**
+ * Sans le moindre fragment d'Ollama pendant ce temps (chargement du modèle compris), la traduction est abandonnée et le
+ * dessin part avec la demande telle quelle. Relecture croisée : c'était une limite de 60 s au TOTAL (une traduction qui
+ * avançait était coupée) ; c'est maintenant une limite d'INACTIVITÉ.
+ */
+export const TRANSLATE_IDLE_MS = 60_000
+
+/** Seule la première ligne sert (cleanTranslation) : dès qu'elle est complète, inutile d'attendre la suite. */
+export function firstLineComplete(text: string): boolean {
+  return /\S[^\n]*\n/.test(text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, ''))
+}
+
+/**
+ * La traduction par Ollama, en flux. Relecture croisée :
+ * - fenêtre de contexte AUTOMATIQUE, la même que les autres demandes au modèle rapide : la fenêtre fixe de 2048 obligeait
+ *   Ollama à recharger ce modèle (avant le dessin, puis de nouveau à la question suivante) ;
+ * - surveillée par inactivité (TRANSLATE_IDLE_MS), et arrêtée par « Arrêter » (le signal de l'appelant) ;
+ * - arrêtée dès que la première ligne est complète : un petit modèle qui se met à raconter ne tourne pas sans fin.
+ */
+export async function translateWithOllama(
+  messages: OllamaMessage[],
+  model: string,
+  signal?: AbortSignal,
+  request: typeof chatWithOllama = chatWithOllama,
+  idleMs = TRANSLATE_IDLE_MS
+): Promise<string> {
+  const controller = new AbortController()
+  let text = ''
+  let enough = false
+  let idle: ReturnType<typeof setTimeout> | undefined
+  const alive = (): void => {
+    clearTimeout(idle)
+    idle = setTimeout(() => controller.abort(), idleMs)
+  }
+  const stop = (): void => controller.abort()
+  if (signal?.aborted) stop()
+  signal?.addEventListener('abort', stop, { once: true })
+  alive()
+  try {
+    // Sans réflexion : une traduction d'une ligne n'en a pas besoin, et la réflexion d'un petit modèle peut durer
+    // plus longtemps que le dessin lui-même.
+    const reply = await request(messages, [], model, false, controller.signal, undefined, (delta) => {
+      alive()
+      text += delta
+      if (firstLineComplete(text)) {
+        enough = true
+        controller.abort()
+      }
+    }, alive)
+    return reply.content ?? text
+  } catch (err) {
+    if (enough) return text
+    throw err
+  } finally {
+    clearTimeout(idle)
+    signal?.removeEventListener('abort', stop)
+  }
+}
+
 const defaultDeps: TranslateDeps = {
-  // Sans réflexion : une traduction d'une ligne n'en a pas besoin, et la réflexion d'un petit modèle peut durer
-  // plus longtemps que le dessin lui-même.
-  chat: async (messages, model) => (await chatWithOllama(messages, [], model, false, AbortSignal.timeout(60_000), 2048)).content ?? '',
+  chat: (messages, model, signal) => translateWithOllama(messages, model, signal),
   // Le modèle rapide : celui qui se charge le plus vite, et largement assez bon pour traduire une phrase.
   model: async () => (await getProfile())?.models?.flash ?? config.ollama.model
 }
@@ -50,8 +107,11 @@ export function cleanTranslation(raw: string, original: string): string | null {
   return cleaned
 }
 
-/** La demande en anglais, ou telle quelle si la traduction est impossible (Ollama arrêté, réponse inexploitable). */
-export async function toEnglishPrompt(prompt: string, deps: TranslateDeps = defaultDeps): Promise<{ text: string; translated: boolean }> {
+/**
+ * La demande en anglais, ou telle quelle si la traduction est impossible (Ollama arrêté, réponse inexploitable, plus de
+ * signe de vie). `signal` : « Arrêter » du dessin en cours, qui arrête aussi la traduction.
+ */
+export async function toEnglishPrompt(prompt: string, signal?: AbortSignal, deps: TranslateDeps = defaultDeps): Promise<{ text: string; translated: boolean }> {
   try {
     const model = await deps.model()
     const raw = await deps.chat(
@@ -59,7 +119,8 @@ export async function toEnglishPrompt(prompt: string, deps: TranslateDeps = defa
         { role: 'system', content: TRANSLATE_SYSTEM_PROMPT },
         { role: 'user', content: prompt }
       ],
-      model
+      model,
+      signal
     )
     const text = cleanTranslation(raw, prompt)
     return text ? { text, translated: true } : { text: prompt, translated: false }

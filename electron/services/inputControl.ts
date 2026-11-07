@@ -163,27 +163,57 @@ const KEY_CODES: Record<string, number> = {
  * script PowerShell lui-même (risque d'injection), il passe par une variable d'environnement que le
  * script relit avec $env:, jamais réinterprétée comme du code.
  */
-function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv): Promise<string | null> {
+/**
+ * Relecture croisée : sans limite, un PowerShell figé (Windows qui ne répond plus, compilation bloquée par un antivirus)
+ * laissait l'action en cours — et toute la réponse de Jaris — attendre pour toujours. Au-delà de ce délai (compilation
+ * de l'aide C# comprise, ~1 à 3 s d'habitude), PowerShell est arrêté, avec un vrai message.
+ */
+export const POWERSHELL_TIMEOUT_MS = 30_000
+/** TypeUnicode attend 5 ms par caractère : un long texte a droit à plus de temps (10 ms par caractère). */
+export const TYPE_TIMEOUT_PER_CHAR_MS = 10
+
+/** Tout l'arbre (Add-Type lance le compilateur C# à côté de PowerShell), comme le moteur de dessin. */
+function killTree(proc: ReturnType<typeof spawn>): void {
+  if (process.platform === 'win32' && proc.pid) {
+    execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => {})
+  } else {
+    proc.kill()
+  }
+}
+
+function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, timeoutMs = POWERSHELL_TIMEOUT_MS): Promise<string | null> {
   const script = `Add-Type -TypeDefinition @'${INPUT_HELPER_CS}'@ -ErrorAction Stop\n${invocation}`
   return new Promise((resolve) => {
     const proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true,
       env: env ?? process.env
     })
+    let done = false
+    const finish = (value: string | null): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => {
+      killTree(proc)
+      finish(t('input.timeout', { seconds: Math.round(timeoutMs / 1000) }))
+    }, timeoutMs)
     let stderr = ''
     proc.stderr?.on('data', (chunk) => (stderr += chunk.toString()))
-    proc.on('error', (err) => resolve(err.message))
-    proc.on('close', (code) => resolve(code === 0 ? null : stderr.trim() || `code de sortie ${code}`))
+    proc.on('error', (err) => finish(err.message))
+    proc.on('close', (code) => finish(code === 0 ? null : stderr.trim() || `code de sortie ${code}`))
   })
 }
 
 /** Tape du texte à l'endroit où se trouve le focus actuel (champ de texte, barre de recherche...). */
 export async function typeText(text: string): Promise<string> {
   if (!text.trim()) return "Aucun texte à taper."
-  const error = await runPowerShell('[JarisInput]::TypeUnicode($env:JARIS_TYPE_TEXT)', {
-    ...process.env,
-    JARIS_TYPE_TEXT: text
-  })
+  const error = await runPowerShell(
+    '[JarisInput]::TypeUnicode($env:JARIS_TYPE_TEXT)',
+    { ...process.env, JARIS_TYPE_TEXT: text },
+    POWERSHELL_TIMEOUT_MS + text.length * TYPE_TIMEOUT_PER_CHAR_MS
+  )
   return error ? t('input.typeFailed', { error }) : `Texte tapé.`
 }
 

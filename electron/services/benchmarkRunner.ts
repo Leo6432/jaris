@@ -10,7 +10,7 @@ import { writeFileAtomic } from './atomicFile'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
 import { MACHINE_DISK_RESERVED_GB, connectedMachine } from './remoteMachine'
 import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
-import { getProfile, saveProfile } from './profileStore'
+import { getProfile, patchProfile } from './profileStore'
 import type { CapacityScanResult, ModelTiers, ModelToTest } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
 import { isVideoQualityInstalled } from './videoGenerator'
@@ -208,8 +208,9 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
     const models = { flash: inService(roles[0]), medium: inService(roles[1]), large: inService(roles[2]) }
     const voiceModels = voiceRoles ? { flash: inService(voiceRoles[0]), medium: inService(voiceRoles[1]), large: inService(voiceRoles[2]) } : undefined
     const sameAsChat = !voiceModels || (voiceModels.flash === models.flash && voiceModels.medium === models.medium && voiceModels.large === models.large)
-    await saveProfile({
-      ...profile,
+    // Relecture croisée : seulement les champs de la configuration, sur le profil RELU après les téléchargements et les
+    // suppressions (patchProfile) — réécrire la copie lue avant effaçait tout réglage fait pendant ce temps (micro, voix…).
+    await patchProfile((current) => ({
       models,
       voiceModels: sameAsChat ? undefined : voiceModels,
       visionModel: inService(roles[3]),
@@ -220,10 +221,10 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
       // Étape 138 : mémorisé pour que la carte "Modèles choisis pour ta machine" explique pourquoi le
       // meilleur modèle n'est pas celui utilisé ; oublié dès qu'un téléchargement du même modèle réussit.
       blockedModels: Object.fromEntries([
-        ...Object.entries(profile.blockedModels ?? {}).filter(([model]) => !pulledOk.has(model) && !blockedReasons.has(model)),
+        ...Object.entries(current.blockedModels ?? {}).filter(([model]) => !pulledOk.has(model) && !blockedReasons.has(model)),
         ...blockedReasons
       ])
-    })
+    }))
   }
 
   // Le modèle vidéo, pour le résumé de fin : même décision que la ligne « Vidéo » de la carte des modèles. Jamais
@@ -420,10 +421,15 @@ export function stopModelTest(): Promise<void> {
  * `chosen` (étape 436) : seulement ces modèles, parmi ceux qui sont VRAIMENT à tester — un nom venu de l'écran qui n'y
  * est pas est ignoré. Absent : tous, comme avant. Le script ne rejoue aussi que leurs cas à refaire (inOnlyModels).
  */
+/**
+ * `stopped` : arrêté par le bouton « Arrêter le test » (stopModelTestByUser) — une fin voulue, pas une panne. Relecture
+ * croisée : c'était un rejet avec la phrase traduite « Test arrêté », que l'écran comparait à SA traduction : la langue
+ * changée entre-temps, un arrêt voulu s'affichait comme une panne.
+ */
 export async function testUnscoredModels(
   onLine: (line: string) => void,
   chosen?: readonly string[]
-): Promise<{ models: string[]; resultsPath: string }> {
+): Promise<{ models: string[]; resultsPath: string; stopped?: boolean }> {
   const models = chosen ? getModelsToTest().filter((m) => chosen.includes(m)) : getModelsToTest()
   const resultsPath = unscoredResultsPath()
   if (!models.length) return { models, resultsPath }
@@ -440,7 +446,7 @@ export async function testUnscoredModels(
   } finally {
     preparingTest = false
   }
-  if (stopAsked) throw new Error(t('unscored.stopped'))
+  if (stopAsked) return { models, resultsPath, stopped: true }
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
       windowsHide: true,
@@ -507,7 +513,7 @@ export async function testUnscoredModels(
       if (runningTest === proc) runningTest = null
       if (runningTestExit === exit) runningTestExit = null
       if (buffer.trim()) onLine(buffer)
-      if (stopAsked) reject(new Error(t('unscored.stopped')))
+      if (stopAsked) resolve({ models, resultsPath, stopped: true })
       else if (code === 0) resolve({ models, resultsPath })
       else reject(new Error(t('bench.testStopped', { code: code ?? '?' })))
     })

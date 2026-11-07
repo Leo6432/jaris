@@ -17,6 +17,7 @@ const electron = { app: { getPath: () => '/donnees' }, safeStorage: { isEncrypti
 const realGithub = loadTsModule('electron/services/github.ts', {
   electron,
   'fs/promises': { readFile: async () => Buffer.from(''), writeFile: async () => {}, rm: async () => {} },
+  './atomicFile': { writeFileAtomic: async () => {} },
   path: { join },
   './dataLocation': { getDataRoot: () => '/donnees' }
 })
@@ -130,6 +131,11 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
         ...(state.token && state.refreshToken ? { refreshToken: state.refreshToken, expiresAt: state.expiresAt } : {})
       }),
       saveGithubToken: async (value) => {
+        // Relecture croisée : une écriture refusée par Windows (antivirus qui tient le fichier).
+        if (state.saveFails > 0) {
+          state.saveFails -= 1
+          throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+        }
         const set = typeof value === 'string' ? { token: value, refreshToken: null, expiresAt: null } : value
         Object.assign(state, { token: set.token, refreshToken: set.refreshToken, expiresAt: set.expiresAt })
         return !state.memoryOnly
@@ -461,6 +467,38 @@ test('jeton refusé en plein travail : un seul renouvellement pour deux demandes
   assert.equal(state.refreshCalls, 1)
   assert.equal(state.token, 'gho_1')
   assert.equal(state.cleared, 0)
+})
+
+// Relecture croisée : le jeton était écrit AVANT d'être gardé en mémoire. Une écriture refusée un instant (antivirus)
+// perdait le nouveau jeton alors que GitHub venait de consommer l'ancien jeton de renouvellement : déconnecté pour de bon.
+const waitUntil = async (condition) => {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 5))
+}
+
+test('jeton renouvelé mais pas écrit (fichier verrouillé) : il sert quand même, rien n’est perdu, il est écrit ensuite', async () => {
+  const { session, state } = expiring()
+  state.saveFails = 1
+  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: true, login: 'leo' }, 'la demande a échoué ou Léo est déconnecté')
+  assert.equal(state.refreshCalls, 1)
+  assert.equal(state.cleared, 0, 'la connexion a été effacée')
+  assert.equal(state.saveFails, 0, 'l’écriture n’a pas été tentée')
+  // Les demandes suivantes partent avec le nouveau jeton (l'ancien est refusé), et l'écriture est refaite à côté.
+  assert.equal((await session.listGithubRepos()).length, 1)
+  await waitUntil(() => state.token === 'gho_1')
+  assert.deepEqual([state.token, state.refreshToken], ['gho_1', 'ghr_1'])
+  assert.equal(state.refreshCalls, 1, 'aucun renouvellement de plus')
+})
+
+test('jeton renouvelé pas encore écrit, puis déconnexion : il ne revient jamais sur le disque', async () => {
+  const { session, state } = expiring()
+  state.saveFails = 100
+  assert.equal((await session.getGithubStatus()).connected, true)
+  await session.logoutGithub()
+  // Le fichier redevient accessible : un essai d'écriture encore prévu remettrait le jeton d'avant la déconnexion.
+  state.saveFails = 0
+  await session.getGithubStatus()
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(state.token, null)
 })
 
 test('renouvellement refusé : la connexion est vraiment perdue, et l’écran le dit', async () => {

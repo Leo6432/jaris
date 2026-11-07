@@ -357,10 +357,39 @@ export interface EngineWording {
 
 const IMAGE_WORDING: EngineWording = { step: 'engine.step.image', finishing: 'engine.finishing.image', cancelled: 'engine.cancelled.image' }
 
+/**
+ * Les moteurs (sd.exe) lancés et pas encore sortis. « Arrêter » rend la main tout de suite, sans attendre leur sortie ;
+ * « Déplacer » (main.ts), lui, doit l'attendre : un moteur encore en train de sortir garde ouverts les fichiers du
+ * dossier image-generation, que la copie lit puis efface.
+ */
+const runningEngines = new Set<Promise<void>>()
+/** Attente maximale de la sortie d'un moteur arrêté (taskkill /F le fait sortir en une fraction de seconde). */
+export const ENGINE_EXIT_WAIT_MS = 15_000
+
+/** Se résout quand plus aucun moteur ne tourne (ou au bout de `maxMs`). */
+export function waitForEngineExit(maxMs = ENGINE_EXIT_WAIT_MS): Promise<void> {
+  if (!runningEngines.size) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const giveUp = setTimeout(resolve, maxMs)
+    giveUp.unref?.()
+    void Promise.all([...runningEngines]).then(() => {
+      clearTimeout(giveUp)
+      resolve()
+    })
+  })
+}
+
 export function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal, wording: EngineWording = IMAGE_WORDING): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error(t(wording.cancelled)))
     const proc = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const exited = new Promise<void>((done) => {
+      proc.once('exit', () => done())
+      proc.once('close', () => done())
+      proc.once('error', () => done())
+    })
+    runningEngines.add(exited)
+    void exited.then(() => runningEngines.delete(exited))
     const lastLines: string[] = []
     let lastStep = 0
     let stepTotal = 0
@@ -466,16 +495,17 @@ export function releaseEngine(): void {
  * Étape 292 : traduit une demande en anglais avant le dessin (promptTranslator.ts, branché par main.ts pour les
  * demandes tapées par Léo ; l'outil du Chat, lui, écrit déjà sa description en anglais).
  */
-export type PromptTranslate = (prompt: string) => Promise<{ text: string; translated: boolean }>
+export type PromptTranslate = (prompt: string, signal?: AbortSignal) => Promise<{ text: string; translated: boolean }>
 
 /**
  * Le texte réellement envoyé au modèle de dessin : la demande traduite si une traduction est demandée. Le nom du
  * fichier, lui, garde les mots de Léo (« Un chat » dans la liste, pas « A cat »).
  */
-export async function drawingPrompt(text: string, onLog: Log, translate?: PromptTranslate): Promise<string> {
+export async function drawingPrompt(text: string, onLog: Log, translate?: PromptTranslate, signal?: AbortSignal): Promise<string> {
   if (!translate) return text
   onLog(t('image.translating'))
-  const result = await translate(text)
+  // « Arrêter » pendant la traduction l'arrête aussi (promptTranslator.ts), au lieu d'attendre qu'elle finisse.
+  const result = await translate(text, signal)
   const english = cleanPrompt(result.text)
   if (!result.translated || !english) return text
   if (english.toLowerCase() !== text.toLowerCase()) onLog(t('image.translated', { text: english }))
@@ -514,7 +544,7 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     const models = modelPaths()
     if (signal?.aborted) throw new Error(t('engine.cancelled.image'))
     // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
-    const drawn = await drawingPrompt(text, onLog, translate)
+    const drawn = await drawingPrompt(text, onLog, translate, signal)
     if (signal?.aborted) throw new Error(t('engine.cancelled.image'))
 
     // Le modèle de conversation est encore chargé sur la carte graphique (il vient de décider de dessiner) :

@@ -129,6 +129,8 @@ async function closeConnection(connection: Connection): Promise<void> {
 
 /** Le message lisible d'un échec de démarrage, avec ce que le serveur a lui-même écrit quand il a écrit quelque chose. */
 export function startFailure(server: McpServerConfig, err: unknown, stderr: string): string {
+  // Déjà rédigé pour Léo (connexion enregistrée illisible, mcpAuth.ts) : jamais déguisé en « ne répond pas ».
+  if (err instanceof McpSignInError) return err.message
   const code = (err as { code?: string } | null)?.code
   if (code === 'ENOENT' && server.transport.kind === 'stdio') return t('mcp.error.commandNotFound', { command: server.transport.command })
   const said = lastLines(stderr)

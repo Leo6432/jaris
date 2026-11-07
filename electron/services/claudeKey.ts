@@ -1,6 +1,7 @@
 import { safeStorage } from 'electron'
-import { readFile, rm, writeFile } from 'fs/promises'
+import { readFile, rm } from 'fs/promises'
 import { join } from 'path'
+import { writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 /**
@@ -24,14 +25,17 @@ export function cleanClaudeKey(value: unknown): string | null {
   return /^sk-ant-[A-Za-z0-9_-]{20,300}$/.test(key) ? key : null
 }
 
-/** Enregistre la clé. Renvoie `false` quand Windows n'a pas pu la chiffrer : elle n'est alors gardée qu'en mémoire. */
+/**
+ * Enregistre la clé. Renvoie `false` quand Windows n'a pas pu la chiffrer : elle n'est alors gardée qu'en mémoire.
+ * D'un seul tenant (atomicFile.ts) : une coupure en pleine écriture laisse l'ancienne clé intacte, jamais une clé tronquée.
+ */
 export async function saveClaudeKey(key: string): Promise<boolean> {
   if (!safeStorage.isEncryptionAvailable()) {
     memoryKey = key
     return false
   }
   memoryKey = null
-  await writeFile(keyPath(), safeStorage.encryptString(key))
+  await writeFileAtomic(keyPath(), safeStorage.encryptString(key))
   return true
 }
 

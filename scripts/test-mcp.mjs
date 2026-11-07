@@ -282,3 +282,28 @@ test('étape 425 : catalogMatches — chaque mot tapé, sans accents ni majuscul
   assert.equal(catalog.catalogMatches('canva mail', card), false, 'tous les mots')
   assert.equal(catalog.catalogMatches('figma', card), false)
 })
+
+/**
+ * Relecture croisée : les Options affichaient l'adresse ou la commande d'un serveur EN ENTIER, clé comprise
+ * (« ?api_key=… », « /mcp/sk-…/sse », « --token … ») ; une capture d'écran envoyée pour de l'aide la donnait.
+ */
+test('ce que les Options affichent d’un serveur ne montre jamais sa clé', () => {
+  const http = (url) => mcp.transportSummary({ kind: 'http', url, headers: {} })
+  const stdio = (command, args) => mcp.transportSummary({ kind: 'stdio', command, args, env: {} })
+  assert.equal(http('https://mcp.canva.com/mcp'), 'https://mcp.canva.com/mcp', 'une adresse sans clé reste lisible')
+  assert.equal(http('https://api.githubcopilot.com/mcp/'), 'https://api.githubcopilot.com/mcp/')
+  assert.equal(http('https://mcp.exemple.fr/mcp?api_key=abc123secret'), 'https://mcp.exemple.fr/mcp?•••')
+  assert.equal(http('https://mcp.exemple.fr/mcp/sk-ab12cd34ef56gh78ij90/sse'), 'https://mcp.exemple.fr/mcp/•••/sse')
+  assert.equal(http('https://mcp.zapier.com/api/mcp/s/Zm9vYmFyMTIzNDU2Nzg5MGFiY2Rl/sse'), 'https://mcp.zapier.com/api/mcp/s/•••/sse')
+  assert.equal(http('https://leo:motdepasse@mcp.exemple.fr/mcp'), 'https://•••@mcp.exemple.fr/mcp')
+  assert.equal(http('https://mcp.exemple.fr/v3/mcp/123e4567-e89b-12d3-a456-426614174000/mcp'), 'https://mcp.exemple.fr/v3/mcp/•••/mcp')
+  assert.equal(stdio('npx', ['-y', '@modelcontextprotocol/server-filesystem@2.0.0', 'C:\\Users\\Léo']), 'npx -y @modelcontextprotocol/server-filesystem@2.0.0 C:\\Users\\Léo')
+  assert.equal(stdio('npx', ['-y', 'mon-serveur', '--api-key', 'abcdefgh12345678xyz']), 'npx -y mon-serveur --api-key •••')
+  assert.equal(stdio('uvx', ['serveur', '--token=court']), 'uvx serveur --token=•••')
+  assert.equal(
+    stdio('npx', ['mcp-remote', 'https://mcp.exemple.fr/sse?key=x', '--header', 'Authorization: Bearer sk-ant-api03-abcdefghijkl']),
+    'npx mcp-remote https://mcp.exemple.fr/sse?••• --header "Authorization: Bearer •••"'
+  )
+  assert.equal(stdio('node', ['serveur.js', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789']), 'node serveur.js •••')
+  for (const word of ['server-filesystem', 'mcp', 'modelcontextprotocol', '2026-11-07', 'C:\\Users\\Léo\\Documents']) assert.equal(mcp.looksLikeSecret(word), false, word)
+})
