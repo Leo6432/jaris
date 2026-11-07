@@ -135,7 +135,7 @@ declare global {
       setModelChoice: (mode: ModelChoiceMode, model: string | null) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
       getUnscoredModels: () => Promise<ModelToTest[]>
-      testUnscoredModels: () => Promise<{ models: string[]; resultsPath: string }>
+      testUnscoredModels: (models?: string[]) => Promise<{ models: string[]; resultsPath: string }>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void

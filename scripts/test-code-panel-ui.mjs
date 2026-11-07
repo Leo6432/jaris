@@ -56,7 +56,9 @@ const settled = (cb) => (value) => {
 
 // __presetApps : la liste telle qu'un redémarrage la retrouve (test des conversations conservées, étape 288).
 window.__apps = window.__presetApps ?? [
-  { path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() - 3600_000 },
+  // Une heure plus tôt, mais jamais avant minuit : lancé juste après minuit, « il y a 1 h » tombait la veille et le test
+  // attendait « Aujourd'hui » (vu le 07/11/2026 à 00:18).
+  { path: 'C:/apps/liste', label: 'liste de courses', timestamp: Math.max(Date.now() - 3600_000, new Date().setHours(0, 0, 0, 0)) },
   { path: 'C:/apps/snake', label: 'jeu snake', timestamp: Date.now() - 90_000_000 }
 ]
 window.__deleted = []

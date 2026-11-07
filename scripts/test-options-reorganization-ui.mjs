@@ -111,8 +111,9 @@ const overrides = {
     window.__pull = cb
     return () => { window.__pull = null }
   },
-  testUnscoredModels: () => {
+  testUnscoredModels: (models) => {
     window.__testCalls = (window.__testCalls ?? 0) + 1
+    window.__testedModels = models ?? null
     return new Promise((resolve) => (window.__finishTest = () => resolve({ models: [], resultsPath: 'x' })))
   },
   getModelOverview: async () => ({
@@ -672,6 +673,40 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
     assert.match(results, /sauté — téléchargement impossible : pull model manifest: file does not exist/)
     // Habillé par le CSS de Jaris (carte), pas du texte nu.
     assert.equal(await page.$eval('.options-menu__unscored', (el) => getComputedStyle(el).borderStyle), 'solid')
+    assert.equal(await page.evaluate(() => window.__testedModels), null, '« Tout tester » : aucune sélection envoyée')
+  })
+})
+
+// Étape 436 (Léo : « pouvoir choisir : tout tester, ou choisir comme les duels, avec le temps — gros modèles quand j'ai
+// le temps, petits sinon »).
+test('« Choisir les modèles » : cases à cocher avec la durée, total de la sélection, seule la sélection est testée', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-menu__unscored')
+    const modes = page.locator('.options-menu__unscored-mode [role="radio"]')
+    assert.deepEqual(await modes.allTextContents(), ['Tout tester', 'Choisir les modèles'])
+    assert.equal(await page.getAttribute('.options-menu__unscored-mode [role="radio"]:has-text("Tout tester")', 'aria-checked'), 'true', 'par défaut : tout, comme avant')
+    await page.click('.options-menu__unscored-mode [role="radio"]:has-text("Choisir les modèles")')
+
+    const picks = page.locator('.options-menu__unscored-picks [role="checkbox"]')
+    assert.equal(await picks.count(), 2)
+    assert.match(await picks.nth(0).textContent(), /qwen2\.5-coder:14b.*outils, vision — environ 1 h 35/i)
+    assert.equal(await page.locator('.options-menu__unscored-picks [aria-checked="true"]').count(), 0, 'rien de coché au départ')
+    assert.match(await page.textContent('.options-menu__unscored-total'), /^Modèles choisis : 0$/)
+    assert.equal(await page.isDisabled('.options-menu__unscored button:has-text("Tester la sélection")'), true, 'rien de coché : rien à lancer')
+
+    // Peu de temps : seulement le petit.
+    await picks.nth(1).click()
+    assert.equal(await picks.nth(1).getAttribute('aria-checked'), 'true')
+    assert.match(await page.textContent('.options-menu__unscored-total'), /^Modèles choisis : 1 — environ 7 min$/)
+    // Les cases du duel, habillées par le CSS de Jaris (pas des boutons nus du navigateur).
+    assert.equal(await picks.nth(1).evaluate((el) => getComputedStyle(el.querySelector('.duel-pick__box')).borderStyle), 'solid')
+
+    await page.click('.options-menu__unscored button:has-text("Tester la sélection")')
+    await page.click('.options-menu__unscored button:has-text("Lancer le test")')
+    await page.waitForFunction(() => Array.isArray(window.__testedModels))
+    assert.deepEqual(await page.evaluate(() => window.__testedModels), ['nemotron-3.5-lightning:30b'])
+    await page.evaluate(() => window.__finishTest())
   })
 })
 

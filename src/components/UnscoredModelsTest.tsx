@@ -43,6 +43,10 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   const [current, setCurrent] = useState(() => t('runtime.preparing'))
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Étape 436 (Léo : « pouvoir choisir : tout tester comme maintenant, ou choisir comme les duels, avec le temps — si
+  // j'ai beaucoup de temps, je choisis les gros modèles et j'éteins le PC après ; sinon les petits »).
+  const [choosing, setChoosing] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
 
   useEffect(() => {
     void window.jaris.getUnscoredModels().then(setModels)
@@ -83,6 +87,15 @@ export default function UnscoredModelsTest(): JSX.Element | null {
 
   if (!models) return null
   const estimatedTotal = models.reduce((sum, m) => sum + (m.estimatedMs ?? 0), 0)
+  // Ce que le bouton lancera : tout, ou seulement les modèles cochés (dans l'ordre de la liste).
+  const chosen = choosing ? models.filter((m) => picked.includes(m.model)) : models
+  const chosenTotal = chosen.reduce((sum, m) => sum + (m.estimatedMs ?? 0), 0)
+  const toggle = (model: string): void =>
+    setPicked((current) => (current.includes(model) ? current.filter((m) => m !== model) : [...current, model]))
+  const lineValue = ({ needs, estimatedMs }: ModelToTest): string => {
+    const missing = needs.map(describeNeed).join(', ')
+    return estimatedMs ? t('unscored.lineEstimate', { needs: missing, duration: formatEstimate(estimatedMs) }) : missing
+  }
   if (!models.length && phase === 'idle') {
     return <p className="capacity-scan__status">{t('unscored.allScored')}</p>
   }
@@ -93,7 +106,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
     setRows([])
     setError(null)
     try {
-      await window.jaris.testUnscoredModels()
+      await window.jaris.testUnscoredModels(choosing ? chosen.map((m) => m.model) : undefined)
       setPercent(100)
       setPhase('done')
     } catch (err) {
@@ -105,31 +118,87 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   return (
     <div className="options-menu__unscored">
       <p className="options-menu__unscored-title">{t('unscored.toTest', { count: models.length })}</p>
-      {/* Étape 431 : pour chaque modèle, ce qui lui manque — avant, 31 noms d'affilée sans dire pourquoi. */}
-      <ul className="options-menu__unscored-list">
-        {models.map(({ model, needs, estimatedMs }) => {
-          const missing = needs.map(describeNeed).join(', ')
-          return (
-            <li key={model}>
-              {t('common.labelValue', {
-                label: formatModelName(model),
-                value: estimatedMs ? t('unscored.lineEstimate', { needs: missing, duration: formatEstimate(estimatedMs) }) : missing
-              })}
-            </li>
-          )
-        })}
-      </ul>
-      {/* Étape 433 (Léo : « ajoute le temps estimé ») : le total, d'après les temps déjà mesurés sur ce PC. */}
-      {estimatedTotal > 0 && (
-        <p className="options-menu__unscored-text options-menu__unscored-total">
-          {t(models.every((m) => m.estimatedMs) ? 'unscored.total' : 'unscored.totalPartial', { duration: formatEstimate(estimatedTotal) })}
-        </p>
+      {/* Étape 436 : tout tester d'un coup (comme avant), ou choisir les modèles selon le temps qu'on a. */}
+      <div className="duel-sizes duel-pickmode options-menu__unscored-mode" role="radiogroup" aria-label={t('unscored.mode.label')}>
+        {([false, true] as const).map((choose) => (
+          <button
+            key={String(choose)}
+            type="button"
+            role="radio"
+            aria-checked={choosing === choose}
+            className={`duel-size${choosing === choose ? ' duel-size--selected' : ''}`}
+            disabled={phase === 'running'}
+            onClick={() => setChoosing(choose)}
+          >
+            {t(choose ? 'unscored.mode.choose' : 'unscored.mode.all')}
+          </button>
+        ))}
+      </div>
+      {choosing ? (
+        <>
+          <div className="duel-picks__tools">
+            <button type="button" className="duel-btn" onClick={() => setPicked(models.map((m) => m.model))} disabled={picked.length === models.length}>
+              {t('duel.pick.all')}
+            </button>
+            <button type="button" className="duel-btn" onClick={() => setPicked([])} disabled={picked.length === 0}>
+              {t('duel.pick.none')}
+            </button>
+          </div>
+          <ul className="duel-picks options-menu__unscored-picks">
+            {models.map((entry) => {
+              const checked = picked.includes(entry.model)
+              return (
+                <li key={entry.model}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    disabled={phase === 'running'}
+                    className={`duel-pick${checked ? ' duel-pick--checked' : ''}`}
+                    title={entry.model}
+                    onClick={() => toggle(entry.model)}
+                  >
+                    <span className="duel-pick__box" aria-hidden="true">
+                      {checked && (
+                        <svg viewBox="0 0 16 16" width="12" height="12">
+                          <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="duel-pick__name">{formatModelName(entry.model)}</span>
+                    <span className="options-menu__unscored-pick-detail">{lineValue(entry)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="options-menu__unscored-text options-menu__unscored-total">
+            {chosenTotal > 0
+              ? t('unscored.selectionEstimate', { count: chosen.length, duration: formatEstimate(chosenTotal) })
+              : t('unscored.selection', { count: chosen.length })}
+          </p>
+        </>
+      ) : (
+        <>
+          {/* Étape 431 : pour chaque modèle, ce qui lui manque — avant, 31 noms d'affilée sans dire pourquoi. */}
+          <ul className="options-menu__unscored-list">
+            {models.map((entry) => (
+              <li key={entry.model}>{t('common.labelValue', { label: formatModelName(entry.model), value: lineValue(entry) })}</li>
+            ))}
+          </ul>
+          {/* Étape 433 (Léo : « ajoute le temps estimé ») : le total, d'après les temps déjà mesurés sur ce PC. */}
+          {estimatedTotal > 0 && (
+            <p className="options-menu__unscored-text options-menu__unscored-total">
+              {t(models.every((m) => m.estimatedMs) ? 'unscored.total' : 'unscored.totalPartial', { duration: formatEstimate(estimatedTotal) })}
+            </p>
+          )}
+        </>
       )}
       <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (
-        <button className="options-menu__action" onClick={() => setPhase('confirming')}>
-          {t('unscored.test')}
+        <button className="options-menu__action" onClick={() => setPhase('confirming')} disabled={choosing && chosen.length === 0}>
+          {t(choosing ? 'unscored.testSelection' : 'unscored.test')}
         </button>
       )}
 

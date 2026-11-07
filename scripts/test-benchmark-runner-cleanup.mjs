@@ -398,8 +398,9 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     }
   }
   const procs = []
-  const fakeSpawn = () => {
+  const fakeSpawn = (_command, _args, options) => {
     const proc = new EventEmitter()
+    proc.env = options?.env ?? {}
     proc.stdout = Object.assign(new EventEmitter(), { setEncoding() {} })
     proc.stderr = Object.assign(new EventEmitter(), { setEncoding() {} })
     proc.kill = () => proc.emit('close', null)
@@ -420,7 +421,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
           return false
         }
       }
-    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'], describeModelsToTest: () => [{ model: 'qwen3.5:9b', needs: [{ test: 'tools', reason: 'missing' }] }], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
+    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b', 'granite4.2:8b'], describeModelsToTest: () => [{ model: 'qwen3.5:9b', needs: [{ test: 'tools', reason: 'missing' }] }], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
     if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === './profileStore') return {}
     if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
@@ -465,4 +466,16 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   await stopModelTest()
   assert.equal(exited, true, 'stopModelTest() doit attendre que le test soit vraiment sorti')
   await third
+
+  // Étape 436 : « Tout tester » envoie tous les modèles à tester ; « Choisir » seulement ceux cochés — et jamais un nom
+  // venu de l'écran qui n'est pas à tester.
+  assert.equal(procs[0].env.JARIS_ONLY_MODELS, 'qwen3.5:9b,granite4.2:8b')
+  const chosen = testUnscoredModels(() => {}, ['granite4.2:8b', 'inconnu:1b'])
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(procs.at(-1).env.JARIS_ONLY_MODELS, 'granite4.2:8b')
+  procs.at(-1).emit('close', 0)
+  assert.deepEqual((await chosen).models, ['granite4.2:8b'])
+  const before = procs.length
+  assert.deepEqual((await testUnscoredModels(() => {}, ['inconnu:1b'])).models, [], 'rien de valable : rien n’est lancé')
+  assert.equal(procs.length, before)
 })

@@ -2208,8 +2208,12 @@ app.whenReady().then(async () => {
   // Étape 168, remis à l'étape 221 (Léo : « rajoute le bouton analyse pour tester Ling-3.0-tiny ») : test des seuls
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
   ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTestDetails())
-  ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event) =>
-    testUnscoredModels((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+  // Étape 436 : une sélection de modèles venue de l'écran, revérifiée (des noms, rien d'autre ; filtrés par testUnscoredModels).
+  ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event, chosen?: unknown) =>
+    testUnscoredModels(
+      (line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line),
+      Array.isArray(chosen) ? chosen.filter((m): m is string => typeof m === 'string') : undefined
+    )
   )
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par

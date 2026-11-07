@@ -11318,3 +11318,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   zone de dépôt, refus d'un .txt, vignette, envoi d'une image seule en base64 — échoue si l'image ne protège plus la
   barre), `test-widget-mode.mjs` (canal et garde côté main ; le clic n'ouvre toujours pas la barre). Pas vérifié sur
   Windows avec un vrai glisser depuis l'Explorateur (zone cliquable de la fenêtre repliée).
+
+## Étape 436 — « Modèles à tester » : tout tester, ou choisir les modèles selon le temps (v0.46.4)
+
+- Léo : « pouvoir choisir : soit on fait directement toutes les analyses comme maintenant, soit choisir comme les duels,
+  avec le temps — si j'ai beaucoup de temps je choisis les gros modèles et j'éteins le PC après ; si je n'ai pas trop
+  le temps, les petits ». Question juste avant (vérifiée dans le code, sans changement) : fermer Jaris et éteindre en
+  plein test ne perd que l'épreuve en cours ; chaque épreuve finie est écrite dans le fichier des résultats
+  (`persistResults` après chaque `##MODEL_DONE##`) et `JARIS_RESUME=1` la saute au prochain lancement.
+- Écran : « Tout tester » (par défaut, comme avant) ou « Choisir les modèles » — les mêmes cases que le choix des
+  modèles d'un duel (`duel-pick`, Tout cocher / Tout décocher), avec à droite ce qui manque et la durée estimée ;
+  « Modèles choisis : N — environ X » ; « Tester la sélection » inactif sans case cochée. 6 textes, 24 langues.
+- `testUnscoredModels(onLine, chosen?)` : seulement les modèles cochés PARMI ceux qui sont vraiment à tester (un nom
+  venu de l'écran qui n'y est pas est ignoré ; rien de valable = rien de lancé). Le script ne rejoue déjà que les cas
+  à refaire de ces modèles (`pendingCases` filtré par `inOnlyModels`).
+- Test daté corrigé au passage : `test-code-panel-ui.mjs` datait une application « il y a 1 h » et attendait
+  « Aujourd'hui » — faux juste après minuit (vu à 00:18). Horodatage borné à minuit du jour.
+- Régression : `test-options-reorganization-ui.mjs` (choix, cases, total de la sélection, bouton inactif sans case, seule
+  la sélection envoyée ; « Tout tester » n'envoie aucune sélection), `test-benchmark-runner-cleanup.mjs` (liste passée
+  au script, nom inconnu ignoré — échoue si la sélection est ignorée). Capture du rendu compilé.

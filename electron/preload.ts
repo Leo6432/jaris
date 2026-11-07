@@ -162,8 +162,8 @@ const api = {
     invoke(IPC_CHANNELS.setModelChoice, mode, model),
   runQuickSetup: (): Promise<CapacityScanResult> => invoke(IPC_CHANNELS.runQuickSetup),
   getUnscoredModels: (): Promise<ModelToTest[]> => invoke(IPC_CHANNELS.getUnscoredModels),
-  testUnscoredModels: (): Promise<{ models: string[]; resultsPath: string }> =>
-    invoke(IPC_CHANNELS.testUnscoredModels),
+  testUnscoredModels: (models?: string[]): Promise<{ models: string[]; resultsPath: string }> =>
+    invoke(IPC_CHANNELS.testUnscoredModels, models),
   showUnscoredResults: (): Promise<void> => invoke(IPC_CHANNELS.showUnscoredResults),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => subscribe(IPC_CHANNELS.modelPullProgress, cb),

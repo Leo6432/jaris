@@ -12449,3 +12449,22 @@ input.reply-ui__field-input {
   border-radius: 10px;
   border: 1px solid var(--island-line);
 }
+
+/* Étape 436 : « Tout tester » ou « Choisir les modèles » (mêmes cases que le choix des modèles d'un duel), avec ce qui
+   manque et la durée estimée de chaque modèle à droite de son nom. */
+.options-menu__unscored-mode {
+  margin: 2px 0 4px;
+}
+.options-menu__unscored-picks {
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.options-menu__unscored-pick-detail {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 12px;
+  color: var(--hud-text-dim);
+  text-align: right;
+}

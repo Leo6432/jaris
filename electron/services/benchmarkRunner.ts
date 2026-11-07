@@ -309,8 +309,15 @@ export function stopModelTest(): Promise<void> {
   })
 }
 
-export async function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
-  const models = getModelsToTest()
+/**
+ * `chosen` (étape 436) : seulement ces modèles, parmi ceux qui sont VRAIMENT à tester — un nom venu de l'écran qui n'y
+ * est pas est ignoré. Absent : tous, comme avant. Le script ne rejoue aussi que leurs cas à refaire (inOnlyModels).
+ */
+export async function testUnscoredModels(
+  onLine: (line: string) => void,
+  chosen?: readonly string[]
+): Promise<{ models: string[]; resultsPath: string }> {
+  const models = chosen ? getModelsToTest().filter((m) => chosen.includes(m)) : getModelsToTest()
   const resultsPath = unscoredResultsPath()
   if (!models.length) return { models, resultsPath }
   if (runningTest || preparingTest) throw new Error(t('bench.testRunning'))
