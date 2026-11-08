@@ -4831,6 +4831,14 @@ textarea:not(.composer__input):focus-visible {
   vertical-align: bottom;
 }
 
+/* Étape 447 (Léo, capture du Classement : « c'est pas centré ? ») : les scores restaient collés à gauche de leur
+   colonne (la règle générale des cellules, plus précise, écrasait l'alignement à droite prévu plus haut), un grand
+   vide à droite. Titres et valeurs des colonnes chiffrées sont centrés l'un sous l'autre. */
+.options-menu__model-overview th.options-menu__col-num,
+.options-menu__model-overview td.options-menu__col-num {
+  text-align: center;
+}
+
 /* L'introduction de « Ce que Jaris sait faire » se lit comme le sous-titre des autres pages (14 px). */
 .options-menu__capability-intro {
   font-size: 14px;

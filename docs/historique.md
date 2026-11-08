@@ -11590,3 +11590,18 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : test-options-reorganization-ui.mjs (colonnes, croix et son nom accessible, appel d'outils sans le
   score de vision, 9 tris, tableau qui tient à 1 000 et 760 px, défilement dans la carte à 620 px),
   test-hardwarescan-single-pool.mjs (trois scores lus dans le vrai fichier) ; tous deux échouent sur l'ancien code.
+
+## Étape 447 — Classement : colonnes chiffrées centrées (v0.52.1)
+
+- Léo, capture des badges « 42/48 » et « 28/34 » : « c'est pas centré ? ». Les scores restaient collés à gauche de
+  leur colonne : `.options-menu__model-overview td` (plus précis) écrasait l'alignement à droite de
+  `.options-menu__col-num`. Titres et valeurs des colonnes chiffrées (VRAM, scores, Vision/Code, duels, vitesse) sont
+  maintenant centrés l'un sous l'autre ; le tableau tient toujours à 760 px.
+- Lenteur du Vocal signalée le même soir (2 min 30 pour « Quelle heure est-il ? ») : le journal des demandes de Léo
+  montre le MÊME modèle (qwen3.5:9b), la même fenêtre (16384) et la même taille de demande (~4 600 tokens) que le
+  06/11 : lecture 2,4 s → 1 min 00-1 min 29, écriture 25 à 40 fois plus lente, correction de la voix 0,7 s → 6 s,
+  processeur à 92 % mesuré AVANT le travail du modèle, et /api/ps : 5,2 Go sur 6,2 Go dans la carte (1 Go sur le
+  processeur). Rien dans le code de la semaine n'explique cet écart ; capture du Gestionnaire des tâches demandée à
+  Léo pour trouver ce qui occupe son PC. Pas de correctif deviné.
+- Régression : test-options-reorganization-ui.mjs (centre du titre et de la valeur de chaque colonne chiffrée = centre
+  de la colonne, ±3 px) — échoue sur l'ancien CSS (« Appel d'outils : valeur décalée, 526 pour 536 »).

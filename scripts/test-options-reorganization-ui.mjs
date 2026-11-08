@@ -1141,3 +1141,30 @@ test('accessibilité : onglet affiché marqué, voix nommées, menus du micro et
     assert.equal(await page.getByRole('combobox', { name: 'Langue' }).count(), 1)
   })
 })
+
+// Étape 447 (Léo, capture du Classement : « c'est pas centré ? ») : dans chaque colonne chiffrée, le titre et les
+// valeurs (scores, croix, duels, VRAM) sont centrés l'un sous l'autre, au lieu d'être collés à gauche.
+test('Classement : titres et valeurs des colonnes chiffrées centrés l’un sous l’autre', options, async () => {
+  await withOptions(async (page) => {
+    await measureModelsTable(page, 1366, 768)
+    const columns = await page.evaluate(() => {
+      const headers = [...document.querySelectorAll('.options-page--models thead th')]
+      const row = document.querySelector('.options-page--models tbody tr')
+      const cells = [...row.querySelectorAll('td')]
+      const center = (el) => { const r = el.getBoundingClientRect(); return r.left + r.width / 2 }
+      return headers
+        .map((th, i) => ({ th, td: cells[i] }))
+        .filter(({ th }) => th.classList.contains('options-menu__col-num'))
+        .map(({ th, td }) => {
+          const title = th.querySelector('button') ?? th
+          const value = td.querySelector('.options-menu__badge, .options-menu__no-vision, .options-menu__duel-points') ?? td
+          return { name: th.textContent.trim(), cell: Math.round(center(td)), title: Math.round(center(title)), value: Math.round(center(value)) }
+        })
+    })
+    assert.ok(columns.length >= 8, `colonnes chiffrées trouvées : ${columns.length}`)
+    for (const c of columns) {
+      assert.ok(Math.abs(c.value - c.cell) <= 3, `${c.name} : valeur décalée dans sa colonne (${c.value} pour un centre à ${c.cell})`)
+      assert.ok(Math.abs(c.title - c.cell) <= 3, `${c.name} : titre décalé dans sa colonne (${c.title} pour un centre à ${c.cell})`)
+    }
+  })
+})
