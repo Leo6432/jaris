@@ -113,6 +113,21 @@ roulettes ») et « C'est fait, Paul… Paul sera en retard ce soir » sont inco
 Horizon et d'Ornith. Sa vision n'est pas mesurée (pas candidat), son code reste à faire. Les autres modèles du fichier
 gardent leurs scores corrigés ci-dessous (le fichier redonne leurs scores bruts, d'avant les relectures).
 
+Étape 442 : campagne de Léo du 07/11/2026 (Jaris 0.46.4 à 0.49.1, Ollama 0.40.10, RTX 3070), toutes les réponses des
+nouveaux scores relues, justes comprises. gemma4:31b demandes 48/48 ; questions qwen3-vl:8b 74/78 et qwen3-vl:4b 72/78
+(PC éteint à « ce soir » ; pour la 4B, YouTube ouvert sans recherche et clic droit raté), sans correction. Demandes :
+qwen3-vl:4b 36/48 (dont 10 réflexions qui remplissent la fenêtre de contexte), qwen3-vl:8b 43 → 44/48 (« (ex: dans 2
+heures ou à 18h) » est un exemple dans la question, que le juge prenait pour un délai inventé). Leur vision vient de
+l'ancienne version du tag (05/10, autre digest). qwen2.5-coder:7b 5/78 et 4/48 : il écrit ses appels en JSON dans le texte, que Jaris ne lit
+pas (une relance, puis le texte tel quel) : le test juge comme Jaris. Code de Spark-X2.6-4B 3/5, provisoire : la liste
+rate vraiment (bouton « Ajouter » jamais branché), mais le convertisseur n'a pas été écrit, sa réflexion remplissant la
+fenêtre de 16 384 — Jaris aurait refait l'étape avec une fenêtre doublée, le script de test non (au mieux 4/5). Les
+demandes coupées par l'ancienne limite de 10 allers-retours (étape 402) ont été rejouées et comptent ; justes pour le
+juge mais comptées fausses : chez K2 Horizon 3.7B, le balisage d'appel `<ifm|tool_calls>` écrit en texte, « je vais
+maintenant lancer une musique » quand elle joue déjà, « je n'ai pas encore pu envoyer le message » après un envoi
+réussi ; chez qwen3.5:0.8b, deux réponses incohérentes (crêpes cuites « à l'étuve ») ; chez qwen3.5:2b, une. Pas
+intégrés : qwen3-vl:2b (16/78) et GLM-4.6V-Flash (27/78), tests interrompus.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -156,6 +171,9 @@ gardent leurs scores corrigés ci-dessous (le fichier redonne leurs scores bruts
 | gemma4:31b | 78/78 |
 | nemotron-3.5-bolt:e4b | 75/78 |
 | hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 72/78 |
+| qwen3-vl:8b | 74/78 |
+| qwen3-vl:4b | 72/78 |
+| qwen2.5-coder:7b | 5/78 |
 
 ## Vision — compréhension d'image
 
@@ -218,6 +236,8 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 
 Étape 323 : K2 Horizon 3.7B 2/5 sur le PC de Léo (5/5 chez Claude) : détail dans la section des conversations.
 
+Étape 442 : Spark-X2.6-4B 3/5 provisoire (au mieux 4/5) : détail dans la section des conversations.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -232,6 +252,7 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 5/5 |
 | phi4-mini | 5/5 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
+| hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 3/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -276,44 +297,48 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 |---|---|
 | qwen3.5:27b | 48/48 |
 | qwen3.6:27b | 48/48 |
+| granite4.2:8b | 48/48 |
+| gemma4:31b | 48/48 |
 | gemma4:26b | 47/48 |
 | granite4.2:30b | 47/48 |
-| granite4.2:8b | 47/48 |
 | nemotron-3.5-lightning:30b | 47/48 |
 | qwen3.8:27b | 47/48 |
 | gemma4:12b | 46/48 |
 | qwen3.5:9b | 46/48 |
+| glm-4.7-flash:q4_K_M | 46/48 |
+| qwen3.5:35b | 46/48 |
 | nemotron-3.5-bolt:e4b | 45/48 |
-| glm-4.7-flash:q4_K_M | 45/48 |
-| qwen3.5:35b | 45/48 |
 | ornith-1.5:35b | 45/48 |
+| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 45/48 |
 | granite4.2:3b | 44/48 |
+| qwen3-vl:8b | 44/48 |
 | gemma4:e4b | 43/48 |
 | gpt-oss:20b | 43/48 |
 | ornith-1.5:9b | 43/48 |
 | muse-glimmer:30b | 43/48 |
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
-| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 42/48 |
+| qwen3.6:35b | 43/48 |
 | qwen3.5:4b | 42/48 |
-| qwen3.6:35b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
 | hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 40/48 |
 | ministral-3:8b | 39/48 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 39/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
-| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 36/48 |
-| ministral-3:14b | 34/48 |
-| ministral-3:3b | 34/48 |
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 31/48 |
-| qwen3.5:2b | 32/48 |
-| qwen3:1.7b | 28/48 |
+| ministral-3:3b | 36/48 |
+| qwen3-vl:4b | 36/48 |
+| ministral-3:14b | 35/48 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 34/48 |
+| qwen3.5:2b | 34/48 |
+| qwen3:1.7b | 31/48 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 29/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
-| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
 | qwen3.5:0.8b | 13/48 |
+| qwen2.5-coder:7b | 4/48 |
 | phi4-mini | 2/48 |
-| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 0/48 |
+| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
 
 ## À remesurer sur le PC de Léo
 
