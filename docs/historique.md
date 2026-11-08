@@ -11533,3 +11533,24 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : nouveaux tests test-visual-consistency-ui, test-format-chat-progress, test-tts-client,
   test-i18n-unused-keys, test-i18n-pt-br, et une trentaine de fichiers de tests étendus ; chaque nouveau test vérifié
   sur l'ancien code (il échoue). Rien vérifié en usage réel (pas de Windows ici).
+
+## Étape 444 — Thème clair corrigé partout, widgets clairs en thème clair (v0.51.0)
+
+- Léo, Windows passé en clair (capture d'Options → Voix) : « règle tous les bugs sur le thème clair, cherche partout
+  les petits problèmes, et mets les widgets en clair, pas en noir, quand le thème est clair ». Cette demande remplace
+  le choix de l'étape 432 (capsule toujours noire). Inventaire mesuré de 54 états d'écran × 2 thèmes × 760/1200 px +
+  page téléphone (contraste du texte déjà bon ; défauts ailleurs) : Options désormais centré comme les autres pages ;
+  barres des voix non choisies distinctes de la voix choisie ; interrupteur éteint visible en clair ; « Enregistrer
+  l'image » et triangle de lecture vidéo lisibles sur leur voile ; accueil et configuration sur le fond des pages ;
+  ligne choisie du téléphone à 5:1 ; contour clavier de « Copier ». Débordements corrigés dans les deux thèmes : panneau
+  GitHub coupé en Code à 1200 px (usePickerPanel.ts), badge « Connecté · outils » des Outils MCP et « Micro utilisé »
+  sur 7 lignes à 760 px.
+- Widgets : capsule vocale et widget Chat blancs à texte foncé en clair (trait + ombre dans la marge de 14 px de la
+  fenêtre transparente), couleurs d'émotion du texte et des barres assombries en clair (≥ 5:1) ; noirs en sombre.
+- Logo (Léo : « en haut à gauche, un truc qui cloche ? le logo ») : le disque noir posé à l'étape 443 derrière le logo
+  en clair est retiré. Une orbe assombrie en clair (≥ 3,5:1) a été montrée et refusée (« très sombre, pas comme
+  avant ») : l'orbe garde son cyan d'origine dans les deux thèmes, comme le veut l'identité de Jaris.
+- Pas modifié, à décider : contours des champs à ~1,25:1 (trait fin façon ChatGPT, dans les deux thèmes).
+- Régression : test-light-theme-ui.mjs (8 mesures × 2 thèmes sur la vraie App + logo sans disque, cyan d'origine),
+  test-chat-widget-ui.mjs (capsule claire en clair, noire en sombre, textes ≥ 4,5:1), test-phone-page-ui.mjs ; chaque
+  test vérifié sur l'ancien code. Rien vérifié sous Windows (liseré et ombre réels de la fenêtre transparente).

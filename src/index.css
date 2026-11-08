@@ -4327,15 +4327,8 @@ body {
   height: 20px;
 }
 
-/* Thème clair : l'orbe cyan posée sur un disque noir, exactement comme en sombre — sur le gris clair de la barre, le
-   cyan tombait à 1,4:1 (logo délavé). En sombre, rien ne change : c'est l'identité de Jaris. */
-@media (prefers-color-scheme: light) {
-  .titlebar__logo {
-    border-radius: 50%;
-    background: #000000;
-    box-shadow: 0 0 0 2px #000000;
-  }
-}
+/* Thème clair : plus de disque noir derrière le logo (étape 444, Léo : « le logo, un truc qui cloche »), et l'orbe garde
+   son cyan d'origine — une version assombrie a été refusée (« trop sombre, pas comme avant ») : identité de Jaris. */
 
 .titlebar__name {
   font-size: 12px;

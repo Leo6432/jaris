@@ -310,3 +310,29 @@ for (const scheme of ['light', 'dark']) {
     })
   })
 }
+
+// Étape 444 (Léo, en clair : « en haut à gauche tu ne vois pas un truc qui cloche ? le logo ») : le disque noir posé
+// derrière le logo en clair faisait tache. Plus de disque ; l'orbe garde son cyan d'origine dans les deux thèmes (une
+// version assombrie en clair a été refusée : « trop sombre, pas comme avant »).
+for (const scheme of ['light', 'dark']) {
+  test(`${scheme} : logo de la barre de titre sans disque, orbe de son cyan d'origine`, options, async () => {
+    await withPage(scheme, 1200, {}, async (page) => {
+      await page.waitForSelector('.titlebar__logo canvas')
+      await page.waitForTimeout(400)
+      const logo = await page.$eval('.titlebar__logo', (el) => {
+        const cs = getComputedStyle(el)
+        const canvas = el.querySelector('canvas')
+        const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height)
+        // Le pixel le plus couvrant du dessin : la couleur du trait de l'orbe.
+        let best = null
+        for (let i = 0; i < data.length; i += 4) if (!best || data[i + 3] > best[3]) best = [data[i], data[i + 1], data[i + 2], data[i + 3]]
+        return { background: cs.backgroundColor, shadow: cs.boxShadow, stroke: best.slice(0, 3) }
+      })
+      assert.equal(logo.background, 'rgba(0, 0, 0, 0)', 'plus de disque derrière le logo')
+      assert.equal(logo.shadow, 'none')
+      // #33e6c8 (éclairci par son halo) : cyan vif, pas une teinte assombrie.
+      const [r, g, b] = logo.stroke
+      assert.ok(r < 90 && g >= 220 && b >= 190, `cyan vif attendu, trouvé rgb(${logo.stroke.join(', ')})`)
+    })
+  })
+}
