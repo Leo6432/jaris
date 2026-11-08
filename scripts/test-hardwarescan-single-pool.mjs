@@ -193,7 +193,7 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   const real = (model) => REAL_SCORES.slice(REAL_SCORES.indexOf('## Demandes')).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/48) \\|`))?.[1]
   assert.equal(byModel.get('granite4.2:8b').demands, real('granite4.2:8b'))
   assert.match(byModel.get('granite4.2:8b').demands, /^\d+\/48$/)
-  assert.equal(byModel.get('qwen3-vl:4b').demands, null, 'modèle de vision seul : pas de demandes')
+  assert.equal(byModel.get('qwen3-vl:2b').demands, null, 'modèle de vision seul : pas de demandes')
   // La carte « Modèles utilisés sur ta machine » aussi, que le modèle soit le choix idéal ou celui du profil.
   const scan = setup({ vramMib: 8 * 1024 })
   assert.equal((await scan.getMyModelPicks()).large.demands, real((await scan.getMyModelPicks()).large.model))
@@ -206,18 +206,15 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // scores sont recopiés dans verified-tool-scores.md (Muse Glimmer et Ornith 1.5 : tous notés à l'étape 335).
 // Étape 376 : tous les modèles passent le test d'appel d'outils — les modèles de vision et de code, jamais testés en
 // conversation, attendent le test de Léo (du plus léger au plus lourd).
+// Étape 442 : qwen3-vl:4b et 8b, qwen2.5-coder:7b et gemma4:31b ont désormais tous leurs scores.
 const AWAITING = [
   'qwen3-vl:2b',
-  'qwen3-vl:4b',
-  'qwen2.5-coder:7b',
-  'qwen3-vl:8b',
   'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
   'qwen2.5-coder:14b',
   'devstral-small-2:24b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
-  'gemma4:31b',
   'qwen3.6:35b-a3b'
 ]
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
@@ -242,12 +239,13 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')
   assert.deepEqual(new Set(setup({ vramMib: 8 * 1024, scores: before }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
   // Une fois les trois nouvelles épreuves notées, plus rien à tester.
+  // Étape 442 : des modèles de vision et de code ont désormais un score de conversation : leurs demandes aussi.
   const table = (heading, models, score) => `\n\n## ${heading}\n\n| Modèle | Score |\n|---|---|\n${[...models].map((m) => `| ${m} | ${score} |`).join('\n')}\n`
   const allNew =
     REAL_SCORES.replace(/## Vision[\s\S]*$/, '') +
     table('Vision — compréhension', visionOnly, '30/34') +
     table('Code — génération', codeOnly, '4/5') +
-    table('Demandes complètes', conversationModels, '40/48')
+    table('Demandes complètes', new Set([...conversationModels, ...visionOnly, ...codeOnly]), '40/48')
   assert.deepEqual(notAwaiting(setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()), [])
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
@@ -394,7 +392,7 @@ test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
   const described = scan.describeModelsToTest()
   const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
   assert.equal(needs('qwen3-vl:2b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
-  assert.equal(needs('qwen2.5-coder:7b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('qwen2.5-coder:14b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
   // Un modèle de vision sans score de vision : les deux épreuves, dans l'ordre outils puis vision.
   const scores = REAL_SCORES.replace(/^\| qwen3-vl:2b \| \d+\/34 \|\r?\n/m, '')
   assert.notEqual(scores, REAL_SCORES, 'ligne vision de qwen3-vl:2b introuvable')

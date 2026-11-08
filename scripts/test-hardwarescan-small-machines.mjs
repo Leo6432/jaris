@@ -52,7 +52,8 @@ const picks = async (vramMib, ramGb) => {
 }
 
 test('sans carte graphique : jamais le modèle qui rate toutes les demandes complètes, le meilleur des petits', async () => {
-  assert.match(REAL_SCORES, /\| hf\.co\/IFM\/K2-Horizon-0\.9B-GGUF:Q4_K_M \| 0\/48 \|/, 'la 0.9B rate bien toutes les demandes')
+  // Étape 442 : une demande rejouée réussie (1/48), elle rate toujours presque tout.
+  assert.match(REAL_SCORES, /\| hf\.co\/IFM\/K2-Horizon-0\.9B-GGUF:Q4_K_M \| 1\/48 \|/, 'la 0.9B rate bien presque toutes les demandes')
   for (const ramGb of [8, 16]) {
     const chosen = await picks(0, ramGb)
     for (const role of ['flash', 'medium', 'large', 'code']) {
