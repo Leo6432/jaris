@@ -479,6 +479,25 @@ test('Modèle : choisir le modèle puis la réflexion depuis le téléphone, com
     assert.equal(await page.isDisabled('.sheet__row:has-text("Élevé")'), true, 'un modèle pas installé ne se choisit pas')
     assert.match(await page.textContent('#sheet-think-note'), /Choisis d’abord un modèle/)
     await shot(page, 'phone-model-auto')
+    // Thème clair (Léo, Windows en clair) : l'explication de la ligne choisie (« Jaris choisit le modèle… ») restait à
+    // 4,1:1 sur le gris de la sélection. Au moins 4,5:1 dans les deux thèmes.
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme })
+      const ratio = await page.$eval('.sheet__row--active .sheet__row-hint', (el) => {
+        const parse = (c) => { const p = c.match(/[\d.]+/g).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 } }
+        const lum = ({ r, g, b }) => [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+        const blend = (t, b) => ({ r: t.r * t.a + b.r * (1 - t.a), g: t.g * t.a + b.g * (1 - t.a), b: t.b * t.a + b.b * (1 - t.a), a: 1 })
+        const layers = []
+        for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c.a > 0) layers.push(c); if (c.a === 1) break }
+        let bg = { r: 255, g: 255, b: 255, a: 1 }
+        for (const c of layers.reverse()) bg = blend(c, bg)
+        const fg = blend(parse(getComputedStyle(el).color), bg)
+        const [x, y] = [lum(fg), lum(bg)].sort((m, n) => n - m)
+        return (x + 0.05) / (y + 0.05)
+      })
+      assert.ok(ratio >= 4.5, `${scheme} : explication de la ligne choisie à ${ratio.toFixed(2)}:1`)
+    }
+    await page.emulateMedia({ colorScheme: null })
 
     await page.click('.sheet__row:has-text("Moyen")')
     await page.waitForSelector('#sheet-thinks .chip')

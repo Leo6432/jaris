@@ -6,10 +6,12 @@ import type { MessageKey } from '../../shared/i18n'
 
 /**
  * Étape 432 (Léo : « je veux changer le widget vocal, on ne voit pas le texte… je vois beaucoup d'applis faire ça »,
- * puis « parfait, fais-le ») : une capsule NOIRE collée en haut au centre, façon encoche, au lieu d'un grand orbe et
- * d'un texte posés directement sur le fond d'écran (illisibles sur un fond clair). Une seule capsule qui change de
- * forme : petite au repos, élargie pendant l'écoute et la réflexion, ouverte en carte pour la réponse — texte blanc sur
- * noir, lisible sur n'importe quel fond. L'orbe garde l'identité de Jaris (sa forme et ses couleurs par émotion).
+ * puis « parfait, fais-le ») : une capsule collée en haut au centre, façon encoche, au lieu d'un grand orbe et d'un
+ * texte posés directement sur le fond d'écran (illisibles sur un fond clair). Une seule capsule qui change de forme :
+ * petite au repos, élargie pendant l'écoute et la réflexion, ouverte en carte pour la réponse — lisible sur n'importe
+ * quel fond. Elle suit le thème de Windows (variables --island-*, fin d'index.css) : noire au texte blanc en sombre,
+ * blanche au texte foncé en clair (Léo : « les widgets en clair, pas en noir, quand le thème est clair »). L'orbe garde
+ * l'identité de Jaris (sa forme et ses couleurs par émotion).
  *
  * Un seul orbe, toujours monté : c'est lui qui reçoit le son de la réponse (`audioElRef`, un seul AudioContext par
  * lecteur, voir JarisOrb).

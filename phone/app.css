@@ -1061,6 +1061,14 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+/* Thème clair : sur le gris de la ligne choisie, le texte discret tombait à 4,1:1 (« Jaris choisit le modèle selon la
+   question ») ; le gris du texte secondaire y garde 5,1:1. En sombre, rien ne change. */
+@media (prefers-color-scheme: light) {
+  .sheet__row--active .sheet__row-hint {
+    color: var(--soft);
+  }
+}
+
 .sheet__check {
   width: 22px;
   height: 22px;

@@ -302,7 +302,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
             void send()
           }}
         >
-          {/* Étape 432 : la même capsule noire que le widget vocal, avec l'orbe de Jaris à gauche. */}
+          {/* Étape 432 : la même capsule que le widget vocal (noire en sombre, blanche en clair), l'orbe à gauche. */}
           <JarisOrb emotion="idle" size={VOICE_WIDGET_ORB_SIZE} />
           {attachment && (
             <span className="chat-widget__thumb">

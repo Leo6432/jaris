@@ -129,11 +129,12 @@ function buildPage() {
   return pageHtml
 }
 
-async function withWidget(run) {
+/** `colorScheme` : le thème de Windows, que la fenêtre du widget suit (clair par défaut, comme chez Léo). */
+async function withWidget(run, colorScheme = 'light') {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
-    const page = await browser.newPage()
+    const page = await browser.newPage({ colorScheme })
     // Les dimensions réelles de la fenêtre active (WIDGET_CHAT_WIDTH x WIDGET_CHAT_COLLAPSED_HEIGHT,
     // main.ts) : tester à une taille inventée ne dirait rien de ce que Léo verra.
     await page.setViewportSize({ width: 460, height: 68 })
@@ -373,7 +374,7 @@ test('envoyer une question déplie la réponse et donne au main la hauteur RÉEL
     assert.match(content, /18 degrés/, 'la réponse doit s’afficher dans le widget, sans rouvrir l’application')
     assert.ok(await page.$('.chat-widget__reply strong'), 'le **gras** du modèle doit être rendu, pas affiché tel quel')
     const answerBackground = await page.$eval('.chat-widget__answer', (el) => getComputedStyle(el).backgroundColor)
-    // « rgb(0, 0, 0) » (étape 432, noir opaque) n'a pas d'alpha : seul « rgba(…, a) » en porte un.
+    // « rgb(255, 255, 255) » ou « rgb(0, 0, 0) » (fonds opaques des deux thèmes) n'a pas d'alpha : seul « rgba(…, a) » en porte un.
     const alpha = answerBackground.startsWith('rgba') ? Number(answerBackground.match(/[\d.]+(?=\)$)/)?.[0] ?? 1) : 1
     assert.ok(alpha >= 0.9, `le fond de la réponse reste trop transparent (${answerBackground})`)
 
@@ -567,14 +568,15 @@ test('widget vocal : une très longue réponse reste dans la fenêtre et défile
       return el.getBoundingClientRect().bottom
     })
     assert.ok(end <= 460 - 14)
-    // Étape 432 : texte blanc sur fond noir opaque — lisible sur n'importe quel fond d'écran.
+    // Thème clair (Léo : « les widgets en clair, pas en noir, quand le thème est clair ») : texte foncé sur une carte
+    // blanche opaque — lisible sur n'importe quel fond d'écran. Le thème sombre (noir, texte blanc) : test plus bas.
     const colors = await page.$eval('.voice-island__reply', (el) => [getComputedStyle(el).color, getComputedStyle(el.closest('.voice-island')).backgroundColor])
-    assert.deepEqual(colors, ['rgb(255, 255, 255)', 'rgb(0, 0, 0)'])
+    assert.deepEqual(colors, ['rgb(13, 13, 13)', 'rgb(255, 255, 255)'])
   })
 })
 
-// Étape 432 (Léo : « on ne voit pas le texte ») : une seule capsule noire qui change de forme selon ce que fait Jaris.
-test('widget vocal : capsule de repos, écoute, réflexion puis carte de réponse, toujours texte blanc sur noir', options, async () => {
+// Étape 432 (Léo : « on ne voit pas le texte ») : une seule capsule qui change de forme selon ce que fait Jaris.
+test('widget vocal : capsule de repos, écoute, réflexion puis carte de réponse (thème clair : texte foncé sur blanc)', options, async () => {
   await withWidget(async (page) => {
     await page.setViewportSize({ width: 500, height: 460 })
     const state = async () => {
@@ -604,7 +606,7 @@ test('widget vocal : capsule de repos, écoute, réflexion puis carte de répons
     assert.equal(s.width, 380)
     assert.equal(s.headline, 'Quel temps fera-t-il demain', 'les mots entendus s’écrivent dans la capsule')
     assert.equal(s.headlineShown, true)
-    assert.equal(s.headlineColor, 'rgb(255, 255, 255)')
+    assert.equal(s.headlineColor, 'rgb(13, 13, 13)')
     assert.equal(s.bodyShown, false)
 
     await page.evaluate(() => window.__renderVoice('thinking', 'Quel temps fera-t-il demain ?', '', 'Recherche sur internet…'))
@@ -624,6 +626,84 @@ test('widget vocal : capsule de repos, écoute, réflexion puis carte de répons
     assert.equal(await page.evaluate(() => window.__openedSettings), before + 1)
   })
 })
+
+// Léo, Windows passé en clair : « mets aussi les widgets en clair, pas en noir, quand le thème est clair » (la capsule
+// restait noire dans les deux thèmes depuis l'étape 432). En clair : capsule blanche au texte foncé, détachée du fond
+// d'écran par un trait et une ombre que la fenêtre transparente ne coupe pas ; en sombre : inchangée, noire au texte
+// blanc. Dans les deux : chaque texte (≥ 4,5:1) et chaque couleur d'émotion (barres, points : ≥ 3:1 ; texte de la
+// réflexion : ≥ 4,5:1) se lit sur la capsule — le cyan et l'ambre du sombre tombaient à 1,5-1,8:1 sur du blanc.
+for (const scheme of ['light', 'dark']) {
+  test(`widgets en thème ${scheme === 'light' ? 'clair : capsule claire' : 'sombre : capsule noire'}, textes et couleurs d’émotion lisibles`, options, async () => {
+    await withWidget(async (page) => {
+      await page.setViewportSize({ width: 500, height: 460 })
+      await page.evaluate(() => {
+        const parse = (c) => { const p = String(c).match(/rgba?\(([^)]+)\)/)[1].split(/[ ,/]+/).filter(Boolean).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 } }
+        const lum = ({ r, g, b }) => [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0)
+        const blend = (top, bottom) => ({ r: top.r * top.a + bottom.r * (1 - top.a), g: top.g * top.a + bottom.g * (1 - top.a), b: top.b * top.a + bottom.b * (1 - top.a), a: 1 })
+        window.__lum = (color) => lum(parse(color))
+        window.__ratio = (color, background) => { const bg = parse(background); const [x, y] = [lum(blend(parse(color), bg)), lum(bg)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05) }
+      })
+      const look = (selector, prop = 'color') =>
+        page.$eval(selector, (el, p) => {
+          const capsule = el.closest('.voice-island, .chat-widget__bar, .chat-widget__answer, .chat-widget__idle')
+          const bg = getComputedStyle(capsule).backgroundColor
+          return { bg, ratio: window.__ratio(getComputedStyle(el)[p], bg), color: getComputedStyle(el)[p] }
+        }, prop)
+      const states = [
+        ['listening', 'Quel temps fera-t-il demain', '', null, ['.voice-island__headline'], '.voice-island__bars i'],
+        ['thinking', 'Quel temps fera-t-il demain ?', '', 'Recherche sur internet…', ['.voice-island__headline', '.voice-island__question'], '.voice-island__dots i'],
+        ['happy', 'Quel temps fera-t-il demain ?', 'Demain : 14 °C, nuageux.', null, ['.voice-island__headline', '.voice-island__question', '.voice-island__reply'], '.voice-island__bars i'],
+        ['surprised', 'Combien de temps pour Mars ?', 'Sept mois.', null, ['.voice-island__headline', '.voice-island__reply'], '.voice-island__bars i']
+      ]
+      for (const [emotion, transcript, reply, activity, texts, signal] of states) {
+        await page.evaluate(([e, tr, r, a]) => window.__renderVoice(e, tr, r, a), [emotion, transcript, reply, activity])
+        await page.waitForTimeout(350)
+        for (const selector of texts) {
+          const text = await look(selector)
+          assert.ok(text.ratio >= 4.5, `${scheme}/${emotion} : ${selector} à ${text.ratio.toFixed(2)}:1 (${text.color} sur ${text.bg})`)
+        }
+        const accent = await look(signal, 'backgroundColor')
+        assert.ok(accent.ratio >= 3, `${scheme}/${emotion} : couleur d'émotion (${signal}) à ${accent.ratio.toFixed(2)}:1 sur la capsule`)
+      }
+      const capsule = await page.$eval('.voice-island', (el) => {
+        const s = getComputedStyle(el)
+        return { bg: s.backgroundColor, text: s.color, border: s.borderTopColor, shadow: s.boxShadow, bgLum: window.__lum(s.backgroundColor), textLum: window.__lum(s.color) }
+      })
+      if (scheme === 'light') {
+        assert.ok(capsule.bgLum > 0.9 && capsule.textLum < 0.05, `thème clair : capsule claire au texte foncé attendue, reçu ${capsule.text} sur ${capsule.bg}`)
+        // Le trait : de l'encre sombre (rgba(0, 0, 0, a)), pas le liseré blanc de la capsule noire, invisible sur un fond clair.
+        assert.match(capsule.border, /^rgba\(0, 0, 0, 0\.\d+\)$/, `trait de la capsule claire : ${capsule.border}`)
+        assert.notEqual(capsule.shadow, 'none', 'la capsule claire garde une ombre qui la détache d’un fond d’écran blanc')
+        // L'ombre reste dans les 14 px de marge transparente de la fenêtre (décalage + flou), sinon elle serait coupée.
+        for (const [, y, blur] of capsule.shadow.matchAll(/rgba?\([^)]*\)\s+-?[\d.]+px\s+(-?[\d.]+)px\s+([\d.]+)px/g)) {
+          assert.ok(Number(y) + Number(blur) <= 14, `ombre ${capsule.shadow} : ${Number(y) + Number(blur)} px sous la capsule, plus que la marge de 14 px`)
+        }
+      } else {
+        assert.deepEqual([capsule.bg, capsule.text], ['rgb(0, 0, 0)', 'rgb(255, 255, 255)'], 'thème sombre : la capsule reste noire, texte blanc')
+      }
+
+      // Widget Chat : la barre (texte d'aide, bouton d'envoi) et la carte de réponse (texte, « Ouvrir le Chat »).
+      await page.evaluate(() => window.__renderChatWidget(false))
+      await page.waitForSelector('.chat-widget__input')
+      const hint = await page.$eval('.chat-widget__input', (el) => window.__ratio(getComputedStyle(el, '::placeholder').color, getComputedStyle(el.closest('.chat-widget__bar')).backgroundColor))
+      assert.ok(hint >= 4.5, `${scheme} : texte d'aide de la barre à ${hint.toFixed(2)}:1`)
+      await page.fill('.chat-widget__input', 'quel temps ?')
+      const send = await page.$eval('.chat-widget__send', (el) => {
+        const s = getComputedStyle(el)
+        return { arrow: window.__ratio(s.color, s.backgroundColor), button: window.__ratio(s.backgroundColor, getComputedStyle(el.closest('.chat-widget__bar')).backgroundColor) }
+      })
+      assert.ok(send.arrow >= 4.5 && send.button >= 3, `${scheme} : envoi (flèche ${send.arrow.toFixed(2)}:1, bouton ${send.button.toFixed(2)}:1 sur la barre)`)
+      const bar = await page.$eval('.chat-widget__bar', (el) => getComputedStyle(el).backgroundColor)
+      assert.equal(bar, capsule.bg, 'la barre du Chat a la même couleur que la capsule vocale')
+      await page.click('.chat-widget__send')
+      await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
+      for (const selector of ['.chat-widget__reply', '.chat-widget__question', '.chat-widget__name', '.chat-widget__action']) {
+        const text = await look(selector)
+        assert.ok(text.ratio >= 4.5, `${scheme} : ${selector} à ${text.ratio.toFixed(2)}:1 (${text.color} sur ${text.bg})`)
+      }
+    }, scheme)
+  })
+}
 
 // Étape 434 (Léo : « ça bouge aléatoirement, mais ça doit bouger s'il parle ») : les barres suivent le vrai son.
 test('widget vocal : les barres restent immobiles dans le silence et suivent la voix pendant l’écoute', options, async () => {
