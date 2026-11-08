@@ -887,7 +887,13 @@ export default function App(): JSX.Element {
                         Étape 402 (Léo) : plus de bouton « Parler à Jaris » — l'orbe, « + » et « Jaris » suffisent ;
                         l'orbe est aussi le chemin au clavier. */}
                     <JarisOrb emotion={emotion} size={voiceOrbSize} onClick={wakeFromClick} label={t('app.voice.talk')} />
-                    <h1 className="app__status">{emotion === 'idle' ? t('app.voice.prompt') : t(STATUS_LABEL[emotion])}</h1>
+                    <h1 className="app__status">
+                      {emotion === 'idle'
+                        ? profileName
+                          ? t('chat.empty.greeting', { name: profileName })
+                          : t('app.voice.prompt')
+                        : t(STATUS_LABEL[emotion])}
+                    </h1>
                     {/* Étape 402 : le choix du modèle juste sous la question (même sélecteur que le Chat et le mode Code). */}
                     <div className="app__model-picker">
                       <ModelEffortPicker mode="voice" />

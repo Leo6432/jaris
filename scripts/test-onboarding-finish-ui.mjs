@@ -127,7 +127,8 @@ test('« Continuer » de « Configuration terminée » affiche l’accueil dans 
     assert.equal(await page.locator('.capacity-scan').count(), 0, 'l’écran de configuration doit avoir disparu')
     assert.equal(await page.locator('.app-rail').count(), 1, 'la barre d’icônes de Jaris doit être là')
     const prompt = await page.locator('.voice-screen .app__status').textContent()
-    assert.equal(prompt?.trim(), 'Que puis-je faire pour toi ?')
+    // Étape 443 : le Vocal salue par le prénom, comme le Chat (« Que puis-je faire pour toi, Léo ? »).
+    assert.equal(prompt?.trim().replace(/\u00a0/g, ' '), 'Que puis-je faire pour toi, Léo ?')
     assert.equal(await page.evaluate(() => window.__onboardingFinished), 1, 'le main doit être prévenu une seule fois')
   } finally {
     await browser.close()

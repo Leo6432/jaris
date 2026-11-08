@@ -11484,3 +11484,52 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : `test-benchmark-runner-cleanup.mjs` (arrêt pendant le test et pendant la préparation, test suivant
   normal), `test-unscored-models-ui.mjs` (bouton trouvable, état « arrêté » sans erreur, reprise et envoi possibles,
   arrêt depuis « déjà en cours » — échoue sans le bouton).
+
+## Étape 442 — Scores de la campagne du 07/11 (v0.50.0)
+
+- Premier fichier de Léo venu de « Préparer le fichier à m'envoyer » (tout l'historique, aucun envoi marqué avant) ;
+  nouvelles lignes depuis le 07/11 11:20. Toutes les réponses relues, justes comprises (détail dans la note « Étape
+  442 » de scripts/verified-tool-scores.md). gemma4:31b demandes 48/48 ; qwen3-vl:8b 74/78 et 44/48 (« ex: » pris
+  pour un exemple) ; qwen3-vl:4b 72/78 et 36/48 ; qwen2.5-coder:7b 5/78 et 4/48 (il écrit ses appels en JSON dans le
+  texte, sans `tool_calls` : Jaris non plus ne les lirait pas — vérifié dans la trace) ; Spark code 3/5 provisoire.
+  Cas rejoués : 11 modèles gagnent des points, 3 réponses que le juge croyait justes comptées fausses (K2 Horizon 3.7B,
+  qwen3.5:2b). Seul changement de choix sur la grille : Faible à 20-24 Go → granite4.2:8b.
+- Non intégrés : qwen3-vl:2b (16/78) et GLM-4.6V-Flash (27/78), tests arrêtés en route.
+- Doutes sur le test, pas corrigés : le code de `benchmark-models.mjs` ne refait pas l'étape avec une fenêtre doublée
+  sur `ContextFullError` (Jaris le fait, codeGenerator.ts) ; le juge de rappel-clarifie ne reconnaît pas « ex: » ;
+  `isRealReply` et Jaris ne retirent pas le balisage `<ifm|tool_calls>` écrit en texte par K2 Horizon ; vision de
+  qwen3-vl mesurée sur un autre digest du tag (republié depuis).
+
+## Étape 443 — Audit complet de l'appli et correctifs (v0.50.0)
+
+- Léo : « scanne toute l'application et trouve-moi des défauts de design ou de code », puis « corrige tout ». Quatre
+  audits en lecture seule (rendu réel mesuré dans Chromium en sombre/clair à 760 et 1200 px, CSS, côté main, écran et
+  textes), points clés revérifiés à la main, puis trois agents en copies séparées (git worktree) et une relecture
+  adverse des changements qui touchent aux données (4 défauts trouvés, corrigés).
+- Données et main : liste des téléphones (lecture qui distingue absent/illisible, écriture atomique, file exclusive,
+  « vu le » une fois par minute) ; jeton GitHub renouvelé gardé en mémoire avant l'écriture, compteur de session contre
+  une déconnexion pendant un renouvellement ; jetons MCP jamais écrasés sur une lecture ratée ; jeton GitHub, clé
+  Claude et trace de connexion en écriture atomique (writeFileAtomic accepte des octets, effacement dans la même file :
+  `removeFileQueued`) ; `patchProfile(fonction)` partout où le main relisait puis réécrivait le profil après une
+  attente ; read_web_page refuse les adresses locales (vérifiées à la connexion, redirections à la main, 2 Mo max) ;
+  traduction du dessin sans fenêtre forcée à 2048, par inactivité ; « Déplacer » bloque et arrête toute création
+  (portes claimEngine/runEngine, conversation annulée, attente de sd.exe signalée) ; transcriptions du téléphone
+  rejetées tout de suite si l'écoute s'arrête ; voix et PowerShell surveillés par inactivité (signe de vie tous les
+  50 caractères pour une longue frappe) ; appairage limité par appareil (le tunnel Go pose `X-Jaris-Client`, vérifié
+  ici par go vet + compilation des tests, exécution laissée à la CI) ; notes de mémoire en file par note ; clés
+  masquées dans le résumé MCP ; déconnexion Tailscale qui attend l'arrêt ; arrêt d'un test résolu `{ stopped: true }`.
+- Écran et textes : journal du Chat filtré par liste d'AUTORISATION (plus de « Outils MCP proposés : … » en français) ;
+  téléphone qui décide sur le 404, pas sur un mot traduit, et remet le texte si l'envoi échoue ; plus d'écran vide ni de
+  bouton muet sur une lecture ratée (accueil, configuration, Options, Cerveau, Image, Vidéo, téléphone) ; gardes du mode
+  Code ; pluriels du Duel ; voix du Duel arrêtée en quittant ; GitHub « Connexion… » et annulation sans texte comparé ;
+  accessibilité (libellés reliés, aria-current, aria-pressed, structure) ; portugais harmonisé en pt-BR ; 3 clés mortes.
+- Style : 1 211 lignes de CSS mortes ou entièrement écrasées retirées (4 couches de design empilées), un bloc :root par
+  thème — 72 états d'écran identiques au pixel et en styles calculés avant/après, sauf les correctifs voulus. Thème
+  clair corrigé (recherche du Classement, focus du Chat, roue d'attente, Cerveau, logo, points de duel) ; même champ de
+  saisie partout ; Classement lisible à 760 px et centré ; « … » visible ; titres d'accueil homogènes, prénom aussi en
+  Vocal ; titres en double masqués à l'écran (gardés pour les lecteurs d'écran). `--hud-panel-raised` blanc en clair.
+- Pas fait : position verticale du titre d'accueil selon le mode (dépend de chaque panneau) ; `workspace.searchEmpty`
+  parle de conversations aussi en mode Code.
+- Régression : nouveaux tests test-visual-consistency-ui, test-format-chat-progress, test-tts-client,
+  test-i18n-unused-keys, test-i18n-pt-br, et une trentaine de fichiers de tests étendus ; chaque nouveau test vérifié
+  sur l'ancien code (il échoue). Rien vérifié en usage réel (pas de Windows ici).
