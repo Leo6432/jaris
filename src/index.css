@@ -82,7 +82,9 @@
 
     --hud-bg: #ffffff;
     --hud-panel: #f4f4f4;
-    --hud-panel-raised: #f4f4f4;
+    /* Ce qui est posé PAR-DESSUS (menus, cartes) : blanc sur un trait, comme les menus de ChatGPT en clair. Égal à
+       --hud-panel (#f4f4f4), le menu « + » ne se détachait pas d'un champ du même gris. */
+    --hud-panel-raised: #ffffff;
 
     --hud-text: #0d0d0d;
     --hud-text-soft: #2f2f2f;
@@ -701,6 +703,7 @@ body.body--splash {
 .options-menu__sort-button {
   font: inherit;
   color: inherit;
+  text-align: inherit;
   text-transform: inherit;
   letter-spacing: inherit;
   background: none;
@@ -768,15 +771,18 @@ body.body--splash {
 
 /* Étape 226 : recherche dans « Tous les modèles », même pilule que les pastilles de tri voisines. Exclue de la
    règle générale des champs (plus bas, avec !important), qui lui imposerait des coins droits. */
+/* La recherche peut se resserrer jusqu'à 160 px avant de faire passer les pastilles à la ligne : à 240 px fixes,
+   « Par défaut » se retrouvait seul sur sa ligne dès 1200 px. */
 .options-menu__model-search {
   font-family: var(--hud-font-body);
   font-size: 12px;
-  flex: 0 1 240px;
-  min-width: 140px;
+  flex: 1 1 160px;
+  min-width: 120px;
+  max-width: 240px;
   padding: 5px 14px;
   margin-right: 8px;
   border-radius: 999px;
-  background: rgba(21, 21, 23, 0.75);
+  background: var(--hud-panel);
   border: 1px solid var(--hud-line);
   color: var(--hud-text);
   outline: none;
@@ -826,20 +832,23 @@ body.body--splash {
   color: hsl(calc(4deg + var(--duel-confidence, 0) * 138deg) 72% var(--duel-lightness));
 }
 
+/* 25 % : la teinte la plus claire (jaune-vert) atteint encore 4,9:1 sur le gris du tableau ; à 33 % elle tombait à 3,1:1. */
 @media (prefers-color-scheme: light) {
   .options-menu__duel-points {
-    --duel-lightness: 33%;
+    --duel-lightness: 25%;
   }
 }
 
+/* D'un seul tenant (« Duels » d'un côté, « : 3 » de l'autre se lisait mal), dans la police du texte, plus étroite que
+   la chasse fixe des chiffres : la colonne reste assez étroite pour que le tableau tienne à 760 px. */
 .options-menu__duel-count {
   display: block;
   margin-top: 2px;
+  font-family: var(--hud-font-body);
   font-size: 12px;
   color: var(--hud-text-faint);
   font-variant-numeric: tabular-nums;
-  /* Peut passer sur deux lignes dans une fenêtre étroite plutôt que faire défiler le tableau de côté. */
-  white-space: normal;
+  white-space: nowrap;
 }
 
 /* Étape 341 : futurs modèles, en bas de « Tous les modèles », sur fond rayé — repérés, jamais choisis. */
@@ -945,8 +954,10 @@ body.body--splash {
 .options-menu__voice-picker {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
-  gap: 28px;
+  gap: 16px 28px;
 }
 
 .options-menu__voice-nav {
@@ -976,9 +987,12 @@ body.body--splash {
   cursor: default;
 }
 
+/* Au moins 260 px de texte : en dessous (fenêtre de 760 px), la description passe sous l'orbe plutôt que de
+   s'écraser sur 140 px et six lignes à côté. */
 .options-menu__voice-info {
   display: flex;
   flex-direction: column;
+  flex: 1 1 260px;
   gap: 8px;
   min-width: 0;
 }
@@ -1048,7 +1062,7 @@ body.body--splash {
   height: 44px;
   padding: 0 4px;
   border-radius: 8px;
-  background: rgba(21, 21, 23, 0.5);
+  background: var(--jv-hover);
 }
 
 .options-menu__mic-bar {
@@ -1200,12 +1214,6 @@ body.body--splash {
 .app__onboarding {
   display: flex;
   flex-direction: column;
-}
-
-.app__onboarding input {
-  background: rgba(var(--jv-ink-rgb), 0.06);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
-  color: var(--hud-text);
 }
 
 .app__onboarding input:focus {
@@ -2623,15 +2631,13 @@ p.capacity-scan__tier-missing {
   cursor: default;
 }
 
-.composer__send--busy:disabled {
-  opacity: 0.8;
-}
-
+/* La couleur du bouton qui la porte (envoi : encre sur le disque plein ; micro : gris du texte) : en gris foncé fixe,
+   elle disparaissait sur le micro en thème sombre et sur l'envoi en thème clair. */
 .composer__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(21, 21, 23, 0.3);
-  border-top-color: #151517;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
   border-radius: 999px;
   animation: composer-spin 0.8s linear infinite;
 }
@@ -2846,8 +2852,11 @@ p.capacity-scan__tier-missing {
 .effort-picker__step--active,
 .effort-picker__step--active:not(:disabled):hover {
   background: #ffffff;
-  /* Un liseré de la couleur du fond détache le disque blanc du cyan, sinon les deux clairs se confondent. */
-  box-shadow: none;
+  /* Un liseré de la couleur du panneau, cerclé d'un trait d'encre, détache le disque blanc du remplissage (en sombre,
+     blanc sur #ececec se confondaient : 1,2:1) comme du reste de la barre, gris clair en thème clair. */
+  box-shadow:
+    0 0 0 2px var(--jv-composer),
+    0 0 0 3px rgba(var(--jv-ink-rgb), 0.3);
 }
 
 .effort-picker__step:disabled {
@@ -3036,7 +3045,7 @@ p.capacity-scan__tier-missing {
 .reply-code-block {
   margin: 8px 0;
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--jv-code);
   border: 1px solid var(--hud-line);
   border-radius: 6px;
   overflow-x: auto;
@@ -3044,12 +3053,19 @@ p.capacity-scan__tier-missing {
   font-family: 'JetBrains Mono', 'Consolas', monospace;
   font-size: 0.85em;
 }
+/* Un voile de l'encre du thème : le noir à 35 % était invisible sur le fond noir et lourd sur le blanc. */
 .reply-code-inline {
   padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 4px;
   font-family: 'JetBrains Mono', 'Consolas', monospace;
   font-size: 0.9em;
+}
+
+/* Le widget reste noir dans les deux thèmes (voulu) : son code garde le voile sombre d'origine. */
+.app--widget .reply-code-block,
+.app--widget .reply-code-inline {
+  background: rgba(0, 0, 0, 0.35);
 }
 
 /* --- Écran en erreur (étape 234, bêta) ------------------------------------ */
@@ -3144,6 +3160,39 @@ p.capacity-scan__tier-missing {
   background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
+/* Avec la vue 3D : le nombre de notes, en tête, déplie leur liste par-dessus la vue (fermée par défaut). Une note ne
+   s'ouvrait qu'en cliquant sa sphère : rien au clavier, rien pour un lecteur d'écran. */
+.memory-brain__index {
+  position: relative;
+}
+
+.memory-brain__index > summary {
+  margin-left: -8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.memory-brain__index > summary:hover,
+.memory-brain__index[open] > summary {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.memory-brain__index > .memory-brain__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 5;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, 70vw);
+  max-height: 50vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
 /* La famille de panneaux (équerres, plus haut) remet `position: relative` sur la fiche de note : écrite APRÈS la
    règle d'origine, à spécificité égale, elle gagnait — la fiche ouverte d'un clic tombait sous le graphe, hors de
    l'écran, en 3D comme en liste. Rétablie ici, après la famille. */
@@ -3213,6 +3262,7 @@ a:hover {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--hud-text);
+  background: transparent;
   border: 1px solid var(--hud-line);
   padding: 8px 16px;
   cursor: pointer;
@@ -3289,10 +3339,11 @@ button:disabled {
 
 /* --- Champs de saisie ----------------------------------------------------- */
 
-input:not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
+input:not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not(.duel-judge__key-input):not(.app__onboarding input):not([type='checkbox']):not([type='radio']),
 textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);
+  border-radius: 10px !important;
   background: var(--hud-panel) !important;
   border: 1px solid var(--hud-line) !important;
   color: var(--hud-text) !important;
@@ -3340,8 +3391,9 @@ textarea::placeholder {
   color: var(--hud-danger);
 }
 
+/* « — » (pas encore mesuré) : le gris le plus discret tombait à 4,2:1 sur le fond du badge en thème clair. */
 .options-menu__badge--none {
-  color: var(--hud-text-faint);
+  color: var(--hud-text-dim);
 }
 
 .options-menu__section-title {
@@ -4043,13 +4095,19 @@ textarea::placeholder {
   color: var(--hud-text-dim);
 }
 
+/* Le prénom, en pilule comme le bouton « Commencer » juste dessous : exclu de la règle générale des champs (coins à
+   10 px en !important, qui l'emportait), il en reprend ici le fond, le trait et la police. */
 .app__onboarding input {
   width: 100%;
   height: 46px;
   padding: 0 16px;
+  font-family: var(--hud-font-body);
   font-size: 15px;
   text-align: center;
-  border-radius: 999px !important;
+  color: var(--hud-text);
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
 }
 
 .app__onboarding button {
@@ -4244,6 +4302,16 @@ body {
   height: 20px;
 }
 
+/* Thème clair : l'orbe cyan posée sur un disque noir, exactement comme en sombre — sur le gris clair de la barre, le
+   cyan tombait à 1,4:1 (logo délavé). En sombre, rien ne change : c'est l'identité de Jaris. */
+@media (prefers-color-scheme: light) {
+  .titlebar__logo {
+    border-radius: 50%;
+    background: #000000;
+    box-shadow: 0 0 0 2px #000000;
+  }
+}
+
 .titlebar__name {
   font-size: 12px;
 }
@@ -4429,26 +4497,6 @@ body {
   border-top-left-radius: 8px;
 }
 
-/* --- Boutons, cartes, champs : coins Windows 11 ---------------------------- */
-
-.options-menu__action,
-.options-page__close,
-.options-menu__ollama-update-actions button,
-.app__new-models button,
-.memory-brain__actions button,
-.error-panel__actions button,
-.code-panel__result-actions button,
-.workspace__confirm-yes,
-.workspace__confirm-no,
-.chat-widget__action,
-.capacity-scan button,
-.runtime-setup__actions button,
-.image-install__button,
-.quality-picker__download,
-.app__onboarding button {
-  background: var(--hud-panel);
-}
-
 /* Action principale d'un écran (installer, commencer, lancer) : pilule pleine claire, comme le bouton
    « Commencer » de la maquette. */
 .capacity-scan button,
@@ -4493,16 +4541,6 @@ textarea:not(.composer__input):focus-visible {
 .chat-panel pre,
 .image-panel__thumb {
   border-radius: 8px;
-}
-
-/* --- Barre de saisie : champ Windows 11, trait d'accent en bas au focus ----- */
-
-.composer {
-  border-bottom: 2px solid var(--hud-line);
-}
-
-.composer:focus-within {
-  border-bottom-color: var(--hud-accent);
 }
 
 .composer__plus {
@@ -4702,7 +4740,28 @@ textarea:not(.composer__input):focus-visible {
    ci-dessus le forçait à défiler de côté même sur un écran de 1920 px (Léo : « mettre en gros pour pas
    faire défiler »). Deux classes : plus spécifique que la règle générale, quel que soit l'ordre. */
 .options-page--models .options-page__content > * {
-  max-width: 1440px;
+  max-width: 1040px;
+  margin-inline: auto;
+}
+
+/* Fenêtre étroite : moins de marge autour du tableau et entre ses colonnes — ses dix colonnes tiennent à 760 px
+   (deux d'entre elles étaient cachées, à faire défiler de côté). */
+@media (max-width: 900px) {
+  .options-page--models .options-page__content {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .options-page--models .options-menu__model-overview-scroll > .options-menu__model-group {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .options-page--models .options-menu__model-overview th,
+  .options-page--models .options-menu__model-overview td {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
 }
 
 /* Titres de colonnes sur deux lignes si besoin, et dans la police du texte : en chasse fixe et sans retour à
@@ -4755,13 +4814,18 @@ textarea:not(.composer__input):focus-visible {
   border-radius: 9999px;
 }
 
+/* Boutons secondaires : TOUS transparents sur un trait (« Supprimer » garde sa couleur de danger, le bouton principal
+   d'un écran reste plein — règle plus haut, plus spécifique). */
 .options-menu__action,
+.options-page__close,
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
 .error-panel__actions button,
 .code-panel__result-actions button,
-.workspace__confirm-no {
+.workspace__confirm-no,
+.runtime-setup__actions button,
+.quality-picker__download {
   background: transparent;
   border: 1px solid var(--hud-line-strong);
   color: var(--hud-text);
@@ -4801,12 +4865,6 @@ textarea:not(.composer__input):focus-visible {
   border-radius: 16px;
 }
 
-input:not(.chat-widget__input):not(.options-menu__model-search):not(.reply-ui__field-input):not([type='checkbox']):not([type='radio']),
-textarea:not(.composer__input),
-select {
-  border-radius: 10px !important;
-}
-
 .options-menu__progress-bar,
 .runtime-setup__bar,
 .options-menu__progress-bar-fill,
@@ -4839,8 +4897,10 @@ select {
   box-shadow: var(--jv-composer-shadow);
 }
 
+/* Focus : le contour fonce un peu, dans l'encre du thème (le blanc codé en dur du Chat disparaissait en clair). Le
+   champ lui-même n'a pas d'anneau (.composer__input exclu plus haut) : c'est ce contour qui montre le focus. */
 .composer:focus-within {
-  border-color: var(--jv-composer-border);
+  border-color: rgba(var(--jv-ink-rgb), 0.24);
   box-shadow: var(--jv-composer-shadow);
 }
 
@@ -4853,6 +4913,12 @@ select {
 
 .composer__send:disabled {
   opacity: 0.3;
+}
+
+/* Occupé (la réponse arrive) : désactivé lui aussi, mais sa roue doit se voir. APRÈS la règle :disabled ci-dessus,
+   jamais avant : même spécificité, c'est l'ordre qui décide (elle était écrasée, la roue restait à 30 %). */
+.composer__send--busy:disabled {
+  opacity: 0.8;
 }
 
 .composer__menu,
@@ -5037,7 +5103,8 @@ select {
 }
 
 .app-rail .rail__item--active,
-.app-rail .rail__item--active:hover {
+.app-rail .rail__item--active:hover,
+.app-rail .rail__item[aria-expanded='true'] {
   color: var(--hud-text);
   background: var(--jv-hover-strong);
 }
@@ -5067,7 +5134,7 @@ select {
   border-left: 1px solid var(--hud-line);
   border-top-left-radius: 12px;
   background: var(--jv-side);
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(var(--jv-ink-rgb), 0.18) transparent;
   scrollbar-width: thin;
 }
 
@@ -5247,18 +5314,11 @@ select {
   border-radius: 0;
 }
 
+/* Même champ que Code, Image et Vidéo (fond, trait, arrondi : .composer) ; seule sa largeur est propre au Chat. */
 .chat-panel > .composer {
   width: calc(100% - 40px);
   max-width: 800px;
   margin-bottom: 16px;
-  border: 1px solid var(--hud-line-strong);
-  border-radius: 26px;
-  background: var(--hud-panel);
-}
-
-.chat-panel > .composer:focus-within {
-  border-color: rgba(255, 255, 255, 0.24);
-  border-bottom-color: rgba(255, 255, 255, 0.24);
 }
 
 .composer__input {
@@ -5284,10 +5344,11 @@ select {
   color: var(--jv-accent-ink);
 }
 
+/* Le titre d'accueil de tous les modes (Chat, Code, Image, Vidéo, Duel, et la question de l'Agent vocal plus bas). */
 .empty-state__title {
   font-size: 28px;
-  font-weight: 550;
-  letter-spacing: -0.025em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .empty-state__description {
@@ -5350,8 +5411,8 @@ select {
 /* --- Sous l'orbe : l'état, puis l'échange en cours comme des sous-titres ---------------------- */
 .voice-screen .app__status {
   margin: 4px 0 0;
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--hud-text);
 }
@@ -8895,11 +8956,19 @@ ul.reply-list--nested {
   gap: 8px;
 }
 
+/* Une clé se relit caractère par caractère : vraie chasse fixe (--font-mono n'existait pas, et la règle générale des
+   champs imposait sa police), d'où l'exclusion de cette règle — fond, trait et coins repris ici. */
 .duel-judge__key-input {
   flex: 1 1 220px;
   min-width: 0;
   height: 36px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  padding: 0 12px;
+  font-family: var(--hud-font-mono);
+  font-size: 13px;
+  color: var(--hud-text);
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
 }
 
 .duel-judge__key-saved {
@@ -9465,6 +9534,22 @@ ul.reply-list--nested {
    Même famille que les blocs de code : une carte neutre, jamais de couleur vive (le graphique est dans la couleur
    du texte, comme le reste de l'interface). */
 .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* La barre du haut nomme déjà l'écran — Duel, Machine louée et Classement répétaient ce nom en grand juste dessous.
+   Le titre de la page reste pour les lecteurs d'écran (même technique que .sr-only, juste au-dessus). */
+.duel-home > .empty-state > .empty-state__title,
+.machine-page__title,
+.options-page--models .options-page__tab-header h3 {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -10391,9 +10476,7 @@ input.reply-ui__field-input {
 .mcp-discover__title {
   margin: 0;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--hud-text-faint);
 }
 
@@ -10796,6 +10879,8 @@ input.reply-ui__field-input {
 .workspace__rail-head .workspace__rail-label {
   padding-top: 0;
   padding-bottom: 0;
+  /* La hauteur de la loupe : « Récents » ne monte plus quand elle est absente (mode Code sans conversation). */
+  line-height: 26px;
 }
 
 /* L'air au-dessus de « Récents » (16 px) passe sur la ligne entière : la loupe reste centrée sur le texte. */
@@ -11373,6 +11458,8 @@ input.reply-ui__field-input {
 /* Quatre champs : l'adresse sur toute la largeur, puis carte, RAM et stockage côte à côte. */
 .machine-page__fields {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Un libellé sur deux lignes (« Mémoire de la carte graphique ») ne décale plus son champ des deux autres. */
+  align-items: end;
 }
 .machine-page__fields .duel-remote__field--host {
   grid-column: 1 / -1;

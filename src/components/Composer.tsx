@@ -82,6 +82,20 @@ const INLINE_MAX_HEIGHT_PX = 220
 /** Étape 427 : en dessous de cette largeur pour le texte, le champ sur une ligne passe sur deux rangées. */
 const INLINE_MIN_TEXT_PX = 160
 
+/**
+ * Largeur dont le texte d'aide (placeholder) a besoin pour tenir sur une ligne dans ce champ, marges intérieures
+ * comprises. Mode Code à 760 px : « Décris l'application à créer… » (195 px) dans 183 px passait à la ligne, et le
+ * champ d'une ligne n'en montrait que la moitié du haut. Mesuré avec la vraie police du champ (canvas).
+ */
+function placeholderWidth(field: HTMLTextAreaElement): number {
+  if (!field.placeholder) return 0
+  const style = getComputedStyle(field)
+  const context = document.createElement('canvas').getContext('2d')
+  if (!context) return 0
+  context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  return Math.ceil(context.measureText(field.placeholder).width) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+}
+
 function PlusIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -177,10 +191,16 @@ export default function Composer({
     const composer = composerRef.current
     const field = inputRef.current
     if (!inline || !composer || !field || typeof ResizeObserver === 'undefined') return
+    let alive = true
     const check = (): void => {
+      if (!alive) return
       const width = composer.getBoundingClientRect().width
+      // Champ vide : il faut aussi la place du texte d'aide, sinon il passe à la ligne et n'est vu qu'à moitié. Une fois
+      // sur deux rangées, le champ s'élargit : le retour à une ligne ne dépend que de la largeur du champ entier (plus
+      // bas), jamais de cette mesure — pas de va-et-vient entre une et deux rangées.
+      const needed = field.value ? INLINE_MIN_TEXT_PX : Math.max(INLINE_MIN_TEXT_PX, placeholderWidth(field))
       setCramped((current) => {
-        if (!current && !composer.classList.contains('composer--expanded') && field.getBoundingClientRect().width < INLINE_MIN_TEXT_PX) {
+        if (!current && !composer.classList.contains('composer--expanded') && field.getBoundingClientRect().width < needed) {
           crampedAtRef.current = width
           return true
         }
@@ -193,8 +213,13 @@ export default function Composer({
     observer.observe(composer)
     // Un bouton qui apparaît (la branche, à l'ouverture d'un dépôt) rétrécit le texte sans changer la largeur du champ.
     observer.observe(field)
-    return () => observer.disconnect()
-  }, [inline])
+    // La police embarquée peut arriver après le premier calcul : le texte d'aide est remesuré avec elle.
+    void document.fonts?.ready.then(check)
+    return () => {
+      alive = false
+      observer.disconnect()
+    }
+  }, [inline, placeholder])
   useLayoutEffect(() => {
     const field = inputRef.current
     if (!inline || !field) return

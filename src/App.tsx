@@ -56,7 +56,9 @@ const MODES: Array<{ id: AppMode; label: MessageKey; title: MessageKey; panel?: 
 
 /** Léo : Duel et Classement derrière un seul bouton « … » de la barre d'icônes, qui ouvre un petit menu. */
 const MORE_MODES: AppMode[] = ['duel', 'ranking']
-const ICON_MORE = 'M5 12h.01M12 12h.01M19 12h.01'
+/** Trois points pleins (petits cercles), du même poids que le trait des autres icônes : en simples points de 1,6 px,
+ *  « … » paraissait plus pâle que ses voisines. */
+const ICON_MORE = 'M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0'
 /** Étape 437 : un serveur (deux baies), pour la machine louée. */
 const ICON_MACHINE = 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01'
 
@@ -145,7 +147,7 @@ function RailMoreMenu({ active, current, onSelect }: { active: boolean; current:
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <LineIcon d={ICON_MORE} size={22} />
+        <LineIcon d={ICON_MORE} size={20} />
         <span className="rail__label">{t('app.mode.more')}</span>
       </button>
       {open && (

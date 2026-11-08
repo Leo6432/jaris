@@ -21,15 +21,47 @@ function isCenterNode(node: NodeObject): boolean {
   return Boolean((node as { isCenter?: boolean }).isCenter)
 }
 
-function makeNodeLabel(node: NodeObject): SpriteText {
+/**
+ * Couleurs dessinées dans la vue 3D (un canvas : le CSS n'y entre pas). Celles du thème sombre sont celles d'origine ;
+ * en thème clair, les étiquettes sombres sur fond quasi noir et les liens bleu pâle devenaient des taches sur le
+ * blanc : texte foncé sur fond clair, liens plus soutenus. Les nœuds gardent les couleurs de Jaris (cyan, ambre).
+ * La vue 3D éclaircit les couleurs de ses étiquettes (mesuré : #10243a s'affichait gris moyen) : d'où un texte noir,
+ * et un ambre très foncé (#411600) qui s'affiche comme l'ambre du thème clair (#8a5300).
+ */
+const BRAIN_COLORS = {
+  dark: { label: '#d9ecff', centerLabel: '#ffb648', labelBackground: 'rgba(5, 7, 12, 0.75)', link: 'rgba(127, 163, 201, 0.55)' },
+  light: { label: '#000000', centerLabel: '#411600', labelBackground: 'rgba(255, 255, 255, 0.9)', link: 'rgba(30, 60, 100, 0.6)', weight: '600' }
+} as const
+
+const LIGHT_QUERY = '(prefers-color-scheme: light)'
+
+/** Le thème de Windows (Jaris le suit), relu quand il change. */
+function usePrefersLight(): boolean {
+  const [light, setLight] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia(LIGHT_QUERY).matches)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia(LIGHT_QUERY)
+    const onChange = (): void => setLight(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return light
+}
+
+function makeNodeLabel(node: NodeObject, colors: (typeof BRAIN_COLORS)['dark' | 'light']): SpriteText {
   const isCenter = isCenterNode(node)
   const sprite = new SpriteText(String(node.id))
-  sprite.color = isCenter ? '#ffb648' : '#d9ecff'
+  sprite.color = isCenter ? colors.centerLabel : colors.label
   sprite.textHeight = isCenter ? 5 : 3.5
-  sprite.backgroundColor = 'rgba(5, 7, 12, 0.75)'
+  sprite.backgroundColor = colors.labelBackground
+  // Texte foncé sur fond clair : les lettres fines, réduites par la vue 3D, tournaient au gris ; un cran plus gras.
+  if ('weight' in colors) sprite.fontWeight = colors.weight
   sprite.padding = 2
   sprite.borderRadius = 3
   sprite.position.set(0, isCenter ? 13 : 9, 0)
+  // Les étiquettes passent toujours devant les sphères : « Parc Astérix » disparaissait derrière la grosse sphère « Léo ».
+  sprite.material.depthTest = false
+  sprite.renderOrder = 10
   return sprite
 }
 
@@ -40,24 +72,53 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
   // Étape 234 (bêta) : sans WebGL (pilote graphique, machine virtuelle, accélération désactivée), la vue 3D
   // lève une exception dès sa création — non rattrapée, elle vidait TOUT l'écran de Jaris (menu compris).
   const [view3dFailed, setView3dFailed] = useState(false)
+  const light = usePrefersLight()
+  // Numéro de la dernière note demandée : une réponse plus ancienne qui arrive après (clic sur A puis B, A répond en
+  // dernier) est ignorée au lieu de remplacer la note affichée. Fermer la note invalide aussi la demande en cours.
+  const noteRequestRef = useRef(0)
 
   // Le nœud central est l'utilisateur (ajouté par main.ts), pas une note : le compter affichait « 2 notes » pour une seule.
-  const noteCount = graph.nodes.filter((node) => !node.isCenter).length
+  const notes = graph.nodes.filter((node) => !node.isCenter)
+  const noteCount = notes.length
 
   const openNote = (title: string): void => {
+    const request = ++noteRequestRef.current
     setSelectedNote({ title, content: null })
     // Étape 328 : aucune note à ce titre (le prénom au centre, souvent) ou note illisible : une phrase dans la langue
     // de Jaris, jamais « chargement… » pour toujours ni la réponse française destinée au modèle.
     void window.jaris.getMemoryNoteContent(title).then(
-      (content) => setSelectedNote({ title, content: content ?? t('brain.noNote', { title }) }),
-      (err: unknown) => setSelectedNote({ title, content: err instanceof Error ? err.message : String(err) })
+      (content) => {
+        if (request === noteRequestRef.current) setSelectedNote({ title, content: content ?? t('brain.noNote', { title }) })
+      },
+      (err: unknown) => {
+        if (request === noteRequestRef.current) setSelectedNote({ title, content: err instanceof Error ? err.message : String(err) })
+      }
     )
   }
+
+  const closeNote = (): void => {
+    noteRequestRef.current++
+    setSelectedNote(null)
+  }
+
+  /** Les notes en boutons (clavier, lecteur d'écran) : dans le canvas 3D, on ne les atteint qu'à la souris. */
+  const noteList = (
+    <ul className="memory-brain__list">
+      {notes.map((node) => (
+        <li key={node.id}>
+          <button className="memory-brain__list-item" onClick={() => openNote(node.id)}>
+            {node.id}
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
+    const colors = light ? BRAIN_COLORS.light : BRAIN_COLORS.dark
     let instance: ForceGraph3DInstance
     try {
       instance = new ForceGraph3D(container)
@@ -69,9 +130,9 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
         .nodeVal((node) => (isCenterNode(node) ? 3 : 1))
         .nodeColor((node) => (isCenterNode(node) ? '#ffb648' : '#37e2ff'))
         .nodeOpacity(0.9)
-        .nodeThreeObject(makeNodeLabel)
+        .nodeThreeObject((node) => makeNodeLabel(node, colors))
         .nodeThreeObjectExtend(true)
-        .linkColor(() => 'rgba(127, 163, 201, 0.55)')
+        .linkColor(() => colors.link)
         .linkDirectionalParticles(2)
         .linkDirectionalParticleColor(() => '#37e2ff')
         .onNodeClick((node) => openNote(String(node.id)))
@@ -108,13 +169,21 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
       instanceRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph])
+  }, [graph, light])
 
   return (
     <div className="memory-brain">
       <div className="memory-brain__header">
-        {/* Le nom de l'écran est déjà dans l'en-tête de la fenêtre : ne pas l'écrire deux fois. */}
-        <span>{tn('brain.notes', noteCount)}</span>
+        {/* Le nom de l'écran est déjà dans l'en-tête de la fenêtre : ne pas l'écrire deux fois. Avec la vue 3D, le nombre
+            de notes déplie leur liste (discrète, fermée par défaut) : chaque note s'ouvre aussi au clavier. */}
+        {noteCount > 0 && !view3dFailed ? (
+          <details className="memory-brain__index">
+            <summary>{tn('brain.notes', noteCount)}</summary>
+            {noteList}
+          </details>
+        ) : (
+          <span>{tn('brain.notes', noteCount)}</span>
+        )}
         <div className="memory-brain__actions">
           <button onClick={() => window.jaris.openMemoryFolder()}>{t('common.openFolder')}</button>
         </div>
@@ -124,17 +193,7 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
       ) : view3dFailed ? (
         <div className="memory-brain__fallback">
           <p className="memory-brain__fallback-text">{t('brain.no3d')}</p>
-          <ul className="memory-brain__list">
-            {graph.nodes
-              .filter((node) => !node.isCenter)
-              .map((node) => (
-                <li key={node.id}>
-                  <button className="memory-brain__list-item" onClick={() => openNote(node.id)}>
-                    {node.id}
-                  </button>
-                </li>
-              ))}
-          </ul>
+          {noteList}
         </div>
       ) : (
         <div ref={containerRef} className="memory-brain__canvas" />
@@ -144,7 +203,7 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
         <div className="memory-brain__note">
           <div className="memory-brain__note-header">
             <span>{selectedNote.title}</span>
-            <button onClick={() => setSelectedNote(null)} aria-label={t('common.close')}>✕</button>
+            <button onClick={closeNote} aria-label={t('common.close')}>✕</button>
           </div>
           <pre className="memory-brain__note-content">
             {selectedNote.content === null ? t('common.loading') : selectedNote.content}
