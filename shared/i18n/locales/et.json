@@ -981,6 +981,8 @@
   "ollama.listFailed": "Ollama vastas installitud mudeleid loetledes {status}",
   "ollama.tooLarge": "{model} vajab umbes {required} GB, rohkem kui selles arvutis saadaolev {budget} GB VRAM-i + RAM-i: see ei saaks niikuinii töötada.",
   "ollama.diskFull": "{model} vajab umbes {required} GB, rohkem kui selle arvuti {free} GB vaba kettaruumi.",
+  "engine.dataMoving": "Jaris teisaldab sinu andmeid teise kausta: piltide ja videote loomine on kuni taaskäivituseni peatatud.",
+  "main.move.engineStillRunning": "Piltide ja videote mootor ei peatunud {seconds} s jooksul: teisaldamine jätkub, kuid selle avatuna hoitav fail võib selle nurjata.",
   "mcp.error.authUnreadable": "Jaris ei saanud selle serveri salvestatud ühendust lugeda ({detail}). Midagi ei kustutatud: uuesti proovimiseks klõpsa „Taaskäivita“; kui see kordub, eemalda see server ja lisa see uuesti.",
   "page.blockedAddress": "Jaris ei loe aadressi {url}: see viib sellesse arvutisse või sinu võrgu seadmesse, mitte veebisaidile.",
   "page.tooManyRedirects": "Leht {url} suunab liiga paljudele teistele aadressidele: Jaris lõpetas selle järgimise.",

@@ -118,11 +118,28 @@ function dropUnsavedToken(): void {
   tokenSaveRetry = null
 }
 
+/**
+ * Relecture adverse : change à chaque déconnexion et à chaque nouvelle connexion. Un renouvellement (ou une lecture du
+ * jeton, une vérification) parti AVANT ne doit plus rien remettre ni effacer : « Se déconnecter » pendant un
+ * renouvellement en cours le laissait réécrire le jeton, et Léo se retrouvait reconnecté malgré lui.
+ */
+let sessionGeneration = 0
+
+/** Une autre session commence (déconnexion, nouvelle connexion) : ce qui appartenait à l'ancienne est abandonné. */
+function startNewSession(): void {
+  sessionGeneration += 1
+  renewing = null
+  dropUnsavedToken()
+}
+
 async function getClient(): Promise<GithubClient | null> {
   // Sans attendre : la demande part avec le jeton en mémoire, l'écriture se fait à côté.
   if (unsavedTokenSet) void saveRenewedToken()
   if (!client) {
+    const generation = sessionGeneration
     const stored = await readGithubToken()
+    // Déconnecté ou reconnecté pendant la lecture : ce qui a été lu appartient à l'ancienne session.
+    if (generation !== sessionGeneration) return client
     tokenUnreadable = stored.unreadable
     if (!stored.token) return null
     tokenSet = { token: stored.token, refreshToken: stored.refreshToken ?? null, expiresAt: stored.expiresAt ?? null }
@@ -148,9 +165,13 @@ function renewToken(): Promise<GithubClient | null> {
   if (renewing) return renewing
   const refreshToken = tokenSet?.refreshToken
   if (!refreshToken) return Promise.resolve(null)
-  renewing = (async () => {
+  const generation = sessionGeneration
+  let run: Promise<GithubClient | null> | null = null
+  run = (async () => {
     try {
       const next = await refreshGithubToken(clientId(), refreshToken)
+      // Déconnecté (ou reconnecté à un autre compte) pendant ce temps : ce jeton n'appartient plus à la session en cours.
+      if (generation !== sessionGeneration) return null
       // D'abord en mémoire : l'ancien jeton de renouvellement vient d'être consommé chez GitHub, le nouveau est le seul
       // qui reste. Une écriture refusée ne fait ni échouer la demande ni perdre le jeton (saveRenewedToken réessaie).
       tokenSet = next
@@ -159,15 +180,17 @@ function renewToken(): Promise<GithubClient | null> {
       await saveRenewedToken()
       return client
     } catch (err) {
+      if (generation !== sessionGeneration) return null
       if (!isAuthError(err)) throw err
       // Refusé : ce jeton de renouvellement ne servira plus, inutile de le redemander à GitHub.
       if (tokenSet) tokenSet = { ...tokenSet, refreshToken: null }
       return null
     } finally {
-      renewing = null
+      if (renewing === run) renewing = null
     }
   })()
-  return renewing
+  renewing = run
+  return run
 }
 
 /**
@@ -178,7 +201,7 @@ async function forget(rejected = false): Promise<void> {
   client = null
   tokenSet = null
   login = null
-  dropUnsavedToken()
+  startNewSession()
   await clearGithubToken()
   if (!rejected) {
     sessions.clear()
@@ -203,6 +226,7 @@ async function lostConnection(): Promise<GithubLostConnection | null> {
 const isAuthError = (err: unknown): boolean => err instanceof GithubError && err.reason === 'auth'
 
 async function withClient<T>(action: (github: GithubClient) => Promise<T>): Promise<T> {
+  const generation = sessionGeneration
   const github = await getClient()
   if (!github) throw new GithubError(401, t('github.err.notConnected'), 'auth')
   try {
@@ -217,13 +241,16 @@ async function withClient<T>(action: (github: GithubClient) => Promise<T>): Prom
     // Jeton expiré (application à jetons de 8 h) : renouvelé, puis la demande est refaite.
     const renewed = await renewToken()
     if (renewed) return await action(renewed)
+    // Déconnecté ou reconnecté pendant la demande : rien à vérifier ni à effacer, la demande s'arrête là.
+    if (generation !== sessionGeneration) throw err
     // Étape 308 : un seul refus effaçait le jeton pour de bon — Léo devait se reconnecter « tous les jours ». Avant
     // d'effacer quoi que ce soit, GitHub dit lui-même si ce jeton vaut encore (/user) : s'il passe, la demande est
     // refaite une fois au lieu de déconnecter ; s'il est refusé là aussi, le jeton est vraiment mort.
     try {
       await github.viewer()
     } catch (check) {
-      if (isAuthError(check)) await forget(true)
+      // Jamais la session d'après : seulement celle dont le jeton vient d'être refusé.
+      if (isAuthError(check) && generation === sessionGeneration) await forget(true)
       throw err
     }
     return await action(github)
@@ -235,9 +262,13 @@ export async function getGithubStatus(): Promise<GithubStatus> {
   const github = await getClient()
   if (!github) return { available: true, connected: false, login: null, lost: await lostConnection() }
   if (!login) {
+    const generation = sessionGeneration
     try {
       // Même chemin que toute autre demande : un jeton expiré est renouvelé ici aussi, jamais effacé d'emblée.
-      login = await withClient((client) => client.viewer())
+      const viewer = await withClient((client) => client.viewer())
+      // Déconnecté ou reconnecté entre-temps : ce nom et sa trace appartiennent à l'ancienne session.
+      if (generation !== sessionGeneration) return { available: true, connected: client !== null, login: null }
+      login = viewer
       const record = await readConnectionRecord()
       if (record && record.login !== login && !dataMoving) await writeConnectionRecord({ ...record, login })
     } catch (err) {
@@ -271,7 +302,7 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
     // Code validé pendant qu'un déplacement commençait : le jeton partirait dans l'ancien dossier, effacé à la fin.
     if (dataMoving) throw dataMovingError()
     const previous = await readConnectionRecord()
-    dropUnsavedToken()
+    startNewSession()
     const encrypted = await saveGithubToken(next)
     await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
     tokenSet = next

@@ -1276,10 +1276,16 @@ test('« Déplacer » arrête d’abord ce qui écrit dans les données : accès
   }
   // Relecture croisée : le dessin, la vidéo et le code en cours (sur le PC ET depuis le téléphone) s'arrêtent aussi, et
   // la vraie sortie du moteur de dessin (sd.exe, qui garde ses fichiers ouverts) est attendue avant la copie.
-  for (const stop of ['codeGenAbort?.abort()', 'imageStudioAbort?.abort()', 'videoStudioAbort?.abort()', 'phoneAccess?.stopStudioJobs()', 'await phoneStudioStopped', 'await waitForEngineExit()']) {
+  for (const stop of ['codeGenAbort?.abort()', 'imageStudioAbort?.abort()', 'videoStudioAbort?.abort()', 'chatSession.cancel()', 'phoneAccess?.stopStudioJobs()', 'await phoneStudioStopped', 'await waitForEngineExit()']) {
     const at = handler.indexOf(stop)
     assert.ok(at !== -1 && at < moveAt, `${stop} doit venir avant relocateEverything`)
   }
+  // Relecture adverse : plus aucune création ne démarre pendant le déplacement — posé AVANT d'arrêter l'existant —,
+  // de nouveau permise s'il est annulé ; un moteur qui ne sort pas est écrit dans le journal du déplacement.
+  const blocked = handler.indexOf('setEnginesBlocked(true)')
+  assert.ok(blocked !== -1 && blocked < handler.indexOf('codeGenAbort?.abort()') && blocked < handler.indexOf('chatSession.cancel()'), 'setEnginesBlocked(true) doit venir avant les arrêts')
+  assert.ok(handler.lastIndexOf('setEnginesBlocked(false)') > handler.lastIndexOf('} catch (err) {'), 'déplacement annulé : les créations doivent repartir')
+  assert.match(handler, /if \(!\(await waitForEngineExit\(\)\)\) log\(t\('main\.move\.engineStillRunning'/)
 })
 
 /**

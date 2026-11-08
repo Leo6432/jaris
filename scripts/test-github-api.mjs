@@ -36,7 +36,7 @@ const github = loadTsModule('electron/services/github.ts', {
   electron,
   'fs/promises': fsPromises,
   // Écriture d'un seul tenant (atomicFile.ts) : ici le même faux disque en mémoire.
-  './atomicFile': { writeFileAtomic: async (path, data) => void files.set(path, Buffer.from(data)) },
+  './atomicFile': { writeFileAtomic: async (path, data) => void files.set(path, Buffer.from(data)), removeFileQueued: async (path) => void files.delete(path) },
   path: { join },
   './dataLocation': { getDataRoot: () => '/donnees-jaris' }
 })
