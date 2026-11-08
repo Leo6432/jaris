@@ -69,7 +69,7 @@ const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash
  * comptent dans le choix depuis l'étape 328 ont leur colonne — Omniscience (« n'invente pas », Faible/Moyen/Élevé)
  * et Terminal-Bench 2.1 (Code) —, triables comme les autres, du meilleur au moins bon au premier clic.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'artificialAnalysisSpeed'
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'vision' | 'code' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'artificialAnalysisSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -78,6 +78,8 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   vramGb: 'asc',
   toolCalling: 'desc',
   demands: 'desc',
+  vision: 'desc',
+  code: 'desc',
   duelConversation: 'desc',
   duelCode: 'desc',
   duelVoice: 'desc',
@@ -88,6 +90,8 @@ const SORT_LABELS: Record<SortKey, MessageKey> = {
   vramGb: 'models.sort.vram',
   toolCalling: 'models.sort.tools',
   demands: 'models.sort.demands',
+  vision: 'role.vision',
+  code: 'options.score.code',
   duelConversation: 'models.sort.duelConversation',
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
@@ -100,13 +104,15 @@ const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
   vramGb: 'models.chip.vram',
   toolCalling: 'models.sort.tools',
   demands: 'options.score.requests',
+  vision: 'role.vision',
+  code: 'options.score.code',
   duelConversation: 'models.sort.duelConversation',
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
   artificialAnalysisSpeed: 'models.chip.speed'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'duelConversation', 'duelCode', 'duelVoice', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'vision', 'code', 'duelConversation', 'duelCode', 'duelVoice', 'artificialAnalysisSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -135,8 +141,35 @@ function SpeedCell({ entry }: { entry: ModelOverviewEntry }) {
   )
 }
 
+/** Score d'appel d'outils de la colonne : celui du test de conversation seul (vision et code ont leur colonne). */
+const conversationScore = (entry: ModelOverviewEntry): string | null =>
+  entry.toolScores ? entry.toolScores.conversation : entry.toolCalling
+
+/**
+ * Étape 446 : colonne Vision — une croix pour un modèle qui ne lit pas les images (il ne peut pas tenir ce rôle), sinon
+ * son score du test de vision (lire une capture, cliquer au bon endroit), ou « — » s'il n'est pas encore testé.
+ */
+function VisionCell({ entry }: { entry: Pick<ModelOverviewEntry, 'readsImages' | 'toolScores'> }): JSX.Element {
+  if (!entry.readsImages) {
+    return (
+      <td className="options-menu__col-num">
+        <span className="options-menu__no-vision" role="img" aria-label={t('models.vision.none')} title={t('models.vision.none')}>
+          ✕
+        </span>
+      </td>
+    )
+  }
+  return (
+    <td className="options-menu__col-num">
+      <ReliabilityBadge value={entry.toolScores?.vision ?? null} />
+    </td>
+  )
+}
+
 function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
-  if (key === 'toolCalling') return toolScoreValue(entry.toolCalling)
+  if (key === 'toolCalling') return toolScoreValue(conversationScore(entry))
+  if (key === 'vision') return entry.readsImages ? toolScoreValue(entry.toolScores?.vision ?? null) : null
+  if (key === 'code') return toolScoreValue(entry.toolScores?.code ?? null)
   if (key === 'demands') return toolScoreValue(entry.demands ?? null)
   // `?? null` : une mesure absente (y compris d'une réponse plus ancienne sans ce champ) reste toujours en fin de liste.
   if (key === 'artificialAnalysisSpeed') return shownSpeed(entry).value
@@ -329,9 +362,9 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                         <table className="options-menu__model-overview">
                           <thead>
                             <tr>
+                              {/* Étape 446 : catégorie et rôles tenus passent sous le nom (deux colonnes de place pour Vision et
+                                  Code, sans défiler de côté sur un portable). */}
                               <th>{t('models.col.model')}</th>
-                              <th>{t('models.col.category')}</th>
-                              <th>{t('models.col.used')}</th>
                               <th className="options-menu__col-num">
                                 <SortButton sortKey="vramGb" sort={sort} onSort={toggleSort} />
                               </th>
@@ -341,6 +374,13 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                               {/* Étape 243 : les 48 vraies demandes de bout en bout, à côté des questions isolées. */}
                               <th className="options-menu__col-num" title={t('models.col.demands.title')}>
                                 <SortButton sortKey="demands" sort={sort} onSort={toggleSort} />
+                              </th>
+                              {/* Étape 446 : les scores de vision et de code, chacun sa colonne. */}
+                              <th className="options-menu__col-num" title={t('models.col.vision.title')}>
+                                <SortButton sortKey="vision" sort={sort} onSort={toggleSort} />
+                              </th>
+                              <th className="options-menu__col-num" title={t('models.col.code.title')}>
+                                <SortButton sortKey="code" sort={sort} onSort={toggleSort} />
                               </th>
                               {/* Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — ce sont
                                   les points de duel qui décident, une colonne par catégorie de duel. */}
@@ -365,18 +405,24 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                       {entry.quantization}
                                     </span>
                                   )}
+                                  {/* Étape 446 : « lit les images » n'est plus répété, la colonne Vision le dit (croix ou score). */}
+                                  <span className="options-menu__model-meta">
+                                    {entry.category ? t(CATEGORY_LABELS[entry.category]) : '—'}
+                                    {entry.usedIn?.length
+                                      ? ` · ${t('common.labelValue', { label: t('models.col.used'), value: entry.usedIn.join(', ') })}`
+                                      : ''}
+                                  </span>
                                 </td>
-                                <td>
-                                  {entry.category ? t(CATEGORY_LABELS[entry.category]) : '—'}
-                                  {entry.readsImages ? ` · ${t('models.readsImages')}` : ''}
-                                </td>
-                                <td>{entry.usedIn?.length ? t('models.usedIn', { roles: entry.usedIn.join(', ') }) : t('common.no')}</td>
                                 <td className="options-menu__col-num">{t('unit.gb', { value: formatDecimal(entry.vramGb) })}</td>
                                 <td className="options-menu__col-num">
-                                  <ReliabilityBadge value={entry.toolCalling} />
+                                  <ReliabilityBadge value={conversationScore(entry)} />
                                 </td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.demands ?? null} />
+                                </td>
+                                <VisionCell entry={entry} />
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={entry.toolScores?.code ?? null} />
                                 </td>
                                 <DuelCell cell={entry.duels?.conversation} />
                                 <DuelCell cell={entry.duels?.code} />
@@ -391,16 +437,18 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                   <span className="options-menu__quant" title={t('models.quant.title')}>
                                     {entry.quantization}
                                   </span>
+                                  <span className="options-menu__model-meta">
+                                    <span className="options-menu__future-badge">{t('models.future')}</span>
+                                  </span>
                                 </td>
-                                <td>
-                                  <span className="options-menu__future-badge">{t('models.future')}</span>
-                                  {entry.readsImages ? ` · ${t('models.readsImages')}` : ''}
-                                </td>
-                                <td>{t('common.no')}</td>
                                 <td className="options-menu__col-num">{t('unit.gb', { value: formatDecimal(entry.vramGb) })}</td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={null} />
+                                </td>
+                                <VisionCell entry={entry} />
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>

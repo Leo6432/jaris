@@ -11572,3 +11572,21 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Autres doutes notés sur les juges : « ADMITS_UNKNOWN » rate « aucune donnée » / « ne peux pas me souvenir » ; le
   juge de contexte-long accepte une promesse de chercher ; « chat roux » sans contrôle de couleur ; deux délais de
   20 min sans trace (Q13 p2 de qwen2.5-coder:14b, première liste de tâches de Bolt).
+
+## Étape 446 — Colonnes Vision et Code dans le Classement, croix sans vision (v0.52.0)
+
+- Léo : « il y a un score vision ? », puis « oui, et mets une croix quand le modèle n'a pas de vision ». Les scores
+  de vision (34 cas) et de code (5 applis) comptaient déjà dans les choix (Vision, Code) mais n'étaient visibles nulle
+  part : la colonne « Appel d'outils » reprenait seulement le score de vision ou de code quand un modèle n'avait pas
+  de score de conversation (`scoreOf`, repli gardé pour la carte « Mes modèles »).
+- `ModelOverviewEntry.toolScores` (hardwareScan.ts, shared/ipc.ts) : les trois scores, chacun de SA table. Le
+  Classement a deux colonnes triables de plus, Vision (✕ quand le modèle ne lit pas les images, avec une infobulle et
+  un nom pour les lecteurs d'écran ; « — » s'il lit les images sans être testé) et Code ; « Appel d'outils » ne
+  montre plus que le test de conversation. Pour faire la place sans défiler de côté sur un portable (1 000 px) ni à
+  760 px : Catégorie et « Utilisé par Jaris » passent en petit sous le nom du modèle (« lit les images » n'y est plus
+  répété), et en fenêtre étroite les noms très longs finissent par « … » (infobulle), titres et scores un peu serrés.
+- Textes : 3 clés ajoutées (infobulles Vision/Code, croix), 4 retirées (models.col.category, models.usedIn,
+  models.readsImages, common.no), « Vision »/« Code » réutilisés, nom du rôle Vision aligné sur chaque langue.
+- Régression : test-options-reorganization-ui.mjs (colonnes, croix et son nom accessible, appel d'outils sans le
+  score de vision, 9 tris, tableau qui tient à 1 000 et 760 px, défilement dans la carte à 620 px),
+  test-hardwarescan-single-pool.mjs (trois scores lus dans le vrai fichier) ; tous deux échouent sur l'ancien code.

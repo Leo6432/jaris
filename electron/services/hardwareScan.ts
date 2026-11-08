@@ -1829,6 +1829,11 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
       readsImages: READS_IMAGES.has(c.model),
       usedIn: usageByModel.get(c.model) ?? [],
       ...scoreOf(c.model),
+      toolScores: {
+        conversation: verifiedToolScores.conversation.get(c.model) ?? null,
+        vision: verifiedToolScores.vision.get(c.model) ?? null,
+        code: verifiedToolScores.code.get(c.model) ?? null
+      },
       demands: currentDemandScore(verifiedToolScores, c.model),
       intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
       ...publishedScores(c.model)

@@ -462,6 +462,12 @@ export interface ModelOverviewEntry {
   readsImages?: boolean
   toolCalling: string | null
   /**
+   * Étape 446 (Léo : « il y a un score vision ? », puis « oui, et mets une croix quand le modèle n'a pas de vision ») :
+   * les trois scores vérifiés, chacun de SA table (verified-tool-scores.md), pour les colonnes séparées du Classement.
+   * `toolCalling` ci-dessus garde son repli conversation → code → vision (carte « Mes modèles »). `null` : pas de score.
+   */
+  toolScores?: { conversation: string | null; vision: string | null; code: string | null }
+  /**
    * Étape 243, Léo (« il y a seulement les questions visibles le score et pas le score de demandes ») : réussite
    * aux demandes complètes (« 46/48 »), lue dans verified-tool-scores.md, seulement sur le total du test ACTUEL.
    * Compte dans le choix de Faible, Moyen et Élevé (étape 241), jamais de Vision ni de Code. `null` sans score.

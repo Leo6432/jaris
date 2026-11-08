@@ -136,9 +136,9 @@ const overrides = {
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
-      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', toolScores: { conversation: '6/6', vision: '30/34', code: '4/5' }, demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
       { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5, duels: { voice: { points: -10, duels: 10 } } },
-      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4, duels: { voice: { points: 64, duels: 25 } } }
+      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: '29/34', toolScores: { conversation: null, vision: '29/34', code: null }, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4, duels: { voice: { points: 64, duels: 25 } } }
     ]
   })
 }
@@ -417,19 +417,38 @@ test('« Tous les modèles » a quitté les Options : c’est l’écran « Clas
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus : ${rows.length}`)
-    // La catégorie reste visible comme repère (Léo : « pour que les utilisateurs voient quel modèle est rapide »).
-    assert.equal(rows[0][1], 'Faible · lit les images', `catégorie affichée : ${rows[0][1]}`)
-    assert.equal(rows[2][1], 'Élevé · lit les images', `catégorie affichée : ${rows[2][1]}`)
-    // ministral-3:3b : utilisé pour deux rôles, VRAM et Intelligence Index officiel (5).
-    assert.equal(rows[0][2], 'Oui — Rapide, Médium', `rôles actifs attendus : ${rows[0][2]}`)
-    assert.ok(rows[0][3].includes('3'), `VRAM du premier modèle : ${rows[0][3]}`)
+    // La catégorie reste visible comme repère (Léo : « pour que les utilisateurs voient quel modèle est rapide ») ;
+    // étape 446 : avec les rôles tenus par Jaris, en petit sous le nom (plus des colonnes, pour faire place à Vision
+    // et Code). « lit les images » n'y est plus répété : la colonne Vision le dit.
+    const metas = await page.$$eval('.options-page--models tbody tr:not(.options-menu__model-row--future) .options-menu__model-meta', (els) =>
+      els.map((el) => el.textContent.replace(/\u00a0/g, ' ').trim())
+    )
+    assert.equal(metas[0], 'Faible · Utilisé par Jaris : Rapide, Médium', `catégorie et rôles du premier modèle : ${metas[0]}`)
+    assert.equal(metas[1], 'Faible', `modèle non utilisé : la catégorie seule (${metas[1]})`)
+    assert.equal(metas[2], 'Élevé · Utilisé par Jaris : Vision', `catégorie et rôles : ${metas[2]}`)
+    assert.ok(rows[0][1].includes('3'), `VRAM du premier modèle : ${rows[0][1]}`)
     // Étape 243 : la colonne des demandes complètes, à côté de l'appel d'outils ; « — » sans score.
-    assert.equal(rows[0][5], '33/48', `score de demandes attendu : ${rows[0][5]}`)
-    assert.equal(rows[1][5], '—', `pas de score de demandes : ${rows[1][5]}`)
+    assert.equal(rows[0][3], '33/48', `score de demandes attendu : ${rows[0][3]}`)
+    assert.equal(rows[1][3], '—', `pas de score de demandes : ${rows[1][3]}`)
+    // Étape 446 (Léo : « il y a un score vision ? » puis « oui, et mets une croix quand le modèle n'a pas de vision ») :
+    // colonnes Vision et Code, chacune de SON test ; une croix pour un modèle qui ne lit pas les images. L'appel
+    // d'outils ne montre plus que le test de conversation (gemma4:31b : « — », pas son score de vision).
+    assert.equal(rows[0][4], '30/34', `score de vision : ${rows[0][4]}`)
+    assert.equal(rows[1][4], '✕', `croix pour un modèle sans vision : ${rows[1][4]}`)
+    assert.equal(rows[2][4], '29/34')
+    assert.equal(rows[2][2], '—', `appel d'outils sans le score de vision : ${rows[2][2]}`)
+    assert.equal(rows[0][5], '4/5', `score de code : ${rows[0][5]}`)
+    assert.equal(rows[1][5], '—')
+    assert.equal(
+      await page.$eval('.options-page--models tbody tr:nth-child(2) .options-menu__no-vision', (el) => el.getAttribute('aria-label')),
+      'Ne lit pas les images : ne peut pas servir de modèle Vision'.replace(' :', '\u00a0:'),
+      'la croix se lit aussi au lecteur d’écran'
+    )
     // Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — les points de duel par
     // catégorie (Conversation, Code, Vocal), « — » pour un modèle jamais passé en duel.
     const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!headers.some((h) => /Intelligence|Omniscience|Terminal|Artificial/.test(h)), `colonnes d'Artificial Analysis encore là : ${headers}`)
+    assert.ok(headers[4].startsWith('Vision') && headers[5].startsWith('Code'), `colonnes Vision et Code : ${headers}`)
     assert.ok(headers[6].startsWith('Duels Conversation') && headers[7].startsWith('Duels Code') && headers[8].startsWith('Duels Vocal'), `colonnes de duels : ${headers}`)
     // Étape 371 : le nombre de duels s'affiche sous les points (plus seulement en infobulle).
     assert.equal(rows[0][6], '0Duels : 2', `points de duel Conversation : ${rows[0][6]}`)
@@ -458,7 +477,7 @@ test('« Tous les modèles » a quitté les Options : c’est l’écran « Clas
     assert.match(await page.$eval('.options-page--models tbody tr:nth-child(1) td:nth-child(7)', (el) => el.title), /à partir de 20 duels/)
     // Vitesse : « — » sans mesure.
     assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
-    assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
+    // Un modèle non retenu : sa ligne sous le nom ne donne que la catégorie (vérifié plus haut, metas[1]).
 
   })
 })
@@ -531,7 +550,8 @@ test('étape 331 : la version compressée s’affiche en entier sous chaque nom,
 
 test('dans une fenêtre étroite, le tableau défile DANS sa carte : le fond arrondi ne s’arrête plus au milieu', options, async () => {
   await withOptions(async (page) => {
-    const m = await measureModelsTable(page, 760, 700)
+    // Étape 446 : à 760 px toutes les colonnes tiennent désormais ; 620 px force encore le débordement.
+    const m = await measureModelsTable(page, 620, 700)
     assert.ok(m.table.width > m.card.clientWidth, `le cas étroit doit vraiment déborder pour que le test serve : ${m.table.width} <= ${m.card.clientWidth}`)
     assert.equal(m.card.overflowX, 'auto', 'la carte elle-même doit porter le défilement')
     assert.ok(m.wrapper.scrollWidth <= m.wrapper.clientWidth + 1, `rien ne doit déborder de la carte (${m.wrapper.scrollWidth} > ${m.wrapper.clientWidth})`)
@@ -730,13 +750,13 @@ test('« Choisir les modèles » : cases à cocher avec la durée, total de la s
 // rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
 // taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
 // précisément la distinction qui manquait pour attraper le problème avant livraison.
-test('une barre "Trier par" VISIBLE propose les 7 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
+test('une barre "Trier par" VISIBLE propose les 9 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Vision', 'Code', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.

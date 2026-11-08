@@ -195,6 +195,19 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   assert.match(byModel.get('granite4.2:8b').demands, /^\d+\/48$/)
   // Étape 445 : qwen3-vl:2b a désormais ses demandes ; GLM-4.6V-Flash n'en a toujours pas.
   assert.equal(byModel.get('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').demands, null, 'modèle de vision seul : pas de demandes')
+  // Étape 446 : les trois scores, chacun de SA table du vrai fichier, pour les colonnes séparées du Classement.
+  const tableScore = (section, model) => {
+    const start = REAL_SCORES.indexOf(`## ${section}`)
+    const next = REAL_SCORES.indexOf('\n## ', start + 1)
+    return REAL_SCORES.slice(start, next < 0 ? undefined : next).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/\\d+) \\|`))?.[1] ?? null
+  }
+  const vl = byModel.get('qwen3-vl:8b')
+  assert.deepEqual({ ...vl.toolScores }, { conversation: tableScore('Conversation', 'qwen3-vl:8b'), vision: tableScore('Vision', 'qwen3-vl:8b'), code: null })
+  assert.match(vl.toolScores.vision, /^\d+\/34$/, 'score de vision de qwen3-vl:8b')
+  assert.match(vl.toolScores.conversation, /^\d+\/78$/, 'son appel d’outils reste celui du test de conversation')
+  const glm = byModel.get('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M')
+  assert.equal(glm.toolScores.conversation, null, 'pas encore de score de conversation : la colonne affiche « — »')
+  assert.match(glm.toolScores.vision, /^\d+\/34$/)
   // La carte « Modèles utilisés sur ta machine » aussi, que le modèle soit le choix idéal ou celui du profil.
   const scan = setup({ vramMib: 8 * 1024 })
   assert.equal((await scan.getMyModelPicks()).large.demands, real((await scan.getMyModelPicks()).large.model))

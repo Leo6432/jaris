@@ -872,6 +872,25 @@ body.body--splash {
 
 /* D'un seul tenant (« Duels » d'un côté, « : 3 » de l'autre se lisait mal), dans la police du texte, plus étroite que
    la chasse fixe des chiffres : la colonne reste assez étroite pour que le tableau tienne à 760 px. */
+/* Étape 446 : catégorie et rôles tenus par Jaris, en petit sous le nom (ce n'est plus une colonne). */
+.options-menu__model-meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--hud-font-body);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--hud-text-faint);
+  white-space: normal;
+}
+
+/* Étape 446 : croix de la colonne Vision pour un modèle qui ne lit pas les images (discrète, pas une erreur). */
+.options-menu__no-vision {
+  color: var(--hud-text-dim);
+  font-family: var(--hud-font-body);
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .options-menu__duel-count {
   display: block;
   margin-top: 2px;
@@ -4768,7 +4787,7 @@ textarea:not(.composer__input):focus-visible {
   margin-inline: auto;
 }
 
-/* Fenêtre étroite : moins de marge autour du tableau et entre ses colonnes — ses dix colonnes tiennent à 760 px
+/* Fenêtre étroite : moins de marge autour du tableau et entre ses colonnes — toutes ses colonnes tiennent à 760 px
    (deux d'entre elles étaient cachées, à faire défiler de côté). */
 @media (max-width: 900px) {
   .options-page--models .options-page__content {
@@ -4785,6 +4804,21 @@ textarea:not(.composer__input):focus-visible {
   .options-page--models .options-menu__model-overview td {
     padding-left: 4px;
     padding-right: 4px;
+  }
+
+  /* Étape 446 : avec les colonnes Vision et Code, un nom très long finit par « … » (nom complet en infobulle), et
+     titres de colonnes et scores un peu plus serrés : toutes les colonnes tiennent encore à 760 px. */
+  .options-page--models .options-menu__model-name {
+    max-width: 160px;
+  }
+
+  .options-page--models .options-menu__model-overview th {
+    font-size: 11px;
+  }
+
+  .options-page--models .options-menu__model-overview .options-menu__badge {
+    padding-left: 6px;
+    padding-right: 6px;
   }
 }
 
