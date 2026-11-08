@@ -122,15 +122,25 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
 // Étape 347 : avec un Ollama assez récent, le bouton propose les deux nouveaux modèles — et eux seuls — mais aucun rôle
 // ne les choisit tant qu'ils n'ont pas de score (jamais un modèle non testé à la place d'un modèle mesuré).
 test('Ollama 0.40.10 : Bolt E4B proposé au test (Spark-X2.6 tout noté), aucun des deux choisi', async () => {
-  const offered = [...setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
+  // Étape 445 : Bolt E4B a depuis tous ses scores (vision 20/34, code 5/5) ; ce test porte sur la version d'Ollama, il
+  // repart donc de l'état d'avant (ni vision ni code pour Bolt), comme celui de K2 Horizon plus bas.
+  const boltUnscored = REAL_SCORES.split(/\r?\n/)
+    .filter((line) => !/^\| nemotron-3\.5-bolt:e4b \| \d+\/(34|5) \|/.test(line))
+    .join('\n')
+  assert.notEqual(boltUnscored, REAL_SCORES.split(/\r?\n/).join('\n'), 'les lignes vision et code de Bolt existent')
+  const offered = [...setup({ scores: boltUnscored, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
   // Étape 376 : avec eux, les modèles de vision et de code, jamais passés au test d'appel d'outils.
   // Étape 442 : Spark-X2.6 (code 3/5), qwen3-vl:4b et 8b, qwen2.5-coder:7b et gemma4:31b ont tous leurs scores.
+  // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi.
   const visionAndCode = [
-    'qwen3-vl:2b', 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
-    'qwen2.5-coder:14b', 'qwen2.5-coder:32b', 'qwen3-coder:30b', 'north-mini-code-1.0',
+    'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
+    'qwen2.5-coder:32b', 'qwen3-coder:30b', 'north-mini-code-1.0',
     'devstral-small-2:24b', 'qwen3.6:35b-a3b'
   ]
   assert.deepEqual(offered.sort(), [BOLT, ...visionAndCode].sort())
+  // Avec les vrais scores, Bolt n'a plus rien à passer : il n'est plus proposé.
+  const now = [...setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
+  assert.deepEqual(now.sort(), [...visionAndCode].sort())
   for (const vramMib of [0, 4096, 6144, 8192, 12288, 24576]) {
     const roles = picked(await setup({ scores: REAL_SCORES, vramMib, ollamaVersion: '0.40.10' }).pickBestModelsFromBenchmark())
     assert.ok(!roles.includes(SPARK) && !roles.includes(BOLT), `${vramMib} Mio : ${roles.join(', ')}`)

@@ -193,7 +193,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   const real = (model) => REAL_SCORES.slice(REAL_SCORES.indexOf('## Demandes')).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/48) \\|`))?.[1]
   assert.equal(byModel.get('granite4.2:8b').demands, real('granite4.2:8b'))
   assert.match(byModel.get('granite4.2:8b').demands, /^\d+\/48$/)
-  assert.equal(byModel.get('qwen3-vl:2b').demands, null, 'modèle de vision seul : pas de demandes')
+  // Étape 445 : qwen3-vl:2b a désormais ses demandes ; GLM-4.6V-Flash n'en a toujours pas.
+  assert.equal(byModel.get('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').demands, null, 'modèle de vision seul : pas de demandes')
   // La carte « Modèles utilisés sur ta machine » aussi, que le modèle soit le choix idéal ou celui du profil.
   const scan = setup({ vramMib: 8 * 1024 })
   assert.equal((await scan.getMyModelPicks()).large.demands, real((await scan.getMyModelPicks()).large.model))
@@ -207,10 +208,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 376 : tous les modèles passent le test d'appel d'outils — les modèles de vision et de code, jamais testés en
 // conversation, attendent le test de Léo (du plus léger au plus lourd).
 // Étape 442 : qwen3-vl:4b et 8b, qwen2.5-coder:7b et gemma4:31b ont désormais tous leurs scores.
+// Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi.
 const AWAITING = [
-  'qwen3-vl:2b',
   'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
-  'qwen2.5-coder:14b',
   'devstral-small-2:24b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
@@ -391,14 +391,15 @@ test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
   const scan = setup({ vramMib: 24 * 1024 })
   const described = scan.describeModelsToTest()
   const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
-  assert.equal(needs('qwen3-vl:2b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
-  assert.equal(needs('qwen2.5-coder:14b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b ont tous leurs scores ; GLM-4.6V-Flash et qwen2.5-coder:32b non.
+  assert.equal(needs('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('qwen2.5-coder:32b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
   // Un modèle de vision sans score de vision : les deux épreuves, dans l'ordre outils puis vision.
-  const scores = REAL_SCORES.replace(/^\| qwen3-vl:2b \| \d+\/34 \|\r?\n/m, '')
-  assert.notEqual(scores, REAL_SCORES, 'ligne vision de qwen3-vl:2b introuvable')
+  const scores = REAL_SCORES.replace(/^\| hf\.co\/ggml-org\/GLM-4\.6V-Flash-GGUF:Q4_K_M \| \d+\/34 \|\r?\n/m, '')
+  assert.notEqual(scores, REAL_SCORES, 'ligne vision de GLM-4.6V-Flash introuvable')
   const noVision = setup({ vramMib: 24 * 1024, scores }).describeModelsToTest()
   assert.equal(
-    JSON.stringify(noVision.find((m) => m.model === 'qwen3-vl:2b').needs),
+    JSON.stringify(noVision.find((m) => m.model === 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').needs),
     JSON.stringify([{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }])
   )
   assert.equal(needs('granite4.2:8b'), undefined, 'un modèle qui a tous ses scores n’apparaît pas')
@@ -506,10 +507,11 @@ test('étape 433 : durée estimée de chaque modèle à tester, d’après les t
   // Son propre temps : 1 demande à refaire × 10 s (le délai de 600 s n'entre pas dans la moyenne).
   assert.equal(JSON.stringify(of('granite4.2:8b').needs), JSON.stringify([{ test: 'tools', reason: 'redo' }]))
   assert.equal(of('granite4.2:8b').estimatedMs, 10_000)
-  // Jamais passé : 78 questions + 48 demandes, au temps de granite ramené à sa taille (1,9 Go au lieu de 5,3).
-  const expected = Math.round(78 * (2000 / 5.3) * 1.9 + 48 * (10_000 / 5.3) * 1.9)
-  assert.equal(of('qwen3-vl:2b').estimatedMs, expected)
-  assert.ok(of('qwen3.6:35b-a3b').estimatedMs > of('qwen3-vl:2b').estimatedMs, 'un plus gros modèle prend plus longtemps')
+  // Jamais passé : 78 questions + 48 demandes, au temps de granite ramené à sa taille (7,1 Go au lieu de 5,3).
+  // Étape 445 : GLM-4.6V-Flash plutôt que qwen3-vl:2b, qui a désormais tous ses scores.
+  const expected = Math.round(78 * (2000 / 5.3) * 7.1 + 48 * (10_000 / 5.3) * 7.1)
+  assert.equal(of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, expected)
+  assert.ok(of('qwen3.6:35b-a3b').estimatedMs > of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, 'un plus gros modèle prend plus longtemps')
 
   // Rien de mesuré sur ce PC : pas de durée inventée.
   assert.ok(scan.describeModelsToTest().every((m) => m.estimatedMs === null))

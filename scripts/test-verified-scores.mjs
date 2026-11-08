@@ -30,21 +30,22 @@ test('conversation : tous les scores viennent du test sur 78 réponses (test ver
 })
 
 test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être recopiée)', () => {
-  // Test de vision version 4 (05/10/2026) : les 11 candidats, chacun sur 34, plus Muse Glimmer et Ornith 1.5 (étape 335).
+  // Test de vision version 4 (05/10/2026) : les 11 candidats, chacun sur 34, plus Muse Glimmer et Ornith 1.5 (étape 335),
+  // et nemotron-3.5-bolt:e4b (étape 445).
   const vision = rows(section('Vision'))
-  assert.equal(vision.length, 14)
+  assert.equal(vision.length, 15)
   for (const [model, score] of vision) assert.match(score, /^\d+\/34$/, `Vision ${model} : ${score}`)
   // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés,
   // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315), phi4-mini et K2 Horizon 0.9B (étape 317), Spark-X2.6-4B
-  // (étape 442).
+  // (étape 442), nemotron-3.5-bolt:e4b (étape 445).
   const code = rows(section('Code'))
-  assert.equal(code.length, 13)
+  assert.equal(code.length, 14)
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 
-test('demandes complètes : les 30 modèles de conversation, plus K2 Horizon 3.7B (étape 312), 0.9B, 7B et 32B (étape 314), phi4-mini (étape 317), Ornith 1.5 9B et 35B (étape 334), Muse Glimmer (étape 335), nemotron-3.5-bolt:e4b et Spark-X2.6-4B (étape 438), gemma4:31b, qwen3-vl:4b et 8b, qwen2.5-coder:7b (étape 442), chacun sur 48', () => {
+test('demandes complètes : les 30 modèles de conversation, plus K2 Horizon 3.7B (étape 312), 0.9B, 7B et 32B (étape 314), phi4-mini (étape 317), Ornith 1.5 9B et 35B (étape 334), Muse Glimmer (étape 335), nemotron-3.5-bolt:e4b et Spark-X2.6-4B (étape 438), gemma4:31b, qwen3-vl:4b et 8b, qwen2.5-coder:7b (étape 442), qwen3-vl:2b et qwen2.5-coder:14b (étape 445), chacun sur 48', () => {
   const demandes = rows(section('Demandes'))
-  assert.equal(demandes.length, 44)
+  assert.equal(demandes.length, 46)
   for (const [model, score] of demandes) assert.match(score, /^\d+\/48$/, `Demandes ${model} : ${score}`)
 })
 

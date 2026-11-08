@@ -128,6 +128,22 @@ maintenant lancer une musique » quand elle joue déjà, « je n'ai pas encore p
 réussi ; chez qwen3.5:0.8b, deux réponses incohérentes (crêpes cuites « à l'étuve ») ; chez qwen3.5:2b, une. Pas
 intégrés : qwen3-vl:2b (16/78) et GLM-4.6V-Flash (27/78), tests interrompus.
 
+Étape 445 : campagne de Léo du 08/11/2026 (Jaris 0.50.0, Ollama 0.40.10, RTX 3070), toutes les réponses relues, justes
+comprises ; digests identiques à leurs mesures précédentes. qwen3-vl:2b questions 61 → 58/78 : pour « un chat roux »,
+il dessine « a fluffy brown cat », « a brown cat » et « a rosy cat » (sa réflexion ne connaît pas « roux » ; le juge ne
+vérifiait que le chat) ; ses 17 autres erreurs sont réelles (11 réflexions qui remplissent la fenêtre de contexte, PC
+éteint 3 fois à « ce soir », YouTube cherché sur internet ou ouvert sans recherche, président donné sans recherche).
+Demandes 17 → 18/48 : « aucune donnée n'a été trouvée » sur le prénom de la sœur est un aveu que le juge ne
+reconnaissait pas ; 29 de ses 30 erreurs sont des fenêtres de contexte pleines. qwen2.5-coder:14b 5/78 et 6/48 : comme
+la 7B (même gabarit), il écrit ses appels en JSON dans le texte, sans `tool_calls` : le test juge comme Jaris. Aux
+demandes, « je ne peux pas me souvenir du prénom de ta sœur » rendu juste, « je vais chercher une recette de repas
+végétarien » (rien cherché, aucune recette) compté faux. Vision de nemotron-3.5-bolt:e4b 20/34 sans correction (mails
+non lus comptés 5 et 6 au lieu de 4 ; 12 visées ratées : clics trop bas, « tuto guitare » tapé sans cliquer la barre ou
+alors que la recherche est déjà faite). Son code 5/5, chaque appli lue et utilisée : la liste de tâches, coupée une
+fois par le délai de 20 min, réussit au rejeu ; le stockage du navigateur y est essayé mais protégé, sans effet dans
+l'aperçu. Doute : le test garde une fenêtre de 8192 (étape 409) quand Jaris donne 16 384 puis 32 768 à une réflexion
+trop longue ; les fenêtres pleines de qwen3-vl:2b sont comptées fausses, comme pour tous les modèles.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -174,6 +190,8 @@ intégrés : qwen3-vl:2b (16/78) et GLM-4.6V-Flash (27/78), tests interrompus.
 | qwen3-vl:8b | 74/78 |
 | qwen3-vl:4b | 72/78 |
 | qwen2.5-coder:7b | 5/78 |
+| qwen3-vl:2b | 58/78 |
+| qwen2.5-coder:14b | 5/78 |
 
 ## Vision — compréhension d'image
 
@@ -184,6 +202,8 @@ fausse a été relue ; « 14 37 » pour l'horloge (qwen3.5:4b) était juste et e
 justes (05/10/2026) : les 207 lectures sont bonnes ; 5 clics comptés justes grâce à une marge de 4 px tombaient 1 à
 3 px AU-DESSUS de la barre de recherche YouTube (gemma4:31b ×2, gemma4:26b ×2, gemma4:12b) — comptés faux, la
 marge est retirée.
+
+Étape 445 : nemotron-3.5-bolt:e4b 20/34 (08/11/2026) : détail dans la section des conversations.
 
 | Modèle | Fiabilité |
 |---|---|
@@ -201,6 +221,7 @@ marge est retirée.
 | muse-glimmer:30b | 34/34 |
 | ornith-1.5:35b | 31/34 |
 | ornith-1.5:9b | 26/34 |
+| nemotron-3.5-bolt:e4b | 20/34 |
 
 ## Code — génération de code
 
@@ -238,6 +259,8 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 
 Étape 442 : Spark-X2.6-4B 3/5 provisoire (au mieux 4/5) : détail dans la section des conversations.
 
+Étape 445 : nemotron-3.5-bolt:e4b 5/5 : détail dans la section des conversations.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -253,6 +276,7 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 | phi4-mini | 5/5 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 | hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 3/5 |
+| nemotron-3.5-bolt:e4b | 5/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -335,7 +359,9 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 29/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
 | granite4.1:3b | 25/48 |
+| qwen3-vl:2b | 18/48 |
 | qwen3.5:0.8b | 13/48 |
+| qwen2.5-coder:14b | 6/48 |
 | qwen2.5-coder:7b | 4/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
