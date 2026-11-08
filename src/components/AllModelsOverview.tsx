@@ -9,6 +9,7 @@ import type { MessageKey } from '../../shared/i18n'
 import { FUTURE_MODELS } from '../../shared/futureModels'
 import { DUEL_RELIABLE_COUNT, duelConfidence } from '../../shared/duel'
 import { shownSpeed } from '../lib/shownSpeed'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
   measured: 'speed.kind.measured',
@@ -258,15 +259,21 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
   const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState<SortState>(null)
   const [query, setQuery] = useState('')
+  // La liste illisible (Ollama, fichier de scores…) se dit avec son vrai message, au lieu d'une page vide.
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!active) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     window.jaris
       .getModelOverview()
       .then((result) => {
         if (!cancelled) setOverview(result)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(ipcErrorMessage(err))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -291,15 +298,21 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
   const futureEntries = useMemo(() => filterModels(FUTURE_MODELS, query), [query])
 
   return (
-          <div className="options-page options-page--embedded options-page--models" aria-label={t('models.all.label')}>
+          <div className="options-page options-page--embedded options-page--models">
             <div className="options-page__body options-page__body--models">
-              <main className="options-page__workspace">
+              {/* Une <section> nommée, pas un second <main> : la zone principale de Jaris en est déjà un. */}
+              <section className="options-page__workspace" aria-label={t('models.all.label')}>
                 <div className="options-page__content">
                   <div className="options-page__tab-header">
                     <h3>{t('models.candidates')}</h3>
                     <p>{t('models.candidates.hint')}</p>
                   </div>
                   {loading && <p className="capacity-scan__status">{t('common.loading')}</p>}
+                  {error && (
+                    <p className="options-menu__error" role="alert">
+                      {error}
+                    </p>
+                  )}
 
                   {overview && <UnscoredModelsTest />}
                   {overview && (
@@ -403,7 +416,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                     </div>
                   )}
                 </div>
-              </main>
+              </section>
             </div>
           </div>
   )
