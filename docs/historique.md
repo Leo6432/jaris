@@ -11554,3 +11554,21 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : test-light-theme-ui.mjs (8 mesures × 2 thèmes sur la vraie App + logo sans disque, cyan d'origine),
   test-chat-widget-ui.mjs (capsule claire en clair, noire en sombre, textes ≥ 4,5:1), test-phone-page-ui.mjs ; chaque
   test vérifié sur l'ancien code. Rien vérifié sous Windows (liseré et ombre réels de la fenêtre transparente).
+
+## Étape 445 — Scores de la campagne du 08/11 (v0.51.1)
+
+- Deuxième fichier de « Préparer le fichier à m'envoyer » : cette fois seulement les nouvelles lignes (le marqueur
+  d'envoi marche). Toutes les réponses relues (note « Étape 445 » de scripts/verified-tool-scores.md) : qwen3-vl:2b
+  questions 61 → 58/78 (« chat roux » dessiné brun ou rose : le juge ne vérifie que « cat »), demandes 17 → 18/48
+  (« aucune donnée n'a été trouvée » = aveu d'ignorance) ; qwen2.5-coder:14b 5/78 et 6/48 (appels en JSON dans le
+  texte comme le 7B ; une promesse de recette sans recette comptée fausse, un « je ne peux pas me souvenir » juste) ;
+  nemotron-3.5-bolt:e4b vision 20/34 et code 5/5 sans correction. Aucun choix de modèle ne change sur la grille.
+- Écart découvert entre le test et Jaris (vérifié dans le code, PAS corrigé, décision à prendre avec Léo) : le script
+  de test donne `num_ctx` 8192 aux questions et aux demandes (scripts/benchmark-cases.mjs, CONVERSATION_NUM_CTX),
+  alors que Jaris donne au moins 16384 et monte d'un palier quand la fenêtre est pleine (ollama.ts, AUTO_CONTEXT_STEPS,
+  depuis l'étape 409). Les échecs « fenêtre pleine » des modèles qui réfléchissent beaucoup (11 questions et 29
+  demandes de qwen3-vl:2b, 10 demandes de qwen3-vl:4b…) n'arriveraient peut-être pas dans Jaris. Corriger le test
+  rendrait les anciens scores non comparables : il faudrait retester les modèles concernés.
+- Autres doutes notés sur les juges : « ADMITS_UNKNOWN » rate « aucune donnée » / « ne peux pas me souvenir » ; le
+  juge de contexte-long accepte une promesse de chercher ; « chat roux » sans contrôle de couleur ; deux délais de
+  20 min sans trace (Q13 p2 de qwen2.5-coder:14b, première liste de tâches de Bolt).
