@@ -1,9 +1,9 @@
 import { safeStorage } from 'electron'
-import { readFile, rm } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { GithubRepoSummary } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
-import { writeFileAtomic } from './atomicFile'
+import { removeFileQueued, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 /**
@@ -278,17 +278,6 @@ function tokenPath(): string {
 }
 
 /**
- * Écritures et effacement du fichier du jeton, l'un après l'autre : un effacement (déconnexion) demandé pendant une
- * écriture encore en cours ne peut jamais être suivi du renommage de cette écriture, qui ferait revenir le jeton.
- */
-let tokenFileChain: Promise<unknown> = Promise.resolve()
-function onTokenFile<T>(task: () => Promise<T>): Promise<T> {
-  const run = tokenFileChain.then(task, task)
-  tokenFileChain = run.catch(() => undefined)
-  return run
-}
-
-/**
  * Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire.
  * Relecture croisée : écrit d'un seul tenant (atomicFile.ts) — écrit par-dessus, une coupure ou un antivirus en pleine
  * écriture laissait un jeton tronqué, donc illisible : déconnecté.
@@ -300,8 +289,7 @@ export async function saveGithubToken(token: string | GithubTokenSet): Promise<b
     return false
   }
   memoryToken = null
-  const encrypted = safeStorage.encryptString(text)
-  await onTokenFile(() => writeFileAtomic(tokenPath(), encrypted))
+  await writeFileAtomic(tokenPath(), safeStorage.encryptString(text))
   return true
 }
 
@@ -343,7 +331,8 @@ export async function loadGithubToken(): Promise<string | null> {
 
 export async function clearGithubToken(): Promise<void> {
   memoryToken = null
-  await onTokenFile(() => rm(tokenPath(), { force: true }))
+  // Dans la même file que les écritures (atomicFile.ts) : une écriture encore en cours ne fait jamais revenir le jeton.
+  await removeFileQueued(tokenPath())
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -397,7 +386,8 @@ export async function writeConnectionRecord(record: GithubConnectionRecord): Pro
 }
 
 export async function clearConnectionRecord(): Promise<void> {
-  await rm(recordPath(), { force: true }).catch(() => {})
+  // Même file que ses écritures (atomicFile.ts) ; un échec ne fait jamais échouer la déconnexion, mais il laisse une trace.
+  await removeFileQueued(recordPath()).catch((err: unknown) => console.error('[github] Trace de connexion non effacée :', err))
 }
 
 // ---------------------------------------------------------------------------------------------------------

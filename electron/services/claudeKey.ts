@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron'
-import { readFile, rm } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { writeFileAtomic } from './atomicFile'
+import { removeFileQueued, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
 
 /**
@@ -56,7 +56,8 @@ export async function loadClaudeKey(): Promise<string | null> {
 
 export async function clearClaudeKey(): Promise<void> {
   memoryKey = null
-  await rm(keyPath(), { force: true })
+  // Dans la même file que les écritures (atomicFile.ts) : une écriture retardée ne fait jamais revenir la clé effacée.
+  await removeFileQueued(keyPath())
 }
 
 /** Ce que l'écran a le droit de savoir : une clé est là, et sa fin pour la reconnaître. */

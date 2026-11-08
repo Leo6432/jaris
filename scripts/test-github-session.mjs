@@ -17,7 +17,7 @@ const electron = { app: { getPath: () => '/donnees' }, safeStorage: { isEncrypti
 const realGithub = loadTsModule('electron/services/github.ts', {
   electron,
   'fs/promises': { readFile: async () => Buffer.from(''), writeFile: async () => {}, rm: async () => {} },
-  './atomicFile': { writeFileAtomic: async () => {} },
+  './atomicFile': { writeFileAtomic: async () => {}, removeFileQueued: async () => {} },
   path: { join },
   './dataLocation': { getDataRoot: () => '/donnees' }
 })
@@ -522,6 +522,34 @@ test('jeton renouvelé pas encore écrit, puis déconnexion : il ne revient jama
   await session.getGithubStatus()
   await new Promise((resolve) => setTimeout(resolve, 30))
   assert.equal(state.token, null)
+})
+
+// Relecture adverse : « Se déconnecter » (ou une nouvelle connexion) pendant un renouvellement déjà parti — à son retour,
+// il remettait le jeton en mémoire ET sur le disque : Léo reconnecté malgré lui, ou l'ancien compte à la place du nouveau.
+test('déconnexion pendant un renouvellement en cours : le jeton ne revient jamais', async () => {
+  const { session, state } = expiring()
+  const status = session.getGithubStatus()
+  await new Promise((resolve) => setTimeout(resolve, 1)) // le renouvellement est parti (5 ms de « réseau »)
+  await session.logoutGithub()
+  assert.equal(state.token, null)
+  await status.catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(state.token, null, 'le jeton renouvelé est revenu sur le disque après « Se déconnecter »')
+  assert.equal((await session.getGithubStatus()).connected, false, 'Léo reconnecté malgré lui')
+})
+
+test('nouvelle connexion pendant un renouvellement en cours : le nouveau compte reste', async () => {
+  const { session, state } = expiring()
+  state.nextLogin = { token: 'gho_autre', refreshToken: null, expiresAt: null }
+  const status = session.getGithubStatus()
+  await new Promise((resolve) => setTimeout(resolve, 1))
+  await session.startGithubLogin()
+  assert.equal((await session.finishGithubLogin()).connected, true)
+  await status.catch(() => {})
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(state.token, 'gho_autre', 'l’ancien jeton renouvelé a remplacé la nouvelle connexion')
+  assert.equal(state.cleared, 0)
+  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: true, login: 'leo' })
 })
 
 test('renouvellement refusé : la connexion est vraiment perdue, et l’écran le dit', async () => {

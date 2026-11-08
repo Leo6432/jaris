@@ -9,6 +9,9 @@ import { t } from '../../shared/i18n'
  * mouse_event) car c'est l'API recommandée par Microsoft, avec le mode KEYEVENTF_UNICODE qui tape
  * n'importe quel caractère (accents compris) sans avoir à connaître la disposition clavier de l'utilisateur.
  */
+/** Un signe de vie tous les 50 caractères tapés : moins d'une seconde, même à ~16 ms par caractère (voir POWERSHELL_IDLE_MS). */
+export const TYPE_ALIVE_EVERY = 50
+
 const INPUT_HELPER_CS = `
 using System;
 using System.Runtime.InteropServices;
@@ -29,6 +32,7 @@ public static class JarisInput
         SetProcessDPIAware();
     }
 
+    private const int TYPE_ALIVE_EVERY = ${TYPE_ALIVE_EVERY};
     private const int INPUT_MOUSE = 0;
     private const int INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_UNICODE = 0x0004;
@@ -75,6 +79,7 @@ public static class JarisInput
 
     public static void TypeUnicode(string text)
     {
+        int typed = 0;
         foreach (char c in text)
         {
             INPUT down = new INPUT();
@@ -86,6 +91,13 @@ public static class JarisInput
             SendInput(1, new INPUT[] { down }, Marshal.SizeOf(typeof(INPUT)));
             SendInput(1, new INPUT[] { up }, Marshal.SizeOf(typeof(INPUT)));
             System.Threading.Thread.Sleep(5);
+            // Signe de vie pour Jaris (inputControl.ts), qui surveille l'INACTIVITÉ et non la durée : sous Windows 10/11,
+            // Sleep(5) dure souvent ~15,6 ms (résolution de l'horloge), un long texte prend donc bien plus que prévu.
+            if (++typed % TYPE_ALIVE_EVERY == 0)
+            {
+                Console.Out.WriteLine(".");
+                Console.Out.Flush();
+            }
         }
     }
 
@@ -165,12 +177,13 @@ const KEY_CODES: Record<string, number> = {
  */
 /**
  * Relecture croisée : sans limite, un PowerShell figé (Windows qui ne répond plus, compilation bloquée par un antivirus)
- * laissait l'action en cours — et toute la réponse de Jaris — attendre pour toujours. Au-delà de ce délai (compilation
- * de l'aide C# comprise, ~1 à 3 s d'habitude), PowerShell est arrêté, avec un vrai message.
+ * laissait l'action en cours — et toute la réponse de Jaris — attendre pour toujours. Surveillé par INACTIVITÉ : sans
+ * aucun signe de vie de PowerShell pendant ce temps (compilation de l'aide C# comprise, ~1 à 3 s d'habitude), il est
+ * arrêté, avec un vrai message. Un long texte n'est jamais coupé parce qu'il est long : TypeUnicode écrit un signe de
+ * vie tous les TYPE_ALIVE_EVERY caractères (une durée totale calculée d'avance était fausse sous Windows 10/11, où
+ * chaque pause de 5 ms dure ~15,6 ms).
  */
-export const POWERSHELL_TIMEOUT_MS = 30_000
-/** TypeUnicode attend 5 ms par caractère : un long texte a droit à plus de temps (10 ms par caractère). */
-export const TYPE_TIMEOUT_PER_CHAR_MS = 10
+export const POWERSHELL_IDLE_MS = 30_000
 
 /** Tout l'arbre (Add-Type lance le compilateur C# à côté de PowerShell), comme le moteur de dessin. */
 function killTree(proc: ReturnType<typeof spawn>): void {
@@ -181,7 +194,7 @@ function killTree(proc: ReturnType<typeof spawn>): void {
   }
 }
 
-function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, timeoutMs = POWERSHELL_TIMEOUT_MS): Promise<string | null> {
+function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, idleMs = POWERSHELL_IDLE_MS): Promise<string | null> {
   const script = `Add-Type -TypeDefinition @'${INPUT_HELPER_CS}'@ -ErrorAction Stop\n${invocation}`
   return new Promise((resolve) => {
     const proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
@@ -195,12 +208,22 @@ function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, timeoutMs = 
       clearTimeout(timer)
       resolve(value)
     }
-    const timer = setTimeout(() => {
-      killTree(proc)
-      finish(t('input.timeout', { seconds: Math.round(timeoutMs / 1000) }))
-    }, timeoutMs)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // (Re)part de zéro à chaque signe de vie : un « . » de TypeUnicode, un message d'erreur.
+    const alive = (): void => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        killTree(proc)
+        finish(t('input.timeout', { seconds: Math.round(idleMs / 1000) }))
+      }, idleMs)
+    }
+    alive()
     let stderr = ''
-    proc.stderr?.on('data', (chunk) => (stderr += chunk.toString()))
+    proc.stdout?.on('data', alive)
+    proc.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString()
+      alive()
+    })
     proc.on('error', (err) => finish(err.message))
     proc.on('close', (code) => finish(code === 0 ? null : stderr.trim() || `code de sortie ${code}`))
   })
@@ -209,11 +232,7 @@ function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, timeoutMs = 
 /** Tape du texte à l'endroit où se trouve le focus actuel (champ de texte, barre de recherche...). */
 export async function typeText(text: string): Promise<string> {
   if (!text.trim()) return "Aucun texte à taper."
-  const error = await runPowerShell(
-    '[JarisInput]::TypeUnicode($env:JARIS_TYPE_TEXT)',
-    { ...process.env, JARIS_TYPE_TEXT: text },
-    POWERSHELL_TIMEOUT_MS + text.length * TYPE_TIMEOUT_PER_CHAR_MS
-  )
+  const error = await runPowerShell('[JarisInput]::TypeUnicode($env:JARIS_TYPE_TEXT)', { ...process.env, JARIS_TYPE_TEXT: text })
   return error ? t('input.typeFailed', { error }) : `Texte tapé.`
 }
 

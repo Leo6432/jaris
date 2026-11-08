@@ -366,21 +366,39 @@ const runningEngines = new Set<Promise<void>>()
 /** Attente maximale de la sortie d'un moteur arrêté (taskkill /F le fait sortir en une fraction de seconde). */
 export const ENGINE_EXIT_WAIT_MS = 15_000
 
-/** Se résout quand plus aucun moteur ne tourne (ou au bout de `maxMs`). */
-export function waitForEngineExit(maxMs = ENGINE_EXIT_WAIT_MS): Promise<void> {
-  if (!runningEngines.size) return Promise.resolve()
-  return new Promise<void>((resolve) => {
-    const giveUp = setTimeout(resolve, maxMs)
-    giveUp.unref?.()
+/**
+ * Se résout quand plus aucun moteur ne tourne : `true`. Au bout de `maxMs`, `false` — l'appelant le DIT (journal de
+ * « Déplacer ») au lieu de continuer comme si de rien n'était.
+ */
+export function waitForEngineExit(maxMs = ENGINE_EXIT_WAIT_MS): Promise<boolean> {
+  if (!runningEngines.size) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    const giveUp = setTimeout(() => resolve(false), maxMs)
     void Promise.all([...runningEngines]).then(() => {
       clearTimeout(giveUp)
-      resolve()
+      resolve(true)
     })
   })
 }
 
+/**
+ * Relecture adverse : pendant « Déplacer », plus AUCUNE création ne démarre — ni du mode Image ou Vidéo, ni de l'outil
+ * de dessin d'une conversation (Chat, téléphone), ni d'une demande arrivée du téléphone juste avant sa coupure. Posé
+ * AVANT d'arrêter ce qui tourne, et vérifié aux deux seules portes du moteur : sa réservation (claimEngine) et son
+ * lancement (runEngine).
+ */
+let enginesBlocked = false
+export function setEnginesBlocked(blocked: boolean): void {
+  enginesBlocked = blocked
+}
+
+function assertEnginesAllowed(): void {
+  if (enginesBlocked) throw new Error(t('engine.dataMoving'))
+}
+
 export function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal, wording: EngineWording = IMAGE_WORDING): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (enginesBlocked) return reject(new Error(t('engine.dataMoving')))
     if (signal?.aborted) return reject(new Error(t(wording.cancelled)))
     const proc = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     const exited = new Promise<void>((done) => {
@@ -478,6 +496,7 @@ export interface GeneratedImage {
 let busyWith: 'image' | 'video' | null = null
 
 export function claimEngine(kind: 'image' | 'video'): void {
+  assertEnginesAllowed()
   if (busyWith === 'image') throw new Error(t('engine.busy.image'))
   if (busyWith === 'video') throw new Error(t('engine.busy.video'))
   busyWith = kind

@@ -140,14 +140,28 @@ async function writeNow(file: string, content: string | Uint8Array): Promise<voi
  * des octets (jeton GitHub et clé Claude chiffrés par Windows).
  */
 export function writeFileAtomic(file: string, content: string | Uint8Array): Promise<void> {
+  return onFile(file, () => writeNow(file, content))
+}
+
+/** `task` passe après les écritures (et effacements) déjà demandés pour `file`, dans l'ordre. */
+function onFile(file: string, task: () => Promise<void>): Promise<void> {
   const previous = writeQueues.get(file) ?? Promise.resolve()
-  const next = previous.catch(() => {}).then(() => writeNow(file, content))
+  const next = previous.catch(() => {}).then(task)
   writeQueues.set(file, next)
   const forget = (): void => {
     if (writeQueues.get(file) === next) writeQueues.delete(file)
   }
   next.then(forget, forget)
   return next
+}
+
+/**
+ * Efface `file` dans la MÊME file que ses écritures. Relecture adverse : un effacement direct (« Effacer » la clé Claude,
+ * « Se déconnecter » de GitHub) pendant une écriture retardée par un antivirus (renommage réessayé ~3 s) passait AVANT
+ * elle — le renommage de cette écriture faisait ensuite revenir le fichier effacé. Absent : rien à faire.
+ */
+export function removeFileQueued(file: string): Promise<void> {
+  return onFile(file, () => rm(file, { force: true }))
 }
 
 /**

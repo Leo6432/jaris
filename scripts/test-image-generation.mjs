@@ -318,7 +318,7 @@ test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', as
 // fichiers du dossier image-generation. Le dessin est maintenant arrêté avant la copie, et sa VRAIE sortie attendue.
 test('« Déplacer » : waitForEngineExit attend que le moteur arrêté soit vraiment sorti', async () => {
   const t = await installed({ holdEngine: true })
-  await t.gen.waitForEngineExit() // rien ne tourne : immédiat
+  assert.equal(await t.gen.waitForEngineExit(), true) // rien ne tourne : immédiat
   const controller = new AbortController()
   const drawing = t.gen.generateImage('cat', () => {}, controller.signal)
   for (const end = Date.now() + 5000; !t.gen.lastSpawn && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
@@ -326,14 +326,45 @@ test('« Déplacer » : waitForEngineExit attend que le moteur arrêté soit vra
   controller.abort()
   await assert.rejects(drawing, /annulé/)
   let exited = false
-  const waiting = t.gen.waitForEngineExit().then(() => {
-    exited = true
+  const waiting = t.gen.waitForEngineExit().then((result) => {
+    exited = result
   })
   await new Promise((r) => setTimeout(r, 50))
   assert.equal(exited, false, 'rendu la main alors que le moteur tourne encore (fichiers encore ouverts)')
   t.gen.lastSpawn.emit('exit', 1)
   await waiting
   assert.equal(exited, true)
+  t.cleanup()
+})
+
+// Relecture adverse : un moteur qui ne sort pas faisait abandonner l'attente EN SILENCE, puis la copie partait avec
+// sd.exe actif ; et une création pouvait encore DÉMARRER pendant le déplacement (outil de dessin d'une conversation,
+// demande du téléphone arrivée juste avant sa coupure).
+test('« Déplacer » : plus aucune création ne démarre ; un moteur qui ne sort pas est signalé, jamais ignoré', async () => {
+  const t = await installed({ holdEngine: true })
+  const controller = new AbortController()
+  const drawing = t.gen.generateImage('cat', () => {}, controller.signal)
+  for (const end = Date.now() + 5000; !t.gen.lastSpawn && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
+  const stuck = t.gen.lastSpawn
+  controller.abort()
+  await assert.rejects(drawing, /annulé/)
+  assert.equal(await t.gen.waitForEngineExit(30), false, 'un moteur encore là doit être signalé à l’appelant')
+
+  t.gen.setEnginesBlocked(true)
+  try {
+    t.events.length = 0
+    await assert.rejects(t.gen.generateImage('dog'), /déplace tes données/)
+    assert.throws(() => t.gen.claimEngine('video'), /déplace tes données/)
+    await assert.rejects(t.gen.runEngine('sd-cli.exe', [], () => {}), /déplace tes données/)
+    assert.deepEqual(t.events, [], 'un moteur a été lancé pendant le déplacement')
+  } finally {
+    t.gen.setEnginesBlocked(false)
+  }
+  stuck.emit('exit', 1)
+  assert.equal(await t.gen.waitForEngineExit(), true)
+  // Déplacement annulé : le moteur se réserve de nouveau.
+  t.gen.claimEngine('image')
+  t.gen.releaseEngine()
   t.cleanup()
 })
 

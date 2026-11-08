@@ -15,6 +15,8 @@ import {
   isImageModelInstalled,
   listGeneratedImages,
   readGeneratedImageDataUrl,
+  ENGINE_EXIT_WAIT_MS,
+  setEnginesBlocked,
   waitForEngineExit
 } from './services/imageGenerator'
 import { toEnglishPrompt } from './services/promptTranslator'
@@ -2097,9 +2099,13 @@ app.whenReady().then(async () => {
     // Relecture croisée : ce qui dessine, filme ou écrit du code s'arrête aussi, AVANT la copie — le moteur d'image et
     // de vidéo (sd.exe) garde ouverts les fichiers du dossier image-generation, que la copie lit puis efface ; une
     // création demandée depuis le téléphone pareil. Leur sortie est attendue plus bas (waitForEngineExit).
+    // D'abord, plus rien ne démarre (setEnginesBlocked) ; puis l'existant s'arrête, conversation en cours comprise (son
+    // outil de dessin, depuis le Chat ou le téléphone).
+    setEnginesBlocked(true)
     codeGenAbort?.abort()
     imageStudioAbort?.abort()
     videoStudioAbort?.abort()
+    chatSession.cancel()
     const phoneStudioStopped = phoneAccess?.stopStudioJobs().catch(() => {})
     pipeline?.stop()
     ttsClient.stop()
@@ -2112,7 +2118,7 @@ app.whenReady().then(async () => {
     abortDuel()
     await phoneStudioStopped
     await phoneAccess?.disable().catch(() => {})
-    await waitForEngineExit()
+    if (!(await waitForEngineExit())) log(t('main.move.engineStillRunning', { seconds: ENGINE_EXIT_WAIT_MS / 1000 }))
 
     // Pendant la copie (souvent des dizaines de minutes), le mode Code reste utilisable. Tout ce qu'il écrirait dans
     // l'ancien dossier des données serait perdu — déjà copié ou sur le point de l'être, ce dossier est effacé à la fin :
@@ -2159,6 +2165,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       // Déplacement annulé, l'ancien dossier est intact : tout y repart.
       setGithubDataMoving(false)
+      setEnginesBlocked(false)
       try {
         codeStore.releaseWrites()
       } catch (releaseErr) {

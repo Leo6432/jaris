@@ -55,6 +55,7 @@ function frozenPowerShell() {
   const child_process = {
     spawn: () => {
       const proc = new EventEmitter()
+      proc.stdout = new EventEmitter()
       proc.stderr = new EventEmitter()
       proc.pid = 4321 + spawned.length
       proc.killed = false
@@ -77,7 +78,7 @@ function frozenPowerShell() {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 
-test('PowerShell figé : arrêté au bout du délai, avec un vrai message ; un long texte a droit à plus de temps', async (t) => {
+test('PowerShell figé : arrêté après 30 s SANS signe de vie, avec un vrai message', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const { spawned, input } = frozenPowerShell()
   let result = null
@@ -87,19 +88,50 @@ test('PowerShell figé : arrêté au bout du délai, avec un vrai message ; un l
   assert.equal(result, null, 'abandonné trop tôt')
   t.mock.timers.tick(1)
   await flush()
-  assert.equal(result, "Échec de l'appui sur la touche : pas de réponse de Windows en 30 s, action arrêtée")
+  assert.equal(result, "Échec de l'appui sur la touche : pas de réponse de Windows pendant 30\u00a0s, action arrêtée")
   assert.equal(spawned[0].killed, true, 'PowerShell figé laissé en vie')
+  assert.equal(input.POWERSHELL_IDLE_MS, 30_000)
+})
 
-  // 5 000 caractères tapés à 5 ms chacun : 25 s de frappe, jamais coupés au bout de 30 s pile.
+// Relecture adverse : le délai était une durée TOTALE (30 s + 10 ms par caractère). Sous Windows 10/11, chaque pause de
+// 5 ms entre deux caractères dure ~15,6 ms : une lettre de 10 000 caractères (~160 s) était coupée à moitié, avec le
+// message faux « pas de réponse de Windows ». Tant que le texte se tape, il donne signe de vie : jamais coupé.
+test('un long texte qui se tape lentement n’est jamais coupé ; il ne l’est que s’il ne donne plus signe de vie', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { spawned, input } = frozenPowerShell()
   let typed = null
-  void input.typeText('x'.repeat(5000)).then((text) => (typed = text))
-  t.mock.timers.tick(30_000 + 1000)
+  void input.typeText('x'.repeat(10_000)).then((text) => (typed = text))
+  const proc = spawned[0]
+  // 10 000 caractères à ~15,6 ms : ~156 s, un « . » tous les 50 caractères (~0,8 s).
+  for (let second = 0; second < 200; second++) {
+    t.mock.timers.tick(1000)
+    proc.stdout.emit('data', Buffer.from('.\r\n'))
+  }
   await flush()
-  assert.equal(typed, null, 'un long texte coupé alors qu’il se tape encore')
-  t.mock.timers.tick(5000 * 10)
+  assert.equal(typed, null, 'un texte qui se tape encore a été coupé')
+  assert.equal(proc.killed, false)
+  proc.emit('close', 0)
   await flush()
-  assert.match(typed, /^Échec de la saisie du texte : pas de réponse de Windows en 80 s/)
+  assert.equal(typed, 'Texte tapé.')
+
+  // Plus aucun signe de vie : arrêté au bout de 30 s, pas avant.
+  let stuck = null
+  void input.typeText('y'.repeat(10_000)).then((text) => (stuck = text))
+  spawned[1].stdout.emit('data', Buffer.from('.\r\n'))
+  t.mock.timers.tick(29_000)
+  await flush()
+  assert.equal(stuck, null)
+  t.mock.timers.tick(1000)
+  await flush()
+  assert.match(stuck, /^Échec de la saisie du texte : pas de réponse de Windows pendant 30\u00a0s/)
   assert.equal(spawned[1].killed, true)
-  assert.equal(input.POWERSHELL_TIMEOUT_MS, 30_000)
-  assert.equal(input.TYPE_TIMEOUT_PER_CHAR_MS, 10)
+})
+
+test('l’aide C# donne signe de vie pendant la frappe, assez souvent même à ~16 ms par caractère', () => {
+  const source = readFileSync(new URL('../electron/services/inputControl.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const typing = source.slice(source.indexOf('public static void TypeUnicode('), source.indexOf('public static void KeyPress('))
+  assert.match(typing, /if \(\+\+typed % TYPE_ALIVE_EVERY == 0\)\s*\{\s*Console\.Out\.WriteLine\("\."\);\s*Console\.Out\.Flush\(\);/)
+  assert.match(source, /private const int TYPE_ALIVE_EVERY = \$\{TYPE_ALIVE_EVERY\};/)
+  const { input } = frozenPowerShell()
+  assert.ok(input.TYPE_ALIVE_EVERY * 16 < input.POWERSHELL_IDLE_MS / 10, 'signes de vie trop espacés')
 })

@@ -982,6 +982,8 @@
   "ollama.listFailed": "Ollama vastasi {status} asennettuja malleja lueteltaessa",
   "ollama.tooLarge": "{model} vaatii noin {required} Gt, enemmän kuin tällä koneella käytettävissä olevat {budget} Gt VRAM + RAM: se ei voisi toimia joka tapauksessa.",
   "ollama.diskFull": "{model} vaatii noin {required} Gt, enemmän kuin tämän koneen {free} Gt vapaata levytilaa.",
+  "engine.dataMoving": "Jaris siirtää tietojasi toiseen kansioon: kuvien ja videoiden luominen on keskeytetty uudelleenkäynnistykseen asti.",
+  "main.move.engineStillRunning": "Kuva- ja videomoottori ei pysähtynyt {seconds} s kuluessa: siirto jatkuu, mutta sen auki pitämä tiedosto voi saada sen epäonnistumaan.",
   "mcp.error.authUnreadable": "Jaris ei pystynyt lukemaan tämän palvelimen tallennettua yhteyttä ({detail}). Mitään ei poistettu: yritä uudelleen valitsemalla ”Käynnistä uudelleen”; jos sama toistuu, poista palvelin ja lisää se uudelleen.",
   "page.blockedAddress": "Jaris ei lue osoitetta {url}: se johtaa tähän tietokoneeseen tai verkkosi laitteeseen, ei verkkosivustolle.",
   "page.tooManyRedirects": "Sivu {url} ohjaa liian moneen muuhun osoitteeseen: Jaris lopetti sen seuraamisen.",

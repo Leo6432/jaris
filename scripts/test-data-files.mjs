@@ -321,6 +321,31 @@ test('jeton GitHub et clé Claude : une coupure en pleine écriture laisse l’a
   assert.equal(await claude.loadClaudeKey(), first, 'clé tronquée : perdue')
 })
 
+// Relecture adverse : « Effacer » la clé Claude (ou se déconnecter de GitHub) pendant un enregistrement retardé par
+// un antivirus (renommage réessayé) effaçait AVANT le renommage — qui faisait ensuite revenir la clé effacée.
+test('effacer la clé Claude, le jeton GitHub ou la trace pendant un enregistrement retardé : rien ne revient', async (t) => {
+  const dataRoot = tempDir(t)
+  const { faults, fsPromises } = faultyFsPromises()
+  const { github, claude } = loadSecrets(dataRoot, fsPromises)
+  const keyFile = join(dataRoot, 'claude-key.bin')
+  const tokenFile = join(dataRoot, 'github-token.bin')
+  const recordFile = join(dataRoot, 'github-connection.json')
+  for (const file of [keyFile, tokenFile, recordFile]) faults.refuseRename.set(file, 2)
+
+  const saving = [
+    claude.saveClaudeKey(`sk-ant-${'a'.repeat(30)}`),
+    github.saveGithubToken({ token: 'gho_a', refreshToken: 'ghr_a', expiresAt: 1 }),
+    github.writeConnectionRecord({ connectedAt: 1, login: 'leo', memoryOnly: false, rejectedAt: null })
+  ]
+  await new Promise((resolve) => setTimeout(resolve, 10)) // les renommages sont refusés une première fois
+  await Promise.all([claude.clearClaudeKey(), github.clearGithubToken(), github.clearConnectionRecord()])
+  await Promise.all(saving)
+  assert.equal(await claude.loadClaudeKey(), null, 'la clé effacée est revenue')
+  assert.equal((await github.readGithubToken()).token, null, 'le jeton effacé est revenu')
+  assert.equal(await github.readConnectionRecord(), null, 'la trace effacée est revenue')
+  for (const file of [keyFile, tokenFile, recordFile]) assert.equal(existsSync(file), false, file)
+})
+
 test('trace de connexion GitHub : un échec d’écriture ne fait pas échouer la connexion, mais il laisse une trace', async (t) => {
   const dataRoot = tempDir(t)
   const { github } = loadSecrets(dataRoot, realFsPromises)
