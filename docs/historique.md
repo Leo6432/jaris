@@ -11605,3 +11605,17 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   Léo pour trouver ce qui occupe son PC. Pas de correctif deviné.
 - Régression : test-options-reorganization-ui.mjs (centre du titre et de la valeur de chaque colonne chiffrée = centre
   de la colonne, ±3 px) — échoue sur l'ancien CSS (« Appel d'outils : valeur décalée, 526 pour 536 »).
+
+## Étape 448 — Scores de la campagne du 09/11 (v0.52.2)
+
+- Toutes les réponses relues (note « Étape 448 » de scripts/verified-tool-scores.md). qwen3.6:35b-a3b 75/78 et
+  42 → 43/48 (« je ne toucherai à l'ordinateur en aucun cas » : refus au futur, le juge ne cherche que « touche ») ;
+  north-mini-code-1.0 76/78 et 45/48 sans correction ; qwen2.5-coder:32b 14 → 12/78 et 6 → 4/48 (comme le 7B et le
+  14B : aucun `tool_calls`, appels écrits en texte ; un nom d'outil seul en réponse compté faux). Aucun choix de
+  modèle ne change sur la grille (0 à 80 Go) ni sur la machine de Léo.
+- Vérifié sur les fiches des deux campagnes : qwen3.6:35b et qwen3.6:35b-a3b sont le MÊME fichier (digest a7eb95c5…,
+  22,6 Go), notés deux fois. À dédoublonner un jour dans les listes de candidats.
+- Doutes sur le test notés, pas corrigés : `isRealReply` (benchmark-cases.mjs) ne repère un appel écrit en texte
+  qu'avec `{`, ``` ou `[ARGS]` (Jaris, lui, le repère : findLeakedToolName) ; juge de ne-pas-eteindre sans le futur ;
+  recherche simulée de contexte-long qui ne comprend que le français ; fenêtre de 8192 du test contre 16384+ dans
+  Jaris (étape 445).
