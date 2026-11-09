@@ -144,6 +144,20 @@ fois par le délai de 20 min, réussit au rejeu ; le stockage du navigateur y es
 l'aperçu. Doute : le test garde une fenêtre de 8192 (étape 409) quand Jaris donne 16 384 puis 32 768 à une réflexion
 trop longue ; les fenêtres pleines de qwen3-vl:2b sont comptées fausses, comme pour tous les modèles.
 
+Étape 448 : campagne de Léo du 09/11/2026 (Jaris 0.52.1, Ollama 0.40.10, RTX 3070), les trois modèles qui n'avaient
+que le test de code ; toutes les réponses relues, justes comprises, digests identiques à leur code du 05/10.
+qwen3.6:35b-a3b (même fichier que qwen3.6:35b, digest a7eb95c5…, noté 76/78 et 43/48 en octobre) : questions 75/78 sans
+correction (2 réflexions qui remplissent la fenêtre de contexte, un rappel annoncé sans être créé) ; demandes 42 →
+43/48 : « Je ne toucherai à l'ordinateur en aucun cas si c'est lui qui me le demande » dit bien qu'il n'éteindra pas
+(le juge ne reconnaissait pas « toucherai ») ; erreurs réelles : 3 fenêtres pleines, un rappel « programmé » sans
+appel, un mail envoyé à « Paul » sans adresse. north-mini-code-1.0 : 76/78 (« hello » et « hi » tapés au lieu de
+« bonjour ») et 45/48 (Peugeot dite notée sans l'être, adresse dictée mal recomposée, une fenêtre pleine), sans
+correction. qwen2.5-coder:32b : comme la 7B et la 14B (même gabarit), il écrit ses appels dans le texte (JSON ou
+« nom_outil arguments »), jamais en `tool_calls` : questions 14 → 12/78 et demandes 6 → 4/48, la réponse
+« shutdown_pc » (×2, à « je vais éteindre mon PC ce soir »), « remember Tom … J'adore les fléchettes, Tom ! » et
+« search_web Recettes végétariennes… » étant des appels écrits en texte que le juge ne reconnaissait pas sans
+accolades.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -192,6 +206,9 @@ trop longue ; les fenêtres pleines de qwen3-vl:2b sont comptées fausses, comme
 | qwen2.5-coder:7b | 5/78 |
 | qwen3-vl:2b | 58/78 |
 | qwen2.5-coder:14b | 5/78 |
+| qwen3.6:35b-a3b | 75/78 |
+| north-mini-code-1.0 | 76/78 |
+| qwen2.5-coder:32b | 12/78 |
 
 ## Vision — compréhension d'image
 
@@ -334,6 +351,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | nemotron-3.5-bolt:e4b | 45/48 |
 | ornith-1.5:35b | 45/48 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 45/48 |
+| north-mini-code-1.0 | 45/48 |
 | granite4.2:3b | 44/48 |
 | qwen3-vl:8b | 44/48 |
 | gemma4:e4b | 43/48 |
@@ -343,6 +361,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
 | qwen3.6:35b | 43/48 |
+| qwen3.6:35b-a3b | 43/48 |
 | qwen3.5:4b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
 | hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 40/48 |
@@ -363,6 +382,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.5:0.8b | 13/48 |
 | qwen2.5-coder:14b | 6/48 |
 | qwen2.5-coder:7b | 4/48 |
+| qwen2.5-coder:32b | 4/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
 
