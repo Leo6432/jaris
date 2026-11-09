@@ -11635,3 +11635,13 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - 4 textes ajoutés (24 langues). Régression : nouveau test-duel-voice-ask-ui.mjs (faux micro de Chromium, vrai
   DuelPanel : clic, écoute, second clic → transcription → `duelAsk('Quelle heure est-il ?')` sans « Envoyer » ; pas
   d'orbe en Conversation) — échoue sur l'ancien DuelPanel ; test-dictation-ui.mjs inchangé et vert (Composer).
+
+## Étape 449 — Scores de devstral-small-2:24b (v0.53.1, publiés après l'étape 450)
+
+- Campagne de Léo du 09/11 à 17:02 (Jaris 0.52.2), 126 réponses relues : questions 72/78 sans correction (éteint le
+  PC à « ce soir » ×3, Clio ajoutée sans `replace` ×3) ; demandes 44 → 45/48 (youtube-guitare p1 : « veux-tu que je
+  clique sur le premier résultat ? » est une proposition, pas un résultat inventé — même phrase déjà comptée juste
+  pour mistral-small3.2:24b). Même digest que son test de code. Aucun choix de modèle ne change (grille et PC de Léo).
+- Remarque sur Jaris, pas corrigée : après la relance « fais la recherche » envoyée comme message système, devstral
+  écrit son appel en texte (`search_web{…}`) 5 fois sur 5 ; envoyée comme message utilisateur, il appelle bien
+  l'outil (gabarit Mistral). Juge youtube-guitare trop large (« premier résultat »).
