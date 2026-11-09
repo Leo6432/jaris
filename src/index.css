@@ -5475,7 +5475,8 @@ textarea:not(.composer__input):focus-visible {
 }
 
 /* --- Sous l'orbe : l'état, puis l'échange en cours comme des sous-titres ---------------------- */
-.voice-screen .app__status {
+.voice-screen .app__status,
+.duel-voice .app__status {
   margin: 4px 0 0;
   font-size: 28px;
   font-weight: 500;
@@ -5485,7 +5486,8 @@ textarea:not(.composer__input):focus-visible {
 
 /* L'échange en cours, centré comme des sous-titres : ce que Léo a dit (discret), puis la réponse de Jaris en texte
    normal. Une seule règle par élément : trois couches successives (bulle, carte, sous-titres) se contredisaient ici. */
-.voice-screen .app__conversation {
+.voice-screen .app__conversation,
+.duel-voice .app__conversation {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5495,13 +5497,15 @@ textarea:not(.composer__input):focus-visible {
   text-align: center;
 }
 
-.voice-screen .app__transcript {
+.voice-screen .app__transcript,
+.duel-voice .app__transcript {
   margin: 0;
   line-height: 1.55;
   color: var(--hud-text-dim);
 }
 
-.voice-screen .app__reply {
+.voice-screen .app__reply,
+.duel-voice .app__reply {
   margin: 0;
   font-size: 16px;
   line-height: 1.55;
@@ -8390,26 +8394,56 @@ ul.reply-list--nested {
   margin: 0 auto 18px;
 }
 
-/* Étape 450 : Duel Vocal — la question se dit à voix haute en cliquant sur l'orbe (au-dessus du champ, gardé en secours). */
-.duel-voice-ask {
+/* Étape 450 : Duel Vocal — la scène de l'Agent vocal (orbe, état, sous-titres partagés avec .voice-screen plus
+   haut), puis le bouton du modèle B et « Réécouter ». */
+.duel-voice {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin: 8px auto 12px;
-  max-width: 520px;
+  gap: 14px;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 12px 16px 8px;
   text-align: center;
 }
 
-.duel-voice-ask__status {
-  margin: 0;
+.duel-voice__hint {
+  margin: -6px 0 0;
+  max-width: 460px;
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--hud-text-dim);
 }
 
-.duel-voice-ask--recording .duel-voice-ask__status {
-  color: var(--hud-text);
+.duel-voice__letter {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+
+.duel-voice__controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.duel-voice__controls:empty {
+  display: none;
+}
+
+.duel-voice__write {
+  align-self: center;
+  margin: 4px auto 8px;
 }
 
 .duel__error {

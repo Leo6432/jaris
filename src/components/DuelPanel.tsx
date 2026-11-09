@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useReportActivity } from '@/lib/useReportActivity'
 import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
@@ -35,7 +35,8 @@ import {
   type DuelTurn,
   type DuelVoteSide
 } from '../../shared/duel'
-import type { ClaudeKeyStatus, DuelActivity, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
+import type { JarisEmotion } from '@/store/useJarisStore'
+import type { ClaudeKeyStatus, DuelActivity, DuelRoundView, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -1389,54 +1390,128 @@ function DuelReviewScreen({ onBack }: { onBack: () => void }): JSX.Element {
 }
 
 /**
- * Étape 450 (Léo : « dans le mode Vocal du duel, parler et pas écrire, mais toujours le duel avec 2 modèles ») : un
- * clic sur l'orbe enregistre, un second arrête ; la question transcrite part toute seule aux deux modèles, dont les
- * réponses sont lues à voix haute comme avant. Même dictée que le micro du Chat (useDictation). Rien sans micro.
+ * Étape 450, revue avec Léo : « le Duel Vocal doit être vocal comme le Vocal : le modèle répond en vocal, comme le
+ * Vocal, et un bouton envoie le même prompt dit à voix haute au second ». Pas de cartes de texte : la scène de l'Agent
+ * vocal (le grand orbe, ce qui se dit en sous-titres). Un clic sur l'orbe écoute la question (un second l'envoie), ou
+ * coupe une voix qui parle ; A répond à voix haute ; « Poser la même question au modèle B » ; B répond à voix haute ;
+ * puis le vote, en dessous comme avant. Même dictée que le micro du Chat (useDictation).
  */
-function DuelVoiceAsk({
-  followUp,
+function VoiceDuelStage({
+  round,
+  now,
+  playing,
+  audioRef,
+  canSpeak,
   busy,
-  onStart,
-  onText,
-  onError
+  canRunB,
+  onSpoken,
+  onError,
+  onListen,
+  onStopVoice,
+  onRunB,
+  onStopRun
 }: {
-  followUp: boolean
+  round: DuelRoundView
+  now: number
+  playing: DuelSide | null
+  audioRef: RefObject<HTMLAudioElement>
+  /** L'orbe écoute : avant la question, ou pour répondre aux deux modèles une fois qu'ils ont parlé. */
+  canSpeak: boolean
   busy: boolean
-  /** Juste avant d'écouter : la voix d'une réponse précédente se tait. */
-  onStart: () => void
-  onText: (text: string) => void
+  canRunB: boolean
+  onSpoken: (text: string) => void
   onError: (message: string) => void
-}): JSX.Element | null {
-  const dictation = useDictation({ onText, onError })
-  if (!dictation.available) return null
+  onListen: (side: DuelSide) => void
+  onStopVoice: () => void
+  onRunB: () => void
+  onStopRun: () => void
+}): JSX.Element {
+  const dictation = useDictation({ onText: onSpoken, onError })
   const recording = dictation.state === 'recording'
-  const working = busy || dictation.state === 'starting' || dictation.state === 'transcribing'
+  const transcribing = dictation.state === 'transcribing' || dictation.state === 'starting'
+  const runningSide: DuelSide | null = round.a.status === 'running' ? 'a' : round.b.status === 'running' ? 'b' : null
+  // Ce qui s'affiche en sous-titres : la réponse qui se lit, sinon la dernière arrivée.
+  const shown: DuelSide | null = playing ?? (finished(round.b) ? 'b' : finished(round.a) ? 'a' : null)
+  const shownSide = shown ? round[shown] : null
+  const letter = (side: DuelSide): string => side.toUpperCase()
   const time = `${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, '0')}`
   const status = recording
     ? t('duel.voice.listening', { time })
-    : dictation.state === 'transcribing'
+    : transcribing
       ? t('composer.dictation.transcribing')
       : busy
         ? t('common.loading')
-        : t(followUp ? 'duel.voice.tapFollowUp' : 'duel.voice.tap')
-  return (
-    <div className={`duel-voice-ask${recording ? ' duel-voice-ask--recording' : ''}`}>
-      <JarisOrb
-        emotion={recording ? 'listening' : working ? 'thinking' : 'idle'}
-        size={120}
-        label={recording ? t('composer.dictation.finish') : t('duel.voice.tapLabel')}
-        onClick={
-          working
-            ? undefined
-            : () => {
-                if (!recording) onStart()
-                void dictation.toggle()
-              }
+        : round.prompt === null
+          ? t('duel.voice.title')
+          : runningSide
+            ? t('duel.voice.thinking', { side: letter(runningSide) })
+            : playing
+              ? t('duel.voice.speaking', { side: letter(playing) })
+              : finished(round.a) && finished(round.b)
+                ? t('duel.voice.bothDone')
+                : finished(round.a)
+                  ? t('duel.voice.answered', { side: 'A' })
+                  : t('duel.voice.title')
+  const emotion: JarisEmotion = recording ? 'listening' : transcribing || busy || runningSide ? 'thinking' : playing ? 'happy' : 'idle'
+  const orbClick = playing
+    ? onStopVoice
+    : canSpeak && !busy && !transcribing && !runningSide
+      ? () => {
+          if (!recording) onStopVoice()
+          void dictation.toggle()
         }
-      />
-      <p className="duel-voice-ask__status" aria-live="polite">
+      : undefined
+  const orbLabel = playing ? t('duel.voice.stopVoice') : recording ? t('composer.dictation.finish') : t('duel.voice.tapLabel')
+  const lastFollowUp = (round.followUps ?? []).at(-1)
+  return (
+    <div className={`duel-voice${recording ? ' duel-voice--recording' : ''}`} data-emotion={emotion}>
+      <JarisOrb emotion={emotion} size={180} audioElRef={audioRef} onClick={orbClick} label={orbLabel} />
+      <h2 className="app__status duel-voice__status" aria-live="polite">
         {status}
-      </p>
+      </h2>
+      {round.prompt === null && canSpeak && !recording && !transcribing && dictation.available && (
+        <p className="duel-voice__hint">{t('duel.voice.tap')}</p>
+      )}
+      {round.prompt !== null && (
+        <div className="app__conversation duel-voice__conversation">
+          <p className="app__transcript">{t('common.quoted', { text: lastFollowUp ?? round.prompt })}</p>
+          {runningSide && (
+            <p className="app__activity">
+              {activityLabel(round[runningSide].activity)}
+              {round[runningSide].startedAt !== null && ` · ${formatDuration(Math.max(0, now - (round[runningSide].startedAt ?? now)))}`}
+            </p>
+          )}
+          {!runningSide && shown && shownSide && shownSide.text.trim() && (
+            <p className="app__reply">
+              <span className="duel-voice__letter" aria-label={t(shown === 'a' ? 'duel.side.a' : 'duel.side.b')}>
+                {letter(shown)}
+              </span>
+              {shownSide.text}
+            </p>
+          )}
+          {!runningSide && shownSide?.status === 'error' && shownSide.error && <p className="duel-side__error">{shownSide.error}</p>}
+          {!runningSide && shownSide?.audioError && <p className="duel-side__muted">{t('duel.audioFailed', { error: shownSide.audioError })}</p>}
+        </div>
+      )}
+      <div className="duel-voice__controls">
+        {runningSide && (
+          <button type="button" className="duel-btn" onClick={onStopRun}>
+            {t('common.stop')}
+          </button>
+        )}
+        {canRunB && (
+          <button type="button" className="duel-btn duel-btn--primary" onClick={onRunB}>
+            {t('duel.voice.runB')}
+          </button>
+        )}
+        {(['a', 'b'] as const).map((side) =>
+          round[side].audio && !runningSide ? (
+            <button key={side} type="button" className="duel-btn duel-voice__listen" onClick={() => onListen(side)} aria-pressed={playing === side}>
+              {t('duel.voice.listenSide', { side: letter(side) })}
+            </button>
+          ) : null
+        )}
+      </div>
     </div>
   )
 }
@@ -1477,6 +1552,8 @@ export default function DuelPanel(): JSX.Element {
   const [prompt, setPrompt] = useState('')
   // Étape 401 : la réponse de Léo aux deux modèles, avant de voter.
   const [reply, setReply] = useState('')
+  // Étape 450 : en Duel Vocal, le champ texte n'apparaît que si Léo choisit « Écrire plutôt » (micro absent, en panne).
+  const [voiceWrite, setVoiceWrite] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** L'action en cours d'envoi au main (un seul bouton actif à la fois). */
   const [pending, setPending] = useState<'start' | 'ask' | 'runB' | 'followUp' | 'vote' | 'next' | 'retry' | 'swap' | 'skip' | 'end' | 'delete' | 'close' | null>(null)
@@ -2322,6 +2399,27 @@ export default function DuelPanel(): JSX.Element {
           <div className="duel__scroll">
             <DuelBatchEditor category={view.category} busy={pending !== null} onStart={startBatch} onCancel={() => setBatchEditing(false)} />
           </div>
+        ) : round.prompt === null && view.category === 'voice' ? (
+          <div className="duel__scroll duel__center">
+            <VoiceDuelStage
+              round={round}
+              now={now}
+              playing={playing}
+              audioRef={audioRef}
+              canSpeak
+              busy={pending === 'ask'}
+              canRunB={false}
+              onSpoken={(text) => {
+                setPrompt(text)
+                ask(text)
+              }}
+              onError={setError}
+              onListen={(side) => void play(side)}
+              onStopVoice={stopAudio}
+              onRunB={runB}
+              onStopRun={stop}
+            />
+          </div>
         ) : round.prompt === null ? (
           <div className="duel__ask">
             <DuelAsk key={`${view.category}-${view.votes}`} category={view.category} onPick={setPrompt} />
@@ -2334,58 +2432,80 @@ export default function DuelPanel(): JSX.Element {
         ) : (
           <div className="duel__scroll">
             <div className="duel-round">
-              <div className="duel-round__prompt">
-                <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
-                <p>{round.prompt}</p>
-              </div>
-              {round.together && <p className="duel-home__note duel-round__together">{t('duel.together')}</p>}
-              <div className={`duel-round__sides${view.category === 'code' ? ' duel-round__sides--code' : ''}`}>
-                <SideCard
-                  name="a"
-                  side={round.a}
-                  category={view.category}
+              {view.category === 'voice' ? (
+                <VoiceDuelStage
+                  round={round}
                   now={now}
-                  playing={playing === 'a'}
-                  onStop={stop}
-                  onListen={() => void play('a')}
-                  model={round.revealed?.a ?? null}
-                  followUps={followUps}
-                  onSwap={canSwapSide('a') ? () => swap('a') : undefined}
-                  swapDisabled={pending !== null}
-                  onWriteNow={() => writeNow('a')}
+                  playing={playing}
+                  audioRef={audioRef}
+                  canSpeak={canFollowUp}
+                  busy={pending === 'ask' || pending === 'followUp'}
+                  canRunB={finished(round.a) && round.b.status === 'idle' && !(round.b.earlier ?? []).length && !view.batch && !round.a.trouble && pending === null}
+                  onSpoken={(text) => {
+                    setReply(text)
+                    followUp(text)
+                  }}
+                  onError={setError}
+                  onListen={(side) => void play(side)}
+                  onStopVoice={stopAudio}
+                  onRunB={runB}
+                  onStopRun={stop}
                 />
-                {round.b.status === 'idle' && !(round.b.earlier ?? []).length ? (
-                  <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
-                    <header className="duel-side__head">
-                      <span className="duel-side__name">
-                        <span className="duel-side__letter" aria-hidden="true">
-                          B
-                        </span>
-                        {t('duel.side.b')}
-                      </span>
-                      <span className="duel-side__status">{t('duel.status.waiting')}</span>
-                    </header>
-                    {waitingB}
-                  </section>
-                ) : (
+              ) : (
+                <>
+                <div className="duel-round__prompt">
+                  <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
+                  <p>{round.prompt}</p>
+                </div>
+                {round.together && <p className="duel-home__note duel-round__together">{t('duel.together')}</p>}
+                <div className={`duel-round__sides${view.category === 'code' ? ' duel-round__sides--code' : ''}`}>
                   <SideCard
-                    name="b"
-                    side={round.b}
+                    name="a"
+                    side={round.a}
                     category={view.category}
                     now={now}
-                    playing={playing === 'b'}
+                    playing={playing === 'a'}
                     onStop={stop}
-                    onListen={() => void play('b')}
-                    model={round.revealed?.b ?? null}
+                    onListen={() => void play('a')}
+                    model={round.revealed?.a ?? null}
                     followUps={followUps}
-                    waiting={waitingB}
-                    onSwap={canSwapSide('b') ? () => swap('b') : undefined}
+                    onSwap={canSwapSide('a') ? () => swap('a') : undefined}
                     swapDisabled={pending !== null}
-                    onWriteNow={() => writeNow('b')}
+                    onWriteNow={() => writeNow('a')}
                   />
-                )}
-              </div>
-
+                  {round.b.status === 'idle' && !(round.b.earlier ?? []).length ? (
+                    <section className="duel-side duel-side--idle" aria-label={t('duel.side.b')}>
+                      <header className="duel-side__head">
+                        <span className="duel-side__name">
+                          <span className="duel-side__letter" aria-hidden="true">
+                            B
+                          </span>
+                          {t('duel.side.b')}
+                        </span>
+                        <span className="duel-side__status">{t('duel.status.waiting')}</span>
+                      </header>
+                      {waitingB}
+                    </section>
+                  ) : (
+                    <SideCard
+                      name="b"
+                      side={round.b}
+                      category={view.category}
+                      now={now}
+                      playing={playing === 'b'}
+                      onStop={stop}
+                      onListen={() => void play('b')}
+                      model={round.revealed?.b ?? null}
+                      followUps={followUps}
+                      waiting={waitingB}
+                      onSwap={canSwapSide('b') ? () => swap('b') : undefined}
+                      swapDisabled={pending !== null}
+                      onWriteNow={() => writeNow('b')}
+                    />
+                  )}
+                </div>
+                </>
+              )}
               {trouble && noneRunning && (
                 <div className="duel-vote duel-vote--trouble" role="group" aria-labelledby="duel-trouble-title">
                   <h2 id="duel-trouble-title" className="duel-vote__title">
@@ -2426,7 +2546,7 @@ export default function DuelPanel(): JSX.Element {
                   <h2 id="duel-vote-title" className="duel-vote__title">
                     {t('duel.vote.title')}
                   </h2>
-                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t(code ? 'duel.followUp.hintCode' : 'duel.followUp.hint')}</p>}
+                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t(code ? 'duel.followUp.hintCode' : view.category === 'voice' && !voiceWrite ? 'duel.voice.tapFollowUp' : 'duel.followUp.hint')}</p>}
                   <div className="duel-vote__buttons">
                     {OUTCOMES.map(({ outcome, label }) => (
                       <button
@@ -2448,21 +2568,12 @@ export default function DuelPanel(): JSX.Element {
 
         {error && <p className="duel__error">{error}</p>}
 
-        {/* Étape 450 (Léo : « dans le duel Vocal, parler et pas écrire ») : la question se dit à voix haute et part
-            toute seule aux deux modèles ; le champ reste dessous si le micro ne marche pas. */}
-        {round.prompt === null && !batchEditing && view.category === 'voice' && (
-          <DuelVoiceAsk
-            followUp={false}
-            busy={pending === 'ask'}
-            onStart={stopAudio}
-            onText={(text) => {
-              setPrompt(text)
-              ask(text)
-            }}
-            onError={setError}
-          />
+        {view.category === 'voice' && !voiceWrite && (round.prompt === null || canFollowUp) && (
+          <button type="button" className="duel-btn duel-voice__write" onClick={() => setVoiceWrite(true)}>
+            {t('duel.voice.write')}
+          </button>
         )}
-        {round.prompt === null && !batchEditing && (
+        {round.prompt === null && !batchEditing && (view.category !== 'voice' || voiceWrite) && (
           <Composer
             value={prompt}
             onChange={setPrompt}
@@ -2479,19 +2590,7 @@ export default function DuelPanel(): JSX.Element {
             rows={2}
           />
         )}
-        {canFollowUp && view.category === 'voice' && (
-          <DuelVoiceAsk
-            followUp
-            busy={pending === 'followUp'}
-            onStart={stopAudio}
-            onText={(text) => {
-              setReply(text)
-              followUp(text)
-            }}
-            onError={setError}
-          />
-        )}
-        {canFollowUp && (
+        {canFollowUp && (view.category !== 'voice' || voiceWrite) && (
           <Composer
             value={reply}
             onChange={setReply}

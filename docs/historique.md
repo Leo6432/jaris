@@ -11645,3 +11645,24 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Remarque sur Jaris, pas corrigée : après la relance « fais la recherche » envoyée comme message système, devstral
   écrit son appel en texte (`search_web{…}`) 5 fois sur 5 ; envoyée comme message utilisateur, il appelle bien
   l'outil (gabarit Mistral). Juge youtube-guitare trop large (« premier résultat »).
+
+## Étape 451 — Duel Vocal : une vraie scène vocale, A puis « même question au modèle B » (v0.54.0)
+
+- Léo, sur l'étape 450 : « t'as pas compris le mode Duel Vocal, ça doit être vocal comme le Vocal, et après le modèle
+  répond en vocal, comme le Vocal ; c'est juste que tu as un bouton qui envoie le même prompt dit à voix haute au
+  premier ». L'orbe de l'étape 450 restait posé au-dessus de l'écran texte du Duel (cartes, champ). Désormais, en
+  catégorie Vocal, le Duel EST la scène de l'Agent vocal (`VoiceDuelStage` dans DuelPanel.tsx) : grand JarisOrb (180,
+  branché sur l'audio des réponses), ligne d'état (écoute, « Le modèle A réfléchit… », « Le modèle A répond »…), la
+  question entre guillemets, la réponse en sous-titres (lettre A/B). Pas de cartes de texte, pas de champ.
+- Déroulé : clic sur l'orbe → écoute ; second clic → `duelAsk` ; A répond à voix haute ; bouton « Poser la même
+  question au modèle B » (`duelRunB`, mêmes conditions que l'ancien bouton) ; B répond à voix haute ; « Réécouter A /
+  Réécouter B » et le vote habituel dessous. L'orbe coupe une voix qui parle ; il écoute la relance quand les deux ont
+  répondu. « Écrire plutôt » remet le champ en secours. L'indication du vote (« Réponds-lui en bas ») parle de l'orbe
+  en Vocal, puisqu'il n'y a plus de champ en bas.
+- Styles du Vocal partagés : `.voice-screen .app__status/__transcript/__reply/__conversation` couvrent aussi
+  `.duel-voice`. 9 textes ajoutés, `duel.voice.tapFollowUp` reformulé (24 langues). Captures montrées et validées par
+  Léo avant publication.
+- Régression : test-duel-voice-ask-ui.mjs réécrit (faux micro de Chromium, vrai DuelPanel, CSS compilé) : pas de
+  cartes ni de champ, clic-clic → `duelAsk` ; réponse de A lue (`play`) et sous-titrée ; bouton → `duelRunB` ;
+  réécouter A/B + vote ; indication de l'orbe puis retour du champ avec « Écrire plutôt » ; rien de tout ça en
+  Conversation. Les deux tests vocaux échouent sur le DuelPanel de l'étape 450. Vérifié aussi à 760 px.
