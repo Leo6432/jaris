@@ -111,6 +111,18 @@ function metricsOf(data: OllamaChatResponse, thinkingChars: number): ChatMetrics
  * modèle est bien installé et a bien travaillé, il a juste manqué de place — l'ancien message (« bien
  * installé ? ») envoyait sur une fausse piste.
  */
+/**
+ * Étape 452 : le modèle a fini sans rien écrire ni rien appeler (souvent après avoir agi : qwen3.5:9b ouvre le
+ * Bloc-notes puis rend une réponse vide). Reconnue par son nom (`name`), pour que converse() puisse annoncer
+ * l'action faite au lieu d'une panne.
+ */
+export class EmptyReplyError extends Error {
+  constructor(readonly model: string) {
+    super(t('ollama.empty', { model }))
+    this.name = 'EmptyReplyError'
+  }
+}
+
 export class ContextFullError extends Error {
   constructor(
     readonly model: string,
@@ -289,7 +301,7 @@ async function requestChatWith(
     if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) {
       throw new ContextFullError(model, numCtx)
     }
-    if (!data.message) throw new Error(t('ollama.empty', { model }))
+    if (!data.message) throw new EmptyReplyError(model)
     reportMetrics(model, metricsOf(data, data.message.thinking?.length ?? 0), onMetrics)
     return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
   }
@@ -360,7 +372,7 @@ async function requestChatWith(
   content = stripLeakedThinking(content)
   if (!content && !toolCalls) {
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
-    throw new Error(t('ollama.empty', { model }))
+    throw new EmptyReplyError(model)
   }
   if (finalChunk) reportMetrics(model, metricsOf(finalChunk, thinking.length), onMetrics)
   // Sans relais (voix, mémoire), la forme d'avant le flux : la réflexion reste jointe au message, comme une réponse

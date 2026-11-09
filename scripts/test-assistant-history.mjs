@@ -576,6 +576,21 @@ test('étape 346 : après une action réussie (ouvrir une application), aucune r
   assert.equal(model, 2)
 })
 
+test('étape 452 : le modèle se tait après avoir ouvert le Bloc-notes — l’action répond, jamais « Réponse vide »', async () => {
+  const empty = () => Object.assign(new Error("Réponse vide d'Ollama (modèle « qwen3.5:9b » bien installé ?)"), { name: 'EmptyReplyError' })
+  let calls = 0
+  const converse = setup(async () => {
+    calls++
+    if (calls === 1) return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'open_app', arguments: { name: 'Bloc-notes' } } }] }
+    throw empty()
+  }, async (name) => (name === 'open_app' ? 'Bloc-notes a été lancé.' : assert.fail(`outil inattendu : ${name}`)), undefined, { tools: DUEL_TOOLS })
+  assert.equal(await converse('Ouvre le bloc notes.', null, () => {}, undefined, [], undefined, undefined, 'voice', undefined, undefined, undefined, duelRestrictions('qwen3.5:9b')), 'Bloc-notes a été lancé.')
+  assert.equal(calls, 2)
+  // Sans action réussie avant, une réponse vide reste une vraie erreur, dite telle quelle.
+  const silent = setup(async () => { throw empty() }, async () => assert.fail('aucun outil attendu'), undefined, { tools: DUEL_TOOLS })
+  await assert.rejects(silent('Raconte une blague', null, () => {}, undefined, [], undefined, undefined, 'voice', undefined, undefined, undefined, duelRestrictions('qwen3.5:9b')), { name: 'EmptyReplyError' })
+})
+
 test('étape 346 : dans une autre langue que le français, les filets français (recherche, mail) ne relancent pas', async () => {
   const before = i18nModule.currentLanguage()
   i18nModule.setLanguage('en')

@@ -11666,3 +11666,16 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   cartes ni de champ, clic-clic → `duelAsk` ; réponse de A lue (`play`) et sous-titrée ; bouton → `duelRunB` ;
   réécouter A/B + vote ; indication de l'orbe puis retour du champ avec « Écrire plutôt » ; rien de tout ça en
   Conversation. Les deux tests vocaux échouent sur le DuelPanel de l'étape 450. Vérifié aussi à 760 px.
+
+## Étape 452 — Un modèle qui se tait après avoir agi : l'action répond, pas « Réponse vide » (v0.54.1)
+
+- Léo, Duel Vocal : « Ouvre le bloc notes. » → le modèle A (qwen3.5:9b) a bien ouvert le Bloc-notes (confirmé par
+  Léo), puis a rendu une réponse vide (ni texte ni outil). `chatWithOllama` lève alors « Réponse vide d'Ollama (modèle
+  … bien installé ?) », qui remontait comme une panne du côté A — fausse piste, le modèle était installé et avait agi.
+  Le filet `finalize` (réponse vide → « Désolé… ») n'était jamais atteint : l'erreur partait avant.
+- Correctif : `EmptyReplyError` (ollama.ts, reconnue par son `name`). Dans `converse()`, si une ACTION a réussi pendant
+  ce tour (outil non-lecture, résultat sans échec), une réponse vide qui suit est remplacée par le résultat de cette
+  action, écrit par Jaris (« Bloc-notes a été lancé. »), lu à voix haute en Vocal. Sans action réussie avant, la
+  réponse vide reste une vraie erreur, dite telle quelle (vaut pour tous les modes, pas seulement le Duel).
+- Régression : test-assistant-history.mjs (open_app puis réponse vide → « Bloc-notes a été lancé. » ; réponse vide sans
+  action → toujours l'erreur). Échoue sur l'ancien assistant.ts. Non vérifié en usage réel avec qwen3.5:9b.

@@ -1023,21 +1023,34 @@ async function conversation(
   // remplacé par la relance plus bas — il ne doit pas s'afficher le temps de deux secondes.
   const holdStream = holdKnowledgeStream || (namedServices.length > 0 && Boolean(onToken))
   let nudgedForService = false
+  // Étape 452 (Léo, Duel Vocal, qwen3.5:9b : « Ouvre le bloc-notes » → Bloc-notes ouvert, puis « Réponse vide
+  // d'Ollama ») : le résultat de la dernière action réussie de CE tour. Si le modèle se tait ensuite, c'est ce
+  // résultat (écrit par Jaris, « Bloc-notes a été lancé. ») qui répond — l'action a eu lieu, ce n'est pas une panne.
+  let lastActionResult: string | undefined
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const askedAt = Date.now()
     let metrics: ChatMetrics | undefined
-    const message = await chatWithOllama(
-      messages,
-      tools,
-      model,
-      think,
-      signal,
-      numCtx,
-      holdStream ? () => {} : onToken,
-      undefined,
-      (measured) => (metrics = measured)
-    )
+    let message: OllamaMessage
+    try {
+      message = await chatWithOllama(
+        messages,
+        tools,
+        model,
+        think,
+        signal,
+        numCtx,
+        holdStream ? () => {} : onToken,
+        undefined,
+        (measured) => (metrics = measured)
+      )
+    } catch (err) {
+      if (lastActionResult === undefined || !(err instanceof Error) || err.name !== 'EmptyReplyError') throw err
+      onLog?.(`Réponse vide après une action réussie : le résultat de l'action répond (${lastActionResult}).`)
+      const finalText = finalize(lastActionResult)
+      if (holdStream) onToken?.(finalText)
+      return finalText
+    }
     journal.timed(describeModelCall(model, message, metrics), askedAt)
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail && !reminderOrNoteThisTurn) {
@@ -1210,7 +1223,10 @@ async function conversation(
       // ma mère ? », « combien de RAM j'utilise ? »…), toujours plus lentes, et 11 fois une bonne réponse
       // (« le 14 mars ») remplacée par « aucun résultat sur internet ». Consulter une source compte comme vérifier.
       if (LOOKUP_TOOLS.has(call.function.name)) searchCalledThisTurn = true
-      else actionToolThisTurn = true
+      else {
+        actionToolThisTurn = true
+        lastActionResult = result
+      }
       if (call.function.name === 'set_reminder' || call.function.name === 'remember') reminderOrNoteThisTurn = true
 
       // Constaté en usage réel (Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit
