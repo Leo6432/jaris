@@ -4,7 +4,7 @@ import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import { DeleteIcon } from '@/components/icons'
-import { setVoiceOutputDevice } from '@/components/JarisOrb'
+import JarisOrb, { setVoiceOutputDevice } from '@/components/JarisOrb'
 import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatModelName } from '@/lib/formatModelName'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -12,6 +12,7 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatDecimal, formatPercent, t, tn } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { useScreenActive } from '@/lib/shellContext'
+import { useDictation } from '@/lib/useDictation'
 import {
   DUEL_BATCH_MAX,
   DUEL_BATCH_MIN,
@@ -1387,6 +1388,59 @@ function DuelReviewScreen({ onBack }: { onBack: () => void }): JSX.Element {
   )
 }
 
+/**
+ * Étape 450 (Léo : « dans le mode Vocal du duel, parler et pas écrire, mais toujours le duel avec 2 modèles ») : un
+ * clic sur l'orbe enregistre, un second arrête ; la question transcrite part toute seule aux deux modèles, dont les
+ * réponses sont lues à voix haute comme avant. Même dictée que le micro du Chat (useDictation). Rien sans micro.
+ */
+function DuelVoiceAsk({
+  followUp,
+  busy,
+  onStart,
+  onText,
+  onError
+}: {
+  followUp: boolean
+  busy: boolean
+  /** Juste avant d'écouter : la voix d'une réponse précédente se tait. */
+  onStart: () => void
+  onText: (text: string) => void
+  onError: (message: string) => void
+}): JSX.Element | null {
+  const dictation = useDictation({ onText, onError })
+  if (!dictation.available) return null
+  const recording = dictation.state === 'recording'
+  const working = busy || dictation.state === 'starting' || dictation.state === 'transcribing'
+  const time = `${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, '0')}`
+  const status = recording
+    ? t('duel.voice.listening', { time })
+    : dictation.state === 'transcribing'
+      ? t('composer.dictation.transcribing')
+      : busy
+        ? t('common.loading')
+        : t(followUp ? 'duel.voice.tapFollowUp' : 'duel.voice.tap')
+  return (
+    <div className={`duel-voice-ask${recording ? ' duel-voice-ask--recording' : ''}`}>
+      <JarisOrb
+        emotion={recording ? 'listening' : working ? 'thinking' : 'idle'}
+        size={120}
+        label={recording ? t('composer.dictation.finish') : t('duel.voice.tapLabel')}
+        onClick={
+          working
+            ? undefined
+            : () => {
+                if (!recording) onStart()
+                void dictation.toggle()
+              }
+        }
+      />
+      <p className="duel-voice-ask__status" aria-live="polite">
+        {status}
+      </p>
+    </div>
+  )
+}
+
 export default function DuelPanel(): JSX.Element {
   const active = useScreenActive()
   const [view, setView] = useState<DuelSessionView | null>(null)
@@ -1630,8 +1684,9 @@ export default function DuelPanel(): JSX.Element {
     })
   }
 
-  const ask = (): void => {
-    const text = prompt.trim()
+  /** `spoken` : la question dite à voix haute en Duel Vocal (étape 450), envoyée telle quelle. */
+  const ask = (spoken?: string): void => {
+    const text = (spoken ?? prompt).trim()
     if (!text) return
     void run('ask', async () => {
       setView(await window.jaris.duelAsk(text))
@@ -1643,8 +1698,8 @@ export default function DuelPanel(): JSX.Element {
     void run('runB', async () => setView(await window.jaris.duelRunB()))
   }
 
-  const followUp = (): void => {
-    const text = reply.trim()
+  const followUp = (spoken?: string): void => {
+    const text = (spoken ?? reply).trim()
     if (!text) return
     stopAudio()
     void run('followUp', async () => {
@@ -2393,11 +2448,25 @@ export default function DuelPanel(): JSX.Element {
 
         {error && <p className="duel__error">{error}</p>}
 
+        {/* Étape 450 (Léo : « dans le duel Vocal, parler et pas écrire ») : la question se dit à voix haute et part
+            toute seule aux deux modèles ; le champ reste dessous si le micro ne marche pas. */}
+        {round.prompt === null && !batchEditing && view.category === 'voice' && (
+          <DuelVoiceAsk
+            followUp={false}
+            busy={pending === 'ask'}
+            onStart={stopAudio}
+            onText={(text) => {
+              setPrompt(text)
+              ask(text)
+            }}
+            onError={setError}
+          />
+        )}
         {round.prompt === null && !batchEditing && (
           <Composer
             value={prompt}
             onChange={setPrompt}
-            onSubmit={ask}
+            onSubmit={() => ask()}
             placeholder={t('duel.ask.placeholder')}
             submitLabel={t('duel.ask.submit')}
             busyLabel={t('common.loading')}
@@ -2410,11 +2479,23 @@ export default function DuelPanel(): JSX.Element {
             rows={2}
           />
         )}
+        {canFollowUp && view.category === 'voice' && (
+          <DuelVoiceAsk
+            followUp
+            busy={pending === 'followUp'}
+            onStart={stopAudio}
+            onText={(text) => {
+              setReply(text)
+              followUp(text)
+            }}
+            onError={setError}
+          />
+        )}
         {canFollowUp && (
           <Composer
             value={reply}
             onChange={setReply}
-            onSubmit={followUp}
+            onSubmit={() => followUp()}
             placeholder={t(code ? 'duel.followUp.placeholderCode' : 'duel.followUp.placeholder')}
             submitLabel={t(code ? 'duel.followUp.submitCode' : 'duel.followUp.submit')}
             busyLabel={t('common.loading')}

@@ -5,8 +5,8 @@ import {
   pickedFileToImageAttachment,
   type ImageAttachment
 } from '@/lib/imageAttachment'
-import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dictation'
-import { ipcErrorMessage } from '@/lib/ipcError'
+import { appendDictation } from '@/lib/dictation'
+import { useDictation } from '@/lib/useDictation'
 import { t } from '@/lib/i18n'
 
 /**
@@ -166,14 +166,15 @@ export default function Composer({
   // Étape 276 (Léo : « quand on clique sur le micro dans le Chat, ça ne doit pas aller en vocal, ça doit
   // enregistrer et transcrire en texte ») : le micro de la barre est une DICTÉE — un clic enregistre, un second
   // arrête ; le texte transcrit s'ajoute à ce qui est déjà écrit, sans rien envoyer tout seul.
-  const [dictation, setDictation] = useState<'idle' | 'starting' | 'recording' | 'transcribing'>('idle')
-  const [dictationSeconds, setDictationSeconds] = useState(0)
-  const recorderRef = useRef<DictationRecorder | null>(null)
-  // Étape 346 : un double-clic lançait deux ouvertures du micro (l'état React n'a pas encore changé au second clic) ;
-  // le premier enregistreur restait ouvert, micro allumé, sans plus personne pour l'arrêter.
-  const startingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const dictationTimers = useRef<{ stop?: number; tick?: number }>({})
+  const dictationApi = useDictation({
+    onText: (text) => onChange(appendDictation(valueRef.current, text)),
+    onError,
+    onDone: () => inputRef.current?.focus()
+  })
+  const dictation = dictationApi.state
+  const dictationSeconds = dictationApi.seconds
+  const canDictate = dictationApi.available
+  const toggleDictation = dictationApi.toggle
   const valueRef = useRef(value)
   valueRef.current = value
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -237,84 +238,6 @@ export default function Composer({
     // Vide : la hauteur d'une ligne (celle du CSS), jamais celle d'un texte d'aide passé à la ligne.
     field.style.height = value.length > 0 ? `${Math.min(field.scrollHeight, INLINE_MAX_HEIGHT_PX)}px` : ''
   }, [value, inline, expanded])
-  const canDictate = typeof window !== 'undefined' && typeof window.jaris?.transcribeDictation === 'function'
-
-  const clearDictationTimers = (): void => {
-    window.clearTimeout(dictationTimers.current.stop)
-    window.clearInterval(dictationTimers.current.tick)
-    dictationTimers.current = {}
-  }
-
-  // Écran quitté en pleine dictée : le micro est rendu à Windows, rien n'est transcrit.
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      clearDictationTimers()
-      recorderRef.current?.cancel()
-      recorderRef.current = null
-    }
-  }, [])
-
-  const finishDictation = async (): Promise<void> => {
-    const recorder = recorderRef.current
-    recorderRef.current = null
-    clearDictationTimers()
-    if (!recorder) return
-    const wav = recorder.stop()
-    if (!wav) {
-      setDictation('idle')
-      return
-    }
-    setDictation('transcribing')
-    try {
-      const text = await window.jaris.transcribeDictation(wav)
-      if (text) onChange(appendDictation(valueRef.current, text))
-      else onError(t('composer.dictation.nothing'))
-    } catch (err) {
-      onError(ipcErrorMessage(err))
-    } finally {
-      setDictation('idle')
-      inputRef.current?.focus()
-    }
-  }
-
-  const toggleDictation = async (): Promise<void> => {
-    if (dictation === 'recording' && recorderRef.current) return finishDictation()
-    if (dictation !== 'idle' || startingRef.current) return
-    startingRef.current = true
-    setDictation('starting')
-    let recorder: DictationRecorder
-    try {
-      recorder = await DictationRecorder.start()
-    } catch (err) {
-      startingRef.current = false
-      if (mountedRef.current) {
-        setDictation('idle')
-        onError(err instanceof Error ? err.message : String(err))
-      }
-      return
-    }
-    startingRef.current = false
-    // Écran fermé pendant l'ouverture du micro : on le referme aussitôt, rien ne doit rester allumé.
-    if (!mountedRef.current) {
-      recorder.cancel()
-      return
-    }
-    // Un enregistreur oublié (ne devrait plus arriver) est fermé avant d'en garder un autre.
-    recorderRef.current?.cancel()
-    clearDictationTimers()
-    recorderRef.current = recorder
-    setDictation('recording')
-    setDictationSeconds(0)
-    const startedAt = Date.now()
-    dictationTimers.current = {
-      tick: window.setInterval(() => setDictationSeconds(Math.floor((Date.now() - startedAt) / 1000)), 500),
-      // Longue dictée : arrêtée toute seule avant la limite de taille acceptée par Jaris.
-      stop: window.setTimeout(() => void finishDictation(), DICTATION_MAX_MS)
-    }
-  }
-
   // Le menu « + » se ferme au clic en dehors ou sur Échap, comme celui de ChatGPT.
   useEffect(() => {
     if (!menuOpen) return

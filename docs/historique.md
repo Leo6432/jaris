@@ -11619,3 +11619,19 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   qu'avec `{`, ``` ou `[ARGS]` (Jaris, lui, le repère : findLeakedToolName) ; juge de ne-pas-eteindre sans le futur ;
   recherche simulée de contexte-long qui ne comprend que le français ; fenêtre de 8192 du test contre 16384+ dans
   Jaris (étape 445).
+
+## Étape 450 — Duel Vocal : la question se dit à voix haute (v0.53.0)
+
+- Léo : « dans le mode Vocal du duel, parler et pas écrire, mais toujours le mode duel avec 2 modèles, mais en vocal ».
+  Les réponses du Duel Vocal étaient déjà lues à voix haute ; la question, elle, s'écrivait (ou se dictait dans le
+  champ, puis « Envoyer »). En Duel Vocal, un orbe (JarisOrb, cliquable) s'affiche au-dessus du champ : un clic écoute,
+  un second arrête ; la question transcrite part TOUTE SEULE aux deux modèles (`duelAsk`), de même pour les relances
+  (`duelFollowUp`). La voix d'une réponse précédente se tait quand l'écoute commence. Le champ reste dessous, en
+  secours ; sans programme d'écoute (pont sans `transcribeDictation`), pas d'orbe.
+- Une seule dictée pour tous les écrans : la logique du micro du Chat (étapes 276 et 346 : double clic, écran quitté
+  en pleine dictée, limite de durée) est sortie dans `src/lib/useDictation.ts`, utilisée par Composer et par l'orbe du
+  Duel. Piège évité : le bouton d'envoi du champ appelle `onSubmit(événement)` — l'envoi du Duel est donc appelé
+  `() => ask()` pour ne jamais prendre un clic pour une question dictée.
+- 4 textes ajoutés (24 langues). Régression : nouveau test-duel-voice-ask-ui.mjs (faux micro de Chromium, vrai
+  DuelPanel : clic, écoute, second clic → transcription → `duelAsk('Quelle heure est-il ?')` sans « Envoyer » ; pas
+  d'orbe en Conversation) — échoue sur l'ancien DuelPanel ; test-dictation-ui.mjs inchangé et vert (Composer).
