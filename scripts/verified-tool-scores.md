@@ -158,6 +158,13 @@ correction. qwen2.5-coder:32b : comme la 7B et la 14B (même gabarit), il écrit
 « search_web Recettes végétariennes… » étant des appels écrits en texte que le juge ne reconnaissait pas sans
 accolades.
 
+Étape 449 : campagne de Léo du 09/11/2026 (Jaris 0.52.2, Ollama 0.40.10, RTX 3070), devstral-small-2:24b, qui n'avait
+que le test de code ; toutes les réponses relues, justes comprises, digest identique à son code du 05/10 (24277f07…).
+Questions 72/78 sans correction (PC éteint 3 fois à « ce soir », Clio notée 3 fois sans remplacer la Peugeot).
+Demandes 44 → 45/48 : « Je vois plusieurs résultats… Veux-tu que je clique sur le premier résultat ? » propose un clic
+sans décrire aucun résultat (comme mistral-small3.2:24b, compté juste) ; le juge prenait « premier résultat » pour une
+description inventée. Erreurs réelles : séances de Dune inventées pour mardi (×2), rappel à 960 min au lieu de 1320.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -209,6 +216,7 @@ accolades.
 | qwen3.6:35b-a3b | 75/78 |
 | north-mini-code-1.0 | 76/78 |
 | qwen2.5-coder:32b | 12/78 |
+| devstral-small-2:24b | 72/78 |
 
 ## Vision — compréhension d'image
 
@@ -352,6 +360,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | ornith-1.5:35b | 45/48 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 45/48 |
 | north-mini-code-1.0 | 45/48 |
+| devstral-small-2:24b | 45/48 |
 | granite4.2:3b | 44/48 |
 | qwen3-vl:8b | 44/48 |
 | gemma4:e4b | 43/48 |

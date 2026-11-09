@@ -223,7 +223,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 442 : qwen3-vl:4b et 8b, qwen2.5-coder:7b et gemma4:31b ont désormais tous leurs scores.
 // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi.
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
-const AWAITING = ['hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', 'devstral-small-2:24b', 'qwen3-coder:30b']
+// Étape 449 : devstral-small-2:24b aussi.
+const AWAITING = ['hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', 'qwen3-coder:30b']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
