@@ -1790,6 +1790,7 @@
   "duel.series.download": "Descargando el siguiente modelo: {percent} %",
   "duel.series.downloadStart": "Descargando el siguiente modelo…",
   "duel.series.waitOllama": "Ollama no responde: nuevo intento cada minuto.",
+  "duel.series.stalled": "Nada avanza desde hace {minutes} min aunque hay duelos en curso: Ollama parece bloqueado en la máquina alquilada. Reinícialo allí (en un servidor Linux: sudo systemctl restart ollama) y la serie continuará sola.",
   "duel.series.waitDisk": "Esperando espacio en el disco: otros modelos están terminando sus duelos.",
   "duel.series.deleted": "Modelos borrados tras sus duelos: {count}",
   "duel.series.noDisk": "No hay espacio suficiente en el disco para un modelo (se necesitan {need}, hay {free} libres): sus duelos se han quitado de la serie.",

@@ -1790,6 +1790,7 @@
   "duel.series.download": "Изтегляне на следващия модел: {percent}%",
   "duel.series.downloadStart": "Изтегляне на следващия модел…",
   "duel.series.waitOllama": "Ollama не отговаря: нов опит всяка минута.",
+  "duel.series.stalled": "Нищо не напредва от {minutes} мин, въпреки че двубоите вървят: Ollama изглежда блокирала на наетата машина. Рестартирай я там (на Linux сървър: sudo systemctl restart ollama) и серията ще продължи сама.",
   "duel.series.waitDisk": "Изчакване на място на диска: други модели завършват дуелите си.",
   "duel.series.deleted": "Модели, изтрити след дуелите им: {count}",
   "duel.series.noDisk": "Няма достатъчно място на диска за модел (нужни са {need}, свободни {free}): дуелите му бяха премахнати от серията.",

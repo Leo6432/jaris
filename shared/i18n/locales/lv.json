@@ -1812,6 +1812,7 @@
   "duel.series.download": "Lejupielādē nākamo modeli: {percent}%",
   "duel.series.downloadStart": "Lejupielādē nākamo modeli…",
   "duel.series.waitOllama": "Ollama neatbild: jauns mēģinājums katru minūti.",
+  "duel.series.stalled": "Jau {minutes} min nekas nenotiek, lai gan dueļi notiek: šķiet, ka Ollama ir iestrēdzis nomātajā mašīnā. Restartē to tur (Linux serverī: sudo systemctl restart ollama), un sērija turpināsies pati.",
   "duel.series.waitDisk": "Gaida vietu diskā: citi modeļi pabeidz savus dueļus.",
   "duel.series.deleted": "Pēc dueļiem izdzēstie modeļi: {count}",
   "duel.series.noDisk": "Diskā nepietiek vietas modelim (vajag {need}, brīvs {free}): tā dueļi izņemti no sērijas.",

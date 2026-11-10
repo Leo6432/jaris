@@ -35,7 +35,7 @@ async function waitFor(predicate, what) {
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'], installedThere = [], generateGate = null, loaded = () => [] } = {}) {
+function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'], installedThere = [], generateGate = null, loaded = () => [], heartbeat = false } = {}) {
   const calls = { version: [], list: [], pulls: [], thinking: [], converse: [], tool: [], deleted: [], candidates: [], lists: [], machines: [], patches: [], generating: [], ps: [] }
   let profile = {
     name: 'Léo',
@@ -72,7 +72,12 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
       // Étape 456 : une génération qui attend qu'on la libère, pour voir quels modèles tournent en même temps.
       generateApp: async (_prompt, _onProgress, _base, _signal, options) => {
         calls.generating.push(options?.model)
+        // Étape 457 : Ollama bloqué envoie encore des signes de vie, sans un caractère de plus.
+        const beat = heartbeat
+          ? setInterval(() => options?.onProgress?.({ phase: 'writing', stepIndex: 0, stepCount: 1, charsWritten: 0, thinkingChars: 0, idleMs: 1000, elapsedMs: 1000 }), 5)
+          : null
         if (generateGate) await generateGate
+        if (beat) clearInterval(beat)
         calls.generating.splice(calls.generating.indexOf(options?.model), 1)
         return { html: '<html></html>', issues: [] }
       }
@@ -362,4 +367,42 @@ test('étape 456 : série Code sur la machine louée — un nouveau modèle atte
   assert.equal(await run(45, (models) => models.map((model, i) => ({ model, vramGb: i === 0 ? 3 : 5, sizeGb: 5 }))), 2)
   // 60 Go : l'estimation laisse partir 2 modèles, mais chacun en prend vraiment 25 → pas de 3e.
   assert.equal(await run(60, (models) => models.map((model) => ({ model, vramGb: 25, sizeGb: 25 }))), 2)
+})
+
+// Étape 457 (Léo, OVH : LFM2.5 resté « Stopping… », la série attendait sans rien dire) : rien n'avance → Jaris le dit.
+test('étape 457 : série sur la machine louée — rien n’avance depuis longtemps, l’écran le dit, puis l’efface dès que ça repart', async () => {
+  let release
+  const generateGate = new Promise((resolve) => (release = resolve))
+  const env = setup({ remote: { enabled: true, host: POD, vramGb: 288, ramGb: 188 }, installedThere: [...MODELS], generateGate, heartbeat: true })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 10, stallMs: 150 })
+  try {
+    await env.session.startDuel('code', [...MODELS], 2)
+    await waitFor(() => env.calls.generating.length > 0, 'des duels tournent')
+    // Des signes de vie arrivent, mais aucun caractère : au bout du délai, l'avertissement.
+    await waitFor(() => env.session.getDuelView()?.series?.stalledMinutes >= 1, 'blocage signalé')
+    release()
+    await waitFor(() => env.session.getDuelView()?.series?.stalledMinutes === null, 'avertissement effacé quand ça repart')
+  } finally {
+    release()
+    env.session.setDuelSeriesDelays({ stallMs: 10 * 60_000 })
+    await env.session.endDuel().catch(() => {})
+  }
+})
+
+test('étape 457 : des duels qui finissent → jamais d’avertissement', async () => {
+  let release
+  const generateGate = new Promise((resolve) => (release = resolve))
+  const env = setup({ remote: { enabled: true, host: POD, vramGb: 288, ramGb: 188 }, installedThere: [...MODELS], generateGate })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 10, stallMs: 150 })
+  try {
+    await env.session.startDuel('code', [...MODELS], 2)
+    await waitFor(() => env.calls.generating.length > 0, 'des duels tournent')
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    assert.ok(!env.session.getDuelView()?.series?.stalledMinutes, 'des côtés finissent : pas de blocage')
+  } finally {
+    release()
+    env.session.setDuelSeriesDelays({ stallMs: 10 * 60_000 })
+    await env.session.endDuel().catch(() => {})
+  }
 })

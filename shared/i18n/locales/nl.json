@@ -1790,6 +1790,7 @@
   "duel.series.download": "Volgend model wordt gedownload: {percent}%",
   "duel.series.downloadStart": "Volgend model wordt gedownload…",
   "duel.series.waitOllama": "Ollama reageert niet meer: elke minuut een nieuwe poging.",
+  "duel.series.stalled": "Er gebeurt al {minutes} min niets terwijl er duels lopen: Ollama lijkt vast te zitten op de gehuurde machine. Herstart het daar (op een Linux-server: sudo systemctl restart ollama), dan gaat de reeks vanzelf verder.",
   "duel.series.waitDisk": "Wachten op schijfruimte: andere modellen maken hun duels af.",
   "duel.series.deleted": "Modellen verwijderd na hun duels: {count}",
   "duel.series.noDisk": "Niet genoeg schijfruimte voor een model ({need} nodig, {free} vrij): zijn duels zijn uit de serie gehaald.",

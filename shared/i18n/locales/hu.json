@@ -1790,6 +1790,7 @@
   "duel.series.download": "A következő modell letöltése: {percent}%",
   "duel.series.downloadStart": "A következő modell letöltése…",
   "duel.series.waitOllama": "Az Ollama nem válaszol: új próbálkozás percenként.",
+  "duel.series.stalled": "{minutes} perce semmi sem halad, pedig párbajok futnak: úgy tűnik, az Ollama elakadt a bérelt gépen. Indítsd újra ott (Linux-szerveren: sudo systemctl restart ollama), és a sorozat magától folytatódik.",
   "duel.series.waitDisk": "Várakozás lemezterületre: más modellek most fejezik be a párbajaikat.",
   "duel.series.deleted": "Párbajaik után törölt modellek: {count}",
   "duel.series.noDisk": "Nincs elég hely a lemezen egy modellhez ({need} kell, {free} szabad): a párbajait kivettük a sorozatból.",

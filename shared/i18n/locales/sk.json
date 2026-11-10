@@ -1812,6 +1812,7 @@
   "duel.series.download": "Sťahuje sa ďalší model: {percent} %",
   "duel.series.downloadStart": "Sťahuje sa ďalší model…",
   "duel.series.waitOllama": "Ollama neodpovedá: nový pokus každú minútu.",
+  "duel.series.stalled": "Už {minutes} min sa nič nedeje, hoci súboje bežia: Ollama sa zdá byť zaseknutá na prenajatom stroji. Reštartuj ju tam (na linuxovom serveri: sudo systemctl restart ollama) a séria bude pokračovať sama.",
   "duel.series.waitDisk": "Čaká sa na miesto na disku: iné modely dokončujú svoje súboje.",
   "duel.series.deleted": "Modely vymazané po súbojoch: {count}",
   "duel.series.noDisk": "Na disku nie je dosť miesta pre model (treba {need}, voľných {free}): jeho súboje boli zo série odstránené.",

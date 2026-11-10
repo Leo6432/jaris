@@ -1812,6 +1812,7 @@
   "duel.series.download": "Preuzimanje sljedećeg modela: {percent} %",
   "duel.series.downloadStart": "Preuzimanje sljedećeg modela…",
   "duel.series.waitOllama": "Ollama ne odgovara: novi pokušaj svake minute.",
+  "duel.series.stalled": "Već {minutes} min ništa ne napreduje iako dvoboji traju: čini se da je Ollama zapela na unajmljenom stroju. Ponovno je pokreni tamo (na Linux poslužitelju: sudo systemctl restart ollama) i serija će se sama nastaviti.",
   "duel.series.waitDisk": "Čeka se prostor na disku: drugi modeli završavaju svoje dvoboje.",
   "duel.series.deleted": "Modeli izbrisani nakon dvoboja: {count}",
   "duel.series.noDisk": "Nema dovoljno prostora na disku za model (potrebno {need}, slobodno {free}): njegovi su dvoboji uklonjeni iz serije.",

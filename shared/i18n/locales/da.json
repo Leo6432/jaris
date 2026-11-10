@@ -1790,6 +1790,7 @@
   "duel.series.download": "Downloader næste model: {percent} %",
   "duel.series.downloadStart": "Downloader næste model…",
   "duel.series.waitOllama": "Ollama svarer ikke: nyt forsøg hvert minut.",
+  "duel.series.stalled": "Intet har rykket sig i {minutes} min, selvom dueller kører: Ollama ser ud til at sidde fast på den lejede maskine. Genstart den der (på en Linux-server: sudo systemctl restart ollama), så fortsætter serien af sig selv.",
   "duel.series.waitDisk": "Venter på diskplads: andre modeller er ved at afslutte deres dueller.",
   "duel.series.deleted": "Modeller slettet efter deres dueller: {count}",
   "duel.series.noDisk": "Ikke nok diskplads til en model ({need} kræves, {free} ledigt): dens dueller er fjernet fra serien.",

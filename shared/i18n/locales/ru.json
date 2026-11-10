@@ -1834,6 +1834,7 @@
   "duel.series.download": "Скачивание следующей модели: {percent} %",
   "duel.series.downloadStart": "Скачивание следующей модели…",
   "duel.series.waitOllama": "Ollama не отвечает: новая попытка каждую минуту.",
+  "duel.series.stalled": "Уже {minutes} мин ничего не движется, хотя дуэли идут: похоже, Ollama зависла на арендованной машине. Перезапусти её там (на Linux-сервере: sudo systemctl restart ollama), и серия продолжится сама.",
   "duel.series.waitDisk": "Ожидание места на диске: другие модели завершают свои поединки.",
   "duel.series.deleted": "Моделей удалено после поединков: {count}",
   "duel.series.noDisk": "Недостаточно места на диске для модели (нужно {need}, свободно {free}): её поединки убраны из серии.",

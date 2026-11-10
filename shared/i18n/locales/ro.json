@@ -1812,6 +1812,7 @@
   "duel.series.download": "Se descarcă următorul model: {percent}%",
   "duel.series.downloadStart": "Se descarcă următorul model…",
   "duel.series.waitOllama": "Ollama nu răspunde: o nouă încercare în fiecare minut.",
+  "duel.series.stalled": "Nimic nu a mai avansat de {minutes} min deși duelurile rulează: Ollama pare blocat pe mașina închiriată. Repornește-l acolo (pe un server Linux: sudo systemctl restart ollama), iar seria va continua singură.",
   "duel.series.waitDisk": "Se așteaptă spațiu pe disc: alte modele își termină duelurile.",
   "duel.series.deleted": "Modele șterse după dueluri: {count}",
   "duel.series.noDisk": "Nu este destul spațiu pe disc pentru un model (sunt necesari {need}, liberi {free}): duelurile lui au fost scoase din serie.",

@@ -11758,3 +11758,19 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : test-duel.mjs (règle seule) ; test-duel-remote.mjs (vraie série sur machine louée : place réelle faible
   → les 4 modèles finissent par tourner ; un débordement → pas de 3e ; 25 Go réels chacun sur 60 Go → pas de 3e).
   Échoue sans la règle (4 modèles au lieu de 2). Faux Ollama de test-duel-series-move.mjs mis à jour.
+
+## Étape 457 — Série sur la machine louée : « rien n'avance, Ollama semble bloqué » (v0.56.2)
+
+- Léo (OVH, série Code de 94 duels lancée avant la 0.56.1) : `ollama ps` ne montrait plus que LFM2.5-2.6B
+  « 78%/22% CPU/GPU — Stopping… ». Ollama, coincé à décharger ce modèle (débordé sur le processeur), faisait attendre
+  tous les chargements suivants ; la série attendait sans rien dire. `sudo systemctl restart ollama` sur le serveur a
+  tout débloqué (Jaris a attendu le retour d'Ollama puis repris seul). Cause du « Stopping » supposée (débordement),
+  journaux d'Ollama non vus.
+- Jaris ne peut pas redémarrer l'Ollama d'une machine louée (il n'a que son adresse) : il le DIT. Le gardien de la
+  série note chaque vrai progrès (`noteSeriesProgress` : caractères ou réflexion EN PLUS dans une génération, ou un côté
+  qui finit — jamais un simple signe de vie, qu'un Ollama bloqué envoie aussi). Sur la machine louée, des duels qui
+  tournent sans progrès depuis 10 min (`seriesDelays.stallMs`) → `series.stalledMinutes` → ligne orange « Rien n'avance
+  depuis X min… redémarre Ollama là-bas (sudo systemctl restart ollama), la série reprendra toute seule » (24 langues).
+  Effacée dès que ça repart ; jamais pendant « Ollama ne répond plus » (déjà dit) ; rien sur ce PC.
+- Régression : test-duel-remote.mjs (génération figée qui envoie des signes de vie → avertissement, effacé à la
+  reprise ; duels qui finissent → jamais). Échoue si un signe de vie compte comme un progrès.

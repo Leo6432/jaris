@@ -1803,6 +1803,7 @@ export const fr = {
   "duel.series.download": "Téléchargement du modèle suivant : {percent} %",
   "duel.series.downloadStart": "Téléchargement du modèle suivant…",
   "duel.series.waitOllama": "Ollama ne répond plus : nouvel essai toutes les minutes.",
+  "duel.series.stalled": "Rien n'avance depuis {minutes} min alors que des duels tournent : Ollama semble bloqué sur la machine louée. Redémarre-le là-bas (sur un serveur Linux : sudo systemctl restart ollama), la série reprendra toute seule.",
   "duel.series.waitDisk": "En attente de place sur le disque : d'autres modèles finissent leurs duels.",
   "duel.series.deleted": "Modèles supprimés après leurs duels : {count}",
   "duel.series.noDisk": "Pas assez de place sur le disque pour un modèle ({need} nécessaires, {free} libres) : ses duels ont été retirés de la série.",

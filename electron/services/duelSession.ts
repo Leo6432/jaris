@@ -260,6 +260,9 @@ interface SeriesState {
    */
   placement: SeriesPlacement | null
   pending: Map<string, number>
+  /** Étape 457 : le dernier vrai progrès d'un duel (texte écrit, réflexion, côté fini), et le blocage constaté. */
+  lastProgressAt: number
+  stalledMinutes: number | null
 }
 
 /** Étape 399 : la suite de duels Conversation jugés par Claude. */
@@ -385,7 +388,8 @@ export function getDuelView(): DuelSessionView | null {
           download: session.series.download,
           waiting: session.series.waiting,
           deleted: session.series.deleted,
-          active: session.series.running
+          active: session.series.running,
+          stalledMinutes: session.series.stalledMinutes
         }
       : null,
     judge: session.judge
@@ -1017,7 +1021,7 @@ const SERIES_MAX_RETRIES = 3
  * Ollama qui ne répond plus : nouvel essai toutes les minutes, sans fin (le crédit d'une machine louée peut finir).
  * Sans évènement, le gardien regarde quand même où on en est toutes les 30 s. Réglables par les tests seulement.
  */
-const seriesDelays = { ollamaRetryMs: 60_000, idleCheckMs: 30_000 }
+const seriesDelays = { ollamaRetryMs: 60_000, idleCheckMs: 30_000, stallMs: 10 * 60_000 }
 export function setDuelSeriesDelays(delays: Partial<typeof seriesDelays>): void {
   Object.assign(seriesDelays, delays)
 }
@@ -1044,8 +1048,37 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
     restart: false,
     diskFullAt: null,
     placement: null,
-    pending: new Map()
+    pending: new Map(),
+    lastProgressAt: Date.now(),
+    stalledMinutes: null
   }
+}
+
+/**
+ * Étape 457 (Léo, OVH : LFM2.5 resté « Stopping… » dans Ollama, plus rien ne tournait, la série attendait sans rien dire) :
+ * un vrai progrès d'un duel de la série — du texte ou de la réflexion en plus, ou un côté qui finit. Un simple signe de
+ * vie (« le modèle répond toujours ») n'en est pas un : Ollama bloqué en envoie aussi.
+ */
+function noteSeriesProgress(): void {
+  if (session?.series) session.series.lastProgressAt = Date.now()
+}
+
+/**
+ * Étape 457 : sur la machine louée, des duels tournent mais rien n'avance depuis SERIES_STALL_MS : Ollama est
+ * probablement bloqué là-bas. Jaris ne peut pas le redémarrer lui-même (il n'a que son adresse) : il le dit à Léo.
+ */
+function checkSeriesStall(current: Session, series: SeriesState): void {
+  const before = series.stalledMinutes
+  const running = runningSeriesModels(current).size > 0
+  if (!current.remote || !running || series.waiting === 'ollama') {
+    // Rien ne tourne : rien ne peut être bloqué, et le compteur repart quand un duel démarrera.
+    series.lastProgressAt = Date.now()
+    series.stalledMinutes = null
+  } else {
+    const idle = Date.now() - series.lastProgressAt
+    series.stalledMinutes = idle >= seriesDelays.stallMs ? Math.max(1, Math.floor(idle / 60_000)) : null
+  }
+  if (series.stalledMinutes !== before) emitNow()
 }
 
 /** Les modèles dont un duel de la série tourne en ce moment. */
@@ -1221,6 +1254,7 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
     await refreshSeriesPlacement(current, series)
     if (!alive()) break
     pumpBatch(current)
+    checkSeriesStall(current, series)
     if (series.waiting === 'ollama') {
       if (!(await ollamaResponds(current))) {
         emitNow()
@@ -1478,6 +1512,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
   } finally {
     side.activity = null
     side.durationMs = side.startedAt === null ? null : Date.now() - side.startedAt
+    if (side.status === 'done' || side.status === 'error') noteSeriesProgress()
     if (movingRuns.delete(runKey)) Object.assign(side, emptySide())
     else if (retry) Object.assign(side, { ...emptySide(), retries: side.retries + 1 })
     if (runControllers.get(runKey) === controller) runControllers.delete(runKey)
@@ -1616,6 +1651,7 @@ async function runCode(_current: Session, side: SideState, model: string, prompt
 }
 
 async function writeCode(side: SideState, model: string, prompt: string, think: ThinkValue, signal: AbortSignal, writeNow: AbortSignal): Promise<void> {
+  let writtenSoFar = 0
   const app = await generateApp(prompt, () => {}, side.baseHtml ?? undefined, undefined, {
     writeNow,
     model,
@@ -1624,6 +1660,12 @@ async function writeCode(side: SideState, model: string, prompt: string, think: 
     minNumCtx: DUEL_CODE_NUM_CTX,
     signal,
     onProgress: (progress) => {
+      // Étape 457 : seul du texte ou de la réflexion EN PLUS compte comme un progrès de la série.
+      const work = progress.charsWritten + (progress.thinkingChars ?? 0)
+      if (work > writtenSoFar) {
+        writtenSoFar = work
+        noteSeriesProgress()
+      }
       side.activity = codeActivity(progress)
       emitSoon()
     }

@@ -1812,6 +1812,7 @@
   "duel.series.download": "Siunčiamas kitas modelis: {percent} %",
   "duel.series.downloadStart": "Siunčiamas kitas modelis…",
   "duel.series.waitOllama": "Ollama neatsako: bandoma iš naujo kas minutę.",
+  "duel.series.stalled": "Jau {minutes} min niekas nejuda, nors dvikovos vyksta: atrodo, kad Ollama užstrigo nuomojamame kompiuteryje. Paleisk ją ten iš naujo (Linux serveryje: sudo systemctl restart ollama), ir serija tęsis savaime.",
   "duel.series.waitDisk": "Laukiama vietos diske: kiti modeliai baigia savo dvikovas.",
   "duel.series.deleted": "Po dvikovų ištrinti modeliai: {count}",
   "duel.series.noDisk": "Diske nepakanka vietos modeliui (reikia {need}, laisva {free}): jo dvikovos pašalintos iš serijos.",

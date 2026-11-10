@@ -1790,6 +1790,7 @@
   "duel.series.download": "Ladataan seuraavaa mallia: {percent} %",
   "duel.series.downloadStart": "Ladataan seuraavaa mallia…",
   "duel.series.waitOllama": "Ollama ei vastaa: uusi yritys minuutin välein.",
+  "duel.series.stalled": "Mikään ei ole edennyt {minutes} min aikana, vaikka kaksintaisteluja on käynnissä: Ollama näyttää jumittuneen vuokrakoneella. Käynnistä se siellä uudelleen (Linux-palvelimella: sudo systemctl restart ollama), niin sarja jatkuu itsestään.",
   "duel.series.waitDisk": "Odotetaan levytilaa: muut mallit viimeistelevät kaksintaistelujaan.",
   "duel.series.deleted": "Kaksintaistelujen jälkeen poistetut mallit: {count}",
   "duel.series.noDisk": "Levytila ei riitä mallille (tarvitaan {need}, vapaana {free}): sen kaksintaistelut poistettiin sarjasta.",

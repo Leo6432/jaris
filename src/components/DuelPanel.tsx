@@ -204,6 +204,8 @@ function SeriesStatus({ view }: { view: DuelSessionView }): JSX.Element | null {
   const lines: { text: string; warn?: boolean }[] = []
   if (series.waiting === 'ollama') lines.push({ text: t('duel.series.waitOllama'), warn: true })
   else if (series.waiting === 'disk') lines.push({ text: t('duel.series.waitDisk'), warn: true })
+  // Étape 457 : des duels tournent sur la machine louée, mais rien n'avance (Ollama bloqué là-bas).
+  if (series.stalledMinutes) lines.push({ text: t('duel.series.stalled', { minutes: series.stalledMinutes }), warn: true })
   if (series.download) {
     lines.push({
       text:

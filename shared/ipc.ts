@@ -1162,6 +1162,8 @@ export interface DuelSessionView {
     waiting: 'ollama' | 'disk' | null
     deleted: number
     active: boolean
+    /** Étape 457 : sur la machine louée, des duels tournent mais rien n'avance depuis ce nombre de minutes (sinon null). */
+    stalledMinutes?: number | null
   } | null
   /**
    * Étape 399 : Claude écrit les demandes et vote, sans Léo (`null` = pas de juge). `index` = duels déjà passés ;
