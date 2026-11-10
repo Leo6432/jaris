@@ -78,6 +78,8 @@ export default function UnscoredModelsTest(): JSX.Element | null {
 
   useEffect(() => {
     if (phase !== 'running') return undefined
+    // Étape 453 : sur une grande machine louée, plusieurs modèles se testent en même temps.
+    let testingNow: string[] = []
     return window.jaris.onModelBenchmarkLine((line) => {
       const [marker, ...args] = line.trim().split(/\s+/)
       const upsert = (row: Row): void => setRows((prev) => [...prev.filter((r) => r.model !== row.model), row])
@@ -86,9 +88,15 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         if (total > 0) setPercent(Math.min(100, Math.round((done / total) * 100)))
       } else if (marker === '##PULL_MODEL_PROGRESS##') {
         setCurrent(t('unscored.downloading', { model: formatModelName(args[0]), percent: args[1] }))
+      } else if (marker === '##TESTING_NOW##') {
+        testingNow = args
+        if (args.length > 1) setCurrent(t('unscored.testingMany', { count: args.length, models: args.map((m) => formatModelName(m)).join(', ') }))
+        else if (args.length === 1) setCurrent(t('unscored.testing', { model: formatModelName(args[0]) }))
       } else if (marker === '##MODEL_TESTING##') {
-        setCurrent(t('unscored.testing', { model: formatModelName(args[0]) }))
+        if (testingNow.length <= 1) setCurrent(t('unscored.testing', { model: formatModelName(args[0]) }))
       } else if (marker === '##WORKING##') {
+        // Plusieurs modèles en même temps : la liste reste affichée (un seul signe de vie la cacherait).
+        if (testingNow.length > 1) return
         // Étape 314 : une réponse de plusieurs minutes (gros modèle débordant sur la RAM) ne doit pas passer pour un
         // blocage. Sous une minute, rien ne change : « Test de X… » suffit.
         const minutes = Math.floor(Number(args[1]) / 60)

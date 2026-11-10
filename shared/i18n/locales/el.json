@@ -701,6 +701,7 @@
   "unscored.downloading": "Λήψη του {model}: {percent} %",
   "unscored.testing": "Δοκιμή του {model}…",
   "unscored.working": "Δοκιμή του {model} — το μοντέλο απαντά ακόμα ({minutes} λεπ.)",
+  "unscored.testingMany": "{count} μοντέλα δοκιμάζονται ταυτόχρονα: {models}",
   "unscored.allScored": "Όλα τα μοντέλα του Jaris έχουν βαθμολογία.",
   "unscored.toTest": "Μοντέλα για δοκιμή ({count}):",
   "unscored.lineEstimate": "{needs} — περίπου {duration}",

@@ -725,6 +725,7 @@
   "unscored.downloading": "Завантаження {model}: {percent} %",
   "unscored.testing": "Тестування {model}…",
   "unscored.working": "Тестування {model} — модель усе ще відповідає ({minutes} хв)",
+  "unscored.testingMany": "Одночасно тестуються моделі ({count}): {models}",
   "unscored.allScored": "Усі моделі Jaris мають оцінку.",
   "unscored.toTest": "Моделі для тесту ({count}):",
   "unscored.lineEstimate": "{needs} — близько {duration}",

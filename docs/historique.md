@@ -11679,3 +11679,31 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   réponse vide reste une vraie erreur, dite telle quelle (vaut pour tous les modes, pas seulement le Duel).
 - Régression : test-assistant-history.mjs (open_app puis réponse vide → « Bloc-notes a été lancé. » ; réponse vide sans
   action → toujours l'erreur). Échoue sur l'ancien assistant.ts. Non vérifié en usage réel avec qwen3.5:9b.
+
+## Étape 453 — Analyse sur la machine louée : jusqu'à 5 modèles testés en même temps (v0.55.0)
+
+- Léo, sur une machine OVH à 4 × V100S (126 Go) : « si le serveur est assez puissant, carrément lancer 5 tests en
+  même temps, des téléchargements en arrière-plan le plus possible ». Avant : un modèle à la fois, même sur 126 Go
+  (une seule carte occupée sur quatre).
+- benchmark-models.mjs : sur la machine louée (JARIS_MACHINE), jusqu'à 5 modèles (`TEST_PARALLEL_MAX`) se testent
+  en même temps. Un modèle n'entre que si tous tiennent ensemble sur les cartes (taille × 1,3 + 2 Go chacun, 1 Go de
+  marge — même règle que canRunDuelTogether), premier arrivé premier servi (`createTestSlots`). Chaque modèle passe
+  TOUTES ses épreuves à la suite (conversation, vision, code) puis il est supprimé — jamais effacé pendant qu'une autre
+  de ses épreuves tourne. Sur ce PC : inchangé (un à la fois, épreuve par épreuve).
+- Téléchargements : 6 en même temps sur la machine louée, dans l'ordre des tests. Disque juste : au lieu d'un seul
+  téléchargement à la fois (ou d'un modèle sauté faute de place), chacun attend son tour que des modèles testés soient
+  supprimés (`waitForDiskRoom`, file d'attente stricte pour qu'un petit ne prenne jamais la place d'un gros qui attend ;
+  part quand même — et échoue avec la vraie raison — si plus rien ne peut libérer de place).
+- Lignes : chaque modèle a son contexte (AsyncLocalStorage) ; « [1/3] "question" … OK » part d'un bloc, préfixé du nom
+  du modèle quand plusieurs tournent. Les lignes de suivi (« ##… ») partent toujours seules en début de ligne.
+  **Défaut ancien trouvé au passage** : un signe de vie (##WORKING##) écrit pendant une réponse se collait derrière
+  « [1/3] "question" … » et Jaris ne le lisait pas (le test de l'étape 314 en dépendait sans le savoir). Un signe de vie
+  pendant la réponse vaut désormais au moins 1 s (0 = réponse finie).
+- Écran du test : nouvelle ligne `##TESTING_NOW##` → « 3 modèles testés en même temps : A, B, C » (24 langues) ; un
+  signe de vie d'un seul modèle ne cache pas la liste.
+- Limites connues : les vitesses mesurées en parallèle sont un peu plus basses (indicatives seulement, Jaris choisit
+  ses modèles sur d'autres vitesses) ; les durées estimées avant le lancement restent celles d'un modèle à la fois.
+- Régression : test-benchmark-cases.mjs (vrai script, faux Ollama : 3 modèles en même temps sur la machine, 1 sur ce
+  PC, mêmes scores, aucune ligne de suivi collée ; disque juste → téléchargements qui attendent, rien de sauté, chacun
+  supprimé) ; test-unscored-models-ui.mjs (liste affichée). Les deux tests du script échouent sans la file du disque
+  ou sans le parallélisme. Non vérifié en usage réel sur la machine OVH.

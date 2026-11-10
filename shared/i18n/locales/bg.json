@@ -701,6 +701,7 @@
   "unscored.downloading": "Изтегляне на {model}: {percent} %",
   "unscored.testing": "Тестване на {model}…",
   "unscored.working": "Тестване на {model} — моделът все още отговаря ({minutes} мин)",
+  "unscored.testingMany": "{count} модела се тестват едновременно: {models}",
   "unscored.allScored": "Всички модели на Jaris имат оценка.",
   "unscored.toTest": "Модели за тестване ({count}):",
   "unscored.lineEstimate": "{needs} — около {duration}",

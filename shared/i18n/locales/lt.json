@@ -713,6 +713,7 @@
   "unscored.downloading": "Atsisiunčiamas {model}: {percent} %",
   "unscored.testing": "Testuojamas {model}…",
   "unscored.working": "Testuojamas {model} — modelis vis dar atsako ({minutes} min.)",
+  "unscored.testingMany": "Vienu metu testuojami modeliai ({count}): {models}",
   "unscored.allScored": "Visi Jaris modeliai turi įvertinimą.",
   "unscored.toTest": "Testuotini modeliai ({count}):",
   "unscored.lineEstimate": "{needs} — apie {duration}",

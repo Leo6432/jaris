@@ -163,8 +163,11 @@ const PERFECT = {
   "En fait ma voiture n'est plus": ['remember', { title: 'Voiture', content: 'Renault Clio', replace: true }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, delay = () => 0, version = '0.99.0-test', unreadable = [] }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, delay = () => 0, version = '0.99.0-test', unreadable = [], sizesGb = {} }) {
   const requests = []
+  // Étape 453 : combien de modèles DIFFÉRENTS répondent en même temps (tests en parallèle sur la machine louée).
+  const live = new Map()
+  const stats = { maxModels: 0 }
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
   const deleted = []
@@ -177,7 +180,8 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
       if (req.url === '/api/version') return res.end(JSON.stringify({ version }))
-      if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name })) }))
+      // Étape 453 : la taille de chaque modèle (place prise sur le disque de la machine louée), quand le test la donne.
+      if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name, ...(sizesGb[name] ? { size: sizesGb[name] * 1024 ** 3 } : {}) })) }))
       // Étape 313 : `unreadable` = écrit sur le disque mais introuvable pour Ollama (dossier lu à travers une jonction).
       if (req.url === '/api/show') {
         const name = JSON.parse(body).model ?? JSON.parse(body).name
@@ -204,6 +208,9 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       if (req.url === '/api/chat') {
         const json = JSON.parse(body)
         requests.push(json)
+        live.set(json.model, (live.get(json.model) ?? 0) + 1)
+        stats.maxModels = Math.max(stats.maxModels, [...live.values()].filter((n) => n > 0).length)
+        res.on('finish', () => live.set(json.model, live.get(json.model) - 1))
         // La question est le dernier message de l'utilisateur : après elle peuvent venir un appel d'outil déjà fait
         // et son résultat (étape 230, read_web_page).
         const prompt = withoutDateTimeNote(json.messages.findLast((m) => m.role === 'user').content)
@@ -228,7 +235,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       res.end('{}')
     })
   })
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, host: `http://127.0.0.1:${server.address().port}` })))
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, stats, host: `http://127.0.0.1:${server.address().port}` })))
 }
 
 /**
@@ -333,6 +340,76 @@ test('étape 314 : une longue réponse donne un signe de vie régulier, puis le 
     assert.ok(beats.length < 10, `trop de signes de vie pour une seule réponse lente : ${beats.length}`)
   } finally {
     fake.server.close()
+  }
+})
+
+test('étape 453 : sur une grande machine louée, plusieurs modèles se testent en même temps — mêmes scores, lignes jamais mélangées', async () => {
+  const flash = ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b']
+  const run = async (machine) => {
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+    const fake = await startFakeOllama({ installed: [...flash], answer: (_model, prompt) => perfectAnswer(prompt), delay: () => 15 })
+    try {
+      const resultsPath = join(dir, 'r.md')
+      const env = { OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' }
+      const machineEnv = machine ? { JARIS_MACHINE: fake.host, JARIS_MACHINE_VRAM_GB: '126', JARIS_MACHINE_RAM_GB: '180', JARIS_MACHINE_DISK_GB: '470' } : {}
+      const { code, out } = await runScript({ ...env, ...machineEnv })
+      assert.equal(code, 0, out)
+      const results = readFileSync(resultsPath, 'utf8')
+      const scores = flash.map((m) => results.match(new RegExp(`\\| ${m.replace(/[.:]/g, '\\$&')} \\|[^\\n]*\\| (\\d+/\\d+) \\|`))?.[1])
+      return { out, scores, maxModels: fake.stats.maxModels }
+    } finally {
+      fake.server.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  const alone = await run(false)
+  const together = await run(true)
+  assert.equal(alone.maxModels, 1, 'sur ce PC : toujours un modèle à la fois')
+  assert.equal(together.maxModels, 3, 'sur la machine louée (126 Go) : les 3 petits modèles en même temps')
+  assert.deepEqual(together.scores, alone.scores, 'les mêmes scores, en parallèle ou non')
+  assert.ok(together.scores.every((s) => s === `${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL}`), together.scores.join(', '))
+  assert.match(together.out, /^##TESTING_NOW## \S+ \S+ \S+$/m, 'le suivi en direct reçoit la liste des modèles en cours')
+  for (const [name, { out }] of [['seul', alone], ['ensemble', together]]) {
+    // Une ligne de suivi (lue par Jaris) commence TOUJOURS la ligne, jamais collée derrière « [1/3] "question" … ».
+    const glued = out.split('\n').filter((line) => /\S.*##[A-Z_]+## /.test(line) && !/^##[A-Z_]+##/.test(line) && !line.startsWith('Périmètre'))
+    assert.deepEqual(glued, [], `${name} : lignes de suivi collées`)
+  }
+  // Chaque verdict reste sur la ligne de SA question, préfixée du modèle quand plusieurs tournent.
+  const verdicts = together.out.split('\n').filter((line) => /\] "[^"]*" \.\.\. (OK|RATÉ|ERREUR)/.test(line))
+  assert.equal(verdicts.length, 3 * CONVERSATION_TOTAL)
+  assert.ok(verdicts.every((line) => /^\[(ministral-3:3b|qwen3:1\.7b|qwen3\.5:0\.8b)\] +\[\d\/\d\] "/.test(line)), verdicts.find((line) => !/^\[/.test(line)))
+})
+
+test('étape 453 : disque de la machine juste — les téléchargements attendent la place libérée par les tests, aucun modèle sauté', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const sizesGb = { 'ministral-3:3b': 3.0, 'qwen3:1.7b': 1.4, 'qwen3.5:0.8b': 1.3 }
+  const fake = await startFakeOllama({ installed: [], sizesGb, answer: (_model, prompt) => perfectAnswer(prompt), delay: () => 5 })
+  try {
+    const resultsPath = join(dir, 'r.md')
+    // 18,5 Go - 10 Go pour le système - 5 Go de marge = 3,5 Go : ministral-3:3b (3 Go) seul, puis les deux autres
+    // (1,4 + 1,3 Go) ensemble, une fois ministral testé et supprimé.
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RETEST_ALL: '1',
+      JARIS_DELETE_AFTER_TEST: '1',
+      JARIS_DISK_WAIT_POLL_MS: '20',
+      JARIS_MACHINE: fake.host,
+      JARIS_MACHINE_VRAM_GB: '126',
+      JARIS_MACHINE_RAM_GB: '180',
+      JARIS_MACHINE_DISK_GB: '18.5'
+    })
+    assert.equal(code, 0, out)
+    assert.doesNotMatch(out, /^##MODEL_SKIPPED##/m, 'aucun modèle sauté faute de place')
+    assert.ok(out.indexOf('ministral-3:3b : supprimé') < out.indexOf('Téléchargement de qwen3:1.7b'), 'qwen3:1.7b attend que ministral libère le disque')
+    assert.deepEqual([...fake.pulled].sort(), Object.keys(sizesGb).sort())
+    assert.deepEqual([...fake.deleted].sort(), Object.keys(sizesGb).sort(), 'chacun supprimé après son test')
+    assert.equal(fake.stats.maxModels, 2, 'les deux petits ensemble, jamais avec ministral (le disque ne le permet pas)')
+    const results = readFileSync(resultsPath, 'utf8')
+    for (const model of Object.keys(sizesGb)) assert.match(results, new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\|[^\\n]*\\| ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} \\|`))
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
   }
 })
 

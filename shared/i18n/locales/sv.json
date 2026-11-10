@@ -701,6 +701,7 @@
   "unscored.downloading": "Laddar ner {model}: {percent} %",
   "unscored.testing": "Testar {model}…",
   "unscored.working": "Testar {model} — modellen svarar fortfarande ({minutes} min)",
+  "unscored.testingMany": "{count} modeller testas samtidigt: {models}",
   "unscored.allScored": "Alla Jaris modeller har ett betyg.",
   "unscored.toTest": "Modeller att testa ({count}):",
   "unscored.lineEstimate": "{needs} — ungefär {duration}",

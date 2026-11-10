@@ -123,6 +123,31 @@ test('étape 314 : une réponse de plusieurs minutes affiche depuis combien de t
   }
 })
 
+test('étape 453 : plusieurs modèles en même temps sur la machine louée — tous listés, un signe de vie ne cache pas la liste', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    const label = () => page.$eval('.options-menu__progress-label', (el) => el.textContent)
+    await page.evaluate(() => window.__line('##TESTING_NOW## ministral-3:14b qwen3.5:9b hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.includes('en même temps'))
+    assert.match(await label(), /^3 modèles testés en même temps : /)
+    assert.doesNotMatch(await label(), /hf\.co|GGUF/, 'noms lisibles')
+    await page.evaluate(() => window.__line('##MODEL_TESTING## qwen3.5:9b'))
+    await page.evaluate(() => window.__line('##WORKING## qwen3.5:9b 750'))
+    assert.match(await label(), /^3 modèles testés en même temps/, 'ni « Test de X » ni « répond toujours » d’un seul modèle')
+    // Il n'en reste qu'un : retour à l'affichage habituel.
+    await page.evaluate(() => window.__line('##TESTING_NOW## qwen3.5:9b'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.startsWith('Test de'))
+    await page.evaluate(() => window.__line('##WORKING## qwen3.5:9b 750'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.includes('répond toujours'))
+  } finally {
+    await browser.close()
+  }
+})
+
 test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a préparé, ou qu’il n’y a rien de nouveau', options, async () => {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {

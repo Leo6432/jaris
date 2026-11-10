@@ -725,6 +725,7 @@
   "unscored.downloading": "Prenašanje modela {model}: {percent} %",
   "unscored.testing": "Preizkušanje modela {model}…",
   "unscored.working": "Preizkušanje modela {model} — model še vedno odgovarja ({minutes} min)",
+  "unscored.testingMany": "Hkrati se preizkuša modelov ({count}): {models}",
   "unscored.allScored": "Vsi modeli Jarisa imajo oceno.",
   "unscored.toTest": "Modeli za testiranje ({count}):",
   "unscored.lineEstimate": "{needs} — približno {duration}",

@@ -701,6 +701,7 @@
   "unscored.downloading": "Downloading {model}: {percent}%",
   "unscored.testing": "Testing {model}…",
   "unscored.working": "Testing {model} — the model is still answering ({minutes} min)",
+  "unscored.testingMany": "{count} models being tested at once: {models}",
   "unscored.allScored": "All Jaris models have a score.",
   "unscored.toTest": "Models to test ({count}):",
   "unscored.lineEstimate": "{needs} — about {duration}",

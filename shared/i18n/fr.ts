@@ -711,6 +711,7 @@ export const fr = {
   "unscored.downloading": "Téléchargement de {model} : {percent} %",
   "unscored.testing": "Test de {model}…",
   "unscored.working": "Test de {model} — le modèle répond toujours ({minutes} min)",
+  "unscored.testingMany": "{count} modèles testés en même temps : {models}",
   "unscored.allScored": "Tous les modèles de Jaris ont un score.",
   "unscored.toTest": "Modèles à tester ({count}) :",
   "unscored.lineEstimate": "{needs} — environ {duration}",

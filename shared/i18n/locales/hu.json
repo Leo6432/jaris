@@ -701,6 +701,7 @@
   "unscored.downloading": "Letöltés: {model}: {percent} %",
   "unscored.testing": "Tesztelés: {model}…",
   "unscored.working": "Tesztelés: {model} — a modell még válaszol ({minutes} perc)",
+  "unscored.testingMany": "{count} modell tesztelése egyszerre: {models}",
   "unscored.allScored": "Jaris összes modelljének van pontszáma.",
   "unscored.toTest": "Tesztelendő modellek ({count}):",
   "unscored.lineEstimate": "{needs} — kb. {duration}",

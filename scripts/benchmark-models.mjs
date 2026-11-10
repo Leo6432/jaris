@@ -16,6 +16,7 @@
  * démarrer, justement à cause de ce téléchargement potentiellement volumineux.
  */
 
+import { AsyncLocalStorage } from 'async_hooks'
 import { exec } from 'child_process'
 import { request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
@@ -66,6 +67,36 @@ import {
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Étape 453 (Léo : « si le serveur est assez puissant, carrément lancer 5 tests en même temps ») : sur la machine louée,
+ * plusieurs modèles se testent en même temps. Leurs lignes ne doivent pas se mélanger : chaque test écrit
+ * « [1/3] "question" … » puis, une fois la réponse reçue, « OK — 2 s » sur la même ligne. Chaque modèle a donc son
+ * contexte (`modelLines`) : le début de ligne y attend sa fin et part d'un seul bloc, préfixé du nom du modèle quand
+ * plusieurs tournent. Les lignes de suivi (« ##… », lues par Jaris) partent toujours seules, en début de ligne — même
+ * un modèle à la fois : avant, un signe de vie (##WORKING##) écrit pendant une réponse lente se collait derrière le
+ * début de ligne et Jaris ne le reconnaissait pas.
+ */
+const modelLines = new AsyncLocalStorage()
+const rawLog = console.log.bind(console)
+console.log = (...args) => {
+  const text = args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
+  const ctx = modelLines.getStore()
+  if (!ctx || text.startsWith('##')) return rawLog(text)
+  const line = ctx.pending !== null ? `${ctx.pending}${text}` : text
+  ctx.pending = null
+  rawLog(ctx.prefix ? line.split('\n').map((part) => (part ? `${ctx.prefix}${part}` : part)).join('\n') : line)
+}
+/** Début d'une ligne dont la fin (le verdict) viendra au prochain console.log du même modèle. */
+function beginLine(text) {
+  const ctx = modelLines.getStore()
+  if (ctx) ctx.pending = text
+  else process.stdout.write(text)
+}
+/** Exécute les tests d'un modèle dans son propre contexte de lignes. */
+function withModelLines(model, prefixed, run) {
+  return modelLines.run({ prefix: prefixed ? `[${model}] ` : '', pending: null }, run)
+}
 /**
  * Où écrire les résultats : à côté du script, sauf si JARIS_RESULTS_PATH en donne un autre (utilisé par les
  * tests). Depuis l'étape 166, le script n'est plus lancé par Jaris : c'est un outil de développement, dont on
@@ -904,6 +935,8 @@ function detectRamGb() {
  */
 // JARIS_DISK_SAFETY_MARGIN_GB : seulement pour les tests (étape 230), qui ne doivent pas dépendre du disque de la machine.
 const DISK_SAFETY_MARGIN_GB = Number(process.env.JARIS_DISK_SAFETY_MARGIN_GB ?? 5)
+/** Étape 453 : un téléchargement qui attend de la place sur le disque de la machine louée regarde toutes les 5 s. */
+const DISK_WAIT_POLL_MS = Number(process.env.JARIS_DISK_WAIT_POLL_MS) || 5000
 
 /**
  * Espace disque libre (Go) sur le disque où Ollama stocke ses modèles — jusqu'ici jamais vérifié : ce script
@@ -963,9 +996,56 @@ function detectFreeDiskGb() {
  * cette sécurité prime toujours sur la vitesse, quelle que soit la RAM disponible.
  */
 function pullConcurrencyFor(ramGb) {
+  if (MACHINE) return 6
   if (ramGb >= 32) return 4
   if (ramGb >= 16) return 3
   return 2
+}
+
+/**
+ * Étape 453 (Léo : « si le serveur est assez puissant, carrément lancer 5 tests en même temps, et des téléchargements en
+ * arrière-plan le plus possible ») : combien de modèles se testent en même temps sur la machine louée. Jamais sur ce PC
+ * (une seule carte, et Léo s'en sert). Un modèle ne démarre que si TOUS ceux qui tournent tiennent ensemble sur les
+ * cartes de la machine, avec leur mémoire de travail : même règle que deux modèles d'un duel Code lancés ensemble
+ * (canRunDuelTogether, shared/duel.ts) — taille × 1,3 + 2 Go chacun, 1 Go de marge. Ollama place chaque modèle sur la
+ * carte la plus libre ; les vitesses mesurées restent indicatives (Jaris choisit ses modèles sur d'autres vitesses).
+ * Premier arrivé, premier servi : un gros modèle qui attend sa place n'est jamais doublé sans fin par des petits.
+ */
+const TEST_PARALLEL_MAX = 5
+const TEST_SLOT_RESERVE_GB = 1
+const testFootprintGb = (model) => modelWeightGb(model) * 1.3 + 2
+
+function testSlotsFor(vramGb) {
+  return MACHINE && Number.isFinite(vramGb) && vramGb > 0 ? TEST_PARALLEL_MAX : 1
+}
+
+function createTestSlots(budgetGb, maxTogether, onChange) {
+  const running = new Map()
+  const waiting = []
+  const used = () => [...running.values()].reduce((sum, gb) => sum + gb, 0)
+  // Seul, un modèle démarre toujours (il a déjà passé le contrôle de taille avant son téléchargement).
+  const fits = (gb) => running.size === 0 || (running.size < maxTogether && used() + gb <= budgetGb)
+  const admit = () => {
+    while (waiting.length && fits(waiting[0].gb)) {
+      const { model, gb, resolve } = waiting.shift()
+      running.set(model, gb)
+      onChange([...running.keys()])
+      resolve()
+    }
+  }
+  return {
+    running: () => running.size,
+    acquire(model) {
+      return new Promise((resolve) => {
+        waiting.push({ model, gb: testFootprintGb(model), resolve })
+        admit()
+      }).then(() => () => {
+        running.delete(model)
+        onChange([...running.keys()])
+        admit()
+      })
+    }
+  }
 }
 
 class ModelTooLargeError extends Error {
@@ -1236,7 +1316,8 @@ async function postJsonWithHeartbeat(path, body, timeoutMs) {
   let beats = 0
   const heartbeat = setInterval(() => {
     beats++
-    console.log(`##WORKING## ${body.model} ${Math.round((Date.now() - started) / 1000)}`)
+    // Jamais 0 pendant la réponse : 0 veut dire « réponse finie » (dernière ligne ci-dessous).
+    console.log(`##WORKING## ${body.model} ${Math.max(1, Math.round((Date.now() - started) / 1000))}`)
   }, HEARTBEAT_MS)
   try {
     return await postJson(path, body, timeoutMs)
@@ -1949,6 +2030,16 @@ async function main() {
   const conversationPhase = CONVERSATION_SCOPE.filter((m) => toRun.includes(m) || scenarioToRun.includes(m))
   const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision') && runnable(m))
   const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code') && runnable(m))
+  // Étape 453 : plusieurs modèles en même temps sur une machine louée assez grande (voir testSlotsFor).
+  const TEST_SLOTS = testSlotsFor(vramGb)
+  // Lu par le suivi en direct (UnscoredModelsTest.tsx) : les modèles en cours de test en ce moment.
+  const testSlots = createTestSlots((vramGb ?? 0) - TEST_SLOT_RESERVE_GB, TEST_SLOTS, (models) => console.log(`##TESTING_NOW## ${models.join(' ')}`.trimEnd()))
+  // Un modèle à la fois par épreuve, dans l'ordre des épreuves : les téléchargements suivent le même ordre.
+  const jobOrder = [...new Set([...conversationPhase, ...visionToRun, ...codeToRun])]
+  if (TEST_SLOTS > 1) {
+    missing.sort((a, b) => (jobOrder.indexOf(a) + 1 || Infinity) - (jobOrder.indexOf(b) + 1 || Infinity))
+    console.log(`Machine louée : jusqu'à ${TEST_SLOTS} modèles testés en même temps (${Math.round(vramGb)} Go de cartes graphiques).\n`)
+  }
   /**
    * Léo, 05/10/2026 : « à la fin, refaire les tests qui n'ont pas marché… on teste tout ». Seulement les cas arrêtés
    * par le délai maximal (ou non joués après 3 délais de suite) — demandes complètes, vision ET code : une panne de
@@ -2070,7 +2161,7 @@ async function main() {
       if (!scenario) return false
       const where = { model, id: record.id, pass: record.pass, variant: record.variant, seed: record.seed, replay: true }
       const onEvent = ({ kind, messages, ...event }) => trace({ type: `demande-${kind}`, ...where, ...event, ...(messages ? { messages: compactMessages(messages) } : {}) })
-      process.stdout.write(`  [${record.pass}/2] demande « ${record.id} » (rejouée) ... `)
+      beginLine(`  [${record.pass}/2] demande « ${record.id} » (rejouée) ... `)
       try {
         const run = await runScenario(scenario, (messages, opts) => chatScenario(model, messages, record.seed, thinkModes, opts), { variant: record.variant, onEvent })
         trace({
@@ -2110,7 +2201,7 @@ async function main() {
       if (!c) return false
       const where = { type: 'vision', model, kind: record.kind, file: c.file, id: c.id ?? null, pass: record.pass, replay: true }
       const label = record.kind === 'lecture' ? c.prompt : `visée : ${c.goal}`
-      process.stdout.write(`  [${record.pass}] vision « ${label.slice(0, 40)} » (rejouée) ... `)
+      beginLine(`  [${record.pass}] vision « ${label.slice(0, 40)} » (rejouée) ... `)
       try {
         const image = loadVisionImage(c)
         const r = record.kind === 'lecture' ? await chatVision(model, c.prompt, image) : await chatPilot(model, c, image)
@@ -2143,7 +2234,7 @@ async function main() {
     // 'map' » sur une ligne de liste sans balise, campagne de Léo du 05/10/2026) : on revérifie CE code-là. Le
     // regénérer donnerait une autre application — ce ne serait plus le même test.
     if (record.html && !record.timeout) {
-      process.stdout.write(`  code « ${testCase.id} » (revérifié, même code) ... `)
+      beginLine(`  code « ${testCase.id} » (revérifié, même code) ... `)
       const steps = []
       const { type: _type, ok: _ok, reason: _reason, steps: _steps, ...kept } = record
       try {
@@ -2158,7 +2249,7 @@ async function main() {
       }
       return false
     }
-    process.stdout.write(`  code « ${testCase.id} » (rejoué) ... `)
+    beginLine(`  code « ${testCase.id} » (rejoué) ... `)
     const steps = []
     let r = null
     let html = null
@@ -2254,8 +2345,14 @@ async function main() {
   // disque non détectable) retombe sur le comportement généreux habituel : impossible de juger la marge sans
   // pouvoir la mesurer.
   const tightDiskMode = freeDiskGbAtStart !== null && freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB < totalPullWeight
-  const effectiveConcurrency = tightDiskMode ? 1 : pullConcurrencyFor(ramGb)
-  if (tightDiskMode) {
+  // Étape 453 : sur la machine louée, les téléchargements continuent même si le disque est juste — ils attendent leur
+  // tour (waitForDiskRoom) au lieu de passer un par un.
+  const effectiveConcurrency = tightDiskMode && TEST_SLOTS <= 1 ? 1 : pullConcurrencyFor(ramGb)
+  if (tightDiskMode && TEST_SLOTS > 1) {
+    console.log(
+      `Espace disque limité (${(freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB).toFixed(1)} Go de marge pour ${totalPullWeight.toFixed(1)} Go à télécharger) : chaque modèle est supprimé après son test, et les téléchargements suivants attendent la place libérée.\n`
+    )
+  } else if (tightDiskMode) {
     console.log(
       `Espace disque limité (${(freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB).toFixed(1)} Go de marge pour ${totalPullWeight.toFixed(1)} Go à télécharger) : téléchargement d'un seul modèle à la fois, et suppression immédiate des candidats déjà dépassés par un meilleur (au lieu d'attendre la fin du run).\n`
     )
@@ -2337,7 +2434,37 @@ async function main() {
   let pullCursor = 0
   let pullsDone = 0
 
+  /**
+   * Étape 453 : plusieurs modèles testés en même temps, et les téléchargements le plus loin possible devant. Un
+   * téléchargement qui ne tient pas encore sur le disque attend qu'un modèle testé soit supprimé, au lieu d'échouer
+   * (le modèle aurait été sauté). Chacun son tour, dans l'ordre des tests : un petit modèle ne passe jamais devant un
+   * gros qui attend (sinon le gros attendrait la place prise par des modèles qu'aucun test ne peut encore libérer).
+   * Rien ne pourra libérer de place (aucun test en cours, aucun autre téléchargement) : il part quand même, et le
+   * contrôle de pullModel dit pourquoi il ne tient pas (DiskFullError).
+   */
+  const diskQueue = []
+  let pullsInFlight = 0
+  async function waitForDiskRoom(model) {
+    const ticket = {}
+    diskQueue.push(ticket)
+    try {
+      for (;;) {
+        if (diskQueue[0] === ticket) {
+          await refreshMachineFreeDisk()
+          const free = detectFreeDiskGb()
+          if (free === null || free - diskCtx.reservedGb - DISK_SAFETY_MARGIN_GB >= modelWeightGb(model)) return
+          if (testSlots.running() === 0 && pullsInFlight === 0) return
+        }
+        await new Promise((resolve) => setTimeout(resolve, DISK_WAIT_POLL_MS))
+      }
+    } finally {
+      diskQueue.splice(diskQueue.indexOf(ticket), 1)
+    }
+  }
+
   async function runOnePull(model) {
+    if (TEST_SLOTS > 1) await waitForDiskRoom(model)
+    pullsInFlight++
     const weight = modelWeightGb(model)
     console.log(`##PULL_MODEL_PROGRESS## ${model} 0`)
     // Noté AVANT le téléchargement : coupé en plein milieu, le modèle reste à la charge du test.
@@ -2359,6 +2486,7 @@ async function main() {
         console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
       }
     }
+    pullsInFlight--
     weightDone += weight
     pullsDone++
     // "N/M modèles téléchargés" reste utile en lecture humaine à côté de la barre pondérée (OptionsMenu.tsx).
@@ -2542,7 +2670,7 @@ async function main() {
     for (let pass = 1; pass <= CONVERSATION_REPEATS; pass++) for (const [caseIndex, testCase] of TEST_CASES.entries()) {
       const { prompt, expectedTool } = testCase
       const caseDetail = detail[caseIndex]
-      process.stdout.write(`  [${pass}/${CONVERSATION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      beginLine(`  [${pass}/${CONVERSATION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
       // Étape 162 : chaque question compte, y compris celles où il ne faut AUCUN outil, et un appel n'est
       // réussi que si son contenu l'est aussi (bon délai de rappel, bon nom d'application...).
       perModel.total++
@@ -2618,7 +2746,7 @@ async function main() {
     const stats = { promptTokens: [], firstToolMs: [], nudges: 0, truncated: 0, emptyAfterThinking: 0, timeouts: 0 }
     for (const { scenario, index, pass, variant } of SCENARIO_RUNS) {
       const seed = scenarioSeed(pass, index)
-      process.stdout.write(`  [${pass}/2] demande « ${scenario.id} » ... `)
+      beginLine(`  [${pass}/2] demande « ${scenario.id} » ... `)
       perModel.total++
       detail[index].runs++
       // Relecture ChatGPT (v0.28.1) : chaque requête est écrite AVANT l'envoi, chaque réponse et chaque résultat
@@ -2737,17 +2865,12 @@ async function main() {
     persistResults()
   }
 
-  for (const model of conversationPhase) {
-    const ready = await ensureReady(model)
-    if (!ready) {
-      reportSkip(model, 'conversation')
-      continue
-    }
+  /** Les deux épreuves de conversation d'un modèle, à la suite (chargé une seule fois). */
+  async function runConversationModel(model) {
     console.log(`\n=== ${model} ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     if (toRun.includes(model)) await runConversationCases(model)
     if (scenarioToRun.includes(model)) await runScenarioPhase(model)
-    await releaseAfterLastTest(model, 'conversation')
   }
 
   // Modèles Vision : les images sont lues une seule fois ici, elles ne dépendent que du test.
@@ -2756,12 +2879,7 @@ async function main() {
   const pilotTargets = loadPilotTargets()
   const sha = (base64) => createHash('sha256').update(base64).digest('hex').slice(0, 16)
 
-  for (const model of visionToRun) {
-    const readyVision = await ensureReady(model)
-    if (!readyVision) {
-      reportSkip(model, 'vision')
-      continue
-    }
+  async function runVisionModel(model) {
     console.log(`\n=== ${model} (vision) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
@@ -2777,7 +2895,7 @@ async function main() {
     let pilotOk = 0
     for (let pass = 1; pass <= VISION_REPEATS; pass++) for (const [d, { kind, c, i }] of cases.entries()) {
       const label = kind === 'lecture' ? c.prompt : `visée : ${c.goal}`
-      process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${label.slice(0, 40)}${label.length > 40 ? '…' : ''}" ... `)
+      beginLine(`  [${pass}/${VISION_REPEATS}] "${label.slice(0, 40)}${label.length > 40 ? '…' : ''}" ... `)
       perModel.total++
       try {
         guard.check()
@@ -2844,18 +2962,11 @@ async function main() {
     conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail, VISION_REPEATS, [], intro.filter(Boolean)))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
-
-    await releaseAfterLastTest(model, 'vision')
   }
 
   // Modèles Code : une seule passe de génération par cas (pas de critique/réparation) — « juste » = l'application
   // générée, ouverte dans le navigateur avec les règles de l'aperçu de Jaris, fait vraiment ce qui est demandé.
-  for (const model of codeToRun) {
-    const readyCode = await ensureReady(model)
-    if (!readyCode) {
-      reportSkip(model, 'code')
-      continue
-    }
+  async function runCodeModel(model) {
     console.log(`\n=== ${model} (code) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0 }
@@ -2865,7 +2976,7 @@ async function main() {
 
     for (const [index, testCase] of CODE_TEST_CASES.entries()) {
       const { prompt } = testCase
-      process.stdout.write(`  « ${testCase.id} » ... `)
+      beginLine(`  « ${testCase.id} » ... `)
       perModel.total++
       // Hors du try : si l'ouverture dans le navigateur plante APRÈS la génération, le code généré est gardé quand
       // même (relecture ChatGPT : ne rien perdre de ce qui ne se régénère pas à l'identique).
@@ -2963,7 +3074,63 @@ async function main() {
     codeRaw.set(model, JSON.stringify(raw))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
-    await releaseAfterLastTest(model, 'code')
+  }
+
+  if (TEST_SLOTS <= 1) {
+    // Un modèle à la fois (ce PC, ou une machine louée trop petite pour deux) : l'ordre de toujours, épreuve par épreuve.
+    for (const model of conversationPhase) {
+      if (!(await ensureReady(model))) {
+        reportSkip(model, 'conversation')
+        continue
+      }
+      await withModelLines(model, false, () => runConversationModel(model))
+      await releaseAfterLastTest(model, 'conversation')
+    }
+    for (const model of visionToRun) {
+      if (!(await ensureReady(model))) {
+        reportSkip(model, 'vision')
+        continue
+      }
+      await withModelLines(model, false, () => runVisionModel(model))
+      await releaseAfterLastTest(model, 'vision')
+    }
+    for (const model of codeToRun) {
+      if (!(await ensureReady(model))) {
+        reportSkip(model, 'code')
+        continue
+      }
+      await withModelLines(model, false, () => runCodeModel(model))
+      await releaseAfterLastTest(model, 'code')
+    }
+  } else {
+    // Étape 453 : plusieurs modèles en même temps sur la machine louée. Chaque modèle passe TOUTES ses épreuves à la
+    // suite (conversation, vision, code), puis il est supprimé : jamais effacé pendant qu'une autre de ses épreuves
+    // tourne. Il ne démarre que si sa place tient sur les cartes à côté de ceux qui tournent déjà (testSlots).
+    let next = 0
+    const worker = async () => {
+      while (next < jobOrder.length) {
+        const model = jobOrder[next++]
+        const phases = [
+          ['conversation', conversationPhase, runConversationModel],
+          ['vision', visionToRun, runVisionModel],
+          ['code', codeToRun, runCodeModel]
+        ].filter(([, list]) => list.includes(model))
+        if (!(await ensureReady(model))) {
+          for (const [phase] of phases) reportSkip(model, phase)
+          continue
+        }
+        const release = await testSlots.acquire(model)
+        try {
+          for (const [phase, , run] of phases) {
+            await withModelLines(model, true, () => run(model))
+            await releaseAfterLastTest(model, phase)
+          }
+        } finally {
+          release()
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(TEST_SLOTS, jobOrder.length) }, () => worker()))
   }
 
   // Sécurité : s'assurer qu'aucun téléchargement en tâche de fond ne reste en vol avant d'écrire les

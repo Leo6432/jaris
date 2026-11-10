@@ -713,6 +713,7 @@
   "unscored.downloading": "Lejupielādē {model}: {percent} %",
   "unscored.testing": "Testē {model}…",
   "unscored.working": "Testē {model} — modelis joprojām atbild ({minutes} min)",
+  "unscored.testingMany": "Vienlaikus tiek testēti modeļi ({count}): {models}",
   "unscored.allScored": "Visiem Jaris modeļiem ir vērtējums.",
   "unscored.toTest": "Testējamie modeļi ({count}):",
   "unscored.lineEstimate": "{needs} — aptuveni {duration}",

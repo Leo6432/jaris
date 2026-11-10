@@ -701,6 +701,7 @@
   "unscored.downloading": "Ladataan mallia {model}: {percent} %",
   "unscored.testing": "Testataan mallia {model}…",
   "unscored.working": "Testataan mallia {model} — malli vastaa yhä ({minutes} min)",
+  "unscored.testingMany": "{count} mallia testataan samanaikaisesti: {models}",
   "unscored.allScored": "Kaikilla Jarisin malleilla on pistemäärä.",
   "unscored.toTest": "Testattavat mallit ({count}):",
   "unscored.lineEstimate": "{needs} — noin {duration}",

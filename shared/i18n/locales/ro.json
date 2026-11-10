@@ -713,6 +713,7 @@
   "unscored.downloading": "Descărcare {model}: {percent} %",
   "unscored.testing": "Testare {model}…",
   "unscored.working": "Testare {model} — modelul încă răspunde ({minutes} min)",
+  "unscored.testingMany": "Modele testate în același timp ({count}): {models}",
   "unscored.allScored": "Toate modelele lui Jaris au o notă.",
   "unscored.toTest": "Modele de testat ({count}):",
   "unscored.lineEstimate": "{needs} — circa {duration}",

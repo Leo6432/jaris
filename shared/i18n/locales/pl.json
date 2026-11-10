@@ -725,6 +725,7 @@
   "unscored.downloading": "Pobieranie modelu {model}: {percent} %",
   "unscored.testing": "Testowanie modelu {model}…",
   "unscored.working": "Testowanie modelu {model} — model wciąż odpowiada ({minutes} min)",
+  "unscored.testingMany": "Jednocześnie testowane modele ({count}): {models}",
   "unscored.allScored": "Wszystkie modele Jarisa mają ocenę.",
   "unscored.toTest": "Modele do przetestowania ({count}):",
   "unscored.lineEstimate": "{needs} — około {duration}",

@@ -713,6 +713,7 @@
   "unscored.downloading": "Preuzimanje modela {model}: {percent} %",
   "unscored.testing": "Testiranje modela {model}…",
   "unscored.working": "Testiranje modela {model} — model još odgovara ({minutes} min)",
+  "unscored.testingMany": "{count} modela testira se istodobno: {models}",
   "unscored.allScored": "Svi Jarisovi modeli imaju ocjenu.",
   "unscored.toTest": "Modeli za testiranje ({count}):",
   "unscored.lineEstimate": "{needs} — oko {duration}",

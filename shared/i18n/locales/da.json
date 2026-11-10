@@ -701,6 +701,7 @@
   "unscored.downloading": "Downloader {model}: {percent} %",
   "unscored.testing": "Tester {model}…",
   "unscored.working": "Tester {model} — modellen svarer stadig ({minutes} min)",
+  "unscored.testingMany": "{count} modeller testes samtidig: {models}",
   "unscored.allScored": "Alle Jaris' modeller har en score.",
   "unscored.toTest": "Modeller at teste ({count}):",
   "unscored.lineEstimate": "{needs} — omkring {duration}",

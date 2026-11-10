@@ -701,6 +701,7 @@
   "unscored.downloading": "Mudeli {model} allalaadimine: {percent} %",
   "unscored.testing": "Mudeli {model} testimine…",
   "unscored.working": "Mudeli {model} testimine — mudel vastab endiselt ({minutes} min)",
+  "unscored.testingMany": "{count} mudelit testitakse korraga: {models}",
   "unscored.allScored": "Kõigil Jarise mudelitel on hinne.",
   "unscored.toTest": "Testitavad mudelid ({count}):",
   "unscored.lineEstimate": "{needs} — umbes {duration}",

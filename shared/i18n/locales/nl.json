@@ -701,6 +701,7 @@
   "unscored.downloading": "{model} downloaden: {percent}%",
   "unscored.testing": "{model} testen…",
   "unscored.working": "{model} testen — het model antwoordt nog ({minutes} min)",
+  "unscored.testingMany": "{count} modellen tegelijk getest: {models}",
   "unscored.allScored": "Alle modellen van Jaris hebben een score.",
   "unscored.toTest": "Te testen modellen ({count}):",
   "unscored.lineEstimate": "{needs} — ongeveer {duration}",

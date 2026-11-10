@@ -713,6 +713,7 @@
   "unscored.downloading": "Stahování modelu {model}: {percent} %",
   "unscored.testing": "Testování modelu {model}…",
   "unscored.working": "Testování modelu {model} — model stále odpovídá ({minutes} min)",
+  "unscored.testingMany": "Současně se testují modely ({count}): {models}",
   "unscored.allScored": "Všechny modely Jarise mají hodnocení.",
   "unscored.toTest": "Modely k otestování ({count}):",
   "unscored.lineEstimate": "{needs} — asi {duration}",
