@@ -470,6 +470,37 @@ test('étape 384 : la série compte les duels déjà votés — « au moins N »
   assert.ok(new Set(solo.flat().filter((m) => m !== 'a:7b')).size === 4, 'contre tous les autres, pas toujours le même')
 })
 
+test('étape 455 : une série ne refait jamais une paire (ni de cette série, ni déjà jouée) tant qu’un autre adversaire existe', () => {
+  const models = ['a:7b', 'b:7b', 'c:7b', 'd:7b', 'e:7b', 'f:7b']
+  let seed = 11
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const pairsOf = (plan) => plan.map(([x, y]) => duel.pairKey(x, y))
+  const repeats = (keys) => keys.filter((k, i) => keys.indexOf(k) !== i)
+  // 6 modèles, 5 duels chacun : exactement un duel contre chaque autre, jamais deux fois le même.
+  const plan = duel.planDuelSeries(models, 5, random)
+  assert.deepEqual(repeats(pairsOf(plan)), [], 'aucune paire répétée')
+  const counts = new Map()
+  for (const [x, y] of plan) for (const m of [x, y]) counts.set(m, (counts.get(m) ?? 0) + 1)
+  for (const m of models) assert.ok(counts.get(m) >= 5, `${m} : ${counts.get(m)}`)
+  // Les duels déjà faits avant (votes de Léo, votes de Claude) comptent aussi, dans un sens ou dans l'autre.
+  const past = duel.countDuelPairs(
+    [
+      { category: 'conversation', modelA: 'b:7b', modelB: 'a:7b' },
+      { category: 'conversation', modelA: 'c:7b', modelB: 'd:7b' },
+      // Une autre catégorie ne compte pas.
+      { category: 'code', modelA: 'e:7b', modelB: 'f:7b' }
+    ],
+    'conversation'
+  )
+  const again = duel.planDuelSeries(models, 3, random, new Map(), past)
+  const keys = pairsOf(again)
+  assert.deepEqual(repeats(keys), [])
+  assert.ok(!keys.includes(duel.pairKey('a:7b', 'b:7b')), 'a contre b déjà joué')
+  assert.ok(!keys.includes(duel.pairKey('c:7b', 'd:7b')), 'c contre d déjà joué')
+  // Deux modèles seulement : la répétition est inévitable, la série a quand même lieu.
+  assert.equal(duel.planDuelSeries(['x:7b', 'y:7b'], 3, random).length, 3)
+})
+
 test('étape 382 : nombre de duels par modèle accepté de 1 à 50, entier seulement', () => {
   for (const ok of [1, 10, 50]) assert.equal(duel.isDuelSeriesCount(ok), true)
   for (const bad of [0, 51, 2.5, '10', null, Number.NaN]) assert.equal(duel.isDuelSeriesCount(bad), false)

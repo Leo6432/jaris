@@ -1239,7 +1239,9 @@ test('étape 384 : la série déduit les duels déjà votés ; tout est déjà f
   const counts = new Map()
   for (const model of generatedModels(env)) counts.set(model, (counts.get(model) ?? 0) + 1)
   for (const m of others) assert.ok((counts.get(m) ?? 0) >= 3, `${m} : ${counts.get(m)}`)
-  assert.ok((counts.get(first) ?? 0) < 3, `${first} avait déjà ses 3 duels : ${counts.get(first)} de plus`)
+  // Étape 455 : il ne rejoue que pour éviter qu'une paire se répète (les 3 autres n'ont que 2 adversaires chacun à
+  // part lui) — au plus un duel contre chacun d'eux, jamais ses 3 duels refaits en entier.
+  assert.ok((counts.get(first) ?? 0) <= others.length, `${first} avait déjà ses 3 duels : ${counts.get(first)} de plus`)
 
   const full = MODELS.flatMap((a) => MODELS.filter((b) => b !== a).map((b) => vote(a, b)))
   const done = setup({ category: 'code', vramGb: 8, profile: { name: 'Léo' }, priorVotes: full })
@@ -1455,8 +1457,8 @@ test('étape 399 : « Arrêter » stoppe tout, les votes déjà proposés resten
     }
   })
   await env.session.startDuel('conversation', 4, undefined, 2)
-  await waitFor(() => env.calls.judge.questions.length === 2, 'deuxième demande en cours')
-  assert.equal(env.reviews.length, 1)
+  // Étape 455 : la deuxième demande est écrite pendant le premier duel ; on attend aussi le vote du premier.
+  await waitFor(() => env.calls.judge.questions.length === 2 && env.reviews.length === 1, 'premier vote, deuxième demande en cours')
   env.session.stopDuelRun()
   release()
   await waitFor(() => env.session.getDuelView().judge.step === null, 'arrêté')
@@ -1467,6 +1469,47 @@ test('étape 399 : « Arrêter » stoppe tout, les votes déjà proposés resten
   const conversed = env.calls.converse.length
   await new Promise((resolve) => setTimeout(resolve, 30))
   assert.equal(env.calls.converse.length, conversed, 'plus aucun modèle ne répond après « Arrêter »')
+})
+
+test('étape 455 : Claude écrit la demande suivante pendant le duel, et juge pendant que le duel suivant tourne', async () => {
+  let env
+  let release
+  const gate = new Promise((resolve) => (release = resolve))
+  // Combien de réponses de modèles avaient déjà eu lieu quand Claude a écrit chaque demande.
+  const askedAfter = []
+  env = setup({
+    installed: MODELS,
+    judge: {
+      key: 'sk-ant-x',
+      questionImpl: async (n) => {
+        askedAfter[n] = env.calls.converse.length
+        return `Demande numéro ${n}`
+      },
+      verdictImpl: async (n) => {
+        if (n === 1) await gate
+        return { outcome: 'b', reason: `vote ${n}` }
+      }
+    }
+  })
+  await env.session.startDuel('conversation', 4, undefined, 2)
+  // Le duel 2 commence alors que Claude n'a pas fini de juger le duel 1.
+  await waitFor(() => env.calls.converse.some((args) => args[0] === 'Demande numéro 2'), 'le duel 2 démarre')
+  assert.equal(env.calls.judge.verdicts.length, 1)
+  assert.equal(env.reviews.length, 0, 'le vote du duel 1 est encore en cours')
+  // La demande 2 a été écrite avant que B ait répondu au duel 1 (au plus A avait commencé).
+  assert.ok(askedAfter[2] <= 1, `demande 2 écrite après ${askedAfter[2]} réponses`)
+  // Un seul jugement en attente : le duel 2 fini, Claude ne juge pas le 2 avant d'avoir fini le 1.
+  await waitFor(() => env.calls.converse.filter((args) => args[0] === 'Demande numéro 2').length === 2, 'B du duel 2')
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(env.calls.judge.verdicts.length, 1)
+  release()
+  await waitFor(() => env.session.getDuelView()?.judge?.finished, 'série finie')
+  const judge = env.session.getDuelView().judge
+  assert.equal(judge.error, null)
+  assert.equal(env.reviews.length, judge.total, 'chaque duel a son vote, aucun perdu')
+  assert.deepEqual(env.reviews.map((r) => r.prompt), env.reviews.map((_r, i) => `Demande numéro ${i + 1}`), 'dans l’ordre, chacun avec SA demande')
+  assert.ok(env.reviews.every((r, i) => r.reason === `vote ${i + 1}`))
+  assert.equal(env.calls.judge.questions.length, judge.total, 'aucune demande écrite pour rien')
 })
 
 test('étape 399 : une panne de Claude arrête avec son message ; un refus de Claude passe juste CE duel', async () => {

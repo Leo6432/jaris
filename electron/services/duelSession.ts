@@ -64,6 +64,7 @@ import {
   isDuelSeriesCount,
   planDuelSeries,
   baseModelTag,
+  countDuelPairs,
   countDuelsByModel,
   canRunDuelTogether,
   duelActionFromLog,
@@ -573,13 +574,19 @@ export async function startDuel(
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
   // Étape 384 : les duels déjà votés comptent (votes de ce PC et votes livrés avec Jaris).
   const seriesPlan =
-    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), 'code'))
+    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), 'code'), countDuelPairs(getAllDuelVotes(), 'code'))
   if (seriesPlan && !seriesPlan.length) throw new Error(tn('duel.series.allDone', seriesPerModel as number))
   // Étape 399 : chaque modèle fait au moins N duels, en comptant les votes déjà faits ET ceux de Claude encore à vérifier.
   const judgePlan =
     judgePerModel === undefined
       ? null
-      : planDuelSeries(shuffled, judgePerModel, Math.random, countDuelsByModel([...getAllDuelVotes(), ...getDuelReviews()], 'conversation'))
+      : planDuelSeries(
+          shuffled,
+          judgePerModel,
+          Math.random,
+          countDuelsByModel([...getAllDuelVotes(), ...getDuelReviews()], 'conversation'),
+          countDuelPairs([...getAllDuelVotes(), ...getDuelReviews()], 'conversation')
+        )
   if (judgePlan && !judgePlan.length) throw new Error(tn('duel.series.allDone', judgePerModel as number))
   session = {
     id: randomUUID(),
@@ -1861,6 +1868,12 @@ async function captureForJudge(): Promise<string | null> {
   }
 }
 
+/**
+ * Étape 455 (Léo : « gagner du temps sur les séries jugées par Claude ») : les modèles répondent toujours un par un (ils
+ * agissent sur le PC), mais Claude ne fait plus attendre. Il écrit la demande du duel suivant pendant que A et B
+ * répondent, et il juge un duel pendant que le suivant tourne déjà (ses captures d'écran sont prises avant). Un seul
+ * jugement en attente à la fois ; une panne de Claude arrête la série comme avant, un refus passe juste CE duel.
+ */
 async function runJudgedDuels(current: Session): Promise<void> {
   const judge = current.judge
   if (!judge) return
@@ -1872,6 +1885,25 @@ async function runJudgedDuels(current: Session): Promise<void> {
     emitNow()
     return
   }
+  /** Une panne de Claude pendant un jugement en arrière-plan : la série s'arrête avec son message. */
+  const fail = (err: unknown): void => {
+    if (session !== current || signal.aborted) return
+    console.error('[jaris] Duels jugés par Claude : arrêt —', err)
+    judge.error = err instanceof Error ? err.message : String(err)
+    judge.controller.abort()
+  }
+  const toolsForClaude = async (): Promise<{ name: string; description: string }[]> => {
+    const offered = await duelToolsHere()
+    return TOOLS.filter((tool) => offered.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description }))
+  }
+  /** La demande suivante, demandée à Claude d'avance (jamais une promesse rejetée sans personne pour l'attendre). */
+  const askQuestion = (tools: { name: string; description: string }[]): Promise<string> => {
+    const asked = writeDuelQuestion(apiKey, tools, judge.prompts, signal)
+    asked.catch(() => {})
+    return asked
+  }
+  let nextQuestion: Promise<string> | null = null
+  let judging: Promise<void> | null = null
   environment.keepAwake?.(true)
   try {
     while (judge.index < judge.plan.length) {
@@ -1896,14 +1928,12 @@ async function runJudgedDuels(current: Session): Promise<void> {
       current.round = round
       judge.step = 'question'
       emitNow()
-      const offered = await duelToolsHere()
-      const tools = TOOLS.filter((tool) => offered.has(tool.function.name)).map((tool) => ({
-        name: tool.function.name,
-        description: tool.function.description
-      }))
+      const tools = await toolsForClaude()
       let prompt: string
       try {
-        prompt = await writeDuelQuestion(apiKey, tools, judge.prompts, signal)
+        const asked = nextQuestion ?? askQuestion(tools)
+        nextQuestion = null
+        prompt = await asked
       } catch (err) {
         if (!stillHere()) return
         if (err instanceof JudgeRefusalError) {
@@ -1916,6 +1946,8 @@ async function runJudgedDuels(current: Session): Promise<void> {
       if (!stillHere()) return
       round.prompt = prompt
       judge.prompts.push(prompt)
+      // Claude écrit déjà la demande suivante (elle connaît celle-ci : jamais deux fois la même) pendant que A et B répondent.
+      if (judge.index + 1 < judge.plan.length) nextQuestion = askQuestion(tools)
       let screens: DuelScreens | null = null
       for (let attempt = 0; ; attempt++) {
         screens = judge.screens ? { before: await captureForJudge(), afterA: null, afterB: null } : null
@@ -1934,50 +1966,56 @@ async function runJudgedDuels(current: Session): Promise<void> {
         round.sides = { a: emptySide(), b: emptySide() }
         round.tools = null
       }
+      judge.index += 1
       if (round.sides.a.trouble || round.sides.b.trouble) {
-        judge.index += 1
         judge.skipped += 1
         continue
       }
+      // Un seul jugement en attente : le précédent doit être fini avant d'en lancer un autre.
+      if (judging) await judging
+      if (!stillHere()) return
+      const judged = { pair, prompt, a: round.sides.a, b: round.sides.b, screens }
+      judging = (async () => {
+        try {
+          const verdict = await judgeDuel(apiKey, { prompt: judged.prompt, a: judgedSide(judged.a), b: judgedSide(judged.b), tools, screens: judged.screens }, signal)
+          if (!stillHere()) return
+          await addDuelReview({
+            id: randomUUID(),
+            category: current.category,
+            at: Date.now(),
+            sessionId: current.id,
+            modelA: judged.pair[0],
+            modelB: judged.pair[1],
+            prompt: judged.prompt,
+            sides: { a: keptSide(judged.a), b: keptSide(judged.b) },
+            outcome: verdict.outcome,
+            reason: verdict.reason,
+            judge: JUDGE_MODEL
+          })
+          judge.judged += 1
+          judge.last = verdict
+          emitNow()
+        } catch (err) {
+          if (!stillHere()) return
+          if (err instanceof JudgeRefusalError) {
+            judge.skipped += 1
+            emitNow()
+            return
+          }
+          fail(err)
+        }
+      })()
+    }
+    // Le dernier jugement : la série n'est finie qu'avec lui.
+    if (judging) {
       judge.step = 'judge'
       emitNow()
-      let verdict
-      try {
-        verdict = await judgeDuel(apiKey, { prompt, a: judgedSide(round.sides.a), b: judgedSide(round.sides.b), tools, screens }, signal)
-      } catch (err) {
-        if (!stillHere()) return
-        if (err instanceof JudgeRefusalError) {
-          judge.index += 1
-          judge.skipped += 1
-          continue
-        }
-        throw err
-      }
-      if (!stillHere()) return
-      await addDuelReview({
-        id: randomUUID(),
-        category: current.category,
-        at: Date.now(),
-        sessionId: current.id,
-        modelA: pair[0],
-        modelB: pair[1],
-        prompt,
-        sides: { a: keptSide(round.sides.a), b: keptSide(round.sides.b) },
-        outcome: verdict.outcome,
-        reason: verdict.reason,
-        judge: JUDGE_MODEL
-      })
-      judge.judged += 1
-      judge.index += 1
-      judge.last = verdict
-      emitNow()
+      await judging
     }
+    if (!stillHere()) return
     judge.finished = true
   } catch (err) {
-    if (session !== current || signal.aborted) return
-    console.error('[jaris] Duels jugés par Claude : arrêt —', err)
-    judge.error = err instanceof Error ? err.message : String(err)
-    judge.controller.abort()
+    fail(err)
   } finally {
     if (session === current) {
       judge.step = null

@@ -11718,3 +11718,24 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   ce format comme un appel écrit en texte (déjà noté pour les appels sans accolades de qwen2.5-coder).
 - Aucun choix de modèle ne change (grille 4–80 Go, PC de Léo compris). Tests des modèles à tester mis à jour : il ne
   reste que GLM-4.6V-Flash.
+
+## Étape 455 — Séries de duels : jamais deux fois la même paire, Claude ne fait plus attendre (v0.56.0)
+
+- Léo : « pour duel ça fait toujours le max » puis « faut pas qu'il y ait plusieurs fois le même duel contre les 2
+  mêmes modèles ». Les séries Code tournaient déjà au maximum de la machine (étapes 385 et 390) ; les duels
+  Conversation et Vocal restent un modèle à la fois (ils agissent sur le PC).
+- Paires (`planDuelSeries`, shared/duel.ts) : l'ancien plan évitait les répétitions DANS la série, mais pas les duels
+  déjà faits avant, et en fin de série les derniers modèles se refaisaient les mêmes paires entre eux. Désormais
+  (`countDuelPairs`, votes de Léo + votes de Claude à vérifier) un modèle n'affronte jamais deux fois le même
+  adversaire tant qu'un adversaire nouveau existe : d'abord un modèle à qui il reste des duels, sinon un modèle qui a
+  fini (qui fait alors un duel de plus — « au moins N »). Répétition seulement si plus aucun adversaire nouveau
+  (2 modèles, par exemple). Vaut pour les séries Code et les séries jugées par Claude.
+  **Choix noté** : dans le test de l'étape 384, un modèle qui avait déjà ses duels en refait quelques-uns (au plus un
+  contre chaque autre) pour que les autres ne se répètent pas — la demande de Léo l'emporte.
+- Séries jugées par Claude (`runJudgedDuels`) : Claude écrit la demande suivante pendant que A et B répondent, et juge
+  un duel pendant que le suivant tourne (captures d'écran déjà prises). Un seul jugement en attente ; une panne de
+  Claude arrête la série comme avant, un refus passe juste ce duel. Gain estimé, pas mesuré.
+- Régression : test-duel.mjs (6 modèles × 5 duels sans aucune paire répétée, paires déjà jouées évitées) ;
+  test-duel-session.mjs (le duel 2 démarre avant la fin du vote du 1, demande 2 écrite avant que B réponde au 1, votes
+  dans l'ordre, aucun perdu). Les deux échouent sur l'ancien code. Test « Arrêter » de l'étape 399 rendu indépendant du
+  rythme. Non vérifié en usage réel.

@@ -875,11 +875,29 @@ export function countDuelsByModel(
   return counts
 }
 
+/**
+ * Étape 455 (Léo : « il ne faut pas qu'il y ait plusieurs fois le même duel entre les 2 mêmes modèles ») : combien de
+ * fois chaque paire de modèles s'est déjà affrontée dans une catégorie (votes de Léo, et votes de Claude à vérifier).
+ */
+export function countDuelPairs(
+  votes: readonly { category: string; modelA: string; modelB: string }[],
+  category: string
+): Map<string, number> {
+  const pairs = new Map<string, number>()
+  for (const vote of votes) {
+    if (vote.category !== category) continue
+    const key = pairKey(baseModelTag(vote.modelA), baseModelTag(vote.modelB))
+    pairs.set(key, (pairs.get(key) ?? 0) + 1)
+  }
+  return pairs
+}
+
 export function planDuelSeries(
   models: readonly string[],
   perModel: number,
   random: () => number = Math.random,
-  done: ReadonlyMap<string, number> = new Map()
+  done: ReadonlyMap<string, number> = new Map(),
+  pastPairs: ReadonlyMap<string, number> = new Map()
 ): Array<[string, string]> {
   const unique = [...new Set(models)]
   if (unique.length < DUEL_MIN_MODELS || !(perModel > 0)) return []
@@ -904,16 +922,23 @@ export function planDuelSeries(
     played.set(pairKey(a, b), (played.get(pairKey(a, b)) ?? 0) + 1)
     out.push(random() < 0.5 ? [a, b] : [b, a])
   }
+  /** Combien de fois a et b se sont affrontés : dans cette série ET avant (étape 455). */
+  const meetings = (a: string, b: string): number =>
+    (played.get(pairKey(a, b)) ?? 0) + (pastPairs.get(pairKey(baseModelTag(a), baseModelTag(b))) ?? 0)
   for (;;) {
     const active = unique.filter((m) => left(m) > 0)
     if (!active.length) break
     const a = active[0]
-    // Le dernier modèle n'a plus d'adversaire : il finit contre les modèles qui viennent de finir, qui font donc un duel
-    // de plus — « au moins N » pour chacun.
-    const pool = active.length > 1 ? active.slice(1) : finished
+    const others = active.slice(1)
+    // Étape 455 : jamais deux fois la même paire tant qu'un adversaire nouveau existe — d'abord un modèle à qui il reste
+    // des duels, sinon un modèle qui a fini (il fait un duel de plus : « au moins N » pour chacun). Sinon (tous déjà
+    // affrontés), le moins affronté, comme avant.
+    const fresh = others.filter((m) => meetings(a, m) === 0)
+    const freshFinished = finished.filter((m) => m !== a && meetings(a, m) === 0)
+    const pool = fresh.length ? fresh : freshFinished.length ? freshFinished : others.length ? others : finished.filter((m) => m !== a)
     if (!pool.length) break
-    const b = pickMax(pool, (m) => -(played.get(pairKey(a, m)) ?? 0) * 1000 + Math.max(0, left(m)))
-    play(a, b, active.length === 1)
+    const b = pickMax(pool, (m) => -meetings(a, m) * 1000 + Math.max(0, left(m)))
+    play(a, b, !others.includes(b))
   }
   return out
 }
