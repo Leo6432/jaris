@@ -480,7 +480,7 @@ const MODELS = [
   'qwen3-vl:8b',
   'qwen3-vl:4b',
   'qwen3-vl:2b',
-  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
+  // Étape 462 : GLM-4.6V-Flash retiré (voir VISION_CANDIDATES dans hardwareScan.ts).
   'qwen3.6:35b-a3b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
@@ -516,7 +516,6 @@ const VISION_CANDIDATES = [
   { model: 'gemma4:12b', vramGb: 8.0 },
   // Étape 347 : Nemotron 3.5 Bolt E4B, vision native (voir VISION_CANDIDATES dans hardwareScan.ts).
   { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 7.1 },
   // ministral-3:8b (voir MEDIUM_CANDIDATES/VISION_CANDIDATES dans hardwareScan.ts) : nativement multimodal.
   { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'qwen3-vl:4b', vramGb: 3.3 },
@@ -659,7 +658,6 @@ const MEDIUM_TIER_MODELS = new Set([
   'qwen3-vl:8b',
   'qwen3-vl:4b',
   'qwen3-vl:2b',
-  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
   'qwen2.5-coder:14b',
   'qwen2.5-coder:7b'
 ])

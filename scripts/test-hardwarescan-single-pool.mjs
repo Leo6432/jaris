@@ -193,8 +193,12 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   const real = (model) => REAL_SCORES.slice(REAL_SCORES.indexOf('## Demandes')).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/48) \\|`))?.[1]
   assert.equal(byModel.get('granite4.2:8b').demands, real('granite4.2:8b'))
   assert.match(byModel.get('granite4.2:8b').demands, /^\d+\/48$/)
-  // Étape 445 : qwen3-vl:2b a désormais ses demandes ; GLM-4.6V-Flash n'en a toujours pas.
-  assert.equal(byModel.get('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').demands, null, 'modèle de vision seul : pas de demandes')
+  // Étape 462 : GLM-4.6V-Flash retiré — un modèle de vision dont on retire ici les scores d'outils fait l'exemple.
+  const VL = 'qwen3-vl:8b'
+  const withoutVlTools = REAL_SCORES.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
+  assert.ok(withoutVlTools.length < REAL_SCORES.length, 'lignes d’outils de qwen3-vl:8b introuvables')
+  const bare = new Map((await setup({ vramMib: 8 * 1024, scores: withoutVlTools }).getModelOverview()).entries.map((e) => [e.model, e]))
+  assert.equal(bare.get(VL).demands, null, 'sans score de demandes : rien d’affiché')
   // Étape 446 : les trois scores, chacun de SA table du vrai fichier, pour les colonnes séparées du Classement.
   const tableScore = (section, model) => {
     const start = REAL_SCORES.indexOf(`## ${section}`)
@@ -205,9 +209,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   assert.deepEqual({ ...vl.toolScores }, { conversation: tableScore('Conversation', 'qwen3-vl:8b'), vision: tableScore('Vision', 'qwen3-vl:8b'), code: null })
   assert.match(vl.toolScores.vision, /^\d+\/34$/, 'score de vision de qwen3-vl:8b')
   assert.match(vl.toolScores.conversation, /^\d+\/78$/, 'son appel d’outils reste celui du test de conversation')
-  const glm = byModel.get('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M')
-  assert.equal(glm.toolScores.conversation, null, 'pas encore de score de conversation : la colonne affiche « — »')
-  assert.match(glm.toolScores.vision, /^\d+\/34$/)
+  assert.equal(bare.get(VL).toolScores.conversation, null, 'pas encore de score de conversation : la colonne affiche « — »')
+  assert.match(bare.get(VL).toolScores.vision, /^\d+\/34$/)
   // La carte « Modèles utilisés sur ta machine » aussi, que le modèle soit le choix idéal ou celui du profil.
   const scan = setup({ vramMib: 8 * 1024 })
   assert.equal((await scan.getMyModelPicks()).large.demands, real((await scan.getMyModelPicks()).large.model))
@@ -224,7 +227,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi.
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
 // Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
-const AWAITING = ['hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M']
+// Étape 462 : GLM-4.6V-Flash retiré de Jaris — plus aucun modèle n'attend le test de Léo.
+const AWAITING = []
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -396,20 +400,25 @@ test('modèles à tester : un cas à refaire compte même quand le score est dé
 // Étape 431, Léo : « il n'y a pas 31 modèles qui manquent un ou deux scores ? ». Sur les vrais scores, sans campagne :
 // les modèles de vision et de code (étape 376 : tout le monde passe les outils) n'ont que l'épreuve « outils » à passer.
 test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
-  const scan = setup({ vramMib: 24 * 1024 })
+  // Étape 462 : plus aucun modèle sans score dans le vrai fichier — qwen3-vl:8b, privé ici de ses scores d'outils, fait
+  // l'exemple d'un modèle de vision jamais passé aux outils.
+  const withoutVlTools = REAL_SCORES.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
+  assert.ok(withoutVlTools.length < REAL_SCORES.length, 'lignes d’outils de qwen3-vl:8b introuvables')
+  const scan = setup({ vramMib: 24 * 1024, scores: withoutVlTools })
   const described = scan.describeModelsToTest()
   const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
   // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b ont tous leurs scores ; GLM-4.6V-Flash non. Étape 448 : qwen2.5-coder:32b
   // non plus ; qwen3-coder:30b (code 5/5) prend sa place. Étape 454 : qwen3-coder:30b a désormais tous ses scores.
-  assert.equal(needs('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('qwen3-vl:8b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), undefined, 'étape 462 : GLM-4.6V-Flash retiré')
   assert.equal(needs('qwen3-coder:30b'), undefined)
   assert.equal(needs('qwen2.5-coder:32b'), undefined)
   // Un modèle de vision sans score de vision : les deux épreuves, dans l'ordre outils puis vision.
-  const scores = REAL_SCORES.replace(/^\| hf\.co\/ggml-org\/GLM-4\.6V-Flash-GGUF:Q4_K_M \| \d+\/34 \|\r?\n/m, '')
-  assert.notEqual(scores, REAL_SCORES, 'ligne vision de GLM-4.6V-Flash introuvable')
+  const scores = withoutVlTools.replace(/^\| qwen3-vl:8b \| \d+\/34 \|\r?\n/m, '')
+  assert.notEqual(scores, withoutVlTools, 'ligne vision de qwen3-vl:8b introuvable')
   const noVision = setup({ vramMib: 24 * 1024, scores }).describeModelsToTest()
   assert.equal(
-    JSON.stringify(noVision.find((m) => m.model === 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').needs),
+    JSON.stringify(noVision.find((m) => m.model === 'qwen3-vl:8b').needs),
     JSON.stringify([{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }])
   )
   assert.equal(needs('granite4.2:8b'), undefined, 'un modèle qui a tous ses scores n’apparaît pas')
@@ -502,7 +511,9 @@ test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
 // SON PC (champ `ms` de chaque cas dans le fichier brut) — la sienne pour un modèle déjà passé, sinon celle des
 // modèles mesurés de taille voisine, à l'échelle de la taille.
 test('étape 433 : durée estimée de chaque modèle à tester, d’après les temps mesurés sur ce PC', () => {
-  const scan = setup({ vramMib: 24 * 1024 })
+  // Étape 462 : qwen3-vl:8b (6,1 Go), privé de ses scores d'outils, remplace GLM-4.6V-Flash retiré.
+  const withoutVlTools = REAL_SCORES.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
+  const scan = setup({ vramMib: 24 * 1024, scores: withoutVlTools })
   const versions = { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
   const lines = [{ type: 'campagne', versions }]
   // granite4.2:8b (5,3 Go) : questions à 2 s, demandes à 10 s ; une demande coupée par le délai (ne compte pas dans
@@ -517,17 +528,16 @@ test('étape 433 : durée estimée de chaque modèle à tester, d’après les t
   // Son propre temps : 1 demande à refaire × 10 s (le délai de 600 s n'entre pas dans la moyenne).
   assert.equal(JSON.stringify(of('granite4.2:8b').needs), JSON.stringify([{ test: 'tools', reason: 'redo' }]))
   assert.equal(of('granite4.2:8b').estimatedMs, 10_000)
-  // Jamais passé : 78 questions + 48 demandes, au temps de granite ramené à sa taille (7,1 Go au lieu de 5,3).
-  // Étape 445 : GLM-4.6V-Flash plutôt que qwen3-vl:2b, qui a désormais tous ses scores.
-  const expected = Math.round(78 * (2000 / 5.3) * 7.1 + 48 * (10_000 / 5.3) * 7.1)
-  assert.equal(of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, expected)
+  // Jamais passé : 78 questions + 48 demandes, au temps de granite ramené à sa taille (6,1 Go au lieu de 5,3).
+  const expected = Math.round(78 * (2000 / 5.3) * 6.1 + 48 * (10_000 / 5.3) * 6.1)
+  assert.equal(of('qwen3-vl:8b').estimatedMs, expected)
   // Étape 448 : qwen3-coder:30b plutôt que qwen3.6:35b-a3b, qui a désormais tous ses scores. Étape 454 : qwen3-coder:30b
   // les a aussi — ses lignes d'appel d'outils sont retirées ici pour garder un modèle plus gros à comparer.
-  const withoutCoderTools = REAL_SCORES.replace(/^\| qwen3-coder:30b \| \d+\/(78|48) \|\r?\n/gm, '')
-  assert.equal(REAL_SCORES.length - withoutCoderTools.length > 0, true, 'lignes de qwen3-coder:30b introuvables')
+  const withoutCoderTools = withoutVlTools.replace(/^\| qwen3-coder:30b \| \d+\/(78|48) \|\r?\n/gm, '')
+  assert.equal(withoutVlTools.length - withoutCoderTools.length > 0, true, 'lignes de qwen3-coder:30b introuvables')
   const bigger = setup({ vramMib: 24 * 1024, scores: withoutCoderTools }).describeModelsToTest(scan.campaignCompletion(traces), scan.caseTimesFromTraces(traces))
   const coder = bigger.find((m) => m.model === 'qwen3-coder:30b')
-  assert.ok(coder.estimatedMs > of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, 'un plus gros modèle prend plus longtemps')
+  assert.ok(coder.estimatedMs > of('qwen3-vl:8b').estimatedMs, 'un plus gros modèle prend plus longtemps')
 
   // Rien de mesuré sur ce PC : pas de durée inventée.
   assert.ok(scan.describeModelsToTest().every((m) => m.estimatedMs === null))

@@ -11842,3 +11842,18 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   pris par tous les modèles chargés.
 - Régression : test-duel.mjs (13 % : pas un débordement ; 74 % : si) ; test-duel-remote.mjs (100 Go pris sur 288 → pas
   d'avertissement). Chacun échoue avec l'ancien seuil.
+
+## Étape 462 — GLM-4.6V-Flash retiré de Jaris (v0.57.4)
+
+- Léo : « tu me conseilles de supprimer GLM-4.6V-Flash ? … oui, retire-le ». Mesuré dans son fichier du 10/11
+  (7 premières questions) : sous Ollama 0.40.16, ce modèle (import hf.co/ggml-org, Q4_K_M) répète ses actions jusqu'à
+  remplir sa fenêtre de 8 192 (`done_reason: length`) — « écris bonjour » : type_text puis 192 press_key « entrée » ;
+  « ouvre le bloc-notes » : open_app puis 118 look_at_screen — ou plante (« llama-server returned invalid tool call
+  arguments … unexpected end of JSON input », 4 questions sur 7). ~40–55 s par question au lieu de 2–3. Sur la machine
+  louée, il chargeait aussi à 58 % sur le processeur. Dangereux dans Jaris (192 « Entrée »), et inutile : en vision
+  (27/34), qwen3-vl:8b fait mieux (29/34) en plus petit — jamais choisi.
+- **Remarque sur le juge, pas corrigée** : le test des questions ne regarde que le PREMIER appel ; les 192 « Entrée »
+  comptaient juste. Un message avec des dizaines d'appels devrait compter faux.
+- Retiré de VISION_CANDIDATES (hardwareScan.ts) et des listes de benchmark-models.mjs ; ligne de vision retirée de
+  verified-tool-scores.md (note gardée). Aucun choix de modèle ne change (grille 4–80 Go, avant/après identiques). Plus
+  aucun modèle n'attend le test de Léo : les tests « modèles à tester » utilisent qwen3-vl:8b privé de ses scores d'outils.

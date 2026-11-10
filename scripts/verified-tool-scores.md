@@ -241,6 +241,9 @@ marge est retirée.
 
 Étape 445 : nemotron-3.5-bolt:e4b 20/34 (08/11/2026) : détail dans la section des conversations.
 
+Étape 462 : GLM-4.6V-Flash (27/34) retiré de Jaris — il répète ses actions sans fin sous Ollama (192 « Entrée »
+pour « écris bonjour »), et qwen3-vl:8b fait mieux en vision en plus petit.
+
 | Modèle | Fiabilité |
 |---|---|
 | gemma4:31b | 29/34 |
@@ -249,7 +252,6 @@ marge est retirée.
 | gemma4:e4b | 17/34 |
 | qwen3-vl:8b | 29/34 |
 | gemma4:12b | 25/34 |
-| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 27/34 |
 | ministral-3:8b | 23/34 |
 | qwen3-vl:4b | 30/34 |
 | qwen3.5:4b | 28/34 |

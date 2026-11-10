@@ -393,11 +393,10 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:12b', vramGb: 8.0 },
   // Nemotron 3.5 Bolt E4B : vision native (voir la note de l'étape 347 dans MEDIUM_CANDIDATES).
   { model: 'nemotron-3.5-bolt:e4b', vramGb: 7.9 },
-  // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
-  // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
-  // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
-  // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 7.1 },
+  // Étape 462 (Léo : « retire-le ») : GLM-4.6V-Flash (import hf.co/ggml-org) RETIRÉ. Sous Ollama, il répète ses
+  // actions jusqu'à remplir sa fenêtre (192 « Entrée » pour « écris bonjour », 118 regards sur l'écran), ou plante
+  // (« invalid tool call arguments »), et charge mal sur la machine louée ; en vision (27/34), qwen3-vl:8b fait mieux
+  // (29/34) en plus petit — il n'était jamais choisi.
   // Candidat "réutilisation" : ministral-3:8b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal
   // (vérifié sur ollama.com/library/ministral-3, badge "Text, Image"). Aucune exigence de tool-calling ici
   // (voir gemma4:31b plus haut) : la réserve response_format+tools qui vaut pour son usage en Médium ne
@@ -1485,7 +1484,6 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'gemma4:12b': 'Q4_K_M',
   'nemotron-3.5-bolt:e4b': 'Q4_K_M',
   'qwen3.5:9b': 'Q4_K_M',
-  'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M': 'Q4_K_M',
   'ministral-3:8b': 'Q4_K_M',
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 'Q4_K_M',
   'granite4.2:8b': 'Q4_K_M',

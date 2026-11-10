@@ -31,9 +31,9 @@ test('conversation : tous les scores viennent du test sur 78 réponses (test ver
 
 test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être recopiée)', () => {
   // Test de vision version 4 (05/10/2026) : les 11 candidats, chacun sur 34, plus Muse Glimmer et Ornith 1.5 (étape 335),
-  // et nemotron-3.5-bolt:e4b (étape 445).
+  // et nemotron-3.5-bolt:e4b (étape 445), moins GLM-4.6V-Flash (retiré à l'étape 462).
   const vision = rows(section('Vision'))
-  assert.equal(vision.length, 15)
+  assert.equal(vision.length, 14)
   for (const [model, score] of vision) assert.match(score, /^\d+\/34$/, `Vision ${model} : ${score}`)
   // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés,
   // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315), phi4-mini et K2 Horizon 0.9B (étape 317), Spark-X2.6-4B

@@ -156,13 +156,14 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
 // interdit tout import hf.co/ par un test) à cause d'un bug d'Ollama 0.34.2 sur les redirections Hugging Face.
 // Le risque est désormais traité là où il se produit — runQuickSetup retombe sur le modèle suivant si le
 // téléchargement échoue (test-benchmark-runner-cleanup.mjs) — donc les deux modèles restent candidats.
-test('G9v3-3B et GLM-4.6V-Flash restent dans la liste des modèles malgré le bug Ollama 0.34.2', async () => {
+// Étape 462 (Léo : « retire-le ») : GLM-4.6V-Flash retiré pour une autre raison — il répète ses actions sans fin sous
+// Ollama, et qwen3-vl:8b fait mieux en vision. G9v3-3B reste.
+test('G9v3-3B reste dans la liste des modèles malgré le bug Ollama 0.34.2 ; GLM-4.6V-Flash retiré (étape 462)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const entry = (model) => overview.entries.find((e) => e.model === model)
   assert.ok(entry('hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit rester candidat')
-  // GLM-4.6V-Flash doit rester candidat ET reconnu comme lisant les images (seuls ceux-là peuvent tenir Vision).
-  assert.equal(entry('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M')?.readsImages, true)
+  assert.equal(entry('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), undefined, 'GLM-4.6V-Flash retiré')
 })
 
 test('indique tous les paliers qui utilisent réellement chaque modèle du profil actif', async () => {
