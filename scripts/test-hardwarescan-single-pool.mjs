@@ -223,8 +223,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 442 : qwen3-vl:4b et 8b, qwen2.5-coder:7b et gemma4:31b ont désormais tous leurs scores.
 // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi.
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
-// Étape 449 : devstral-small-2:24b aussi.
-const AWAITING = ['hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', 'qwen3-coder:30b']
+// Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
+const AWAITING = ['hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -400,9 +400,9 @@ test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
   const described = scan.describeModelsToTest()
   const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
   // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b ont tous leurs scores ; GLM-4.6V-Flash non. Étape 448 : qwen2.5-coder:32b
-  // non plus ; qwen3-coder:30b (code 5/5) prend sa place.
+  // non plus ; qwen3-coder:30b (code 5/5) prend sa place. Étape 454 : qwen3-coder:30b a désormais tous ses scores.
   assert.equal(needs('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
-  assert.equal(needs('qwen3-coder:30b'), JSON.stringify([{ test: 'tools', reason: 'missing' }]))
+  assert.equal(needs('qwen3-coder:30b'), undefined)
   assert.equal(needs('qwen2.5-coder:32b'), undefined)
   // Un modèle de vision sans score de vision : les deux épreuves, dans l'ordre outils puis vision.
   const scores = REAL_SCORES.replace(/^\| hf\.co\/ggml-org\/GLM-4\.6V-Flash-GGUF:Q4_K_M \| \d+\/34 \|\r?\n/m, '')
@@ -521,8 +521,13 @@ test('étape 433 : durée estimée de chaque modèle à tester, d’après les t
   // Étape 445 : GLM-4.6V-Flash plutôt que qwen3-vl:2b, qui a désormais tous ses scores.
   const expected = Math.round(78 * (2000 / 5.3) * 7.1 + 48 * (10_000 / 5.3) * 7.1)
   assert.equal(of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, expected)
-  // Étape 448 : qwen3-coder:30b plutôt que qwen3.6:35b-a3b, qui a désormais tous ses scores.
-  assert.ok(of('qwen3-coder:30b').estimatedMs > of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, 'un plus gros modèle prend plus longtemps')
+  // Étape 448 : qwen3-coder:30b plutôt que qwen3.6:35b-a3b, qui a désormais tous ses scores. Étape 454 : qwen3-coder:30b
+  // les a aussi — ses lignes d'appel d'outils sont retirées ici pour garder un modèle plus gros à comparer.
+  const withoutCoderTools = REAL_SCORES.replace(/^\| qwen3-coder:30b \| \d+\/(78|48) \|\r?\n/gm, '')
+  assert.equal(REAL_SCORES.length - withoutCoderTools.length > 0, true, 'lignes de qwen3-coder:30b introuvables')
+  const bigger = setup({ vramMib: 24 * 1024, scores: withoutCoderTools }).describeModelsToTest(scan.campaignCompletion(traces), scan.caseTimesFromTraces(traces))
+  const coder = bigger.find((m) => m.model === 'qwen3-coder:30b')
+  assert.ok(coder.estimatedMs > of('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M').estimatedMs, 'un plus gros modèle prend plus longtemps')
 
   // Rien de mesuré sur ce PC : pas de durée inventée.
   assert.ok(scan.describeModelsToTest().every((m) => m.estimatedMs === null))

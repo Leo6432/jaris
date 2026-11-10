@@ -165,6 +165,16 @@ Demandes 44 → 45/48 : « Je vois plusieurs résultats… Veux-tu que je clique
 sans décrire aucun résultat (comme mistral-small3.2:24b, compté juste) ; le juge prenait « premier résultat » pour une
 description inventée. Erreurs réelles : séances de Dune inventées pour mardi (×2), rappel à 960 min au lieu de 1320.
 
+Étape 454 : campagne de Léo du 10/11/2026 (Jaris 0.54.1, Ollama 0.40.16, machine louée OVH 4 × V100S), qwen3-coder:30b,
+qui n'avait que le test de code ; digest 06c1097e…, les 126 réponses relues, justes comprises. Il écrit souvent ses
+appels dans le texte, au format `<function=…><parameter=…>` (non lu par Ollama, donc jamais exécuté par Jaris).
+Questions 70 → 69/78 : à « je vais éteindre mon PC ce soir », un rappel non demandé écrit ainsi en texte était compté
+juste (le juge ne reconnaît pas ce format) ; erreurs réelles : code postal et extinction écrits en texte (×3 chacun),
+une recherche web puis un regard sur l'écran pour dire son propre nom. Demandes 41 → 42/48 : « J'ai trouvé plusieurs
+tutoriels… Veux-tu que je t'ouvre le premier résultat ? » propose un clic sans décrire de résultat (même cas que
+devstral-small-2:24b, compté juste). Erreurs réelles : Peugeot dite notée sans l'être (×2), regard sur l'écran non
+demandé, Spotify ouvert sans musique, rappel à 1440 min au lieu de 1320, recette retenue au lieu d'être donnée.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -217,6 +227,7 @@ description inventée. Erreurs réelles : séances de Dune inventées pour mardi
 | north-mini-code-1.0 | 76/78 |
 | qwen2.5-coder:32b | 12/78 |
 | devstral-small-2:24b | 72/78 |
+| qwen3-coder:30b | 69/78 |
 
 ## Vision — compréhension d'image
 
@@ -361,6 +372,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 45/48 |
 | north-mini-code-1.0 | 45/48 |
 | devstral-small-2:24b | 45/48 |
+| qwen3-coder:30b | 42/48 |
 | granite4.2:3b | 44/48 |
 | qwen3-vl:8b | 44/48 |
 | gemma4:e4b | 43/48 |

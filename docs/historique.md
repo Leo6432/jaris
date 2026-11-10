@@ -11707,3 +11707,14 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   PC, mêmes scores, aucune ligne de suivi collée ; disque juste → téléchargements qui attendent, rien de sauté, chacun
   supprimé) ; test-unscored-models-ui.mjs (liste affichée). Les deux tests du script échouent sans la file du disque
   ou sans le parallélisme. Non vérifié en usage réel sur la machine OVH.
+
+## Étape 454 — Scores de qwen3-coder:30b (v0.55.1)
+
+- Campagne de Léo du 10/11/2026 (Jaris 0.54.1, Ollama 0.40.16), faite sur la machine louée OVH (4 × V100S, première
+  utilisation réelle de la page Machine pour l'Analyse) : qwen3-coder:30b complet (78 questions, 48 demandes), plus 7
+  premières questions de GLM-4.6V-Flash (test en cours, rien recopié). 126 réponses relues, justes comprises.
+- Questions 70 → 69/78, demandes 41 → 42/48 (détail dans verified-tool-scores.md). Il écrit souvent ses appels en texte
+  au format `<function=…><parameter=…>` — **remarque sur le juge, pas corrigée** : `isCorrectAnswer` ne reconnaît pas
+  ce format comme un appel écrit en texte (déjà noté pour les appels sans accolades de qwen2.5-coder).
+- Aucun choix de modèle ne change (grille 4–80 Go, PC de Léo compris). Tests des modèles à tester mis à jour : il ne
+  reste que GLM-4.6V-Flash.
