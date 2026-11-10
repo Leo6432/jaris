@@ -424,7 +424,7 @@ test('étape 458 : un seul NOUVEAU modèle se charge à la fois sur la machine l
       })
       .map((model, i) => ({ model, vramGb: spill && i === 0 ? 1 : 5, sizeGb: 5 })),
     // Des modèles d'avant, encore chargés le temps qu'Ollama les libère (150 Go sur 288).
-    ...(crowd ? [{ model: 'fini-model:70b', vramGb: 150, sizeGb: 150 }] : [])
+    ...(crowd === 'half' ? [{ model: 'moitie-model:70b', vramGb: 100, sizeGb: 100 }] : crowd ? [{ model: 'fini-model:70b', vramGb: 150, sizeGb: 150 }] : [])
   ]
   const env = setup({ remote: { enabled: true, host: POD, vramGb: 288, ramGb: 188 }, installedThere: [...MODELS], generateGate, loaded })
   env.session.setDuelSeriesDelays({ idleCheckMs: 10, loadCheckMs: 10 })
@@ -445,6 +445,13 @@ test('étape 458 : un seul NOUVEAU modèle se charge à la fois sur la machine l
     await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === true, 'débordement cartes libres signalé')
     spill = false
     await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === false, 'effacé quand ça va mieux')
+    // Étape 461 (capture de Léo : 61 Go pris sur 126) : un quart des cartes ou plus déjà pris → pas « presque libres ».
+    crowd = 'half'
+    spill = true
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    assert.equal(env.session.getDuelView().series.cpuFallback, false, 'cartes à moitié prises : pas « presque libres »')
+    crowd = false
+    spill = false
     // Étape 459 : débordement alors que les cartes sont bien remplies par d'AUTRES modèles chargés (qui finissent) —
     // ce n'est pas un démarrage raté des cartes : pas cet avertissement.
     crowd = true

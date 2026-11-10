@@ -515,6 +515,10 @@ test('étape 456 : place réelle d’une série sur la machine louée — débor
   const spilled = duel.seriesPlacementFrom([{ model: 'c:4b', vramGb: 1, sizeGb: 4.3 }], new Set(['c:4b']))
   assert.equal(spilled.spill, 'c:4b', '78 % sur le processeur : débordement')
   assert.equal(duel.seriesPlacementFrom([{ model: 'c:4b', vramGb: 4, sizeGb: 4.3 }], new Set(['c:4b'])).spill, null, 'arrondi d’Ollama : pas un débordement')
+  // Étape 461 (capture de Léo) : ministral-3:3b à « 13%/87% CPU/GPU » — à peine ralenti, pas un débordement.
+  assert.equal(duel.seriesPlacementFrom([{ model: 'm:3b', vramGb: 14.8, sizeGb: 17 }], new Set(['m:3b'])).spill, null)
+  // Spark-X2.6 à « 74%/26% CPU/GPU » : si.
+  assert.equal(duel.seriesPlacementFrom([{ model: 's:4b', vramGb: 1.3, sizeGb: 5 }], new Set(['s:4b'])).spill, 's:4b')
   // 126 Go : (126 - 1) × 0,9 = 112,5 Go utilisables.
   const need = duel.seriesModelNeedGb(10, duel.DUEL_SERIES_SLOTS_PER_MODEL)
   assert.equal(duel.seriesNewModelFits({ usedGb: 0, spill: null }, 0, 10, 126), true)

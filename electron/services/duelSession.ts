@@ -1117,7 +1117,8 @@ async function refreshSeriesPlacement(current: Session, series: SeriesState): Pr
   // Étape 459 (capture de Léo : l'avertissement affiché à tort, 72 Go pris sur 126) : la place prise compte TOUS les
   // modèles chargés (ceux qui finissent ou attendent d'être déchargés aussi), pas seulement ceux de la série qui tournent.
   const loadedGb = loaded.reduce((sum, entry) => sum + entry.vramGb, 0)
-  const cpuFallback = Boolean(series.placement.spill) && current.vramGb !== null && loadedGb < current.vramGb / 2
+  // Étape 461 (Léo : l'avertissement encore affiché avec 61 Go pris sur 126) : « presque libres » = moins d'un quart pris.
+  const cpuFallback = Boolean(series.placement.spill) && current.vramGb !== null && loadedGb < current.vramGb / 4
   if (cpuFallback !== series.cpuFallback) {
     series.cpuFallback = cpuFallback
     emitNow()

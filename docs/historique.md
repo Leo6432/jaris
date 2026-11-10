@@ -11830,3 +11830,15 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Régression : test-duel-session.mjs (avant le vote : aucun nom, même écrit dans le code par le modèle ; les deux codes ;
   pas de vote) — échoue si les noms ne sont plus masqués ; test-duel-panel-ui.mjs (bouton dans le bloc du vote, appelé
   sans identifiant ; plus de bouton après le vote). Capture à 760 px vérifiée.
+
+## Étape 461 — Débordement et « cartes presque libres » : seuils trop sévères (v0.57.3)
+
+- Capture de Léo (série de 54 duels, OVH) : mistral-small3.2 et qwen3.5:2b à 100 % GPU, ministral-3:3b à « 13%/87%
+  CPU/GPU » — et l'avertissement « cartes presque libres » affiché, avec ~61 Go pris sur 126. Deux seuils trop sévères :
+  le moindre bout sur le processeur comptait comme débordement (et bloquait les nouveaux modèles de la série), et
+  « presque libres » voulait dire moins de la moitié des cartes.
+- Débordement (`seriesPlacementFrom`) = plus d'un quart du modèle sur le processeur (`SERIES_SPILL_SHARE`), en plus du
+  demi-Go d'arrondi : 13 % ne compte plus, les 74 % de Spark-X2.6 si. « Presque libres » = moins d'un quart des cartes
+  pris par tous les modèles chargés.
+- Régression : test-duel.mjs (13 % : pas un débordement ; 74 % : si) ; test-duel-remote.mjs (100 Go pris sur 288 → pas
+  d'avertissement). Chacun échoue avec l'ancien seuil.

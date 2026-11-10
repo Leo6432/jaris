@@ -828,6 +828,8 @@ export function remoteThreadsFor(sizeGb: number, vramGb: number | null): number 
  * Les duels de plus d'un modèle déjà chargé ne coûtent rien (Ollama a réservé leur place au chargement).
  */
 export const SERIES_CARD_FILL = 0.9
+/** Étape 461 : part d'un modèle sur le processeur à partir de laquelle on parle de débordement. */
+export const SERIES_SPILL_SHARE = 0.25
 export interface SeriesPlacement {
   /** Mémoire vidéo réellement prise par les modèles de la série qui tournent (Go). */
   usedGb: number
@@ -853,8 +855,10 @@ export function seriesPlacementFrom(
   for (const entry of loaded) {
     if (!running.has(tag(entry.model))) continue
     usedGb += entry.sizeGb
-    // Une marge d'un demi-Go : Ollama arrondit sa part en mémoire vidéo.
-    if (entry.sizeGb - entry.vramGb > 0.5 && spill === null) spill = entry.model
+    // Une marge d'un demi-Go : Ollama arrondit sa part en mémoire vidéo. Étape 461 (capture de Léo : ministral-3:3b à
+    // « 13%/87% CPU/GPU ») : un petit bout sur le processeur ralentit à peine — un débordement, c'est plus d'un quart.
+    const onCpu = entry.sizeGb - entry.vramGb
+    if (onCpu > 0.5 && onCpu > entry.sizeGb * SERIES_SPILL_SHARE && spill === null) spill = entry.model
   }
   return { usedGb, spill }
 }
