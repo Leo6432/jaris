@@ -1578,7 +1578,7 @@
   "duel.pick.fast": "Die schnellsten",
   "duel.pick.fast.lead": "Jaris nimmt die Modelle, die auf deinem PC am schnellsten schreiben: für ein Duell, wenn du wenig Zeit hast.",
   "duel.pick.fast.tooFew": "Es braucht mindestens {min} Modelle mit bekannter Geschwindigkeit auf deinem PC (hier: {count}). Mach zuerst ein paar Duelle „Zufällig“: jede Antwort misst die Geschwindigkeit.",
-  "duel.pick.fast.remote": "Die Geschwindigkeit wird auf deinem PC gemessen: für einen anderen Rechner wähle „Zufällig“ oder „Ich wähle“.",
+  "duel.pick.fast.remote": "Eine gemietete Maschine ist verbunden: Jaris kennt die Geschwindigkeit der Modelle auf dieser Maschine noch nicht und kann daher nicht die schnellsten auswählen. Wähle stattdessen „Zufällig“ oder „Ich wähle“.",
   "duel.pick.chosen": "Gewählte Modelle: {count} (mindestens {min})",
   "duel.pick.installed": "Installiert",
   "duel.pick.reason.tooBig": "Zu groß für diesen PC: {need} (Platz: {budget})",

@@ -1578,7 +1578,7 @@
   "duel.pick.fast": "Nopeimmat",
   "duel.pick.fast.lead": "Jaris valitsee mallit, jotka kirjoittavat nopeimmin tietokoneellasi: kaksintaisteluun, kun aikaa on vähän.",
   "duel.pick.fast.tooFew": "Tarvitaan vähintään {min} mallia, joiden nopeus tietokoneellasi tunnetaan (tässä: {count}). Tee ensin muutama ”Satunnaisesti”-kaksintaistelu: jokainen vastaus mittaa nopeuden.",
-  "duel.pick.fast.remote": "Nopeus mitataan tietokoneellasi: toiselle koneelle valitse ”Satunnaisesti” tai ”Valitsen itse”.",
+  "duel.pick.fast.remote": "Vuokrakone on yhdistetty: Jaris ei vielä tiedä mallien nopeutta siinä, joten se ei voi valita nopeimpia. Valitse mieluummin ”Satunnaisesti” tai ”Valitsen itse”.",
   "duel.pick.chosen": "Valitut mallit: {count} (vähintään {min})",
   "duel.pick.installed": "Asennettu",
   "duel.pick.reason.tooBig": "Liian suuri tälle tietokoneelle: {need} (tilaa: {budget})",

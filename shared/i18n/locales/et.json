@@ -1578,7 +1578,7 @@
   "duel.pick.fast": "Kiireimad",
   "duel.pick.fast.lead": "Jaris valib mudelid, mis kirjutavad sinu arvutis kõige kiiremini: duelliks, kui sul pole palju aega.",
   "duel.pick.fast.tooFew": "Vaja on vähemalt {min} mudelit, mille kiirus sinu arvutis on teada (siin: {count}). Tee enne paar duelli „Juhuslikult“: iga vastus mõõdab kiirust.",
-  "duel.pick.fast.remote": "Kiirust mõõdetakse sinu arvutis: teise masina jaoks vali „Juhuslikult“ või „Valin ise“.",
+  "duel.pick.fast.remote": "Renditud masin on ühendatud: Jaris ei tea veel mudelite kiirust selles masinas, seega ei saa ta kiiremaid valida. Vali pigem „Juhuslikult“ või „Valin ise“.",
   "duel.pick.chosen": "Valitud mudelid: {count} (vähemalt {min})",
   "duel.pick.installed": "Paigaldatud",
   "duel.pick.reason.tooBig": "Selle arvuti jaoks liiga suur: {need} (ruumi: {budget})",

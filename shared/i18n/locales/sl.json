@@ -1620,7 +1620,7 @@
   "duel.pick.fast": "Najhitrejši",
   "duel.pick.fast.lead": "Jaris izbere modele, ki na tvojem računalniku pišejo najhitreje: za dvoboj, ko nimaš veliko časa.",
   "duel.pick.fast.tooFew": "Potrebuješ vsaj {min} modele z znano hitrostjo na tvojem računalniku (tukaj: {count}). Najprej odigraj nekaj dvobojev »Naključno«: vsak odgovor izmeri hitrost.",
-  "duel.pick.fast.remote": "Hitrost se meri na tvojem računalniku: za drug stroj izberi »Naključno« ali »Izberem sam«.",
+  "duel.pick.fast.remote": "Povezan je najet stroj: Jaris še ne pozna hitrosti modelov na njem, zato ne more izbrati najhitrejših. Raje izberi »Naključno« ali »Izberem sam«.",
   "duel.pick.chosen": "Izbrani modeli: {count} (najmanj {min})",
   "duel.pick.installed": "Nameščeno",
   "duel.pick.reason.tooBig": "Prevelik za ta računalnik: {need} (prostor: {budget})",

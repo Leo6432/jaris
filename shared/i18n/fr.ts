@@ -1591,7 +1591,7 @@ export const fr = {
   "duel.pick.fast": "Les plus rapides",
   "duel.pick.fast.lead": "Jaris prend les modèles qui écrivent le plus vite sur ton PC : pour un duel quand tu n'as pas trop le temps.",
   "duel.pick.fast.tooFew": "Il faut au moins {min} modèles dont la vitesse est connue sur ton PC (ici : {count}). Fais d'abord quelques duels « Au hasard » : chaque réponse mesure la vitesse.",
-  "duel.pick.fast.remote": "La vitesse est mesurée sur ton PC : pour une autre machine, choisis « Au hasard » ou « Je choisis ».",
+  "duel.pick.fast.remote": "Une machine louée est connectée : Jaris ne connaît pas encore la vitesse des modèles sur cette machine, il ne peut donc pas choisir les plus rapides. Choisis plutôt « Au hasard » ou « Je choisis ».",
   "duel.pick.chosen": "Modèles choisis : {count} (minimum {min})",
   "duel.pick.installed": "Installé",
   "duel.pick.reason.tooBig": "Trop gros pour ce PC : {need} (place : {budget})",

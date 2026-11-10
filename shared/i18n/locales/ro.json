@@ -1599,7 +1599,7 @@
   "duel.pick.fast": "Cele mai rapide",
   "duel.pick.fast.lead": "Jaris alege modelele care scriu cel mai repede pe PC-ul tău: pentru un duel când nu ai mult timp.",
   "duel.pick.fast.tooFew": "E nevoie de cel puțin {min} modele cu viteză cunoscută pe PC-ul tău (aici: {count}). Fă mai întâi câteva dueluri „La întâmplare”: fiecare răspuns măsoară viteza.",
-  "duel.pick.fast.remote": "Viteza se măsoară pe PC-ul tău: pentru altă mașină, alege „La întâmplare” sau „Aleg eu”.",
+  "duel.pick.fast.remote": "Este conectată o mașină închiriată: Jaris nu cunoaște încă viteza modelelor pe ea, deci nu poate alege cele mai rapide. Alege mai bine „La întâmplare” sau „Aleg eu”.",
   "duel.pick.chosen": "Modele alese: {count} (minimum {min})",
   "duel.pick.installed": "Instalat",
   "duel.pick.reason.tooBig": "Prea mare pentru acest PC: {need} (spațiu: {budget})",

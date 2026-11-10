@@ -892,7 +892,9 @@ test('étape 414 : « Les plus rapides » sans assez de vitesses connues, ou sur
     await page.waitForSelector('.duel-pickmode')
     await page.getByRole('radio', { name: 'Les plus rapides' }).click()
     await page.waitForSelector('.duel-home__note--warn')
-    assert.match(await page.textContent('.duel-home'), /pour une autre machine, choisis « Au hasard » ou « Je choisis »/)
+    // Étape 464 (Léo : « une personne qui installe Jaris ne va pas comprendre ») : dit pourquoi, sans parler du PC.
+    assert.match(await page.textContent('.duel-home'), /Une machine louée est connectée : Jaris ne connaît pas encore la vitesse des modèles sur cette machine/)
+    assert.match(await page.textContent('.duel-home'), /Choisis plutôt « Au hasard » ou « Je choisis »\./)
     assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
   }, away)
 })

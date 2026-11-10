@@ -1599,7 +1599,7 @@
   "duel.pick.fast": "Ātrākie",
   "duel.pick.fast.lead": "Jaris izvēlas modeļus, kas tavā datorā raksta visātrāk: duelim, kad nav daudz laika.",
   "duel.pick.fast.tooFew": "Vajag vismaz {min} modeļus ar zināmu ātrumu tavā datorā (šeit: {count}). Vispirms izspēlē dažus duelus „Nejauši”: katra atbilde nomēra ātrumu.",
-  "duel.pick.fast.remote": "Ātrums tiek mērīts tavā datorā: citai iekārtai izvēlies „Nejauši” vai „Izvēlos pats”.",
+  "duel.pick.fast.remote": "Ir pievienota nomāta mašīna: Jaris vēl nezina modeļu ātrumu tajā, tāpēc nevar izvēlēties ātrākos. Labāk izvēlies “Nejauši” vai “Izvēlos pats”.",
   "duel.pick.chosen": "Izvēlētie modeļi: {count} (vismaz {min})",
   "duel.pick.installed": "Instalēts",
   "duel.pick.reason.tooBig": "Pārāk liels šim datoram: {need} (vieta: {budget})",

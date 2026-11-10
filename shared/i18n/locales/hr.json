@@ -1599,7 +1599,7 @@
   "duel.pick.fast": "Najbrži",
   "duel.pick.fast.lead": "Jaris uzima modele koji najbrže pišu na tvom računalu: za dvoboj kad nemaš puno vremena.",
   "duel.pick.fast.tooFew": "Treba barem {min} modela s poznatom brzinom na tvom računalu (ovdje: {count}). Prvo odigraj nekoliko dvoboja „Nasumično”: svaki odgovor mjeri brzinu.",
-  "duel.pick.fast.remote": "Brzina se mjeri na tvom računalu: za drugo računalo odaberi „Nasumično” ili „Biram sam”.",
+  "duel.pick.fast.remote": "Spojen je unajmljeni stroj: Jaris još ne zna brzinu modela na njemu pa ne može odabrati najbrže. Radije odaberi „Nasumično” ili „Biram sam”.",
   "duel.pick.chosen": "Odabrani modeli: {count} (najmanje {min})",
   "duel.pick.installed": "Instalirano",
   "duel.pick.reason.tooBig": "Prevelik za ovo računalo: {need} (prostor: {budget})",

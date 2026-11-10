@@ -1599,7 +1599,7 @@
   "duel.pick.fast": "Nejrychlejší",
   "duel.pick.fast.lead": "Jaris vybere modely, které na tvém PC píší nejrychleji: na souboj, když nemáš moc času.",
   "duel.pick.fast.tooFew": "Potřebuješ aspoň {min} modely se známou rychlostí na tvém PC (zde: {count}). Nejdřív udělej pár soubojů „Náhodně“: každá odpověď změří rychlost.",
-  "duel.pick.fast.remote": "Rychlost se měří na tvém PC: pro jiný stroj zvol „Náhodně“ nebo „Vyberu sám“.",
+  "duel.pick.fast.remote": "Je připojen pronajatý stroj: Jaris zatím nezná rychlost modelů na tomto stroji, a proto nemůže vybrat ty nejrychlejší. Zvol raději „Náhodně“ nebo „Vyberu sám“.",
   "duel.pick.chosen": "Vybrané modely: {count} (minimálně {min})",
   "duel.pick.installed": "Nainstalováno",
   "duel.pick.reason.tooBig": "Na tento počítač příliš velký: {need} (místo: {budget})",

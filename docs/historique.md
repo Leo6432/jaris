@@ -11872,3 +11872,11 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   vérifient autre chose (reprise, cas à refaire, durée, version d'Ollama) ; les tests des choix gardent les vrais
   scores. Nouveau test : chaque modèle sans score de code est proposé au test de code ; le script de test fait passer
   le code à Lightning (modèle de conversation). Les deux échouent sur l'ancienne liste.
+
+## Étape 464 — « Les plus rapides » avec une machine louée : un message que tout le monde comprend (v0.58.1)
+
+- Léo : « ça met : La vitesse est mesurée sur ton PC : pour une autre machine, choisis… — une personne qui installe
+  Jaris ne va pas comprendre, et en plus c'est mon PC ». Nouveau texte (24 langues, avec les VRAIS noms des boutons de
+  chaque langue) : « Une machine louée est connectée : Jaris ne connaît pas encore la vitesse des modèles sur cette
+  machine, il ne peut donc pas choisir les plus rapides. Choisis plutôt « Au hasard » ou « Je choisis ». »
+- test-duel-panel-ui.mjs mis à jour (étape 414).
