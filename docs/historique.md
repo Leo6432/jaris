@@ -11857,3 +11857,18 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
 - Retiré de VISION_CANDIDATES (hardwareScan.ts) et des listes de benchmark-models.mjs ; ligne de vision retirée de
   verified-tool-scores.md (note gardée). Aucun choix de modèle ne change (grille 4–80 Go, avant/après identiques). Plus
   aucun modèle n'attend le test de Léo : les tests « modèles à tester » utilisent qwen3-vl:8b privé de ses scores d'outils.
+
+## Étape 463 — Le test de code pour TOUS les modèles (v0.58.0)
+
+- Léo : « pourquoi tout le monde n'a pas de score code ? on peut faire réellement tous les tests code comme les
+  autres ». Le test de code n'était proposé qu'à la liste Code (14 modèles sur 51), choix ancien (test long, petits
+  modèles jugés incapables). Or le rôle Code cherche dans TOUS les modèles depuis l'étape 160, en prenant le score de
+  conversation de ceux qui n'ont pas passé le code : un modèle jamais testé en code était jugé sur autre chose.
+- `CODE_ROLE_MODELS` (hardwareScan.ts) = tous les modèles ; `CODE_TEST_CANDIDATES` (benchmark-models.mjs) = liste Code,
+  puis vision, puis conversation, chacun une fois (taille via `modelWeightGb`). Les 37 modèles sans score de code
+  apparaissent dans « Modèles à tester » avec la seule épreuve « code ». Aucun choix de modèle ne change tant que leurs
+  scores ne sont pas recopiés (grille 4–80 Go identique).
+- Tests : `scripts/scores-with-code.mjs` (`withCodeForAll`) donne un score de code à chaque modèle pour les tests qui
+  vérifient autre chose (reprise, cas à refaire, durée, version d'Ollama) ; les tests des choix gardent les vrais
+  scores. Nouveau test : chaque modèle sans score de code est proposé au test de code ; le script de test fait passer
+  le code à Lightning (modèle de conversation). Les deux échouent sur l'ancienne liste.

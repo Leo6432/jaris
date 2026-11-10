@@ -1607,7 +1607,13 @@ export function noteBreakdown(
  */
 const CONVERSATION_ROLE_MODELS = new Set(ALL_MODELS.map((c) => c.model))
 const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
-const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
+/**
+ * Étape 463 (Léo : « pourquoi tout le monde n'a pas de score code ? On peut faire réellement tous les tests code
+ * comme les autres ») : le test de code est proposé à TOUS les modèles, plus seulement à la liste Code (14 sur 51).
+ * Le choix du rôle Code cherchait déjà dans tous les modèles (étape 160), en prenant le score de conversation de ceux
+ * qui n'avaient pas passé le code : un vrai score de code le remplace dès qu'il est recopié.
+ */
+const CODE_ROLE_MODELS = new Set(ALL_MODELS.map((c) => c.model))
 
 /**
  * Modèles de Jaris à tester, du plus léger au plus lourd : la liste que teste le bouton « Tester les modèles »

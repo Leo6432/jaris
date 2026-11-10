@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { ALL_CANDIDATE_MODELS, withCodeForAll } from './scores-with-code.mjs'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -22,6 +23,8 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText + EXPOSE_AA_TABLES
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+/** Étape 463 : les vrais scores, avec un score de code pour chaque modèle (le test de code est proposé à tous). */
+const SCORES_CODE_FOR_ALL = withCodeForAll(REAL_SCORES)
 
 function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
   // Marque [util.promisify.custom] indispensable (voir test-hardwarescan-tiebreak.mjs) : sans elle, detectGpu()
@@ -246,7 +249,7 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   }
   // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté (phi4-mini,
   // redevenu candidat à l'étape 316, mesuré à l'étape 317 ; Muse Glimmer et Ornith 1.5 à l'étape 335).
-  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], AWAITING)
+  assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: SCORES_CODE_FOR_ALL }).getUnscoredModels()], AWAITING)
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')
   assert.deepEqual(new Set(setup({ vramMib: 8 * 1024, scores: before }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
@@ -256,7 +259,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   const allNew =
     REAL_SCORES.replace(/## Vision[\s\S]*$/, '') +
     table('Vision — compréhension', visionOnly, '30/34') +
-    table('Code — génération', codeOnly, '4/5') +
+    // Étape 463 : le test de code concerne tous les modèles.
+    table('Code — génération', new Set([...conversationModels, ...visionOnly, ...codeOnly]), '4/5') +
     table('Demandes complètes', new Set([...conversationModels, ...visionOnly, ...codeOnly]), '40/48')
   assert.deepEqual(notAwaiting(setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()), [])
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
@@ -279,7 +283,9 @@ test('un score de conversation du test actuel (sur 78) dispense du test ; vision
   const lines = [
     '## Conversation', '', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 70/78 |', '| qwen3:1.7b | 16/17 |', '',
     // Étape 232 : les deux épreuves de conversation comptent.
-    '## Demandes complètes', '', '| Modèle | Réussite |', '|---|---|', '| ministral-3:3b | 40/48 |', '| qwen3:1.7b | 40/48 |'
+    '## Demandes complètes', '', '| Modèle | Réussite |', '|---|---|', '| ministral-3:3b | 40/48 |', '| qwen3:1.7b | 40/48 |', '',
+    // Étape 463 : le code concerne tous les modèles.
+    '## Code — génération', '', '| Modèle | Score |', '|---|---|', '| ministral-3:3b | 4/5 |', '| qwen3:1.7b | 4/5 |'
   ]
   const unscored = [...setup({ vramMib: 8 * 1024, scores: lines.join('\n') }).getUnscoredModels()]
   assert.ok(!unscored.includes('ministral-3:3b'), 'score du test actuel : rien à refaire')
@@ -312,7 +318,8 @@ test('Médium : un modèle sans vitesse publiée reste candidat (choix de Léo),
 // pas encore recopiés.
 test('modèles à tester après une campagne : seulement les sautés, les délais dépassés et les plantages pas encore rejoués', () => {
   // Scores d'avant la campagne : ni demandes complètes ni code notés, c'est le fichier brut qui décide.
-  const scan = setup({ vramMib: 8 * 1024, scores: REAL_SCORES.replace(/## Vision[\s\S]*$/, '') })
+  // Étape 463 : un score de code pour tous, sauf les trois modèles dont ce test regarde justement le code.
+  const scan = setup({ vramMib: 8 * 1024, scores: withCodeForAll(REAL_SCORES.replace(/## Vision[\s\S]*$/, ''), '5/5', ['qwen3-coder:30b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b']) })
   const versions = { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
   const lines = [{ type: 'campagne', versions }]
   const demandes = (model, bad = {}) => {
@@ -376,7 +383,7 @@ test('les versions de test connues de Jaris sont celles des scripts', async () =
 // Étape 244, Léo : « je vois pas tester les modèles avec la dernière version ». Les modèles des demandes arrêtées par
 // l'ancien regard sur l'écran avaient déjà un score sur 48 recopié : le bouton ne les proposait pas.
 test('modèles à tester : un cas à refaire compte même quand le score est déjà recopié (vrai fichier de scores)', () => {
-  const scan = setup({ vramMib: 8 * 1024 })
+  const scan = setup({ vramMib: 8 * 1024, scores: SCORES_CODE_FOR_ALL })
   const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
   for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) {
     const looked = i === 0
@@ -402,8 +409,8 @@ test('modèles à tester : un cas à refaire compte même quand le score est dé
 test('étape 431 : chaque modèle à tester dit ce qui lui manque', () => {
   // Étape 462 : plus aucun modèle sans score dans le vrai fichier — qwen3-vl:8b, privé ici de ses scores d'outils, fait
   // l'exemple d'un modèle de vision jamais passé aux outils.
-  const withoutVlTools = REAL_SCORES.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
-  assert.ok(withoutVlTools.length < REAL_SCORES.length, 'lignes d’outils de qwen3-vl:8b introuvables')
+  const withoutVlTools = SCORES_CODE_FOR_ALL.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
+  assert.ok(withoutVlTools.length < SCORES_CODE_FOR_ALL.length, 'lignes d’outils de qwen3-vl:8b introuvables')
   const scan = setup({ vramMib: 24 * 1024, scores: withoutVlTools })
   const described = scan.describeModelsToTest()
   const needs = (model) => JSON.stringify(described.find((m) => m.model === model)?.needs)
@@ -452,8 +459,8 @@ test('modèles à tester : « model not found » reste à faire même après un 
 // Étape 323 : la 3.7B est remesurée et la section du vrai fichier est vide ; elle y est remise pour ce test.
 test('modèle à remesurer : proposé au test, toujours choisi en attendant, plus proposé une fois tout passé', async () => {
   const k2 = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
-  const scores = REAL_SCORES.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
-  assert.notEqual(scores, REAL_SCORES, 'section « À remesurer » introuvable dans le vrai fichier')
+  const scores = SCORES_CODE_FOR_ALL.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
+  assert.notEqual(scores, SCORES_CODE_FOR_ALL, 'section « À remesurer » introuvable dans le vrai fichier')
   const scan = setup({ vramMib: 6 * 1024, ramGb: 16, scores })
   // 0.40.4 : la version qui charge K2 Horizon, mais pas encore Spark-X2.6 (0.40.5) ni Bolt E4B (0.40.10), ajoutés
   // sans score à l'étape 347 — ce test ne porte que sur le modèle à remesurer.
@@ -512,7 +519,7 @@ test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
 // modèles mesurés de taille voisine, à l'échelle de la taille.
 test('étape 433 : durée estimée de chaque modèle à tester, d’après les temps mesurés sur ce PC', () => {
   // Étape 462 : qwen3-vl:8b (6,1 Go), privé de ses scores d'outils, remplace GLM-4.6V-Flash retiré.
-  const withoutVlTools = REAL_SCORES.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
+  const withoutVlTools = SCORES_CODE_FOR_ALL.replace(/^\| qwen3-vl:8b \| \d+\/(78|48) \|\r?\n/gm, '')
   const scan = setup({ vramMib: 24 * 1024, scores: withoutVlTools })
   const versions = { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
   const lines = [{ type: 'campagne', versions }]
@@ -559,4 +566,21 @@ test('étape 437 : les durées estimées viennent seulement de la machine qui fe
   assert.equal(JSON.stringify([...scan.caseTimesFromTraces(traces)]), JSON.stringify([['conversation|granite4.2:8b', { ms: 20000, count: 2 }]]))
   assert.equal(JSON.stringify([...scan.caseTimesFromTraces(traces, 'http://10.0.0.5:11434')]), JSON.stringify([['conversation|granite4.2:8b', { ms: 1000, count: 1 }]]))
   assert.equal(scan.caseTimesFromTraces(traces, 'http://autre:11434').size, 0, 'une autre machine : rien de mesuré')
+})
+
+// Étape 463 (Léo : « pourquoi tout le monde n'a pas de score code ? on peut faire réellement tous les tests code ») :
+// chaque modèle sans score de code est proposé au test de code — plus seulement ceux de la liste Code.
+test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont pas de score de code', () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const described = scan.describeModelsToTest()
+  const codeSection = REAL_SCORES.slice(REAL_SCORES.indexOf('## Code'), REAL_SCORES.indexOf('\n## ', REAL_SCORES.indexOf('## Code') + 1))
+  const tooNew = scan.modelsNeedingNewerOllama(null)
+  const withoutCode = ALL_CANDIDATE_MODELS.filter((m) => !codeSection.includes(`| ${m} |`) && !tooNew.has(m))
+  assert.ok(withoutCode.length > 30, `des dizaines de modèles sans code (${withoutCode.length})`)
+  for (const model of withoutCode) {
+    const entry = described.find((m) => m.model === model)
+    assert.ok(entry?.needs.some((n) => n.test === 'code' && n.reason === 'missing'), `${model} : test de code à faire`)
+  }
+  // Un modèle qui a déjà son score de code n'a pas à le repasser.
+  assert.ok(!described.find((m) => m.model === 'qwen3-coder:30b'), 'qwen3-coder:30b a tous ses scores')
 })

@@ -747,7 +747,18 @@ const SCENARIO_WEIGHT = 3
 const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
   (c) => !VERIFIED_MODELS.vision.has(c.model) && inOnlyModels(c.model)
 )
-const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []).filter(
+/**
+ * Étape 463 : le test de code pour TOUS les modèles (comme CODE_ROLE_MODELS dans hardwareScan.ts) — la liste Code
+ * d'abord, puis les modèles de vision et de conversation, chacun une seule fois.
+ */
+const CODE_TEST_CANDIDATES = (() => {
+  const byModel = new Map()
+  for (const c of [...CODE_CANDIDATES, ...VISION_CANDIDATES, ...MODELS.map((model) => ({ model, vramGb: modelWeightGb(model) }))]) {
+    if (!byModel.has(c.model)) byModel.set(c.model, c)
+  }
+  return [...byModel.values()]
+})()
+const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_TEST_CANDIDATES : []).filter(
   (c) => !VERIFIED_MODELS.code.has(c.model) && inOnlyModels(c.model)
 )
 

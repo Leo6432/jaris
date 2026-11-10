@@ -430,7 +430,7 @@ test('étape 453 : disque de la machine juste — les téléchargements attenden
   }
 })
 
-test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leurs épreuves (appel d’outils pour tous, code en plus)', async () => {
+test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leurs épreuves (appel d’outils et code pour tous)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({
     // MiniCPM5 et devstral-2:123b n'ont PAS de score non plus : sans le filtre, ils seraient testés eux aussi.
@@ -453,7 +453,9 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leurs 
     const tested = new Set(fake.requests.map((r) => r.model))
     assert.deepEqual([...tested].sort(), ['nemotron-3.5-lightning:30b', 'qwen2.5-coder:14b'])
     const lightning = fake.requests.filter((r) => r.model === 'nemotron-3.5-lightning:30b')
-    assert.equal(lightning.length, CONVERSATION_TOTAL, 'Lightning passe chaque question d’appel d’outils, 3 fois')
+    assert.equal(lightning.filter((r) => r.tools).length, CONVERSATION_TOTAL, 'Lightning passe chaque question d’appel d’outils, 3 fois')
+    // Étape 463 : le test de code concerne désormais TOUS les modèles, Lightning compris.
+    assert.ok(lightning.some((r) => !r.tools), 'Lightning passe aussi le test de code')
     // Étape 376 : le modèle de code passe aussi le test d'appel d'outils, comme tous les modèles, puis son test de code.
     const coder = fake.requests.filter((r) => r.model === 'qwen2.5-coder:14b')
     assert.ok(coder.some((r) => r.tools), 'le modèle de code passe le test d’appel d’outils')
@@ -461,6 +463,7 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leurs 
     const results = readFileSync(resultsPath, 'utf8')
     assert.match(results, new RegExp(`\\| nemotron-3\\.5-lightning:30b \\|[^\\n]*\\| ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} \\|`))
     assert.match(results, /## Code[\s\S]*\| qwen2\.5-coder:14b \|/)
+    assert.match(results, /## Code[\s\S]*\| nemotron-3\.5-lightning:30b \|/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

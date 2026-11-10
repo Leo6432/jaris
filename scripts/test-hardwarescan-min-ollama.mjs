@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { withCodeForAll } from './scores-with-code.mjs'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -124,7 +125,8 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
 test('Ollama 0.40.10 : Bolt E4B proposé au test (Spark-X2.6 tout noté), aucun des deux choisi', async () => {
   // Étape 445 : Bolt E4B a depuis tous ses scores (vision 20/34, code 5/5) ; ce test porte sur la version d'Ollama, il
   // repart donc de l'état d'avant (ni vision ni code pour Bolt), comme celui de K2 Horizon plus bas.
-  const boltUnscored = REAL_SCORES.split(/\r?\n/)
+  // Étape 463 : le code est proposé à tous — ce test porte sur la version d'Ollama, chacun reçoit ici un score de code.
+  const boltUnscored = withCodeForAll(REAL_SCORES, '5/5', [BOLT]).split(/\r?\n/)
     .filter((line) => !/^\| nemotron-3\.5-bolt:e4b \| \d+\/(34|5) \|/.test(line))
     .join('\n')
   assert.notEqual(boltUnscored, REAL_SCORES.split(/\r?\n/).join('\n'), 'les lignes vision et code de Bolt existent')
@@ -137,7 +139,7 @@ test('Ollama 0.40.10 : Bolt E4B proposé au test (Spark-X2.6 tout noté), aucun 
   const visionAndCode = []
   assert.deepEqual(offered.sort(), [BOLT, ...visionAndCode].sort())
   // Avec les vrais scores, Bolt n'a plus rien à passer : il n'est plus proposé.
-  const now = [...setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
+  const now = [...setup({ scores: withCodeForAll(REAL_SCORES), vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]
   assert.deepEqual(now.sort(), [...visionAndCode].sort())
   for (const vramMib of [0, 4096, 6144, 8192, 12288, 24576]) {
     const roles = picked(await setup({ scores: REAL_SCORES, vramMib, ollamaVersion: '0.40.10' }).pickBestModelsFromBenchmark())
