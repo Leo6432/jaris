@@ -167,7 +167,12 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
   const requests = []
   // Étape 453 : combien de modèles DIFFÉRENTS répondent en même temps (tests en parallèle sur la machine louée).
   const live = new Map()
-  const stats = { maxModels: 0 }
+  const stats = { maxModels: 0, firstStart: new Map(), firstDone: new Set(), overlappingLoads: [] }
+  // Étape 458 : un modèle n'apparaît chargé dans /api/ps que 40 ms après sa première demande (le temps de charger), ou
+  // dès que cette demande a reçu sa réponse.
+  const LOAD_MS = 40
+  const isLoaded = (name) => stats.firstDone.has(name) || Date.now() - stats.firstStart.get(name) >= LOAD_MS
+  const loadedNow = () => [...stats.firstStart.keys()].filter(isLoaded)
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
   const deleted = []
@@ -180,6 +185,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
       if (req.url === '/api/version') return res.end(JSON.stringify({ version }))
+      if (req.url === '/api/ps') return res.end(JSON.stringify({ models: loadedNow().map((name) => ({ name, model: name })) }))
       // Étape 453 : la taille de chaque modèle (place prise sur le disque de la machine louée), quand le test la donne.
       if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name, ...(sizesGb[name] ? { size: sizesGb[name] * 1024 ** 3 } : {}) })) }))
       // Étape 313 : `unreadable` = écrit sur le disque mais introuvable pour Ollama (dossier lu à travers une jonction).
@@ -208,9 +214,18 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       if (req.url === '/api/chat') {
         const json = JSON.parse(body)
         requests.push(json)
+        if (!stats.firstStart.has(json.model)) {
+          // Un chargement commence alors qu'un autre n'est pas encore fini : ce que l'étape 458 interdit.
+          const loading = [...stats.firstStart.keys()].filter((name) => !isLoaded(name))
+          if (loading.length) stats.overlappingLoads.push([json.model, ...loading])
+          stats.firstStart.set(json.model, Date.now())
+        }
         live.set(json.model, (live.get(json.model) ?? 0) + 1)
         stats.maxModels = Math.max(stats.maxModels, [...live.values()].filter((n) => n > 0).length)
-        res.on('finish', () => live.set(json.model, live.get(json.model) - 1))
+        res.on('finish', () => {
+          live.set(json.model, live.get(json.model) - 1)
+          stats.firstDone.add(json.model)
+        })
         // La question est le dernier message de l'utilisateur : après elle peuvent venir un appel d'outil déjà fait
         // et son résultat (étape 230, read_web_page).
         const prompt = withoutDateTimeNote(json.messages.findLast((m) => m.role === 'user').content)
@@ -350,13 +365,13 @@ test('étape 453 : sur une grande machine louée, plusieurs modèles se testent 
     const fake = await startFakeOllama({ installed: [...flash], answer: (_model, prompt) => perfectAnswer(prompt), delay: () => 15 })
     try {
       const resultsPath = join(dir, 'r.md')
-      const env = { OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' }
+      const env = { OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1', JARIS_LOAD_POLL_MS: '10' }
       const machineEnv = machine ? { JARIS_MACHINE: fake.host, JARIS_MACHINE_VRAM_GB: '126', JARIS_MACHINE_RAM_GB: '180', JARIS_MACHINE_DISK_GB: '470' } : {}
       const { code, out } = await runScript({ ...env, ...machineEnv })
       assert.equal(code, 0, out)
       const results = readFileSync(resultsPath, 'utf8')
       const scores = flash.map((m) => results.match(new RegExp(`\\| ${m.replace(/[.:]/g, '\\$&')} \\|[^\\n]*\\| (\\d+/\\d+) \\|`))?.[1])
-      return { out, scores, maxModels: fake.stats.maxModels }
+      return { out, scores, maxModels: fake.stats.maxModels, overlappingLoads: fake.stats.overlappingLoads }
     } finally {
       fake.server.close()
       rmSync(dir, { recursive: true, force: true })
@@ -366,6 +381,8 @@ test('étape 453 : sur une grande machine louée, plusieurs modèles se testent 
   const together = await run(true)
   assert.equal(alone.maxModels, 1, 'sur ce PC : toujours un modèle à la fois')
   assert.equal(together.maxModels, 3, 'sur la machine louée (126 Go) : les 3 petits modèles en même temps')
+  // Étape 458 : mais jamais deux CHARGEMENTS en même temps (Ollama dépasse son délai de vérification des cartes).
+  assert.deepEqual(together.overlappingLoads, [], 'un chargement à la fois')
   assert.deepEqual(together.scores, alone.scores, 'les mêmes scores, en parallèle ou non')
   assert.ok(together.scores.every((s) => s === `${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL}`), together.scores.join(', '))
   assert.match(together.out, /^##TESTING_NOW## \S+ \S+ \S+$/m, 'le suivi en direct reçoit la liste des modèles en cours')

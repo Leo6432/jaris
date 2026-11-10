@@ -363,8 +363,9 @@ test('étape 456 : série Code sur la machine louée — un nouveau modèle atte
   // 45 Go de cartes : par estimation, 2 modèles (4 duels chacun) tiennent au départ ; une fois chargés ils prennent peu
   // (5 Go chacun) → les 2 autres démarrent ensuite, au fil des relectures.
   assert.equal(await run(45, (models) => models.map((model) => ({ model, vramGb: 5, sizeGb: 5 }))), 4)
-  // Même machine, mais un des deux modèles déborde sur le processeur : aucun nouveau modèle.
-  assert.equal(await run(45, (models) => models.map((model, i) => ({ model, vramGb: i === 0 ? 3 : 5, sizeGb: 5 }))), 2)
+  // Même machine, mais le premier modèle déborde sur le processeur : aucun nouveau modèle (étape 458 : un seul nouveau
+  // modèle à la fois, donc le premier est seul quand le débordement est vu).
+  assert.equal(await run(45, (models) => models.map((model, i) => ({ model, vramGb: i === 0 ? 3 : 5, sizeGb: 5 }))), 1)
   // 60 Go : l'estimation laisse partir 2 modèles, mais chacun en prend vraiment 25 → pas de 3e.
   assert.equal(await run(60, (models) => models.map((model) => ({ model, vramGb: 25, sizeGb: 25 }))), 2)
 })
@@ -403,6 +404,46 @@ test('étape 457 : des duels qui finissent → jamais d’avertissement', async 
   } finally {
     release()
     env.session.setDuelSeriesDelays({ stallMs: 10 * 60_000 })
+    await env.session.endDuel().catch(() => {})
+  }
+})
+
+// Étape 458 (journal d'Ollama chez Léo : « GPU discovery watchdog timed out » quand plusieurs modèles se chargent ensemble).
+test('étape 458 : un seul NOUVEAU modèle se charge à la fois sur la machine louée ; débordement cartes libres → Léo le sait', async () => {
+  let release
+  const generateGate = new Promise((resolve) => (release = resolve))
+  // La machine ne « voit » un modèle chargé qu'à partir de la 4e relecture qui suit son démarrage.
+  const reads = new Map()
+  let spill = false
+  const loaded = (models) =>
+    models
+      .filter((model) => {
+        reads.set(model, (reads.get(model) ?? 0) + 1)
+        return reads.get(model) >= 4
+      })
+      .map((model, i) => ({ model, vramGb: spill && i === 0 ? 1 : 5, sizeGb: 5 }))
+  const env = setup({ remote: { enabled: true, host: POD, vramGb: 288, ramGb: 188 }, installedThere: [...MODELS], generateGate, loaded })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 10, loadCheckMs: 10 })
+  const seen = []
+  try {
+    await env.session.startDuel('code', [...MODELS], 2)
+    await waitFor(() => {
+      seen.push(new Set(env.calls.generating).size)
+      return new Set(env.calls.generating).size === 4
+    }, 'les 4 modèles finissent par tourner')
+    // Jamais deux nouveaux d'un coup : le nombre de modèles monte de 1 en 1.
+    const steps = [...new Set(seen)]
+    assert.deepEqual(steps, [...steps].sort((x, y) => x - y))
+    assert.ok(seen.every((n, i) => i === 0 || n - seen[i - 1] <= 1), `montée : ${steps.join(' → ')}`)
+    assert.equal(env.session.getDuelView().series.cpuFallback, false)
+    // Un modèle part sur le processeur alors que les cartes sont presque vides (20 Go sur 288) : l'écran le dit.
+    spill = true
+    await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === true, 'débordement cartes libres signalé')
+    spill = false
+    await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === false, 'effacé quand ça va mieux')
+  } finally {
+    release()
+    env.session.setDuelSeriesDelays({ loadCheckMs: 5000 })
     await env.session.endDuel().catch(() => {})
   }
 })

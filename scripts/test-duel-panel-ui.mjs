@@ -88,7 +88,7 @@ window.jaris = {
     window.__calls.push(['vote', outcome])
     window.__votes = (window.__votes || 0) + 1
     // Étape 358 : le même duel, noms révélés juste après le vote.
-    return ready({ ...window.__view.round, revealed: { a: 'qwen3.8:27b', b: 'granite4.2:8b', outcome } })
+    return ready({ ...window.__view.round, revealed: { a: 'qwen3.8:27b', b: 'granite4.2:8b', outcome, voteId: 'vote-1' } })
   },
   duelNext: async () => {
     window.__calls.push('next')
@@ -114,6 +114,8 @@ window.jaris = {
     window.__history = which === 'all' ? [] : (window.__history || []).filter((e) => !which.includes(e.id))
     return window.__history
   },
+  // Étape 458 : le fichier d'un duel voté (demande + code des deux modèles).
+  duelExport: async (id) => { window.__calls.push(['duelExport', id]); return window.__duelExportResult || { saved: true } },
   duelExportVotes: async () => { window.__calls.push('export'); return window.__exportResult || { saved: true, count: 3 } },
   duelHistoryApp: async (id, side) => { window.__calls.push(['historyApp', id, side]); return 'data:text/html,<p>app</p>' },
   duelHistoryCode: async (id, side) => { window.__calls.push(['historyCode', id, side]); return '<html>\\n<body>serpent</body>\\n</html>' },
@@ -396,6 +398,14 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
       assert.deepEqual(await page.locator('.duel-side__model').allTextContents(), ['qwen3.8:27b', 'granite4.2:8b'])
       assert.match(await page.textContent('.duel-vote--revealed'), /Noms révélés/)
       assert.match(await page.textContent('.duel-vote--revealed'), /Gagnant : qwen3\.8:27b/)
+      // Étape 458 : le fichier du duel (demande + les deux réponses), seulement une fois les noms révélés.
+      const exportButton = '.duel-vote--revealed .duel-export__button'
+      assert.equal(await page.textContent(exportButton), 'Télécharger les deux réponses', 'un duel Conversation : pas de code, les réponses')
+      assert.equal(await page.$eval(exportButton, (el) => getComputedStyle(el).cursor), 'pointer')
+      await page.click(exportButton)
+      await page.waitForSelector('.duel-vote--revealed .duel-export__status')
+      assert.equal(await page.textContent('.duel-vote--revealed .duel-export__status'), 'Fichier enregistré.')
+      assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'duelExport' && c[1] === 'vote-1'))
       assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/, 'on reste sur ce duel tant qu’on n’a pas demandé le suivant')
       await page.click('.duel-vote--revealed .duel-btn--primary')
       assert.ok((await page.evaluate(() => window.__calls)).includes('next'))
@@ -647,6 +657,13 @@ test('historique : un petit bouton ouvre tous les duels, avec les réponses et l
     await page.click('.duel-history__item:nth-child(2) .duel-history__open-app')
     await page.waitForSelector('.duel-history__item:nth-child(2) iframe.duel-side__preview')
     assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'historyApp' && c[1] === 'v2' && c[2] === 'a'))
+    // Étape 458 : chaque duel de l'historique a aussi son fichier ; un échec dit la vraie raison.
+    await page.evaluate(() => (window.__duelExportResult = { saved: false, error: 'Disque plein' }))
+    assert.equal(await page.textContent('.duel-history__item:nth-child(2) .duel-export__button'), 'Télécharger le code des deux modèles', 'un duel Code')
+    await page.click('.duel-history__item:nth-child(2) .duel-export__button')
+    await page.waitForSelector('.duel-history__item:nth-child(2) .duel-export__status--error')
+    assert.equal(await page.textContent('.duel-history__item:nth-child(2) .duel-export__status--error'), 'Fichier non enregistré : Disque plein')
+    assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'duelExport' && c[1] === 'v2'))
     // Un vieux duel sans réponses gardées : le dit au lieu d'un cadre vide.
     await page.click('.duel-history__item:nth-child(3) .duel-history__toggle')
     assert.match(await page.textContent('.duel-history__item:nth-child(3)'), /n'ont pas été gardées/)

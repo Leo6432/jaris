@@ -92,6 +92,7 @@ import {
   duelHistory,
   duelHistoryApp,
   duelHistoryCode,
+  duelExportFile,
   duelSideCode,
   duelRankings,
   startDuelBatch,
@@ -1971,6 +1972,32 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.duelHistoryCode, (_event, voteId: unknown, side: unknown) => {
     if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
     return duelHistoryCode(voteId, side)
+  })
+  // Étape 458 : un duel voté en un fichier (demande + code des deux modèles), enregistré où Léo veut (dialogue gardé).
+  ipcMain.handle(IPC_CHANNELS.duelExport, async (_event, voteId: unknown): Promise<DuelExportResult> => {
+    if (typeof voteId !== 'string' || !voteId) throw new Error(t('duel.error.badRequest'))
+    const built = await duelExportFile(voteId)
+    if (!built) return { saved: false, error: t('duel.error.noRound') }
+    const dialogOptions = {
+      title: t('main.dialog.saveDuel'),
+      defaultPath: join(app.getPath('documents'), built.fileName),
+      filters: [{ name: t('main.dialog.duelFilter'), extensions: ['md'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await writeFile(/\.md$/i.test(target) ? target : `${target}.md`, built.text, 'utf8')
+      return { saved: true }
+    } catch (err) {
+      return { saved: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
   ipcMain.handle(IPC_CHANNELS.duelSideCode, (_event, side: unknown) => {
     if (side !== 'a' && side !== 'b') throw new Error(t('duel.error.badRequest'))

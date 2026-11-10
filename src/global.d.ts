@@ -257,6 +257,7 @@ declare global {
       onMachineChanged: (cb: (view: MachineView) => void) => () => void
       duelHistoryApp: (voteId: string, side: DuelSide) => Promise<string | null>
       duelHistoryCode: (voteId: string, side: DuelSide) => Promise<string | null>
+      duelExport: (voteId: string) => Promise<DuelExportResult>
       duelSideCode: (side: DuelSide) => Promise<string | null>
       duelRetry: () => Promise<DuelSessionView>
       duelSwapModel: (side: DuelSide) => Promise<DuelSessionView>

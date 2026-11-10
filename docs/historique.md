@@ -11774,3 +11774,32 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   Effacée dès que ça repart ; jamais pendant « Ollama ne répond plus » (déjà dit) ; rien sur ce PC.
 - Régression : test-duel-remote.mjs (génération figée qui envoie des signes de vie → avertissement, effacé à la
   reprise ; duels qui finissent → jamais). Échoue si un signe de vie compte comme un progrès.
+
+## Étape 458 — Machine louée : un chargement à la fois ; fichier d'un duel voté pour une IA (v0.57.0)
+
+- **Vraie cause des modèles « sur le processeur » (étape 456 corrigée)** : capture de Léo, les 4 V100S presque VIDES
+  (0 Mo sur trois) et qwen3.5:2b seul, à 89 % sur le processeur, « Stopping… ». Le journal d'Ollama : à chaque
+  chargement, « llama-server GPU discovery watchdog timed out … context deadline exceeded », puis « Load failed … timed
+  out waiting for llama-server to start ». Ollama vérifie les cartes avant chaque chargement ; plusieurs chargements EN
+  MÊME TEMPS dépassent son délai → modèle mis sur le processeur, ou chargement raté et modèle coincé « Stopping… ». Le
+  pilote NVIDIA était en « Persistence-M Off » (il se décharge entre deux utilisations, chaque démarrage est lent) :
+  conseillé à Léo `sudo nvidia-smi -pm 1` puis redémarrer Ollama (non vérifié en vrai au moment d'écrire). L'hypothèse
+  de l'étape 456 (place sur les cartes) était fausse pour ce cas ; sa règle reste utile (place réelle, débordement).
+- Séries (duelSession.ts) : sur la machine louée, un seul NOUVEAU modèle à la fois — le suivant attend que le précédent
+  soit vu chargé dans `/api/ps` (`series.pending`), relecture toutes les 5 s pendant un chargement (`loadCheckMs`) au
+  lieu de 30. Débordement alors que moins de la moitié des cartes est prise → `series.cpuFallback` → ligne orange
+  « … sur le serveur, tape sudo nvidia-smi -pm 1 puis sudo systemctl restart ollama » (24 langues).
+- Analyse en parallèle (benchmark-models.mjs, étape 453) : même règle — `withLoadTurn` dans `postChat` : un modèle pas
+  encore chargé (ou avec une nouvelle fenêtre de contexte, qui le recharge) attend son tour ; le tour se libère dès que
+  le modèle apparaît dans `/api/ps` (pas à la fin de sa réponse). Un modèle chargé ne fait jamais la queue. Sur ce PC :
+  inchangé (un modèle à la fois).
+- **Fichier d'un duel voté** (Léo : « à la fin, d'une série ou autre, on vote, et un bouton pour télécharger le code des
+  deux modèles avec le prompt en un fichier, pour l'envoyer rapidement à une IA ») : `duelExportFile` (Markdown : demande,
+  réponses de Léo aux modèles, réponse + code complet de chaque modèle avec son nom, vote ; bloc de code plus long que
+  tout « ``` » du code), canal `duelExport` (dialogue d'enregistrement gardé par `dialogOpen`), bouton après le vote
+  (« Télécharger le code des deux modèles », ou « les deux réponses » hors Code) et sur chaque duel de l'historique.
+  Jamais avant le vote (les noms sont secrets) : le vote garde son identifiant (`revealed.voteId`).
+- Régression : test-duel-remote.mjs (montée des modèles 1 par 1, jamais 0 → 4 ; avertissement cartes libres) ;
+  test-benchmark-cases.mjs (faux Ollama avec `/api/ps` : jamais deux chargements en même temps) ; test-duel-session.mjs
+  (fichier : demande, deux noms, deux codes entiers malgré des « ```` », vote) ; test-duel-panel-ui.mjs (boutons, libellés,
+  erreur dite). Les règles de chargement échouent quand on les retire. Captures du bouton vérifiées (760 px).

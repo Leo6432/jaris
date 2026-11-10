@@ -306,6 +306,7 @@ const api = {
   onMachineChanged: (cb: (view: MachineView) => void) => subscribe(IPC_CHANNELS.machineChanged, cb),
   duelHistoryApp: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryApp, voteId, side),
   duelHistoryCode: (voteId: string, side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelHistoryCode, voteId, side),
+  duelExport: (voteId: string): Promise<DuelExportResult> => invoke(IPC_CHANNELS.duelExport, voteId),
   duelSideCode: (side: DuelSide): Promise<string | null> => invoke(IPC_CHANNELS.duelSideCode, side),
   duelRetry: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRetry),
   duelSwapModel: (side: DuelSide): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelSwapModel, side),

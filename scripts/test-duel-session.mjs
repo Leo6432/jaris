@@ -671,6 +671,35 @@ test('duel Code : l’application est écrite par CE modèle, montrée dans l’
   assert.equal(env.profile.codeModel, 'delta-model:7b')
 })
 
+test('étape 458 : un duel voté en un fichier — la demande, les deux codes avec leurs noms, le vote ; jamais avant le vote', async () => {
+  const env = setup({
+    installed: MODELS,
+    // Du code qui contient lui-même des « ``` » : le bloc du fichier ne doit pas se refermer dessus.
+    generateImpl: async (_prompt, options) => ({ html: `<html><body>${options.model}\n<pre>${'`'.repeat(4)}x</pre></body></html>`, issues: [], dir: '' })
+  })
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  env.session.askDuel('Un jeu du serpent')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  assert.equal(env.session.getDuelView().round.revealed, null, 'pas de vote, pas de fichier (les noms sont secrets)')
+  const voted = await env.session.voteDuel('b')
+  const { a, b, voteId } = voted.round.revealed
+  assert.ok(voteId, 'le duel voté donne de quoi faire son fichier')
+  const file = await env.session.duelExportFile(voteId)
+  assert.match(file.fileName, /^duel-code-\d{4}-\d{2}-\d{2}-un-jeu-du-serpent\.md$/)
+  const text = file.text
+  assert.match(text, /## Demande\n\nUn jeu du serpent/)
+  assert.ok(text.includes(`## Modèle A : ${a}`) && text.includes(`## Modèle B : ${b}`), 'les deux noms, révélés')
+  for (const model of [a, b]) {
+    // Le code entier, dans un bloc plus long que les « ```` » qu'il contient.
+    assert.ok(text.includes('`````html\n<html><body>' + model + '\n'), `code de ${model}`)
+  }
+  assert.match(text, /## Vote de l'utilisateur\n\nB est meilleur\n$/)
+  assert.equal(await env.session.duelExportFile('inconnu'), null)
+})
+
 test('une seule session à la fois, et une catégorie ou une taille venues de l’écran sont revérifiées par main.ts', async () => {
   const env = setup({ installed: MODELS })
   await readySession(env)

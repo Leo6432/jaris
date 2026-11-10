@@ -206,6 +206,8 @@ function SeriesStatus({ view }: { view: DuelSessionView }): JSX.Element | null {
   else if (series.waiting === 'disk') lines.push({ text: t('duel.series.waitDisk'), warn: true })
   // Étape 457 : des duels tournent sur la machine louée, mais rien n'avance (Ollama bloqué là-bas).
   if (series.stalledMinutes) lines.push({ text: t('duel.series.stalled', { minutes: series.stalledMinutes }), warn: true })
+  // Étape 458 : Ollama n'arrive pas à démarrer les cartes à temps (pilote NVIDIA qui se décharge entre deux modèles).
+  if (series.cpuFallback) lines.push({ text: t('duel.series.cpuFallback'), warn: true })
   if (series.download) {
     lines.push({
       text:
@@ -915,6 +917,42 @@ function outcomeLabel(entry: Pick<DuelHistoryEntry, 'outcome' | 'modelA' | 'mode
   return t('duel.outcome.winner', { model: formatModelName(winner) })
 }
 
+/**
+ * Étape 458 (Léo : « un bouton pour télécharger le code des deux modèles, avec le prompt, en un fichier, pour l'envoyer
+ * rapidement à une IA ») : après le vote (les noms sont connus), et dans l'historique.
+ */
+function DuelExportButton({ voteId, category }: { voteId: string; category: DuelCategory }): JSX.Element {
+  const [state, setState] = useState<{ kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string }>({ kind: 'idle' })
+  const save = async (): Promise<void> => {
+    setState({ kind: 'saving' })
+    try {
+      const result = await window.jaris.duelExport(voteId)
+      if (result.saved) setState({ kind: 'saved' })
+      else if (result.error) setState({ kind: 'error', message: result.error })
+      else setState({ kind: 'idle' })
+    } catch (err) {
+      setState({ kind: 'error', message: ipcErrorMessage(err) })
+    }
+  }
+  return (
+    <span className="duel-export">
+      <button type="button" className="duel-btn duel-export__button" onClick={() => void save()} disabled={state.kind === 'saving'}>
+        {state.kind === 'saving' ? t('common.loading') : t(category === 'code' ? 'duel.export.button' : 'duel.export.buttonAnswers')}
+      </button>
+      {state.kind === 'saved' && (
+        <span className="duel-export__status" role="status">
+          {t('duel.export.saved')}
+        </span>
+      )}
+      {state.kind === 'error' && (
+        <span className="duel-export__status duel-export__status--error" role="alert">
+          {t('duel.export.failed', { error: state.message })}
+        </span>
+      )}
+    </span>
+  )
+}
+
 interface HistorySideProps {
   entry: DuelHistoryEntry
   name: DuelSide
@@ -1160,6 +1198,7 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
                   >
                     {expanded ? t('duel.history.hide') : t('duel.history.show')}
                   </button>
+                  <DuelExportButton voteId={entry.id} category={entry.category} />
                   {expanded &&
                     (entry.sides ? (
                       <div className={`duel-round__sides duel-history__sides${entry.category === 'code' ? ' duel-round__sides--code' : ''}`}>
@@ -2539,6 +2578,7 @@ export default function DuelPanel(): JSX.Element {
                     <button type="button" className="duel-btn duel-btn--primary" onClick={next} disabled={pending !== null}>
                       {t(view.batch ? 'duel.batch.back' : 'duel.next')}
                     </button>
+                    {round.revealed.voteId && <DuelExportButton key={round.revealed.voteId} voteId={round.revealed.voteId} category={view.category} />}
                   </div>
                 </div>
               )}

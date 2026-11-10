@@ -9347,6 +9347,30 @@ ul.reply-list--nested {
   margin-top: 8px;
 }
 
+/* Étape 458 : « Télécharger le code des deux modèles » (après le vote, et dans l'historique). */
+.duel-export {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  justify-self: start;
+}
+
+.duel-history__item .duel-export,
+.duel-summary__round .duel-export {
+  margin-top: 6px;
+}
+
+.duel-export__status {
+  font-size: 12px;
+  color: var(--hud-text-dim);
+}
+
+.duel-export__status--error {
+  color: var(--hud-danger, #f87171);
+}
+
 /* Les listes d'une réponse, rangée dans la liste de l'historique : des puces pleines, pas celles d'une sous-liste. */
 .duel-history__sides ul {
   list-style-type: disc;

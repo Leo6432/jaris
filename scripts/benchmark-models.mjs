@@ -1328,10 +1328,62 @@ async function postJsonWithHeartbeat(path, body, timeoutMs) {
 }
 
 /** Une question à Ollama : attend son retour s'il est injoignable, et abandonne l'analyse s'il ne revient pas. */
+/**
+ * Étape 458 (journal d'Ollama sur la machine OVH de Léo : « llama-server GPU discovery watchdog timed out ») : à chaque
+ * chargement, Ollama vérifie les cartes graphiques ; plusieurs chargements EN MÊME TEMPS dépassent son délai, et le
+ * modèle part sur le processeur (ou ne démarre pas). Quand plusieurs modèles se testent en même temps (étape 453), un
+ * modèle qui doit encore être chargé (nouveau, ou nouvelle fenêtre de contexte, qui le recharge) attend son tour :
+ * le chargement d'avant doit être VU fini dans `/api/ps` (ou sa demande finie). Un modèle déjà chargé ne fait jamais la
+ * queue.
+ */
+let serializeLoads = false
+const LOAD_POLL_MS = Number(process.env.JARIS_LOAD_POLL_MS) || 1000
+const loadedKeys = new Set()
+let loadChain = Promise.resolve()
+
+async function modelLoaded(model) {
+  try {
+    const res = await fetch(`${OLLAMA_HOST}/api/ps`, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return false
+    const data = await res.json()
+    const tag = (name) => (name.includes(':') ? name : `${name}:latest`)
+    return (data.models ?? []).some((m) => tag(m.model ?? m.name ?? '') === tag(model))
+  } catch {
+    return false
+  }
+}
+
+async function withLoadTurn(body, run) {
+  const key = `${body.model}|${body.options?.num_ctx ?? ''}`
+  if (!serializeLoads || loadedKeys.has(key)) return run()
+  let release
+  const previous = loadChain
+  loadChain = new Promise((resolve) => (release = resolve))
+  await previous
+  let settled = false
+  // Le tour se libère dès que le modèle est chargé, sans attendre la fin de sa (longue) réponse.
+  const watch = (async () => {
+    while (!settled) {
+      await new Promise((resolve) => setTimeout(resolve, LOAD_POLL_MS))
+      if (!settled && (await modelLoaded(body.model))) break
+    }
+    release()
+  })()
+  try {
+    const out = await run()
+    loadedKeys.add(key)
+    return out
+  } finally {
+    settled = true
+    release()
+    void watch
+  }
+}
+
 async function postChat(body) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await postJsonWithHeartbeat('/api/chat', body, callTimeoutMs)
+      const res = await withLoadTurn(body, () => postJsonWithHeartbeat('/api/chat', body, callTimeoutMs))
       if (!res.ok) throw new Error(`${res.status} ${res.text}`)
       return JSON.parse(res.text)
     } catch (err) {
@@ -2032,6 +2084,7 @@ async function main() {
   const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code') && runnable(m))
   // Étape 453 : plusieurs modèles en même temps sur une machine louée assez grande (voir testSlotsFor).
   const TEST_SLOTS = testSlotsFor(vramGb)
+  serializeLoads = TEST_SLOTS > 1
   // Lu par le suivi en direct (UnscoredModelsTest.tsx) : les modèles en cours de test en ce moment.
   const testSlots = createTestSlots((vramGb ?? 0) - TEST_SLOT_RESERVE_GB, TEST_SLOTS, (models) => console.log(`##TESTING_NOW## ${models.join(' ')}`.trimEnd()))
   // Un modèle à la fois par épreuve, dans l'ordre des épreuves : les téléchargements suivent le même ordre.

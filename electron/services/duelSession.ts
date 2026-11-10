@@ -169,8 +169,8 @@ interface RoundState {
   /** Étape 401 : ce que Léo a répondu aux deux modèles depuis la demande (même message aux deux), dans l'ordre. */
   followUps: string[]
   sides: Record<DuelSide, SideState>
-  /** Étape 358 : noms révélés après le vote, comme sur Arena. */
-  revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  /** Étape 358 : noms révélés après le vote, comme sur Arena. Étape 458 : avec l'identifiant du vote (fichier du duel). */
+  revealed: { a: string; b: string; outcome: DuelOutcome; voteId?: string } | null
   /** Étape 379 : A et B travaillent en même temps (canRunDuelTogether). */
   together: boolean
   /**
@@ -263,6 +263,8 @@ interface SeriesState {
   /** Étape 457 : le dernier vrai progrès d'un duel (texte écrit, réflexion, côté fini), et le blocage constaté. */
   lastProgressAt: number
   stalledMinutes: number | null
+  /** Étape 458 : un modèle tourne sur le processeur alors que les cartes sont presque libres (Ollama, pas la place). */
+  cpuFallback: boolean
 }
 
 /** Étape 399 : la suite de duels Conversation jugés par Claude. */
@@ -389,7 +391,8 @@ export function getDuelView(): DuelSessionView | null {
           waiting: session.series.waiting,
           deleted: session.series.deleted,
           active: session.series.running,
-          stalledMinutes: session.series.stalledMinutes
+          stalledMinutes: session.series.stalledMinutes,
+          cpuFallback: session.series.cpuFallback
         }
       : null,
     judge: session.judge
@@ -918,6 +921,10 @@ function pumpBatch(current: Session): void {
       if (!runningModels.has(model) && !series.pending.has(model)) {
         const size = current.sizes.get(model) ?? Number.NaN
         const pendingGb = [...series.pending.values()].reduce((sum, gb) => sum + gb, 0)
+        // Étape 458 (journal d'Ollama sur l'OVH de Léo : « GPU discovery watchdog timed out ») : chaque chargement fait
+        // vérifier les cartes par Ollama ; plusieurs à la fois dépassent son délai, et le modèle part sur le processeur
+        // ou reste bloqué. Un seul NOUVEAU modèle à la fois : le suivant attend que celui-ci soit vu chargé.
+        if (series.pending.size > 0) continue
         if (!seriesNewModelFits(placement, pendingGb, size, current.vramGb)) continue
         series.pending.set(model, seriesModelNeedGb(size, DUEL_SERIES_SLOTS_PER_MODEL))
       }
@@ -1021,7 +1028,7 @@ const SERIES_MAX_RETRIES = 3
  * Ollama qui ne répond plus : nouvel essai toutes les minutes, sans fin (le crédit d'une machine louée peut finir).
  * Sans évènement, le gardien regarde quand même où on en est toutes les 30 s. Réglables par les tests seulement.
  */
-const seriesDelays = { ollamaRetryMs: 60_000, idleCheckMs: 30_000, stallMs: 10 * 60_000 }
+const seriesDelays = { ollamaRetryMs: 60_000, idleCheckMs: 30_000, stallMs: 10 * 60_000, loadCheckMs: 5_000 }
 export function setDuelSeriesDelays(delays: Partial<typeof seriesDelays>): void {
   Object.assign(seriesDelays, delays)
 }
@@ -1050,7 +1057,8 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
     placement: null,
     pending: new Map(),
     lastProgressAt: Date.now(),
-    stalledMinutes: null
+    stalledMinutes: null,
+    cpuFallback: false
   }
 }
 
@@ -1059,6 +1067,11 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
  * un vrai progrès d'un duel de la série — du texte ou de la réflexion en plus, ou un côté qui finit. Un simple signe de
  * vie (« le modèle répond toujours ») n'en est pas un : Ollama bloqué en envoie aussi.
  */
+/** Étape 458 : tant qu'un nouveau modèle se charge, le gardien relit la machine souvent, pour lancer le suivant vite. */
+function seriesPause(series: SeriesState): number {
+  return series.pending.size ? Math.min(seriesDelays.loadCheckMs, seriesDelays.idleCheckMs) : seriesDelays.idleCheckMs
+}
+
 function noteSeriesProgress(): void {
   if (session?.series) session.series.lastProgressAt = Date.now()
 }
@@ -1099,6 +1112,13 @@ async function refreshSeriesPlacement(current: Session, series: SeriesState): Pr
   const loaded = await runWithOllamaHost(remote.host, () => loadedOllamaModels()).catch(() => null)
   if (!loaded) return
   series.placement = seriesPlacementFrom(loaded, runningSeriesModels(current))
+  // Étape 458 : débordement alors que moins de la moitié des cartes est prise — ce n'est pas la place, c'est Ollama
+  // qui n'a pas pu démarrer les cartes à temps (journal de Léo) : Léo doit le savoir, Jaris n'y peut rien d'ici.
+  const cpuFallback = Boolean(series.placement.spill) && current.vramGb !== null && series.placement.usedGb < current.vramGb / 2
+  if (cpuFallback !== series.cpuFallback) {
+    series.cpuFallback = cpuFallback
+    emitNow()
+  }
   // Un modèle lancé maintenant vu chargé : sa vraie place est comptée, plus son estimation.
   const seen = new Set(loaded.map((entry) => baseModelTag(entry.model)))
   // Un modèle lancé dont plus aucun duel ne tourne (fini, ou en erreur avant d'être chargé) ne réserve plus rien.
@@ -1285,14 +1305,14 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
         current.vramGb
       )
     if (!next || (ready >= SERIES_PREFETCH_READY && !room)) {
-      await waitSeries(series, seriesDelays.idleCheckMs)
+      await waitSeries(series, seriesPause(series))
       continue
     }
     // Le disque était plein au dernier téléchargement : on attend qu'un modèle fini soit supprimé avant de réessayer.
     if (series.diskFullAt !== null && series.deleted === series.diskFullAt && (running > 0 || ready > 0)) {
       series.waiting = 'disk'
       emitNow()
-      await waitSeries(series, seriesDelays.idleCheckMs)
+      await waitSeries(series, seriesPause(series))
       continue
     }
     // Le disque de ce PC : un modèle qui ne tient pas attend que d'autres finissent (et soient supprimés).
@@ -1303,7 +1323,7 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
         if (running > 0 || ready > 0) {
           series.waiting = 'disk'
           emitNow()
-          await waitSeries(series, seriesDelays.idleCheckMs)
+          await waitSeries(series, seriesPause(series))
           continue
         }
         // Rien ne libérera de place : ses duels quittent la série plutôt que de bloquer toute la nuit.
@@ -1756,7 +1776,7 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   const key = pairKey(modelA, modelB)
   current.played.set(key, (current.played.get(key) ?? 0) + 1)
   current.last = round.pair
-  round.revealed = { a: modelA, b: modelB, outcome }
+  round.revealed = { a: modelA, b: modelB, outcome, voteId: id }
   // Étape 382 : un duel voté quitte la série gardée sur le disque (il est maintenant dans les votes).
   if (current.series) persistSeries(current)
   emitNow()
@@ -1932,6 +1952,58 @@ export function duelSideCode(name: DuelSide): string | null {
 export async function duelHistoryCode(voteId: string, side: DuelSide): Promise<string | null> {
   if (!getDuelVotes().some((v) => v.id === voteId)) return null
   return readDuelApp(voteId, side)
+}
+
+/**
+ * Étape 458 (Léo : « à la fin, d'une série ou autre, on vote, et un bouton pour télécharger le code des deux modèles,
+ * avec le prompt, en un fichier, pour l'envoyer rapidement à une IA ») : un duel VOTÉ en un seul fichier Markdown — la
+ * demande, ce que Léo a répondu aux modèles, la réponse et le code de chacun avec son nom, puis le vote. Jamais avant
+ * le vote : les noms ne sont connus qu'une fois le vote donné à l'aveugle.
+ */
+export async function duelExportFile(voteId: string): Promise<{ fileName: string; text: string } | null> {
+  const vote = getAllDuelVotes().find((v) => v.id === voteId)
+  if (!vote) return null
+  const code = async (side: DuelSide): Promise<string | null> => (vote.sides?.[side].app ? await readDuelApp(voteId, side).catch(() => null) : null)
+  const apps = { a: await code('a'), b: await code('b') }
+  /** Un bloc de code que rien dans le contenu ne peut refermer (des « ``` » dans le code généré). */
+  const fenced = (content: string, lang: string): string => {
+    const longest = Math.max(0, ...[...content.matchAll(/`+/g)].map((m) => m[0].length))
+    const fence = '`'.repeat(Math.max(3, longest + 1))
+    return `${fence}${lang}\n${content.trimEnd()}\n${fence}`
+  }
+  const names = { a: vote.modelA, b: vote.modelB }
+  const lines: string[] = [
+    `# ${t('duel.export.title', { category: t(`duel.category.${vote.category}` as MessageKey) })}`,
+    '',
+    t('duel.export.intro'),
+    '',
+    `## ${t('duel.export.request')}`,
+    '',
+    vote.prompt
+  ]
+  if (vote.followUps?.length) {
+    lines.push('', `## ${t('duel.export.followUps')}`, '', ...vote.followUps.map((reply) => `- ${reply}`))
+  }
+  for (const side of ['a', 'b'] as const) {
+    const kept = vote.sides?.[side]
+    lines.push('', `## ${t('duel.export.model', { side: side.toUpperCase(), model: names[side] })}`)
+    for (const turn of kept?.earlier ?? []) if (turn.text.trim()) lines.push('', turn.text.trim())
+    if (kept?.text.trim()) lines.push('', kept.text.trim())
+    if (kept?.error) lines.push('', kept.error)
+    if (vote.category === 'code') lines.push('', apps[side] ? fenced(apps[side] as string, 'html') : t('duel.export.noCode'))
+  }
+  const outcome = vote.outcome === 'a' ? 'duel.vote.a' : vote.outcome === 'b' ? 'duel.vote.b' : vote.outcome === 'tie' ? 'duel.vote.tie' : 'duel.vote.bothBad'
+  lines.push('', `## ${t('duel.export.vote')}`, '', t(outcome))
+  const day = new Date(vote.at).toISOString().slice(0, 10)
+  const slug = vote.prompt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '')
+  return { fileName: `duel-${vote.category}-${day}${slug ? `-${slug}` : ''}.md`, text: `${lines.join('\n')}\n` }
 }
 
 /** Étape 388 : les duels d'une file (ou d'une série) que Léo n'a pas encore votés, finis ou pas. */

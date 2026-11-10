@@ -1113,7 +1113,7 @@ export interface DuelRoundView {
   a: DuelSideView
   b: DuelSideView
   /** Étape 358 : après le vote, les noms sont révélés (comme sur Arena) ; `null` avant le vote. */
-  revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  revealed: { a: string; b: string; outcome: DuelOutcome; voteId?: string } | null
   /** Étape 379 : les deux modèles travaillent en même temps (duel Code, et assez de mémoire pour les deux). */
   together?: boolean
   /**
@@ -1128,7 +1128,7 @@ export interface DuelBatchItemView {
   prompt: string
   a: DuelSideView['status']
   b: DuelSideView['status']
-  revealed: { a: string; b: string; outcome: DuelOutcome } | null
+  revealed: { a: string; b: string; outcome: DuelOutcome; voteId?: string } | null
 }
 
 export interface DuelSessionView {
@@ -1164,6 +1164,8 @@ export interface DuelSessionView {
     active: boolean
     /** Étape 457 : sur la machine louée, des duels tournent mais rien n'avance depuis ce nombre de minutes (sinon null). */
     stalledMinutes?: number | null
+    /** Étape 458 : un modèle tourne sur le processeur alors que les cartes de la machine louée sont presque libres. */
+    cpuFallback?: boolean
   } | null
   /**
    * Étape 399 : Claude écrit les demandes et vote, sans Léo (`null` = pas de juge). `index` = duels déjà passés ;
@@ -1536,6 +1538,7 @@ export const IPC_CHANNELS = {
   duelHistory: 'jaris:duel-history',
   duelHistoryApp: 'jaris:duel-history-app',
   duelHistoryCode: 'jaris:duel-history-code',
+  duelExport: 'jaris:duel-export',
   /** renderer -> main, étape 398 : supprimer des duels de l'historique (`'all'` : tous). */
   duelHistoryDelete: 'jaris:duel-history-delete',
   duelSideCode: 'jaris:duel-side-code',
