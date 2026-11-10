@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Faili ei salvestatud: {error}",
   "duel.export.title": "Tehisintellekti mudelite duell — {category}",
   "duel.export.intro": "Kahele tehisintellekti mudelile anti sama päring. Siin on päring, mida kumbki vastas ja tegi, ning kasutaja hääl.",
+  "duel.export.introBlind": "Kahele tehisintellekti mudelile, A ja B, anti sama päring (nende nimed jäävad peidetuks, kuni kasutaja on hääletanud). Siin on päring ja mida kumbki vastas ja tegi: aita kasutajal hinnata, kumb sai paremini hakkama.",
+  "duel.export.modelBlind": "Mudel {side}",
   "duel.export.request": "Päring",
   "duel.export.followUps": "Mida kasutaja seejärel mõlemale mudelile vastas",
   "duel.export.model": "Mudel {side}: {model}",

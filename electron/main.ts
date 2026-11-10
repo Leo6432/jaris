@@ -1973,9 +1973,10 @@ app.whenReady().then(async () => {
     if (typeof voteId !== 'string' || (side !== 'a' && side !== 'b')) throw new Error(t('duel.error.badRequest'))
     return duelHistoryCode(voteId, side)
   })
-  // Étape 458 : un duel voté en un fichier (demande + code des deux modèles), enregistré où Léo veut (dialogue gardé).
+  // Étape 458 : un duel en un fichier (demande + code des deux modèles), enregistré où Léo veut (dialogue gardé).
+  // Étape 460 : sans identifiant, le duel ouvert AVANT le vote (à l'aveugle) ; avec, un duel voté de l'historique.
   ipcMain.handle(IPC_CHANNELS.duelExport, async (_event, voteId: unknown): Promise<DuelExportResult> => {
-    if (typeof voteId !== 'string' || !voteId) throw new Error(t('duel.error.badRequest'))
+    if (voteId !== undefined && (typeof voteId !== 'string' || !voteId)) throw new Error(t('duel.error.badRequest'))
     const built = await duelExportFile(voteId)
     if (!built) return { saved: false, error: t('duel.error.noRound') }
     const dialogOptions = {

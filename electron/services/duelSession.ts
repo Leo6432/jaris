@@ -1957,48 +1957,52 @@ export async function duelHistoryCode(voteId: string, side: DuelSide): Promise<s
   return readDuelApp(voteId, side)
 }
 
-/**
- * Étape 458 (Léo : « à la fin, d'une série ou autre, on vote, et un bouton pour télécharger le code des deux modèles,
- * avec le prompt, en un fichier, pour l'envoyer rapidement à une IA ») : un duel VOTÉ en un seul fichier Markdown — la
- * demande, ce que Léo a répondu aux modèles, la réponse et le code de chacun avec son nom, puis le vote. Jamais avant
- * le vote : les noms ne sont connus qu'une fois le vote donné à l'aveugle.
- */
-export async function duelExportFile(voteId: string): Promise<{ fileName: string; text: string } | null> {
-  const vote = getAllDuelVotes().find((v) => v.id === voteId)
-  if (!vote) return null
-  const code = async (side: DuelSide): Promise<string | null> => (vote.sides?.[side].app ? await readDuelApp(voteId, side).catch(() => null) : null)
-  const apps = { a: await code('a'), b: await code('b') }
+interface DuelExportInput {
+  category: DuelCategory
+  at: number
+  prompt: string
+  followUps: readonly string[]
+  sides: Record<DuelSide, { text: string; earlier: readonly { text: string }[]; error: string | null; html: string | null }>
+  /** Les noms et le vote : seulement une fois le vote donné (sinon le fichier reste à l'aveugle). */
+  revealed: { a: string; b: string; outcome: DuelOutcome } | null
+}
+
+/** Étape 458 : le fichier Markdown d'un duel (demande, réponses de Léo, réponse et code de chaque modèle, vote). */
+function duelExportMarkdown(input: DuelExportInput): { fileName: string; text: string } {
   /** Un bloc de code que rien dans le contenu ne peut refermer (des « ``` » dans le code généré). */
   const fenced = (content: string, lang: string): string => {
     const longest = Math.max(0, ...[...content.matchAll(/`+/g)].map((m) => m[0].length))
     const fence = '`'.repeat(Math.max(3, longest + 1))
     return `${fence}${lang}\n${content.trimEnd()}\n${fence}`
   }
-  const names = { a: vote.modelA, b: vote.modelB }
   const lines: string[] = [
-    `# ${t('duel.export.title', { category: t(`duel.category.${vote.category}` as MessageKey) })}`,
+    `# ${t('duel.export.title', { category: t(`duel.category.${input.category}` as MessageKey) })}`,
     '',
-    t('duel.export.intro'),
+    t(input.revealed ? 'duel.export.intro' : 'duel.export.introBlind'),
     '',
     `## ${t('duel.export.request')}`,
     '',
-    vote.prompt
+    input.prompt
   ]
-  if (vote.followUps?.length) {
-    lines.push('', `## ${t('duel.export.followUps')}`, '', ...vote.followUps.map((reply) => `- ${reply}`))
+  if (input.followUps.length) {
+    lines.push('', `## ${t('duel.export.followUps')}`, '', ...input.followUps.map((reply) => `- ${reply}`))
   }
-  for (const side of ['a', 'b'] as const) {
-    const kept = vote.sides?.[side]
-    lines.push('', `## ${t('duel.export.model', { side: side.toUpperCase(), model: names[side] })}`)
-    for (const turn of kept?.earlier ?? []) if (turn.text.trim()) lines.push('', turn.text.trim())
-    if (kept?.text.trim()) lines.push('', kept.text.trim())
-    if (kept?.error) lines.push('', kept.error)
-    if (vote.category === 'code') lines.push('', apps[side] ? fenced(apps[side] as string, 'html') : t('duel.export.noCode'))
+  for (const name of ['a', 'b'] as const) {
+    const side = input.sides[name]
+    const letter = name.toUpperCase()
+    lines.push('', `## ${input.revealed ? t('duel.export.model', { side: letter, model: input.revealed[name] }) : t('duel.export.modelBlind', { side: letter })}`)
+    for (const turn of side.earlier) if (turn.text.trim()) lines.push('', turn.text.trim())
+    if (side.text.trim()) lines.push('', side.text.trim())
+    if (side.error) lines.push('', side.error)
+    if (input.category === 'code') lines.push('', side.html ? fenced(side.html, 'html') : t('duel.export.noCode'))
   }
-  const outcome = vote.outcome === 'a' ? 'duel.vote.a' : vote.outcome === 'b' ? 'duel.vote.b' : vote.outcome === 'tie' ? 'duel.vote.tie' : 'duel.vote.bothBad'
-  lines.push('', `## ${t('duel.export.vote')}`, '', t(outcome))
-  const day = new Date(vote.at).toISOString().slice(0, 10)
-  const slug = vote.prompt
+  if (input.revealed) {
+    const outcome = input.revealed.outcome
+    const label = outcome === 'a' ? 'duel.vote.a' : outcome === 'b' ? 'duel.vote.b' : outcome === 'tie' ? 'duel.vote.tie' : 'duel.vote.bothBad'
+    lines.push('', `## ${t('duel.export.vote')}`, '', t(label))
+  }
+  const day = new Date(input.at).toISOString().slice(0, 10)
+  const slug = input.prompt
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -2006,7 +2010,60 @@ export async function duelExportFile(voteId: string): Promise<{ fileName: string
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
     .replace(/-+$/, '')
-  return { fileName: `duel-${vote.category}-${day}${slug ? `-${slug}` : ''}.md`, text: `${lines.join('\n')}\n` }
+  return { fileName: `duel-${input.category}-${day}${slug ? `-${slug}` : ''}.md`, text: `${lines.join('\n')}\n` }
+}
+
+/**
+ * Étape 458 (Léo : « un bouton pour télécharger le code des deux modèles, avec le prompt, en un fichier, pour l'envoyer
+ * rapidement à une IA »), étape 460 (« c'est pas après le vote, c'est pendant ») :
+ * - sans `voteId` : le duel ouvert, une fois A et B finis, AVANT le vote — à l'aveugle (« Modèle A », « Modèle B »,
+ *   noms masqués jusque dans le code et les réponses, comme à l'écran), pour qu'une IA aide Léo à juger ;
+ * - avec `voteId` : un duel de l'historique, avec les noms et le vote.
+ */
+export async function duelExportFile(voteId?: string): Promise<{ fileName: string; text: string } | null> {
+  if (voteId === undefined) {
+    const current = session
+    const round = current?.round
+    if (!current || !round || round.prompt === null || current.judge) return null
+    if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) return null
+    const hide = (text: string): string => withoutModelNames(text, current.models, round.pair)
+    const sideOf = (name: DuelSide): DuelExportInput['sides'][DuelSide] => {
+      const side = round.sides[name]
+      return {
+        text: hide(side.text),
+        earlier: side.earlier.map((turn) => ({ text: hide(turn.text) })),
+        error: side.error ? hide(side.error) : null,
+        html: side.html ? hide(side.html) : null
+      }
+    }
+    return duelExportMarkdown({
+      category: current.category,
+      at: Date.now(),
+      prompt: round.prompt,
+      followUps: round.followUps,
+      sides: { a: sideOf('a'), b: sideOf('b') },
+      revealed: round.revealed ? { a: round.revealed.a, b: round.revealed.b, outcome: round.revealed.outcome } : null
+    })
+  }
+  const vote = getAllDuelVotes().find((v) => v.id === voteId)
+  if (!vote) return null
+  const sideOf = async (name: DuelSide): Promise<DuelExportInput['sides'][DuelSide]> => {
+    const kept = vote.sides?.[name]
+    return {
+      text: kept?.text ?? '',
+      earlier: kept?.earlier ?? [],
+      error: kept?.error ?? null,
+      html: kept?.app ? await readDuelApp(voteId, name).catch(() => null) : null
+    }
+  }
+  return duelExportMarkdown({
+    category: vote.category,
+    at: vote.at,
+    prompt: vote.prompt,
+    followUps: vote.followUps ?? [],
+    sides: { a: await sideOf('a'), b: await sideOf('b') },
+    revealed: { a: vote.modelA, b: vote.modelB, outcome: vote.outcome }
+  })
 }
 
 /** Étape 388 : les duels d'une file (ou d'une série) que Léo n'a pas encore votés, finis ou pas. */

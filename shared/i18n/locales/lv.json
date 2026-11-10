@@ -1877,6 +1877,8 @@
   "duel.export.failed": "Fails netika saglabāts: {error}",
   "duel.export.title": "MI modeļu duelis — {category}",
   "duel.export.intro": "Divi MI modeļi saņēma vienu un to pašu pieprasījumu. Šeit ir pieprasījums, ko katrs atbildēja un izveidoja, un lietotāja balss.",
+  "duel.export.introBlind": "Divi MI modeļi, A un B, saņēma vienu un to pašu pieprasījumu (to nosaukumi ir slēpti, līdz lietotājs nobalso). Šeit ir pieprasījums un ko katrs atbildēja un izveidoja: palīdzi lietotājam izvērtēt, kurš veica labāk.",
+  "duel.export.modelBlind": "Modelis {side}",
   "duel.export.request": "Pieprasījums",
   "duel.export.followUps": "Ko lietotājs pēc tam atbildēja abiem modeļiem",
   "duel.export.model": "Modelis {side}: {model}",

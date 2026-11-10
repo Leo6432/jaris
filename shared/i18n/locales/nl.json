@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Bestand niet opgeslagen: {error}",
   "duel.export.title": "Duel tussen AI-modellen — {category}",
   "duel.export.intro": "Twee AI-modellen kregen dezelfde vraag. Hier staan de vraag, wat elk model antwoordde en maakte, en de stem van de gebruiker.",
+  "duel.export.introBlind": "Twee AI-modellen, A en B, kregen dezelfde vraag (hun namen blijven verborgen tot de gebruiker heeft gestemd). Hier staan de vraag en wat elk model antwoordde en maakte: help de gebruiker beoordelen welk het beter deed.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Vraag",
   "duel.export.followUps": "Wat de gebruiker daarna aan beide modellen antwoordde",
   "duel.export.model": "Model {side}: {model}",

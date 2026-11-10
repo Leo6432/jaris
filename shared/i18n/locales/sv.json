@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Filen sparades inte: {error}",
   "duel.export.title": "Duell mellan AI-modeller — {category}",
   "duel.export.intro": "Samma förfrågan gavs till två AI-modeller. Här är förfrågan, vad var och en svarade och skapade, och användarens röst.",
+  "duel.export.introBlind": "Samma förfrågan gavs till två AI-modeller, A och B (deras namn är dolda tills användaren har röstat). Här är förfrågan och vad var och en svarade och skapade: hjälp användaren att bedöma vilken som gjorde bäst.",
+  "duel.export.modelBlind": "Modell {side}",
   "duel.export.request": "Förfrågan",
   "duel.export.followUps": "Vad användaren sedan svarade båda modellerna",
   "duel.export.model": "Modell {side}: {model}",

@@ -683,7 +683,17 @@ test('étape 458 : un duel voté en un fichier — la demande, les deux codes av
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
-  assert.equal(env.session.getDuelView().round.revealed, null, 'pas de vote, pas de fichier (les noms sont secrets)')
+  assert.equal(env.session.getDuelView().round.revealed, null)
+  // Étape 460 (« c'est pendant, pas après le vote ») : le fichier AVANT le vote, à l'aveugle — jamais un nom, même
+  // dans le code (où le faux générateur a écrit le nom de son modèle).
+  const blind = await env.session.duelExportFile()
+  assert.ok(blind, 'les deux ont fini : le fichier est prêt avant le vote')
+  assert.match(blind.text, /## Modèle A\n/)
+  assert.match(blind.text, /## Modèle B\n/)
+  assert.match(blind.text, /noms restent cachés/)
+  for (const model of MODELS) assert.ok(!blind.text.includes(model), `${model} ne doit pas apparaître avant le vote`)
+  assert.doesNotMatch(blind.text, /## Vote/, 'pas encore de vote')
+  assert.match(blind.text, /`````html\n<html><body>/, 'les deux codes quand même')
   const voted = await env.session.voteDuel('b')
   const { a, b, voteId } = voted.round.revealed
   assert.ok(voteId, 'le duel voté donne de quoi faire son fichier')

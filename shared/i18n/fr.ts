@@ -1868,6 +1868,8 @@ export const fr = {
   "duel.export.failed": "Fichier non enregistré : {error}",
   "duel.export.title": "Duel de modèles d'IA — {category}",
   "duel.export.intro": "La même demande a été faite à deux modèles d'IA. Voici la demande, ce que chacun a répondu et produit, puis le vote de l'utilisateur.",
+  "duel.export.introBlind": "La même demande a été faite à deux modèles d'IA, A et B (leurs noms restent cachés tant que l'utilisateur n'a pas voté). Voici la demande et ce que chacun a répondu et produit : aide l'utilisateur à juger lequel a le mieux fait.",
+  "duel.export.modelBlind": "Modèle {side}",
   "duel.export.request": "Demande",
   "duel.export.followUps": "Ce que l'utilisateur a répondu ensuite aux deux modèles",
   "duel.export.model": "Modèle {side} : {model}",

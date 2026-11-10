@@ -1855,6 +1855,8 @@
   "duel.export.failed": "File not saved: {error}",
   "duel.export.title": "AI model duel — {category}",
   "duel.export.intro": "The same request was given to two AI models. Here is the request, what each one answered and produced, then the user's vote.",
+  "duel.export.introBlind": "The same request was given to two AI models, A and B (their names stay hidden until the user has voted). Here is the request and what each one answered and produced: help the user judge which did better.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Request",
   "duel.export.followUps": "What the user then replied to both models",
   "duel.export.model": "Model {side}: {model}",

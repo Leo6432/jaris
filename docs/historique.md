@@ -11817,3 +11817,16 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   `OLLAMA_SCHED_SPREAD=1` (chaque modèle réparti sur toutes les cartes).
 - Régression : test-duel-remote.mjs (débordement avec 150 Go pris par d'autres modèles chargés → pas d'avertissement) ;
   échoue avec l'ancien calcul.
+
+## Étape 460 — Le fichier du duel AVANT le vote, à l'aveugle (v0.57.2)
+
+- Léo, sur l'étape 458 : « le bouton télécharger le code avec le prompt, c'est pas après le vote, c'est pendant » — le
+  fichier sert à demander à une IA de l'aider à juger. Le bouton est maintenant dans le bloc du vote (A et B ont fini,
+  pas encore voté), et n'est plus après le vote ; il reste sur chaque duel de l'historique (avec les noms et le vote).
+- `duelExportFile()` sans identifiant : le duel ouvert, à l'aveugle — « Modèle A », « Modèle B », noms masqués jusque
+  dans le code et les réponses (`withoutModelNames`, comme à l'écran), pas de section vote, et une introduction qui
+  demande à l'IA d'aider à juger (`duel.export.introBlind`, 24 langues). Avec un identifiant : le duel de l'historique.
+  Un seul constructeur (`duelExportMarkdown`) pour les deux.
+- Régression : test-duel-session.mjs (avant le vote : aucun nom, même écrit dans le code par le modèle ; les deux codes ;
+  pas de vote) — échoue si les noms ne sont plus masqués ; test-duel-panel-ui.mjs (bouton dans le bloc du vote, appelé
+  sans identifiant ; plus de bouton après le vote). Capture à 760 px vérifiée.

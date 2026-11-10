@@ -1855,6 +1855,8 @@
   "duel.export.failed": "A fájl nem lett mentve: {error}",
   "duel.export.title": "MI-modellek párbaja — {category}",
   "duel.export.intro": "Ugyanazt a kérést két MI-modell kapta meg. Itt a kérés, hogy mit válaszolt és készített mindegyik, majd a felhasználó szavazata.",
+  "duel.export.introBlind": "Ugyanazt a kérést két MI-modell, A és B kapta meg (a nevük rejtve marad, amíg a felhasználó nem szavazott). Itt a kérés, és hogy mit válaszolt és készített mindegyik: segíts a felhasználónak eldönteni, melyik teljesített jobban.",
+  "duel.export.modelBlind": "{side} modell",
   "duel.export.request": "Kérés",
   "duel.export.followUps": "Amit a felhasználó ezután mindkét modellnek válaszolt",
   "duel.export.model": "{side} modell: {model}",

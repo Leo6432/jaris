@@ -1899,6 +1899,8 @@
   "duel.export.failed": "Datoteka ni bila shranjena: {error}",
   "duel.export.title": "Dvoboj modelov UI — {category}",
   "duel.export.intro": "Enako zahtevo sta dobila dva modela UI. Tu so zahteva, kaj je vsak odgovoril in naredil, ter glas uporabnika.",
+  "duel.export.introBlind": "Enako zahtevo sta dobila dva modela UI, A in B (njuni imeni ostaneta skriti, dokler uporabnik ne glasuje). Tu sta zahteva in kaj je vsak odgovoril in naredil: pomagaj uporabniku presoditi, kateri je bil boljši.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Zahteva",
   "duel.export.followUps": "Kaj je uporabnik nato odgovoril obema modeloma",
   "duel.export.model": "Model {side}: {model}",

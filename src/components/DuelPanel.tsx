@@ -919,9 +919,10 @@ function outcomeLabel(entry: Pick<DuelHistoryEntry, 'outcome' | 'modelA' | 'mode
 
 /**
  * Étape 458 (Léo : « un bouton pour télécharger le code des deux modèles, avec le prompt, en un fichier, pour l'envoyer
- * rapidement à une IA ») : après le vote (les noms sont connus), et dans l'historique.
+ * rapidement à une IA »), étape 460 (« c'est pas après le vote, c'est pendant ») : dans le bloc du vote (sans
+ * `voteId` : le duel ouvert, à l'aveugle), et sur chaque duel de l'historique (avec les noms).
  */
-function DuelExportButton({ voteId, category }: { voteId: string; category: DuelCategory }): JSX.Element {
+function DuelExportButton({ voteId, category }: { voteId?: string; category: DuelCategory }): JSX.Element {
   const [state, setState] = useState<{ kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string }>({ kind: 'idle' })
   const save = async (): Promise<void> => {
     setState({ kind: 'saving' })
@@ -2578,7 +2579,6 @@ export default function DuelPanel(): JSX.Element {
                     <button type="button" className="duel-btn duel-btn--primary" onClick={next} disabled={pending !== null}>
                       {t(view.batch ? 'duel.batch.back' : 'duel.next')}
                     </button>
-                    {round.revealed.voteId && <DuelExportButton key={round.revealed.voteId} voteId={round.revealed.voteId} category={view.category} />}
                   </div>
                 </div>
               )}
@@ -2601,6 +2601,10 @@ export default function DuelPanel(): JSX.Element {
                         {t(label)}
                       </button>
                     ))}
+                  </div>
+                  {/* Étape 460 : le fichier du duel AVANT de voter (à l'aveugle), pour demander l'avis d'une IA. */}
+                  <div className="duel-vote__export">
+                    <DuelExportButton key={`${view.id}-${round.number}-${followUps.length}`} category={view.category} />
                   </div>
                 </div>
               )}

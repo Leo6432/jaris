@@ -9362,6 +9362,12 @@ ul.reply-list--nested {
   margin-top: 6px;
 }
 
+.duel-vote__export {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
 .duel-export__status {
   font-size: 12px;
   color: var(--hud-text-dim);

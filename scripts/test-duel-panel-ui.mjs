@@ -390,6 +390,14 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
       const visible = await page.textContent('.duel')
       for (const name of NAMES) assert.ok(!visible.includes(name), `« ${name} » affiché pendant la session`)
 
+      // Étape 460 (« c'est pendant, pas après le vote ») : le fichier du duel, à l'aveugle, avant de voter.
+      const exportButton = '.duel-vote .duel-export__button'
+      assert.equal(await page.textContent(exportButton), 'Télécharger les deux réponses', 'un duel Conversation : pas de code, les réponses')
+      assert.equal(await page.$eval(exportButton, (el) => getComputedStyle(el).cursor), 'pointer')
+      await page.click(exportButton)
+      await page.waitForSelector('.duel-vote .duel-export__status')
+      assert.equal(await page.textContent('.duel-vote .duel-export__status'), 'Fichier enregistré.')
+      assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'duelExport' && c[1] == null), 'le duel ouvert, sans identifiant de vote')
       await page.click('.duel-vote__button:has-text("A est meilleur")')
       assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'vote'), ['vote', 'a'])
       // Étape 358, comme Arena : les noms sont révélés juste après le vote, sur chaque côté et dans le résultat.
@@ -398,14 +406,8 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
       assert.deepEqual(await page.locator('.duel-side__model').allTextContents(), ['qwen3.8:27b', 'granite4.2:8b'])
       assert.match(await page.textContent('.duel-vote--revealed'), /Noms révélés/)
       assert.match(await page.textContent('.duel-vote--revealed'), /Gagnant : qwen3\.8:27b/)
-      // Étape 458 : le fichier du duel (demande + les deux réponses), seulement une fois les noms révélés.
-      const exportButton = '.duel-vote--revealed .duel-export__button'
-      assert.equal(await page.textContent(exportButton), 'Télécharger les deux réponses', 'un duel Conversation : pas de code, les réponses')
-      assert.equal(await page.$eval(exportButton, (el) => getComputedStyle(el).cursor), 'pointer')
-      await page.click(exportButton)
-      await page.waitForSelector('.duel-vote--revealed .duel-export__status')
-      assert.equal(await page.textContent('.duel-vote--revealed .duel-export__status'), 'Fichier enregistré.')
-      assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'duelExport' && c[1] === 'vote-1'))
+      // Étape 460 : plus de bouton une fois voté — il est dans le bloc du vote, AVANT de voter.
+      assert.equal(await page.locator('.duel-vote--revealed .duel-export__button').count(), 0)
       assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/, 'on reste sur ce duel tant qu’on n’a pas demandé le suivant')
       await page.click('.duel-vote--revealed .duel-btn--primary')
       assert.ok((await page.evaluate(() => window.__calls)).includes('next'))

@@ -1855,6 +1855,8 @@
   "duel.export.failed": "File non salvato: {error}",
   "duel.export.title": "Duello di modelli di IA — {category}",
   "duel.export.intro": "La stessa richiesta è stata fatta a due modelli di IA. Ecco la richiesta, cosa ha risposto e prodotto ciascuno, poi il voto dell'utente.",
+  "duel.export.introBlind": "La stessa richiesta è stata fatta a due modelli di IA, A e B (i loro nomi restano nascosti finché l'utente non ha votato). Ecco la richiesta e cosa ha risposto e prodotto ciascuno: aiuta l'utente a giudicare quale ha fatto meglio.",
+  "duel.export.modelBlind": "Modello {side}",
   "duel.export.request": "Richiesta",
   "duel.export.followUps": "Cosa ha risposto poi l'utente ai due modelli",
   "duel.export.model": "Modello {side}: {model}",

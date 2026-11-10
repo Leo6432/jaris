@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Filen blev ikke gemt: {error}",
   "duel.export.title": "Duel mellem AI-modeller — {category}",
   "duel.export.intro": "Den samme forespørgsel blev givet til to AI-modeller. Her er forespørgslen, hvad hver svarede og lavede, og brugerens stemme.",
+  "duel.export.introBlind": "Den samme forespørgsel blev givet til to AI-modeller, A og B (deres navne er skjult, indtil brugeren har stemt). Her er forespørgslen og hvad hver svarede og lavede: hjælp brugeren med at vurdere, hvilken der klarede sig bedst.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Forespørgsel",
   "duel.export.followUps": "Hvad brugeren derefter svarede begge modeller",
   "duel.export.model": "Model {side}: {model}",

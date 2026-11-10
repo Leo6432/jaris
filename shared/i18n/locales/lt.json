@@ -1877,6 +1877,8 @@
   "duel.export.failed": "Failas neišsaugotas: {error}",
   "duel.export.title": "DI modelių dvikova — {category}",
   "duel.export.intro": "Tas pats prašymas pateiktas dviem DI modeliams. Štai prašymas, ką kiekvienas atsakė ir sukūrė, ir naudotojo balsas.",
+  "duel.export.introBlind": "Tas pats prašymas pateiktas dviem DI modeliams, A ir B (jų pavadinimai slepiami, kol naudotojas nubalsuos). Štai prašymas ir ką kiekvienas atsakė bei sukūrė: padėk naudotojui įvertinti, kuris pasirodė geriau.",
+  "duel.export.modelBlind": "Modelis {side}",
   "duel.export.request": "Prašymas",
   "duel.export.followUps": "Ką naudotojas po to atsakė abiem modeliams",
   "duel.export.model": "Modelis {side}: {model}",

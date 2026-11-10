@@ -1877,6 +1877,8 @@
   "duel.export.failed": "Fișierul nu a fost salvat: {error}",
   "duel.export.title": "Duel între modele de IA — {category}",
   "duel.export.intro": "Aceeași cerere a fost făcută la două modele de IA. Iată cererea, ce a răspuns și a produs fiecare, apoi votul utilizatorului.",
+  "duel.export.introBlind": "Aceeași cerere a fost făcută la două modele de IA, A și B (numele lor rămân ascunse până votează utilizatorul). Iată cererea și ce a răspuns și a produs fiecare: ajută utilizatorul să judece care s-a descurcat mai bine.",
+  "duel.export.modelBlind": "Modelul {side}",
   "duel.export.request": "Cerere",
   "duel.export.followUps": "Ce a răspuns apoi utilizatorul celor două modele",
   "duel.export.model": "Modelul {side}: {model}",

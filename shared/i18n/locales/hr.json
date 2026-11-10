@@ -1877,6 +1877,8 @@
   "duel.export.failed": "Datoteka nije spremljena: {error}",
   "duel.export.title": "Dvoboj AI modela — {category}",
   "duel.export.intro": "Isti zahtjev dobila su dva AI modela. Evo zahtjeva, što je svaki odgovorio i napravio te glasa korisnika.",
+  "duel.export.introBlind": "Isti zahtjev dobila su dva AI modela, A i B (njihova imena ostaju skrivena dok korisnik ne glasa). Evo zahtjeva i što je svaki odgovorio i napravio: pomozi korisniku procijeniti koji je bio bolji.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Zahtjev",
   "duel.export.followUps": "Što je korisnik zatim odgovorio objema modelima",
   "duel.export.model": "Model {side}: {model}",

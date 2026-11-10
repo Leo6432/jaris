@@ -1877,6 +1877,8 @@
   "duel.export.failed": "Soubor nebyl uložen: {error}",
   "duel.export.title": "Souboj modelů AI — {category}",
   "duel.export.intro": "Stejný požadavek dostaly dva modely AI. Zde je požadavek, co každý odpověděl a vytvořil, a hlas uživatele.",
+  "duel.export.introBlind": "Stejný požadavek dostaly dva modely AI, A a B (jejich jména zůstávají skrytá, dokud uživatel nehlasuje). Zde je požadavek a co každý odpověděl a vytvořil: pomoz uživateli posoudit, který si vedl lépe.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Požadavek",
   "duel.export.followUps": "Co uživatel potom odpověděl oběma modelům",
   "duel.export.model": "Model {side}: {model}",

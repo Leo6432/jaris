@@ -1899,6 +1899,8 @@
   "duel.export.failed": "Plik nie został zapisany: {error}",
   "duel.export.title": "Pojedynek modeli AI — {category}",
   "duel.export.intro": "To samo polecenie otrzymały dwa modele AI. Oto polecenie, co każdy odpowiedział i stworzył, oraz głos użytkownika.",
+  "duel.export.introBlind": "To samo polecenie otrzymały dwa modele AI, A i B (ich nazwy pozostają ukryte, dopóki użytkownik nie zagłosuje). Oto polecenie oraz to, co każdy odpowiedział i stworzył: pomóż użytkownikowi ocenić, który poradził sobie lepiej.",
+  "duel.export.modelBlind": "Model {side}",
   "duel.export.request": "Polecenie",
   "duel.export.followUps": "Co użytkownik odpowiedział potem obu modelom",
   "duel.export.model": "Model {side}: {model}",

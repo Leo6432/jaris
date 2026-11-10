@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Tiedostoa ei tallennettu: {error}",
   "duel.export.title": "Tekoälymallien kaksintaistelu — {category}",
   "duel.export.intro": "Kahdelle tekoälymallille annettiin sama pyyntö. Tässä pyyntö, mitä kumpikin vastasi ja teki, sekä käyttäjän ääni.",
+  "duel.export.introBlind": "Kahdelle tekoälymallille, A ja B, annettiin sama pyyntö (niiden nimet pysyvät piilossa, kunnes käyttäjä on äänestänyt). Tässä pyyntö ja mitä kumpikin vastasi ja teki: auta käyttäjää arvioimaan, kumpi onnistui paremmin.",
+  "duel.export.modelBlind": "Malli {side}",
   "duel.export.request": "Pyyntö",
   "duel.export.followUps": "Mitä käyttäjä sen jälkeen vastasi molemmille malleille",
   "duel.export.model": "Malli {side}: {model}",

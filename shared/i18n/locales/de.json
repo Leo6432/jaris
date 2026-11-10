@@ -1855,6 +1855,8 @@
   "duel.export.failed": "Datei nicht gespeichert: {error}",
   "duel.export.title": "Duell von KI-Modellen — {category}",
   "duel.export.intro": "Zwei KI-Modelle haben dieselbe Anfrage erhalten. Hier sind die Anfrage, was jedes geantwortet und erstellt hat, und die Stimme des Nutzers.",
+  "duel.export.introBlind": "Zwei KI-Modelle, A und B, haben dieselbe Anfrage erhalten (ihre Namen bleiben bis zur Stimme des Nutzers verborgen). Hier sind die Anfrage und was jedes geantwortet und erstellt hat: Hilf dem Nutzer zu beurteilen, welches es besser gemacht hat.",
+  "duel.export.modelBlind": "Modell {side}",
   "duel.export.request": "Anfrage",
   "duel.export.followUps": "Was der Nutzer danach beiden Modellen geantwortet hat",
   "duel.export.model": "Modell {side}: {model}",
