@@ -11803,3 +11803,17 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   test-benchmark-cases.mjs (faux Ollama avec `/api/ps` : jamais deux chargements en même temps) ; test-duel-session.mjs
   (fichier : demande, deux noms, deux codes entiers malgré des « ```` », vote) ; test-duel-panel-ui.mjs (boutons, libellés,
   erreur dite). Les règles de chargement échouent quand on les retire. Captures du bouton vérifiées (760 px).
+
+## Étape 459 — Avertissement « cartes presque libres » affiché à tort (v0.57.1)
+
+- Léo (0.57.0, OVH, après `nvidia-smi -pm 1` : plus aucun « discovery timed out » dans le journal) : l'avertissement de
+  l'étape 458 s'affichait alors que ~72 Go sur 126 étaient pris. Il ne comptait que les modèles de la SÉRIE qui
+  tournent ; les autres modèles chargés (qui finissent, ou attendent d'être déchargés) n'étaient pas comptés. Désormais
+  « presque libres » = TOUS les modèles de `/api/ps` prennent moins de la moitié des cartes.
+- Ce que montre le journal pour le modèle encore sur le processeur (Spark-X2.6-4B, 74 % CPU) : `CUDA0 … 1104 MiB free`
+  puis `offloaded 4/37 layers to GPU` — Ollama l'a mis sur une carte presque pleine alors que d'autres avaient de la
+  place (son choix de carte, pas Jaris). Idée écartée après vérification : décharger les modèles finis — Jaris le fait
+  déjà (la suppression d'un modèle fini le décharge : le « Stopping… » de qwen3.5:2b). Piste non testée :
+  `OLLAMA_SCHED_SPREAD=1` (chaque modèle réparti sur toutes les cartes).
+- Régression : test-duel-remote.mjs (débordement avec 150 Go pris par d'autres modèles chargés → pas d'avertissement) ;
+  échoue avec l'ancien calcul.

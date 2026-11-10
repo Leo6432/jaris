@@ -415,13 +415,17 @@ test('étape 458 : un seul NOUVEAU modèle se charge à la fois sur la machine l
   // La machine ne « voit » un modèle chargé qu'à partir de la 4e relecture qui suit son démarrage.
   const reads = new Map()
   let spill = false
-  const loaded = (models) =>
-    models
+  let crowd = false
+  const loaded = (models) => [
+    ...models
       .filter((model) => {
         reads.set(model, (reads.get(model) ?? 0) + 1)
         return reads.get(model) >= 4
       })
-      .map((model, i) => ({ model, vramGb: spill && i === 0 ? 1 : 5, sizeGb: 5 }))
+      .map((model, i) => ({ model, vramGb: spill && i === 0 ? 1 : 5, sizeGb: 5 })),
+    // Des modèles d'avant, encore chargés le temps qu'Ollama les libère (150 Go sur 288).
+    ...(crowd ? [{ model: 'fini-model:70b', vramGb: 150, sizeGb: 150 }] : [])
+  ]
   const env = setup({ remote: { enabled: true, host: POD, vramGb: 288, ramGb: 188 }, installedThere: [...MODELS], generateGate, loaded })
   env.session.setDuelSeriesDelays({ idleCheckMs: 10, loadCheckMs: 10 })
   const seen = []
@@ -441,6 +445,14 @@ test('étape 458 : un seul NOUVEAU modèle se charge à la fois sur la machine l
     await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === true, 'débordement cartes libres signalé')
     spill = false
     await waitFor(() => env.session.getDuelView()?.series?.cpuFallback === false, 'effacé quand ça va mieux')
+    // Étape 459 : débordement alors que les cartes sont bien remplies par d'AUTRES modèles chargés (qui finissent) —
+    // ce n'est pas un démarrage raté des cartes : pas cet avertissement.
+    crowd = true
+    spill = true
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    assert.equal(env.session.getDuelView().series.cpuFallback, false, 'cartes déjà bien prises : pas « presque libres »')
+    crowd = false
+    spill = false
   } finally {
     release()
     env.session.setDuelSeriesDelays({ loadCheckMs: 5000 })
