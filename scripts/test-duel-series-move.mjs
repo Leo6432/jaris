@@ -78,6 +78,8 @@ function setup(t) {
       pickModelsForDuelCategory: async () => ({ flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b', code: 'bravo-model:8b' })
     },
     './ollama': {
+      // Étape 456 : la place réelle relue sur la machine louée (rien de chargé ici).
+      loadedOllamaModels: async () => [],
       fetchOllamaVersion: async () => {
         if (down.has(config.ollama.host)) throw new Error('fetch failed')
         return '0.40.10'

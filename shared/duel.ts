@@ -817,6 +817,49 @@ export function remoteThreadsFor(sizeGb: number, vramGb: number | null): number 
 }
 
 /**
+ * Étape 456 (capture de Léo, OVH 4 × V100S : 6 modèles d'une série Code, dont LFM2.5 « 78%/22% CPU/GPU ») : la place
+ * était comptée sur le TOTAL des cartes avec une estimation, mais un modèle doit tenir dans ce qui reste sur CHAQUE carte,
+ * et un modèle chargé pour 4 duels à la fois prend plus que prévu (devstral : 39 Go au lieu de ~32). Sur une machine
+ * louée, la série relit donc ce qu'Ollama a VRAIMENT chargé (`/api/ps`) :
+ * - un modèle de la série déborde sur le processeur (`spill`) : aucun NOUVEAU modèle ne démarre tant que ça dure ;
+ * - sinon, un nouveau modèle ne démarre que si la mémoire réellement prise par les modèles de la série qui tournent,
+ *   plus celle des modèles lancés depuis la dernière lecture, plus la sienne (4 duels à la fois), tient dans 90 % des
+ *   cartes (le reste : les trous laissés sur chaque carte).
+ * Les duels de plus d'un modèle déjà chargé ne coûtent rien (Ollama a réservé leur place au chargement).
+ */
+export const SERIES_CARD_FILL = 0.9
+export interface SeriesPlacement {
+  /** Mémoire vidéo réellement prise par les modèles de la série qui tournent (Go). */
+  usedGb: number
+  /** Un modèle de la série qui déborde sur le processeur, sinon null. */
+  spill: string | null
+}
+export function seriesNewModelFits(placement: SeriesPlacement, pendingGb: number, sizeGb: number, vramGb: number | null): boolean {
+  if (placement.spill) return false
+  if (vramGb === null || !Number.isFinite(vramGb)) return false
+  const need = seriesModelNeedGb(sizeGb, DUEL_SERIES_SLOTS_PER_MODEL)
+  return placement.usedGb + pendingGb + need <= (vramGb - DUEL_TOGETHER_GPU_RESERVE_GB) * SERIES_CARD_FILL
+}
+
+/** Étape 456 : ce que la série lit dans `/api/ps` — seuls comptent ses modèles qui tournent (les autres seront libérés). */
+export function seriesPlacementFrom(
+  loaded: readonly { model: string; vramGb: number; sizeGb: number }[],
+  runningModels: ReadonlySet<string>
+): SeriesPlacement {
+  const tag = (model: string): string => (model.includes(':') ? model : `${model}:latest`)
+  const running = new Set([...runningModels].map(tag))
+  let usedGb = 0
+  let spill: string | null = null
+  for (const entry of loaded) {
+    if (!running.has(tag(entry.model))) continue
+    usedGb += entry.sizeGb
+    // Une marge d'un demi-Go : Ollama arrondit sa part en mémoire vidéo.
+    if (entry.sizeGb - entry.vramGb > 0.5 && spill === null) spill = entry.model
+  }
+  return { usedGb, spill }
+}
+
+/**
  * Étape 385 : le gardien de la série peut-il télécharger un modèle de plus pour le faire tourner EN MÊME TEMPS que
  * ceux déjà là ? Oui si tous tiennent ensemble sur la carte, chacun avec tous ses duels à la fois. Carte inconnue : non.
  */

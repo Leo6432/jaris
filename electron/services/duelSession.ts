@@ -14,7 +14,7 @@ import {
   type DuelCandidate,
   type DuelMachineOverride
 } from './hardwareScan'
-import { deleteModel, fetchOllamaVersion, type OllamaMessage, getModelThinking, listInstalledModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
+import { deleteModel, fetchOllamaVersion, type OllamaMessage, getModelThinking, listInstalledModels, loadedOllamaModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
 import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
@@ -61,6 +61,11 @@ import {
   remoteThreadsFor,
   batchSlotsToStart,
   seriesRoomForModel,
+  seriesNewModelFits,
+  seriesModelNeedGb,
+  seriesPlacementFrom,
+  DUEL_SERIES_SLOTS_PER_MODEL,
+  type SeriesPlacement,
   isDuelSeriesCount,
   planDuelSeries,
   baseModelTag,
@@ -249,6 +254,12 @@ interface SeriesState {
    * le nombre de modèles supprimés à ce moment-là. On ne réessaie qu'après une nouvelle suppression.
    */
   diskFullAt: number | null
+  /**
+   * Étape 456 : sur une machine louée, ce qu'Ollama a VRAIMENT chargé pour la série (relu par le gardien), et les modèles
+   * lancés depuis, pas encore vus chargés (leur place estimée). `null` sur ce PC : la règle d'avant s'applique.
+   */
+  placement: SeriesPlacement | null
+  pending: Map<string, number>
 }
 
 /** Étape 399 : la suite de duels Conversation jugés par Claude. */
@@ -891,9 +902,24 @@ function pumpBatch(current: Session): void {
       }
     }
   }
-  for (const key of batchSlotsToStart(running, waiting, current.vramGb, current.series ? 'series' : 'batch')) {
+  const series = current.series
+  const placement = series?.placement ?? null
+  const runningModels = new Set(running.map((r) => r.model))
+  for (const key of batchSlotsToStart(running, waiting, current.vramGb, series ? 'series' : 'batch')) {
     const slot = where.get(key)
-    if (slot) void runSide(current, slot.round, slot.side)
+    if (!slot) continue
+    // Étape 456 : un NOUVEAU modèle sur la machine louée ne démarre que s'il tient vraiment (seriesNewModelFits).
+    if (series && placement) {
+      const model = slot.round.pair[slot.side === 'a' ? 0 : 1]
+      if (!runningModels.has(model) && !series.pending.has(model)) {
+        const size = current.sizes.get(model) ?? Number.NaN
+        const pendingGb = [...series.pending.values()].reduce((sum, gb) => sum + gb, 0)
+        if (!seriesNewModelFits(placement, pendingGb, size, current.vramGb)) continue
+        series.pending.set(model, seriesModelNeedGb(size, DUEL_SERIES_SLOTS_PER_MODEL))
+      }
+      runningModels.add(model)
+    }
+    void runSide(current, slot.round, slot.side)
   }
 }
 
@@ -1016,8 +1042,35 @@ function newSeriesState(createdAt: number, perModel: number): SeriesState {
     wake: null,
     running: false,
     restart: false,
-    diskFullAt: null
+    diskFullAt: null,
+    placement: null,
+    pending: new Map()
   }
+}
+
+/** Les modèles dont un duel de la série tourne en ce moment. */
+function runningSeriesModels(current: Session): Set<string> {
+  const models = new Set<string>()
+  for (const round of current.batch ?? []) {
+    if (round.sides.a.status === 'running') models.add(round.pair[0])
+    if (round.sides.b.status === 'running') models.add(round.pair[1])
+  }
+  return models
+}
+
+/** Étape 456 : relit ce que la machine louée a vraiment chargé (rien sur ce PC, ni si elle ne répond pas). */
+async function refreshSeriesPlacement(current: Session, series: SeriesState): Promise<void> {
+  const remote = current.remote
+  if (!remote) return
+  // Une lecture ratée ne bloque jamais la série : la dernière place connue reste.
+  const loaded = await runWithOllamaHost(remote.host, () => loadedOllamaModels()).catch(() => null)
+  if (!loaded) return
+  series.placement = seriesPlacementFrom(loaded, runningSeriesModels(current))
+  // Un modèle lancé maintenant vu chargé : sa vraie place est comptée, plus son estimation.
+  const seen = new Set(loaded.map((entry) => baseModelTag(entry.model)))
+  // Un modèle lancé dont plus aucun duel ne tourne (fini, ou en erreur avant d'être chargé) ne réserve plus rien.
+  const running = runningSeriesModels(current)
+  for (const model of [...series.pending.keys()]) if (seen.has(baseModelTag(model)) || !running.has(model)) series.pending.delete(model)
 }
 
 /** Les demandes de la série : des applications tirées au hasard dans la liste d'idées, toutes vues avant qu'une revienne. */
@@ -1160,9 +1213,14 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
   const alive = (): boolean => session === current && current.series === series && !signal.aborted && Boolean(current.batch)
   const installed = await installedModelsSeen()
   for (const model of current.models) if (isInstalled(model, installed)) series.present.add(model)
+  await refreshSeriesPlacement(current, series)
   pumpBatch(current)
   emitNow()
   while (alive()) {
+    // Étape 456 : à chaque passage, la place réelle sur la machine louée, puis les duels qui peuvent partir.
+    await refreshSeriesPlacement(current, series)
+    if (!alive()) break
+    pumpBatch(current)
     if (series.waiting === 'ollama') {
       if (!(await ollamaResponds(current))) {
         emitNow()
@@ -1186,6 +1244,7 @@ async function seriesKeeper(current: Session, series: SeriesState): Promise<void
     const active = [...new Set(sides.filter((s) => series.present.has(s.model)).map((s) => s.model))]
     const room =
       next !== undefined &&
+      !series.placement?.spill &&
       seriesRoomForModel(
         active.map((m) => current.sizes.get(m) ?? Number.NaN),
         current.sizes.get(next.model) ?? Number.NaN,

@@ -501,6 +501,29 @@ test('étape 455 : une série ne refait jamais une paire (ni de cette série, ni
   assert.equal(duel.planDuelSeries(['x:7b', 'y:7b'], 3, random).length, 3)
 })
 
+test('étape 456 : place réelle d’une série sur la machine louée — débordement, place prise, place réservée', () => {
+  // Ce qu'Ollama a chargé : seuls comptent les modèles de la série qui tournent (« :latest » ou non).
+  const placement = duel.seriesPlacementFrom(
+    [
+      { model: 'a:7b', vramGb: 20, sizeGb: 20 },
+      { model: 'b:latest', vramGb: 10, sizeGb: 10 },
+      { model: 'fini:7b', vramGb: 30, sizeGb: 30 }
+    ],
+    new Set(['a:7b', 'b'])
+  )
+  assert.deepEqual(placement, { usedGb: 30, spill: null })
+  const spilled = duel.seriesPlacementFrom([{ model: 'c:4b', vramGb: 1, sizeGb: 4.3 }], new Set(['c:4b']))
+  assert.equal(spilled.spill, 'c:4b', '78 % sur le processeur : débordement')
+  assert.equal(duel.seriesPlacementFrom([{ model: 'c:4b', vramGb: 4, sizeGb: 4.3 }], new Set(['c:4b'])).spill, null, 'arrondi d’Ollama : pas un débordement')
+  // 126 Go : (126 - 1) × 0,9 = 112,5 Go utilisables.
+  const need = duel.seriesModelNeedGb(10, duel.DUEL_SERIES_SLOTS_PER_MODEL)
+  assert.equal(duel.seriesNewModelFits({ usedGb: 0, spill: null }, 0, 10, 126), true)
+  assert.equal(duel.seriesNewModelFits({ usedGb: 112.5 - need, spill: null }, 0, 10, 126), true)
+  assert.equal(duel.seriesNewModelFits({ usedGb: 112.5 - need, spill: null }, 1, 10, 126), false, 'la place réservée par un modèle pas encore chargé compte')
+  assert.equal(duel.seriesNewModelFits({ usedGb: 0, spill: 'c:4b' }, 0, 1, 126), false, 'jamais pendant un débordement')
+  assert.equal(duel.seriesNewModelFits({ usedGb: 0, spill: null }, 0, 10, null), false, 'carte inconnue')
+})
+
 test('étape 382 : nombre de duels par modèle accepté de 1 à 50, entier seulement', () => {
   for (const ok of [1, 10, 50]) assert.equal(duel.isDuelSeriesCount(ok), true)
   for (const bad of [0, 51, 2.5, '10', null, Number.NaN]) assert.equal(duel.isDuelSeriesCount(bad), false)

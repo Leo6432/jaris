@@ -972,14 +972,21 @@ export async function isModelLoaded(model: string): Promise<boolean | null> {
   }
 }
 
-/** Modèles qu'Ollama garde chargés (`/api/ps`), avec la mémoire vidéo qu'ils occupent. `null` si Ollama ne répond pas. */
-export async function loadedOllamaModels(): Promise<{ model: string; vramGb: number }[] | null> {
+/**
+ * Modèles qu'Ollama garde chargés (`/api/ps`), avec la mémoire vidéo qu'ils occupent — et (étape 456) leur taille
+ * totale : un modèle dont la taille dépasse sa part en mémoire vidéo déborde sur le processeur. `null` si Ollama ne
+ * répond pas.
+ */
+export async function loadedOllamaModels(): Promise<{ model: string; vramGb: number; sizeGb: number }[] | null> {
   try {
     const response = await fetch(`${config.ollama.host}/api/ps`, { signal: AbortSignal.timeout(2000) })
     if (!response.ok) return null
-    const data = (await response.json()) as { models?: { name?: string; model?: string; size_vram?: number }[] }
+    const data = (await response.json()) as { models?: { name?: string; model?: string; size?: number; size_vram?: number }[] }
     return (data.models ?? [])
-      .map((m) => ({ model: m.model ?? m.name ?? '', vramGb: Math.max(0, Number(m.size_vram) || 0) / 1024 ** 3 }))
+      .map((m) => {
+        const vramGb = Math.max(0, Number(m.size_vram) || 0) / 1024 ** 3
+        return { model: m.model ?? m.name ?? '', vramGb, sizeGb: Math.max(vramGb, (Number(m.size) || 0) / 1024 ** 3) }
+      })
       .filter((m) => m.model)
   } catch {
     return null

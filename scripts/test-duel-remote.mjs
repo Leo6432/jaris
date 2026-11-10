@@ -35,8 +35,8 @@ async function waitFor(predicate, what) {
   assert.fail(`jamais arrivé : ${what}`)
 }
 
-function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'], installedThere = [] } = {}) {
-  const calls = { version: [], list: [], pulls: [], thinking: [], converse: [], tool: [], deleted: [], candidates: [], lists: [], machines: [], patches: [] }
+function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'], installedThere = [], generateGate = null, loaded = () => [] } = {}) {
+  const calls = { version: [], list: [], pulls: [], thinking: [], converse: [], tool: [], deleted: [], candidates: [], lists: [], machines: [], patches: [], generating: [], ps: [] }
   let profile = {
     name: 'Léo',
     models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' },
@@ -68,7 +68,15 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
         return 'Fait.'
       }
     },
-    './codeGenerator': { generateApp: async () => ({ html: '<html></html>', issues: [] }) },
+    './codeGenerator': {
+      // Étape 456 : une génération qui attend qu'on la libère, pour voir quels modèles tournent en même temps.
+      generateApp: async (_prompt, _onProgress, _base, _signal, options) => {
+        calls.generating.push(options?.model)
+        if (generateGate) await generateGate
+        calls.generating.splice(calls.generating.indexOf(options?.model), 1)
+        return { html: '<html></html>', issues: [] }
+      }
+    },
     './generatedAppPreview': { createGeneratedAppPreview: () => 'jaris-preview://app/x/index.html' },
     './imageGenerator': { imageDrawingAvailable: async () => true },
     './hardwareScan': {
@@ -112,6 +120,11 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
       },
       deleteModel: async (model) => {
         calls.deleted.push({ model, host: config.ollama.host })
+      },
+      // Étape 456 : ce que la machine a VRAIMENT chargé (`/api/ps`), selon les modèles qui génèrent en ce moment.
+      loadedOllamaModels: async () => {
+        calls.ps.push(config.ollama.host)
+        return loaded([...new Set(calls.generating)])
       }
     },
     './profileStore': {
@@ -318,4 +331,35 @@ test('téléchargement sur l’autre machine : ni la mémoire ni le disque de CE
   } finally {
     globalThis.fetch = realFetch
   }
+})
+
+// Étape 456 (capture de Léo, OVH 4 × V100S : un 6e modèle d'une série Code à « 78%/22% CPU/GPU ») : sur la machine louée,
+// un NOUVEAU modèle de la série ne démarre que s'il tient vraiment, d'après ce qu'Ollama a chargé.
+test('étape 456 : série Code sur la machine louée — un nouveau modèle attend la place réelle, et jamais pendant un débordement', async () => {
+  const run = async (vramGb, loaded) => {
+    let release
+    const generateGate = new Promise((resolve) => (release = resolve))
+    const env = setup({ remote: { enabled: true, host: POD, vramGb, ramGb: 188 }, installedThere: [...MODELS], generateGate, loaded })
+    env.session.setDuelSeriesDelays({ idleCheckMs: 10 })
+    try {
+      await env.session.startDuel('code', [...MODELS], 2)
+      await waitFor(() => env.calls.ps.length >= 1 && new Set(env.calls.generating).size >= 1, 'premiers modèles lancés')
+      // Plusieurs relectures de la machine : ce qui devait démarrer a démarré.
+      const before = env.calls.ps.length
+      await waitFor(() => env.calls.ps.length >= before + 5, 'relectures de la machine')
+      assert.ok(env.calls.ps.every((host) => host === POD), 'la place lue sur la machine louée')
+      return new Set(env.calls.generating).size
+    } finally {
+      // Toujours libérer et fermer : une série laissée en route garderait le test ouvert.
+      release()
+      await env.session.endDuel().catch(() => {})
+    }
+  }
+  // 45 Go de cartes : par estimation, 2 modèles (4 duels chacun) tiennent au départ ; une fois chargés ils prennent peu
+  // (5 Go chacun) → les 2 autres démarrent ensuite, au fil des relectures.
+  assert.equal(await run(45, (models) => models.map((model) => ({ model, vramGb: 5, sizeGb: 5 }))), 4)
+  // Même machine, mais un des deux modèles déborde sur le processeur : aucun nouveau modèle.
+  assert.equal(await run(45, (models) => models.map((model, i) => ({ model, vramGb: i === 0 ? 3 : 5, sizeGb: 5 }))), 2)
+  // 60 Go : l'estimation laisse partir 2 modèles, mais chacun en prend vraiment 25 → pas de 3e.
+  assert.equal(await run(60, (models) => models.map((model) => ({ model, vramGb: 25, sizeGb: 25 }))), 2)
 })

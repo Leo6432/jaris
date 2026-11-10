@@ -11739,3 +11739,22 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   test-duel-session.mjs (le duel 2 démarre avant la fin du vote du 1, demande 2 écrite avant que B réponde au 1, votes
   dans l'ordre, aucun perdu). Les deux échouent sur l'ancien code. Test « Arrêter » de l'étape 399 rendu indépendant du
   rythme. Non vérifié en usage réel.
+
+## Étape 456 — Séries sur la machine louée : un nouveau modèle attend la place RÉELLE (v0.56.1)
+
+- Capture de Léo (OVH 4 × V100S, 126 Go, série Code, OLLAMA_NUM_PARALLEL=4 posé à sa demande) : 6 modèles chargés,
+  dont LFM2.5-2.6B à « 78%/22% CPU/GPU » — surtout sur le processeur. Deux causes : la place était comptée sur le
+  TOTAL des cartes (un modèle doit tenir dans ce qui reste sur UNE carte), et un modèle chargé pour 4 duels à la fois
+  prend plus que l'estimation (devstral-small-2 : 39 Go mesurés pour ~32 estimés).
+- Sur la machine louée, le gardien de la série relit `/api/ps` à chaque passage (`loadedOllamaModels`, qui donne
+  maintenant aussi la taille totale) : `seriesPlacementFrom` (mémoire réellement prise par les modèles de la série qui
+  tournent, et le premier qui déborde), puis `seriesNewModelFits` : aucun NOUVEAU modèle tant qu'un modèle déborde ;
+  sinon place réelle + place réservée des modèles lancés pas encore vus chargés + la sienne (4 duels) ≤ 90 % des cartes
+  (le reste pour les trous de chaque carte). Les duels de plus d'un modèle déjà chargé partent librement. Pas de
+  téléchargement d'avance pendant un débordement. Sur ce PC : inchangé. Une lecture ratée ne bloque rien.
+- Limite connue : les tout premiers modèles partent encore sur l'estimation (rien n'est chargé à ce moment-là) ; un
+  débordement déjà là ne se corrige pas (le modèle finit ses duels, lentement). L'Analyse en parallèle (étape 453) garde
+  sa règle sur le total, sans relecture.
+- Régression : test-duel.mjs (règle seule) ; test-duel-remote.mjs (vraie série sur machine louée : place réelle faible
+  → les 4 modèles finissent par tourner ; un débordement → pas de 3e ; 25 Go réels chacun sur 60 Go → pas de 3e).
+  Échoue sans la règle (4 modèles au lieu de 2). Faux Ollama de test-duel-series-move.mjs mis à jour.
