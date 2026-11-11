@@ -72,8 +72,9 @@
   --jv-on-media-rgb: 236, 236, 236;
 
   /* Geist (embarquée, src/main.tsx) avant Segoe UI : une police d'appli moderne, pas celle de Windows. */
-  --hud-font-display: 'Geist Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
-  --hud-font-body: 'Geist Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  /* Étape 465 : Bricolage Grotesque pour les titres, Instrument Sans pour le texte (voir main.tsx). */
+  --hud-font-display: 'Bricolage Grotesque Variable', 'Instrument Sans Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --hud-font-body: 'Instrument Sans Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
   --hud-font-mono: 'Geist Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
 
   font-family: var(--hud-font-body);
@@ -11733,4 +11734,21 @@ input.reply-ui__field-input {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+}
+
+/*
+ * Étape 465 (Léo : « Bricolage Grotesque, et Instrument Sans pour le texte courant, pour toute l'application ») : tous
+ * les vrais titres (h1 à h4, et la phrase d'état de l'Agent vocal et du Duel Vocal) en Bricolage Grotesque, comme sur le
+ * site de Jaris. À la fin du fichier et un cran plus précis qu'une simple classe : les titres qui reprenaient la police
+ * du texte par leur propre classe passent tous à celle des titres.
+ */
+:is(h1, h2, h3, h4):not(.jaris-keep-body-font),
+.app__status.app__status,
+/* Les titres qui ne sont pas des h1–h4 : celui de la colonne de gauche (« Conversations », « Options ») et celui du haut. */
+.app-sidebar__title.app-sidebar__title,
+.app-header__title.app-header__title {
+  font-family: var(--hud-font-display);
+  /* Léo, sur les captures : « titres plus gras », puis « encore plus gras » — le maximum de Bricolage (800). */
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }

@@ -446,7 +446,8 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
     assert.equal(styles.length, 1, 'seul le bouton Ouvrir le Chat doit être présent')
     for (const style of styles) {
       // Refonte « design sobre » : pilule à liseré fin en Geist (plus de coins coupés ni de Rajdhani).
-      assert.match(style.font, /Geist/, 'bouton laissé à la police par défaut du navigateur')
+      // Étape 465 : la police du texte de Jaris est Instrument Sans (plus Geist).
+      assert.match(style.font, /Instrument Sans/, 'bouton laissé à la police par défaut du navigateur')
       assert.equal(style.radius, '9999px', 'bouton sans la pilule de la famille de Jaris (style ChatGPT, étape 266)')
       assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
     }

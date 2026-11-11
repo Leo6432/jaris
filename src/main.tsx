@@ -4,10 +4,13 @@ import ReactDOM from 'react-dom/client'
 // rester utilisable hors ligne à 100%, une police téléchargée à l'exécution casserait ça au premier
 // démarrage sans internet. Refonte « design sobre » (maquette Jaris.dc.html) : Geist pour tout le texte,
 // Geist Mono pour le code et les données techniques — fini Rajdhani/Barlow et le look cockpit.
-// Sous-ensemble latin uniquement : une interface en français n'affichera jamais les autres alphabets.
-import '@fontsource/geist-sans/latin-400.css'
-import '@fontsource/geist-sans/latin-500.css'
-import '@fontsource/geist-sans/latin-600.css'
+// Étape 465 (Léo, sur le site de Jaris : « une police que j'adore, Bricolage Grotesque, et Instrument Sans pour le
+// texte courant : utilise ces deux polices pour toute l'application ») : Bricolage Grotesque pour les titres (axe de
+// taille optique : dessinée pour les grands titres comme pour les petits), Instrument Sans pour tout le texte ; Geist
+// Mono reste pour le code. Polices variables (toutes les graisses dans un fichier) ; leurs fichiers latin ET latin
+// étendu (polonais, tchèque, hongrois… : Jaris parle 24 langues), le navigateur ne charge que ceux dont il a besoin.
+import '@fontsource-variable/bricolage-grotesque/opsz.css'
+import '@fontsource-variable/instrument-sans/wght.css'
 import '@fontsource/geist-mono/latin-400.css'
 import '@fontsource/geist-mono/latin-500.css'
 import App from './App'

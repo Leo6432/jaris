@@ -11880,3 +11880,19 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   chaque langue) : « Une machine louée est connectée : Jaris ne connaît pas encore la vitesse des modèles sur cette
   machine, il ne peut donc pas choisir les plus rapides. Choisis plutôt « Au hasard » ou « Je choisis ». »
 - test-duel-panel-ui.mjs mis à jour (étape 414).
+
+## Étape 465 — Polices : Bricolage Grotesque (titres) et Instrument Sans (texte) (v0.59.0)
+
+- Léo, sur le site de Jaris fait par une autre IA : « une police que j'adore, Bricolage Grotesque, et Instrument Sans
+  pour le texte courant : utilise ces deux polices pour toute l'application ». Puis, sur les captures : « titres plus
+  gras », « encore plus gras » → 800 (le maximum de Bricolage). Captures montrées et validées avant publication.
+- Paquets `@fontsource-variable/bricolage-grotesque` (axe de taille optique, opsz.css) et
+  `@fontsource-variable/instrument-sans` (wght.css), licence OFL, embarqués (jamais chargés d'Internet : Jaris doit
+  marcher hors ligne). Fichiers latin ET latin étendu (polonais, tchèque…) : avant, seul le latin de base de Geist était
+  embarqué. Le grec et le cyrillique (el, bg, ru, uk) restent sur la police du système (aucune des deux ne les a).
+  `@fontsource/geist-sans` retiré ; Geist Mono reste pour le code. La page du téléphone n'en charge aucune (inchangée).
+- `--hud-font-display` = Bricolage, `--hud-font-body` = Instrument Sans ; en fin de index.css, tous les h1–h4, la phrase
+  d'état du Vocal, le titre de la colonne de gauche et celui du haut passent en Bricolage 800 (beaucoup de titres
+  reprenaient la police du texte par leur propre classe).
+- Tests : test-chat-conversations-ui.mjs et test-chat-widget-ui.mjs vérifiaient « Geist » → Instrument Sans. Mesuré dans
+  un vrai navigateur (polices chargées, titres en Bricolage, aucun débordement à 1200 et 760 px).
