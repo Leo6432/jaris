@@ -174,7 +174,7 @@ for (const testCase of CODE_TEST_CASES) {
 // Étape 466 : l'aperçu de Jaris remplace localStorage (refusé dans l'iframe isolée) par une mémoire — le test aussi.
 test('étape 466 : la mémoire de l’aperçu est EXACTEMENT celle de Jaris (generatedAppPreview.ts)', () => {
   const source = readFileSync(new URL('../electron/services/generatedAppPreview.ts', import.meta.url), 'utf8')
-  const block = source.match(/export const MEMORY_STORAGE_SCRIPT =\s*([\s\S]*?)\n\n/)?.[1]
+  const block = source.match(/export const MEMORY_STORAGE_SCRIPT =\s*([\s\S]*?)\r?\n\r?\n/)?.[1]
   assert.ok(block, 'MEMORY_STORAGE_SCRIPT introuvable')
   const script = Function(`return ${block}`)()
   assert.equal(script, `<script>${PREVIEW_MEMORY_STORAGE_SOURCE}</script>`)

@@ -11919,3 +11919,10 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   jugé sur son score de conversation (code à rejouer) — se réglera avec son rejeu. PC de Léo (8 Go / 32 Go) inchangé.
   **Remarque, pas corrigée** : un modèle sans score de code est jugé sur sa conversation (x/78), un modèle noté sur son
   code (x/5) : comparer les deux avantage parfois celui qui n'a pas passé le code.
+
+## Étape 467 — v0.59.2 : test « mémoire de l'aperçu » cassé sous Windows (CRLF)
+
+La CI de v0.59.1 a échoué sur un seul test (étape 466, « la mémoire de l'aperçu est EXACTEMENT celle de Jaris ») :
+la regex qui découpe `MEMORY_STORAGE_SCRIPT` dans `generatedAppPreview.ts` cherchait `\n\n`, absent du checkout
+Windows en CRLF. Corrigé en `\r?\n\r?\n` et vérifié sur un worktree `core.autocrlf=true` (11/11). Rappel de la
+règle : toute regex qui lit un fichier source du dépôt doit tolérer `\r`.
