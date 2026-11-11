@@ -11896,3 +11896,26 @@ téléchargeait ses 6 modèles (Chat, Vocal, Code, vision, pilotage) ; le disque
   reprenaient la police du texte par leur propre classe).
 - Tests : test-chat-conversations-ui.mjs et test-chat-widget-ui.mjs vérifiaient « Geist » → Instrument Sans. Mesuré dans
   un vrai navigateur (polices chargées, titres en Bricolage, aucun débordement à 1200 et 760 px).
+
+## Étape 466 — Test de code : le juge bloquait le stockage que Jaris fournit ; 25 scores de code (v0.59.1)
+
+- Campagne de Léo du 10-11/11/2026 (machine louée OVH, Jaris 0.58.1, Ollama 0.40.16) : le test de code ouvert à tous
+  (étape 463), 37 modèles, 185 applications. qwen3.8:27b, qwen3.6:27b, ornith-1.5:9b… ratant tous la liste de tâches,
+  le code a été relu : il enregistre les tâches dans localStorage (dans un try/catch, comme la consigne du mode Code le
+  DEMANDE). Depuis l'étape 368, l'aperçu de Jaris remplace ce stockage refusé par une mémoire (MEMORY_STORAGE_SCRIPT) —
+  le navigateur du test, lui, le refusait toujours : chaque ajout repartait d'une liste vide, compté faux alors que
+  l'application marche dans Jaris.
+- benchmark-browser.mjs : après le refus, la même mémoire que l'aperçu (`PREVIEW_MEMORY_STORAGE_SOURCE`, copie exacte
+  vérifiée par test-benchmark-code.mjs). Le cas « localStorage sans try/catch : plante dans l'aperçu » est retiré (il
+  ne plante plus dans Jaris depuis l'étape 368). Les 185 applications rejugées ici avec le juge corrigé : 14 verdicts
+  faux → juste, aucun dans l'autre sens. Échecs restants relus (message de confirmation caché par son propre code,
+  erreurs JavaScript, réponse vide). Version du test de code inchangée (le juge suit enfin Jaris ; les scores d'avant
+  ne gagnent que des points).
+- 25 modèles recopiés ; 12 ont un délai dépassé ou un plantage de la carte (CUDA out of memory) à rejouer d'abord —
+  le bouton les propose. Scores d'octobre touchés par la même erreur (qwen3.6:35b-a3b, north-mini-code-1.0, K2 Horizon
+  0.9B) : applications absentes de ce fichier, à remesurer.
+- Choix des modèles (grille 0–80 Go × 8–128 Go de RAM) : Code sans carte ou ≤ 2 Go : qwen3.5:0.8b (0/5 réel) →
+  qwen3:1.7b (5/5). Carte de 8 Go avec 8–16 Go de RAM (version d'Ollama inconnue) : qwen3.5:9b (4/5) → qwen3.5:4b, encore
+  jugé sur son score de conversation (code à rejouer) — se réglera avec son rejeu. PC de Léo (8 Go / 32 Go) inchangé.
+  **Remarque, pas corrigée** : un modèle sans score de code est jugé sur sa conversation (x/78), un modèle noté sur son
+  code (x/5) : comparer les deux avantage parfois celui qui n'a pas passé le code.

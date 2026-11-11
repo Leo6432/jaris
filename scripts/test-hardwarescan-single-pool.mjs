@@ -494,7 +494,8 @@ test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au tes
   const scan = setup({ vramMib: 0, ramGb: 16 })
   scan.setOllamaVersionSource(() => '0.40.5')
   const r = await scan.pickBestModelsFromBenchmark()
-  assert.equal(r.codeModel, 'qwen3.5:0.8b')
+  // Étape 466 : qwen3.5:0.8b a désormais son vrai score de code (0/5) ; qwen3:1.7b (5/5) le remplace.
+  assert.equal(r.codeModel, 'qwen3:1.7b')
 })
 
 test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
@@ -576,7 +577,8 @@ test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont
   const codeSection = REAL_SCORES.slice(REAL_SCORES.indexOf('## Code'), REAL_SCORES.indexOf('\n## ', REAL_SCORES.indexOf('## Code') + 1))
   const tooNew = scan.modelsNeedingNewerOllama(null)
   const withoutCode = ALL_CANDIDATE_MODELS.filter((m) => !codeSection.includes(`| ${m} |`) && !tooNew.has(m))
-  assert.ok(withoutCode.length > 30, `des dizaines de modèles sans code (${withoutCode.length})`)
+  // Étape 466 : 25 modèles ont depuis leur score de code ; il en reste une douzaine (délais à rejouer).
+  assert.ok(withoutCode.length >= 10, `des modèles sans code (${withoutCode.length})`)
   for (const model of withoutCode) {
     const entry = described.find((m) => m.model === model)
     assert.ok(entry?.needs.some((n) => n.test === 'code' && n.reason === 'missing'), `${model} : test de code à faire`)

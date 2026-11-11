@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { findBrowser, openBrowser } from './benchmark-browser.mjs'
+import { PREVIEW_MEMORY_STORAGE_SOURCE, findBrowser, openBrowser } from './benchmark-browser.mjs'
 import { CODE_TEST_CASES, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, withPreviewRules } from './benchmark-code.mjs'
 
 /**
@@ -130,11 +130,6 @@ const APPS = {
         'confirmation par alerte (invisible dans l’aperçu de Jaris)',
         page('<input placeholder="Nom"><input type="email"><textarea></textarea><button id="b">Envoyer</button>', "b.onclick=()=>alert('Message envoyé !')"),
         /aucun message de confirmation/
-      ],
-      [
-        'localStorage sans try/catch : plante dans l’aperçu isolé de Jaris',
-        page('<input placeholder="Nom"><input type="email"><textarea></textarea><button id="b">Envoyer</button><p id="ok"></p>', "b.onclick=()=>{localStorage.setItem('m','1');ok.textContent='Merci !'}"),
-        /aucun message de confirmation.*erreur JavaScript/
       ]
     ]
   }
@@ -175,6 +170,42 @@ for (const testCase of CODE_TEST_CASES) {
     }
   })
 }
+
+// Étape 466 : l'aperçu de Jaris remplace localStorage (refusé dans l'iframe isolée) par une mémoire — le test aussi.
+test('étape 466 : la mémoire de l’aperçu est EXACTEMENT celle de Jaris (generatedAppPreview.ts)', () => {
+  const source = readFileSync(new URL('../electron/services/generatedAppPreview.ts', import.meta.url), 'utf8')
+  const block = source.match(/export const MEMORY_STORAGE_SCRIPT =\s*([\s\S]*?)\n\n/)?.[1]
+  assert.ok(block, 'MEMORY_STORAGE_SCRIPT introuvable')
+  const script = Function(`return ${block}`)()
+  assert.equal(script, `<script>${PREVIEW_MEMORY_STORAGE_SOURCE}</script>`)
+})
+
+test('étape 466 : une liste de tâches qui enregistre dans localStorage (comme la consigne le demande) passe, comme dans Jaris', options, async () => {
+  // Le cas réel de qwen3.8:27b (campagne du 11/11) : lecture et écriture protégées par try/catch, liste relue à chaque ajout.
+  const html = page(
+    '<input id="t" type="text"><button id="a">Ajouter</button><ul id="l"></ul>',
+    `function load(){try{var d=localStorage.getItem('tasks');return d?JSON.parse(d):[]}catch(e){return []}}
+     function save(t){try{localStorage.setItem('tasks',JSON.stringify(t))}catch(e){}}
+     function render(t){var l=document.getElementById('l');l.innerHTML='';t.forEach(function(x,i){var li=document.createElement('li');li.textContent=x+' ';var b=document.createElement('button');b.textContent='Supprimer';b.onclick=function(){var c=load();c.splice(i,1);save(c);render(c)};li.appendChild(b);l.appendChild(li)})}
+     document.getElementById('a').onclick=function(){var v=document.getElementById('t').value.trim();if(!v)return;var t=load();t.push(v);save(t);document.getElementById('t').value='';render(t)}
+     render(load())`
+  )
+  const { page: p, close } = await openBrowser(browserPath)
+  try {
+    assert.equal(await checkGeneratedApp(p, CODE_TEST_CASES.find((c) => c.id === 'liste-taches'), html), null)
+  } finally {
+    await close()
+  }
+  // Même sans try/catch : l'aperçu fournit la mémoire, l'application ne plante plus (avant l'étape 466, le test la
+  // comptait fausse alors qu'elle marche dans Jaris depuis l'étape 368).
+  const { page: p2, close: close2 } = await openBrowser(browserPath)
+  try {
+    const form = page('<input placeholder="Nom"><input type="email"><textarea></textarea><button id="b">Envoyer</button><p id="ok"></p>', "b.onclick=()=>{localStorage.setItem('m','1');ok.textContent='Merci !'}")
+    assert.equal(await checkGeneratedApp(p2, CODE_TEST_CASES.find((c) => c.id === 'formulaire-contact'), form), null)
+  } finally {
+    await close2()
+  }
+})
 
 test('une application qui boucle à l’infini est arrêtée et comptée fausse, sans bloquer le test', options, async () => {
   const { page: p, close } = await openBrowser(browserPath)

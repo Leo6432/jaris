@@ -37,9 +37,9 @@ test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être reco
   for (const [model, score] of vision) assert.match(score, /^\d+\/34$/, `Vision ${model} : ${score}`)
   // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés,
   // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315), phi4-mini et K2 Horizon 0.9B (étape 317), Spark-X2.6-4B
-  // (étape 442), nemotron-3.5-bolt:e4b (étape 445).
+  // (étape 442), nemotron-3.5-bolt:e4b (étape 445), et 25 modèles de la campagne de code ouverte à tous (étape 466).
   const code = rows(section('Code'))
-  assert.equal(code.length, 14)
+  assert.equal(code.length, 39)
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 

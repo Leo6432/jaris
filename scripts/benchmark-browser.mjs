@@ -34,6 +34,23 @@ export function findBrowser(env = process.env) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Étape 466 (campagne de code de Léo du 11/11, 37 modèles) : depuis l'étape 368, l'aperçu de Jaris remplace
+ * localStorage/sessionStorage, refusés dans l'iframe isolée, par une mémoire tenue le temps de l'aperçu
+ * (MEMORY_STORAGE_SCRIPT, generatedAppPreview.ts) — et la consigne du mode Code DEMANDE localStorage. Le test, lui,
+ * laissait le refus : une liste de tâches qui enregistre (dans un try/catch, comme demandé) perdait chaque tâche et
+ * comptait fausse alors qu'elle marche dans Jaris (qwen3.8:27b, qwen3.6:27b, ornith-1.5:9b…). Copie EXACTE du script
+ * de l'aperçu (sans les balises), vérifiée par test-benchmark-code.mjs, ajoutée après le refus comme dans Jaris.
+ */
+export const PREVIEW_MEMORY_STORAGE_SOURCE =
+  '(function(){function m(){var d=Object.create(null),s={' +
+  'getItem:function(k){k=String(k);return k in d?d[k]:null},setItem:function(k,v){d[String(k)]=String(v)},' +
+  'removeItem:function(k){delete d[String(k)]},clear:function(){for(var k in d)delete d[k]},' +
+  'key:function(i){var k=Object.keys(d);return i>=0&&i<k.length?k[i]:null}};' +
+  "Object.defineProperty(s,'length',{get:function(){return Object.keys(d).length}});return s}" +
+  "['localStorage','sessionStorage'].forEach(function(n){try{window[n].getItem('jaris')}catch(e){" +
+  'try{Object.defineProperty(window,n,{configurable:true,value:m()})}catch(e2){}}})})();'
+
 /** Lance le navigateur invisible et renvoie une page pilotable. Toujours appeler close(). */
 export async function openBrowser(browserPath) {
   const profile = mkdtempSync(join(tmpdir(), 'jaris-navigateur-'))
@@ -146,11 +163,14 @@ export async function openBrowser(browserPath) {
     await send('Runtime.enable')
     await send('Emulation.setDeviceMetricsOverride', { ...VIEWPORT, deviceScaleFactor: 1, mobile: false })
     // Comme dans l'aperçu de Jaris (iframe « allow-scripts allow-forms », origine opaque) : aucune boîte de dialogue
-    // ne s'affiche, et localStorage refuse tout accès.
+    // ne s'affiche, et localStorage refuse tout accès — puis l'aperçu le remplace par une mémoire (étape 466).
     await send('Page.addScriptToEvaluateOnNewDocument', {
       source:
         "window.alert = () => {}; window.confirm = () => false; window.prompt = () => null; " +
-        "Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('Accès refusé (aperçu isolé)', 'SecurityError') } });"
+        "Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('Accès refusé (aperçu isolé)', 'SecurityError') } });" +
+        "Object.defineProperty(window, 'sessionStorage', { configurable: true, get() { throw new DOMException('Accès refusé (aperçu isolé)', 'SecurityError') } });" +
+        // Étape 466 : puis la mémoire de l'aperçu de Jaris, exactement comme dans l'application.
+        PREVIEW_MEMORY_STORAGE_SOURCE
     })
 
     const page = {

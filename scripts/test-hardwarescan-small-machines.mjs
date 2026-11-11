@@ -59,8 +59,9 @@ test('sans carte graphique : jamais le modèle qui rate toutes les demandes comp
     for (const role of ['flash', 'medium', 'large', 'code']) {
       assert.notEqual(chosen[role], TINY_K2, `${role} avec ${ramGb} Go de RAM`)
       // Étape 332 : avec sa vraie taille (1,4 Go et non 2), qwen3:1.7b (28/48) entre dans le gabarit des petits et
-      // passe devant qwen3.5:0.8b (13/48) pour la conversation ; le Code reste à qwen3.5:0.8b.
-      assert.equal(chosen[role], role === 'code' ? 'qwen3.5:0.8b' : 'qwen3:1.7b', `${role} avec ${ramGb} Go de RAM`)
+      // passe devant qwen3.5:0.8b (13/48) pour la conversation. Étape 466 : le Code aussi — qwen3.5:0.8b a son vrai
+      // score de code (0/5), qwen3:1.7b le sien (5/5).
+      assert.equal(chosen[role], 'qwen3:1.7b', `${role} avec ${ramGb} Go de RAM`)
     }
   }
 })

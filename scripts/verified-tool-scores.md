@@ -299,6 +299,21 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 
 Étape 445 : nemotron-3.5-bolt:e4b 5/5 : détail dans la section des conversations.
 
+Étape 466 : campagne de Léo du 10-11/11/2026 sur la machine louée OVH (Jaris 0.58.1, Ollama 0.40.16), le test de
+code ouvert à TOUS les modèles (étape 463) : 37 modèles, 185 applications. **Erreur du juge trouvée et corrigée** :
+depuis l'étape 368, l'aperçu de Jaris remplace le stockage du navigateur (refusé dans l'iframe isolée) par une mémoire,
+et la consigne du mode Code demande ce stockage — mais le test le laissait refusé. Une liste de tâches qui enregistre
+(dans un try/catch, comme demandé) perdait chaque tâche et comptait fausse alors qu'elle marche dans Jaris. Le
+navigateur du test reçoit désormais la même mémoire ; les 185 applications ont été rejugées ici : 14 verdicts passent
+de faux à juste (listes de tâches de qwen3.8:27b, qwen3.6:27b, ornith-1.5:9b, qwen3-vl:4b, ministral-3:14b, Ling,
+LFM2.5…), aucun dans l'autre sens. Les échecs restants relus (code qui cache son propre message, erreurs JavaScript,
+réponse vide de nemotron-3.5-lightning:30b sur l'addition). 25 modèles recopiés ci-dessous ; 12 ont un délai dépassé
+(20 min) ou un plantage de la carte (« CUDA out of memory », gemma4:12b) à rejouer d'abord : gemma4:12b, granite4.1:3b,
+granite4.1:8b, granite4.2:3b, G9v3-3B, MiniCPM5-2B, ministral-3:8b, qwen3-vl:2b, qwen3-vl:8b, qwen3.5:35b, qwen3.5:4b,
+qwen3.6:35b. **Concerne aussi les scores d'octobre** : qwen3.6:35b-a3b et north-mini-code-1.0 (liste vide « tâches
+gardées dans le stockage du navigateur ») et K2 Horizon 0.9B (« stockage interdit ») ont perdu un point pour cette
+raison ; leurs applications ne sont pas dans ce fichier — à remesurer.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -315,6 +330,31 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 | hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | 3/5 |
 | nemotron-3.5-bolt:e4b | 5/5 |
+| gemma4:26b | 5/5 |
+| gemma4:31b | 5/5 |
+| gemma4:e4b | 5/5 |
+| glm-4.7-flash:q4_K_M | 5/5 |
+| gpt-oss:20b | 5/5 |
+| granite4.2:30b | 4/5 |
+| granite4.2:8b | 4/5 |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 4/5 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 4/5 |
+| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 4/5 |
+| ministral-3:14b | 5/5 |
+| ministral-3:3b | 4/5 |
+| mistral-small3.2:24b | 5/5 |
+| muse-glimmer:30b | 5/5 |
+| nemotron-3.5-lightning:30b | 2/5 |
+| ornith-1.5:35b | 5/5 |
+| ornith-1.5:9b | 5/5 |
+| qwen3-vl:4b | 5/5 |
+| qwen3.5:0.8b | 0/5 |
+| qwen3.5:27b | 5/5 |
+| qwen3.5:2b | 1/5 |
+| qwen3.5:9b | 4/5 |
+| qwen3.6:27b | 5/5 |
+| qwen3.8:27b | 5/5 |
+| qwen3:1.7b | 5/5 |
 
 ## Demandes complètes — de bout en bout
 
