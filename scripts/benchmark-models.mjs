@@ -407,6 +407,8 @@ const MODELS = [
   // par oubli, alors qu'il tient sur n'importe quelle config et est un vrai candidat pour du matériel
   // très contraint (pas de GPU, ou VRAM minuscule).
   'qwen3.5:0.8b',
+  // Étape 469 : Qwen3.5-0.8B corrigé par Weight-Space Programming (voir FLASH_CANDIDATES dans hardwareScan.ts).
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0',
   // Fait exclusivement pour le tool calling (pas pour la conversation générale) : ses réponses aux 2
   // questions de raisonnement du test n'ont pas vraiment de sens, mais intéressant sur les 6 tests d'outils.
   'functiongemma:270m',
@@ -588,6 +590,7 @@ const MODEL_SIZE_HINTS = {
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 4.8,
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 1.6,
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': 1.0,
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 2.4,
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 1.7,
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 0.7,
@@ -654,6 +657,7 @@ const MEDIUM_TIER_MODELS = new Set([
   'granite4.2:3b',
   'granite4.1:3b',
   'qwen3.5:0.8b',
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0',
   // Étape 376 : modèles de vision et de code de moins de 10 Go, testés aussi en conversation.
   'qwen3-vl:8b',
   'qwen3-vl:4b',
@@ -1093,6 +1097,37 @@ class DiskFullError extends Error {
  * qui s'en sert pour convertir "ce modèle est à 40%" en "X Go sur Y Go au total ont été téléchargés",
  * la vraie unité de la barre de progression pondérée (voir MODEL_WEIGHT_GB).
  */
+/**
+ * Étape 469 : copie EXACTE de MODEL_DEFAULT_PARAMETERS (electron/services/modelDefaults.ts), vérifiée par
+ * test-benchmark-candidates-sync.mjs. Un GGUF de Hugging Face arrive sans les réglages du modèle officiel : sans eux,
+ * son score ne serait pas comparable à celui de l'original.
+ */
+const MODEL_DEFAULT_PARAMETERS = {
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': {
+    presence_penalty: 1.5,
+    temperature: 1,
+    top_k: 20,
+    top_p: 0.95
+  }
+}
+
+/**
+ * Les réglages d'origine d'un modèle (même méthode que applyModelDefaults, modelDefaults.ts) : `/api/create` depuis le
+ * modèle lui-même, sous le même nom. Rejette avec le vrai message d'Ollama : appelée avant chaque test du modèle
+ * (ensureReady, rejeu), un échec le fait sauter avec sa raison — un score mesuré avec d'autres réglages serait faux.
+ */
+async function applyModelDefaults(model) {
+  const parameters = MODEL_DEFAULT_PARAMETERS[model]
+  if (!parameters) return
+  const res = await fetch(`${OLLAMA_HOST}/api/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, from: model, parameters, stream: false })
+  })
+  if (!res.ok) throw new Error(`réglages d'origine non appliqués (${res.status} ${await res.text()})`)
+  console.log(`  ${model} : réglages d'origine appliqués (${Object.entries(parameters).map(([k, v]) => `${k} ${v}`).join(', ')}).`)
+}
+
 async function pullModel(model, budgetGb, diskCtx, onBucket) {
   console.log(`Téléchargement de ${model}…`)
   await refreshMachineFreeDisk()
@@ -2188,6 +2223,13 @@ async function main() {
             continue
           }
         }
+        // Étape 469 : ses réglages d'origine, seulement s'il va répondre (une appli seulement revérifiée s'en passe).
+        try {
+          if (needsModel) await applyModelDefaults(model)
+        } catch (err) {
+          console.log(`  ${model} : ${err.message}, ses tests ne sont pas rejoués.`)
+          continue
+        }
         console.log(`\n=== ${model} (tests rejoués) ===`)
         // Suivi en direct de Jaris (UnscoredModelsTest.tsx) : sans ces lignes, l'écran restait figé pendant tout le
         // rejeu alors que le test avançait (Léo, 05/10/2026 : « ça met fini » pour un seul modèle sur huit).
@@ -2581,6 +2623,19 @@ async function main() {
 
   /** Attend qu'un modèle soit prêt à être testé (déjà installé, ou en cours/à faire dans la file de pull). */
   async function ensureReady(model) {
+    if (!(await ensureInstalled(model))) return false
+    // Étape 469 : ses réglages d'origine avant chaque épreuve (une opération instantanée sur les métadonnées).
+    try {
+      await applyModelDefaults(model)
+      return true
+    } catch (err) {
+      console.log(`  ${model} : ${err.message}, ses tests ne sont pas faits.`)
+      skipReasons.set(model, err.message)
+      return false
+    }
+  }
+
+  async function ensureInstalled(model) {
     if (installed.includes(model)) return true
     if (!pullOutcomes.has(model)) {
       // Filet de secours : ne devrait arriver que si une boucle de test rattrape la file de téléchargement

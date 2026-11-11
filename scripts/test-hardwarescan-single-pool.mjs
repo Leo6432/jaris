@@ -231,7 +231,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
 // Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
 // Étape 462 : GLM-4.6V-Flash retiré de Jaris — plus aucun modèle n'attend le test de Léo.
-const AWAITING = []
+// Étape 469 : Qwen3.5-0.8B corrigé (« qwen3.5:0.8b (update) »), ajouté sans score : à tester par Léo.
+const AWAITING = ['hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -266,8 +267,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333).
-  assert.equal(conversationModels.size, 34)
+  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333), Qwen3.5-0.8B corrigé (étape 469).
+  assert.equal(conversationModels.size, 35)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).

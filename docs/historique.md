@@ -11937,3 +11937,34 @@ donc le script les croyait faits, et leurs cas en délai dépassé n'étaient ja
 les comptait à refaire : deux sources de vérité en désaccord. granite4.2:3b passait seulement parce que ses 5 cas étaient
 tous en erreur (ligne « — », refaite en entier). Corrigé : le rejeu utilise `CODE_TEST_CANDIDATES`. Test (le cas réel de
 qwen3.5:4b : ligne 2/5 déjà écrite, un cas en délai) qui échoue avec l'ancienne liste.
+
+## Étape 469 — v0.60.0 : Qwen3.5-0.8B corrigé par « Weight-Space Programming » (« qwen3.5:0.8b (update) »)
+
+Léo a vu le post de Rikiya Takehi (MIT, 02/11/2026) : un gros modèle (« GPT-6 Astra ») a retiré des poids de Qwen3.5-0.8B
+la « direction de boucle » de sa réflexion (64 colonnes des MLP des couches 15 et 19, 0,016 % des poids, sans
+entraînement) ; MATH-500 7,9 → 48,1 %, IFEval 21 → 62 %, en mode réflexion. Limite dite par l'auteur et la note de
+la communauté : ça retire un défaut connu (les boucles), ça n'ajoute pas d'intelligence (rien gagné sur Gemma 3 270M,
+qui ne boucle pas). Léo : « ajoute-le et mets qwen3.5:0.8b (update) ».
+
+Vérifié avant l'ajout, sur les sources primaires :
+- poids : RikiyaT, ML-Intern-lab, ovexhugi et Realuxxx ont le MÊME safetensors (sha256 fd1e42ac…) ; comparé par
+  lectures partielles (HTTP Range) à Qwen/Qwen3.5-0.8B : seules 64 colonnes des couches 15 et 19 diffèrent (couche
+  10 intacte), exactement ce que dit l'article ;
+- GGUF : `hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0` (quantifieur reconnu, source
+  ovexhugi = mêmes poids), Q8_0 comme le qwen3.5:0.8b officiel ; ses tenseurs déquantifiés sont ~100 fois plus
+  proches du modèle corrigé que de l'original dans les colonnes touchées ; Apache 2.0 ;
+- vrai Ollama 0.40.16 ici (archive officielle, sha256 vérifié, sans les bibliothèques GPU, port 11477) :
+  architecture qwen35, `tools`, `thinking`, `vision` (lecteur d'images téléchargé avec), 0,95 Go, un outil appelé.
+
+Piège trouvé en route : le qwen3.5:0.8b officiel embarque ses réglages (couche params du registre : presence_penalty
+1.5, temperature 1, top_k 20, top_p 0.95), un GGUF de Hugging Face AUCUN — Ollama aurait mis les siens, et le
+modèle corrigé aurait été mesuré dans de moins bonnes conditions que l'original (le presence_penalty sert justement
+contre les boucles). `electron/services/modelDefaults.ts` : `/api/create` depuis le modèle lui-même, sous le même nom
+(vérifié avec le vrai Ollama : nom, fichiers et vision gardés, réglages appliqués). Jaris les remet à chaque
+`pullModelIfMissing` (installé ou non ; un échec est seulement noté au journal) ; le script de test avant chaque
+épreuve (`ensureReady`) et au rejeu, un échec faisant sauter le modèle avec sa raison (jamais un score faux).
+Copie du tableau dans benchmark-models.mjs vérifiée par test.
+
+Candidat Rapide et Médium (comme qwen3.5:0.8b), nom affiché « qwen3.5:0.8b (update) », sans score : jamais choisi,
+proposé au test. Tests : `test-model-defaults.mjs` (mord : sans l'appel, échec), test du script (réglages AVANT la
+première question ; mord), faux ponts de 11 tests mis à jour pour le nouvel import.

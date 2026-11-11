@@ -19,6 +19,7 @@ function load({ tagsBefore, tagsAfter = tagsBefore, unreachable = false }) {
     '../config': { config: { ollama: { host: 'http://ollama', model: 'm', numCtx: 8192 } } },
     '../../shared/effort': { parseModelThinking: () => null },
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: () => 100, getDownloadBudgetGb: async () => 100 },
+    './modelDefaults': { applyModelDefaults: async () => {} },
     './huggingFaceImport': { importHuggingFaceModel: async () => {} },
     '../../shared/i18n': { t: (key, vars) => `${key} ${JSON.stringify(vars ?? {})}`, formatDecimal: String }
   }

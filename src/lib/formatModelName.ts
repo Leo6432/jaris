@@ -9,7 +9,9 @@
  * contient légitimement un underscore.
  */
 const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 'G9v3-3B'
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 'G9v3-3B',
+  // Étape 469, Léo : « mets qwen3.5:0.8b (update) » — le même modèle corrigé par Weight-Space Programming.
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': 'qwen3.5:0.8b (update)'
 }
 
 /**

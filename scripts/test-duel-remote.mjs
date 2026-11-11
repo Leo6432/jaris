@@ -319,6 +319,7 @@ test('téléchargement sur l’autre machine : ni la mémoire ni le disque de CE
       '../../shared/effort': { parseModelThinking: () => null },
       // CE PC : 5 Go pour faire tourner un modèle, 1 Go de disque.
       './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 6, getDownloadBudgetGb: async () => 5 },
+      './modelDefaults': { applyModelDefaults: async () => {} },
       './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
     })
   try {

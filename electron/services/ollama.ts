@@ -2,6 +2,7 @@ import { config } from '../config'
 import { parseModelThinking, type ModelThinking, type ThinkValue } from '../../shared/effort'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { importHuggingFaceModel } from './huggingFaceImport'
+import { applyModelDefaults } from './modelDefaults'
 import { formatDecimal, t } from '../../shared/i18n'
 import type { ModelPullProgress } from '../../shared/ipc'
 
@@ -794,10 +795,14 @@ export async function pullModelIfMissing(
   // téléchargement « réussi » en 2 s, puis « model not found »). Retélécharger n'y changerait rien.
   // Étape 377 : jamais pour l'Ollama d'une autre machine — la réparation agit sur le dossier et l'Ollama de CE PC.
   if (installed.length === 0 && !config.ollama.remote && modelsViewRepair && (await modelsViewRepair())) installed = await listInstalledModels()
-  if (installed.includes(model) || installed.includes(withTag(model))) return false
+  if (installed.includes(model) || installed.includes(withTag(model))) {
+    await keepModelDefaults(model)
+    return false
+  }
 
   try {
     await pullWithOllama(model, onStatus, onProgress, signal)
+    await keepModelDefaults(model)
     return true
   } catch (err) {
     if (signal?.aborted) throw err
@@ -810,6 +815,7 @@ export async function pullModelIfMissing(
     onStatus?.(t('ollama.pull.hfFallback', { model }))
     try {
       await importHuggingFaceModel(model, onStatus)
+      await keepModelDefaults(model)
       return true
     } catch (importErr) {
       if (importErr instanceof ModelTooLargeError || importErr instanceof DiskFullError) throw importErr
@@ -827,6 +833,15 @@ export async function pullModelIfMissing(
     // figée, pendant l'installation du modèle suivant ou du modèle d'image).
     onProgress?.(null)
   }
+}
+
+/**
+ * Étape 469 : les réglages d'origine d'un modèle importé de Hugging Face qui n'en apporte aucun (modelDefaults.ts),
+ * remis à chaque vérification (une opération sur les métadonnées, instantanée) : un premier essai manqué se rattrape
+ * tout seul. Un échec n'empêche pas d'utiliser le modèle : il est seulement noté dans le journal.
+ */
+async function keepModelDefaults(model: string): Promise<void> {
+  await applyModelDefaults(config.ollama.host, model).catch((err: unknown) => console.warn(err instanceof Error ? err.message : err))
 }
 
 async function pullWithOllama(

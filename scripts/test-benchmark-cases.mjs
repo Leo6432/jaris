@@ -176,6 +176,9 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
   const deleted = []
+  // Étape 469 : réglages appliqués (`/api/create` depuis le modèle lui-même), et l'ordre réglages / questions.
+  const created = []
+  const events = []
   let chatCalls = 0
   const server = createServer((req, res) => {
     // Coupure de connexion (Ollama arrêté ou en train de redémarrer) : la requête meurt sans réponse.
@@ -205,6 +208,17 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
         installed.push(name)
         return res.end(JSON.stringify({ status: 'success' }) + '\n')
       }
+      if (req.url === '/api/create') {
+        const json = JSON.parse(body)
+        // Comme le vrai Ollama : créer DEPUIS un modèle absent échoue.
+        if (!installed.includes(json.from)) {
+          res.statusCode = 404
+          return res.end(JSON.stringify({ error: `model '${json.from}' not found` }))
+        }
+        created.push(json)
+        events.push(['create', json.model])
+        return res.end(JSON.stringify({ status: 'success' }))
+      }
       if (req.url === '/api/delete') {
         const name = JSON.parse(body).name ?? JSON.parse(body).model
         deleted.push(name)
@@ -214,6 +228,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       if (req.url === '/api/chat') {
         const json = JSON.parse(body)
         requests.push(json)
+        events.push(['chat', json.model])
         if (!stats.firstStart.has(json.model)) {
           // Un chargement commence alors qu'un autre n'est pas encore fini : ce que l'étape 458 interdit.
           const loading = [...stats.firstStart.keys()].filter((name) => !isLoaded(name))
@@ -250,7 +265,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       res.end('{}')
     })
   })
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, stats, host: `http://127.0.0.1:${server.address().port}` })))
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, created, events, stats, host: `http://127.0.0.1:${server.address().port}` })))
 }
 
 /**
@@ -1309,6 +1324,42 @@ test('rejeu : un cas de code à refaire est rejoué pour un modèle hors de l’
     assert.equal(rows.length, 2, `le cas coupé doit être rejoué :\n${out}`)
     assert.ok(rows[1].replay && rows[1].ok, `rejoué et juste : ${rows[1].reason}`)
     assert.equal(fake.requests.length, 1, 'seul le cas à refaire est rejoué, pas les 5 applis')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Étape 469 : un GGUF de Hugging Face arrive sans les réglages du modèle officiel (qwen3.5:0.8b : presence_penalty 1.5,
+// temperature 1, top_k 20, top_p 0.95). Le script les applique AVANT la première question, sinon son score ne serait pas
+// comparable à celui de l'original (sans presence_penalty, Qwen3.5 tourne bien plus en rond).
+test('Qwen3.5-0.8B corrigé : ses réglages d’origine sont appliqués avant sa première question', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0'
+  const fake = await startFakeOllama({ installed: [], answer: () => ({ content: '' }) })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ANALYSIS_SCOPE: 'code',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RESUME: '1',
+      // Le cas de Léo : la machine louée (sans elle, ce conteneur sans carte graphique sauterait le modèle).
+      JARIS_MACHINE: fake.host,
+      JARIS_MACHINE_VRAM_GB: '126',
+      JARIS_MACHINE_RAM_GB: '180',
+      JARIS_MACHINE_DISK_GB: '470'
+    })
+    assert.equal(code, 0, out)
+    assert.deepEqual(fake.pulled, [model], out)
+    assert.deepEqual(
+      fake.created.map((c) => ({ ...c })),
+      [{ model, from: model, parameters: { presence_penalty: 1.5, temperature: 1, top_k: 20, top_p: 0.95 }, stream: false }],
+      out
+    )
+    const firstChat = fake.events.findIndex(([kind]) => kind === 'chat')
+    assert.ok(firstChat > 0, 'des questions ont été posées')
+    assert.deepEqual(fake.events[0], ['create', model], 'réglages appliqués avant la première question')
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

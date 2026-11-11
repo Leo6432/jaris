@@ -160,6 +160,7 @@ function loadOllama(response) {
     '../config': { config: { ollama: { host: 'http://ollama', model: 'm', numCtx: 8192 } } },
     '../../shared/effort': { parseModelThinking: () => null },
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: () => 100, getDownloadBudgetGb: async () => 100 },
+    './modelDefaults': { applyModelDefaults: async () => {} },
     './huggingFaceImport': { importHuggingFaceModel: async () => {} }
   }
   // Étape 299 : `/api/show` (maximum du modèle) répond à part, sans plafond.
