@@ -1261,6 +1261,60 @@ test('rejeu : un cas de code à refaire est rejoué même quand le modèle a dé
   }
 })
 
+// Étape 468 : le 11/11/2026, « Tout tester » n'a fait que granite4.2:3b, puis « Test terminé » direct à chaque clic.
+// Depuis l'étape 466, le test de code vaut pour TOUS les modèles (CODE_TEST_CANDIDATES), mais le rejeu ne regardait
+// que l'ancienne liste CODE_CANDIDATES : les cas coupés de qwen3.5:4b (et 10 autres) n'étaient jamais rejoués, alors
+// que Jaris les affichait « à tester ». Le cas réel : une ligne de code déjà écrite (2/5), un cas en délai dépassé.
+test('rejeu : un cas de code à refaire est rejoué pour un modèle hors de l’ancienne liste de code (qwen3.5:4b)', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen3.5:4b'
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+  const oldList = script.slice(script.indexOf('const CODE_CANDIDATES = ['), script.indexOf('\n]', script.indexOf('const CODE_CANDIDATES = [')))
+  assert.ok(!oldList.includes(`'${model}'`), 'le cas de Léo : un modèle absent de l’ancienne liste de code')
+  const testCase = CODE_TEST_CASES[1]
+  writeFileSync(
+    join(dir, 'r.md'),
+    [
+      `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+      `Version du test de code : ${CODE_TEST_VERSION}`,
+      '',
+      '## Code',
+      '',
+      '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+      '|---|---|---|---|',
+      `| ${model} | 20745 ms | 50.0 tok/s | 2/5 |`
+    ].join('\n')
+  )
+  writeFileSync(
+    join(dir, 'r.traces.jsonl'),
+    [
+      { type: 'campagne', versions: { conversation: CONVERSATION_TEST_VERSION, code: CODE_TEST_VERSION } },
+      { type: 'code', model, id: testCase.id, ok: false, timeout: true, reason: 'erreur : délai dépassé : aucune réponse du modèle en 20 min' }
+    ].map((row) => JSON.stringify(row)).join('\n') + '\n'
+  )
+  const sum =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><input id="a" type="number"><input id="b" type="number"><button id="c">Calculer</button><div id="r"></div>' +
+    "<script>c.onclick=()=>{r.textContent='Somme : '+(Number(a.value)+Number(b.value))}</script></body></html>"
+  const fake = await startFakeOllama({ installed: [model], answer: (_m, prompt) => ({ content: prompt.includes(testCase.prompt) ? `\`\`\`html\n${sum}\n\`\`\`` : '' }) })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ANALYSIS_SCOPE: 'code',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RESUME: '1'
+    })
+    assert.equal(code, 0, out)
+    const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code')
+    assert.equal(rows.length, 2, `le cas coupé doit être rejoué :\n${out}`)
+    assert.ok(rows[1].replay && rows[1].ok, `rejoué et juste : ${rows[1].reason}`)
+    assert.equal(fake.requests.length, 1, 'seul le cas à refaire est rejoué, pas les 5 applis')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 // Étape 320 : le cas réel de K2 Horizon 7B chez Léo, de bout en bout. Deux applis coupées par le délai, puis
 // « model not found » à leur rejeu, un score de code déjà recopié, et le modèle supprimé du disque. Trois défauts
 // successifs avaient empêché ce rejeu ; vérifié ici d'un seul tenant : retéléchargé, ces 2 applis seulement, supprimé.

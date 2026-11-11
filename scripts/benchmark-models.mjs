@@ -2143,7 +2143,9 @@ async function main() {
         ? CONVERSATION_SCOPE.includes(row.model) && inOnlyModels(row.model)
         : row.type === 'vision'
           ? (SCOPE === 'all' || SCOPE === 'vision') && VISION_CANDIDATES.some((c) => c.model === row.model) && inOnlyModels(row.model)
-          : (SCOPE === 'all' || SCOPE === 'code') && CODE_CANDIDATES.some((c) => c.model === row.model) && inOnlyModels(row.model)
+          : (SCOPE === 'all' || SCOPE === 'code') && CODE_TEST_CANDIDATES.some((c) => c.model === row.model) && inOnlyModels(row.model)
+    // Étape 468 : CODE_TEST_CANDIDATES (tous les modèles, étape 466), pas l'ancienne liste CODE_CANDIDATES — sinon les
+    // cas à refaire des modèles ajoutés au test de code n'étaient jamais rejoués : « Test terminé » tout de suite.
     // Léo, 05/10/2026 : on refait aussi un cas qui a PLANTÉ (« erreur : … » : appel d'outil illisible pour Ollama, moteur
     // tombé…), pas seulement un délai dépassé. Une seule fois : s'il replante au rejeu, à l'identique, c'est bien le
     // modèle, et son erreur reste comptée fausse. Un délai dépassé, lui, est retenté à chaque lancement.

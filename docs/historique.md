@@ -11926,3 +11926,14 @@ La CI de v0.59.1 a échoué sur un seul test (étape 466, « la mémoire de l'ap
 la regex qui découpe `MEMORY_STORAGE_SCRIPT` dans `generatedAppPreview.ts` cherchait `\n\n`, absent du checkout
 Windows en CRLF. Corrigé en `\r?\n\r?\n` et vérifié sur un worktree `core.autocrlf=true` (11/11). Rappel de la
 règle : toute regex qui lit un fichier source du dépôt doit tolérer `\r`.
+
+## Étape 468 — v0.59.3 : « Tout tester » s'arrêtait après granite4.2:3b (« Test terminé » direct)
+
+Léo (11/11, machine louée) : « Tout tester » n'a fait que granite4.2:3b, puis « Test terminé » à chaque clic, alors que
+Jaris affichait encore 11 modèles à tester (qwen3.5:4b, gemma4:12b, qwen3.6:35b…). Cause : depuis l'étape 466, le test de
+code vaut pour TOUS les modèles (`CODE_TEST_CANDIDATES`), mais `pendingCases()` (rejeu des cas coupés/plantés) filtrait
+encore sur l'ancienne liste `CODE_CANDIDATES`. Ces 11 modèles avaient déjà une ligne de code (avec au moins une réponse),
+donc le script les croyait faits, et leurs cas en délai dépassé n'étaient jamais rejoués ; Jaris, lui (campaignCompletion),
+les comptait à refaire : deux sources de vérité en désaccord. granite4.2:3b passait seulement parce que ses 5 cas étaient
+tous en erreur (ligne « — », refaite en entier). Corrigé : le rejeu utilise `CODE_TEST_CANDIDATES`. Test (le cas réel de
+qwen3.5:4b : ligne 2/5 déjà écrite, un cas en délai) qui échoue avec l'ancienne liste.
