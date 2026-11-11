@@ -24,6 +24,8 @@ const duel = loadTsModule('shared/duel.ts')
 const LARGE = 'qwen3.8:27b'
 const CHALLENGER = 'qwen3.6:27b'
 const K2_7B = 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M'
+// Étape 471 : le Moyen de Léo avec la mémoire réelle à 16 384 (K2 Horizon 7B, 8,3 Go chargé, ne tient plus sur 8 Go).
+const K2_37B = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
 
 function setup(votes, { vramMib = 8 * 1024, ramGb = 32 } = {}) {
   const exec = (_cmd, opts, cb) => (typeof opts === 'function' ? opts : cb)(null, `Fake GPU, ${vramMib}\n`, '')
@@ -60,7 +62,8 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   const empty = await setup([]).pickBestModelsFromBenchmark()
   assert.deepEqual(JSON.parse(JSON.stringify(empty)), JSON.parse(JSON.stringify(none)))
   // Machine de Léo, avec les vrais scores : ce que Jaris choisit quand personne n'a encore voté (calculé, pas deviné).
-  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' })
+  // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go chargé) ne tient plus sur les 7 Go utiles.
+  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:27b' })
   assert.equal(none.codeModel, 'ornith-1.5:35b')
   assert.equal(none.visionModel, LARGE, 'Vision n’a pas de duel : elle garde Artificial Analysis')
   assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
@@ -188,16 +191,21 @@ test('le calcul affiché dit d’où vient la note : les duels (points et nombre
 
 test('candidats d’une session : ceux qui tiennent sur CE PC, Ollama capable, quel que soit le test d’outils, et les deux groupes', async () => {
   const m = setup([])
-  const profile = { models: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE }, codeModel: LARGE, blockedModels: { 'gemma4:e4b': 'bloqué' } }
+  const profile = { models: { flash: 'granite4.2:3b', medium: K2_37B, large: LARGE }, codeModel: LARGE, blockedModels: { 'gemma4:e4b': 'bloqué' } }
   const candidates = await m.getDuelCandidates('conversation', profile)
   const byModel = new Map(candidates.map((c) => [c.model, c]))
   assert.ok(candidates.length >= 8)
+  // Étape 471 : « tient » se juge sur la mémoire réelle chargée (contexte 16 384), celle de « Tous les modèles » ;
+  // `vramGb` d'un candidat reste la taille du fichier (téléchargement).
+  const memory = new Map((await m.getModelOverview()).entries.map((e) => [e.model, e.vramGb]))
   for (const c of candidates) {
-    assert.ok(c.group === 'card' ? c.vramGb <= 7 : c.group === 'ram' && c.vramGb > 7, `${c.model} : groupe ${c.group} pour ${c.vramGb} Go`)
-    assert.ok(c.vramGb <= 7 + (32 - 16), `${c.model} ne tient pas sur ce PC`)
+    const need = memory.get(c.model)
+    assert.ok(c.group === 'card' ? need <= 7 : c.group === 'ram' && need > 7, `${c.model} : groupe ${c.group} pour ${need} Go`)
+    assert.ok(need <= 7 + (32 - 16), `${c.model} ne tient pas sur ce PC`)
   }
+  assert.equal(byModel.has(K2_7B), false, 'K2 Horizon 7B (8,3 Go chargé) ne tient pas sur la carte et ne peut pas déborder')
   assert.equal(byModel.get(LARGE).inUse, true)
-  assert.equal(byModel.get(K2_7B).inUse, true)
+  assert.equal(byModel.get(K2_37B).inUse, true)
   assert.equal(byModel.has('gemma4:e4b'), false, 'un modèle bloqué au téléchargement n’est jamais proposé')
   // Étape 376 : le test d'appel d'outils ne filtre plus les duels — un score faible (phi4-mini, 7/78) ou aucun score
   // de conversation (un modèle de code) n'empêche pas d'entrer en duel.
@@ -216,9 +224,9 @@ test('candidats d’une session : ceux qui tiennent sur CE PC, Ollama capable, q
 
 test('une session sur la machine de Léo : les modèles déjà utilisés, puis un challenger qui déborde et un qui tient sur la carte', async () => {
   const m = setup([])
-  const profile = { models: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE }, codeModel: LARGE }
+  const profile = { models: { flash: 'granite4.2:3b', medium: K2_37B, large: LARGE }, codeModel: LARGE }
   const chosen = duel.selectDuelModels(await m.getDuelCandidates('conversation', profile), 5)
-  assert.deepEqual(chosen.slice(0, 3).sort(), [K2_7B, 'granite4.2:8b', LARGE].sort())
+  assert.deepEqual(chosen.slice(0, 3).sort(), [K2_37B, 'granite4.2:3b', LARGE].sort())
   const sizes = new Map((await m.getModelOverview()).entries.map((e) => [e.model, e.vramGb]))
   assert.ok(sizes.get(chosen[3]) > 7 !== sizes.get(chosen[4]) > 7, `un gros et un petit challenger : ${chosen.slice(3)}`)
 })

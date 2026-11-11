@@ -61,30 +61,36 @@ test('sans carte graphique : jamais le modèle qui rate toutes les demandes comp
       // Étape 332 : avec sa vraie taille (1,4 Go et non 2), qwen3:1.7b (28/48) entre dans le gabarit des petits et
       // passe devant qwen3.5:0.8b (13/48) pour la conversation. Étape 466 : le Code aussi — qwen3.5:0.8b a son vrai
       // score de code (0/5), qwen3:1.7b le sien (5/5).
-      assert.equal(chosen[role], 'qwen3:1.7b', `${role} avec ${ramGb} Go de RAM`)
+      // Étape 471 : avec la mémoire réelle à 16 384, le plus léger noté est qwen3.5:0.8b (update) (1,4 Go chargé) : le
+      // gabarit des petits va jusqu'à 2,8 Go. qwen3:1.7b (3,4 Go chargé) en sort ; MiniCPM5-2B (2,4 Go, 37/48) en
+      // conversation, LFM2.5-2.6B (2,1 Go, 4/5) en code.
+      assert.equal(chosen[role], role === 'code' ? 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M' : 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', `${role} avec ${ramGb} Go de RAM`)
     }
   }
 })
 
 test('petite carte (1 à 2 Go) : Rapide prend la meilleure note, plus le plus léger des plus fiables aux questions', async () => {
   // Étape 332 : sur 2 Go, seule K2 Horizon 0.9B (0/48) tient ; le gabarit des petits est appliqué quand même.
-  for (const vramMib of [1024, 2048]) assert.equal((await picks(vramMib, 8)).flash, 'qwen3:1.7b', `${vramMib} Mo`)
+  // Étape 471 : MiniCPM5-2B (2,4 Go chargé), le meilleur du gabarit des petits avec la mémoire réelle (voir plus haut).
+  for (const vramMib of [1024, 2048]) assert.equal((await picks(vramMib, 8)).flash, 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', `${vramMib} Mo`)
   // 3 Go : MiniCPM5-2B (37/48, plus léger) plutôt que qwen3:1.7b (28/48), qui avait seulement le meilleur score aux questions.
   assert.equal((await picks(3072, 16)).flash, 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M')
 })
 
-test('le gabarit « deux fois le plus léger » ne sert QUE quand rien ne tient : une carte de 6 Go garde K2 Horizon 3.7B', async () => {
+test('le gabarit « deux fois le plus léger » ne sert QUE quand rien ne tient : une carte de 6 Go garde un modèle qui tient', async () => {
   const chosen = await picks(6144, 16)
-  assert.equal(chosen.flash, 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M')
-  assert.equal(chosen.medium, 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M')
+  // Étape 471 : K2 Horizon 3.7B prend 5,8 Go chargé, plus que les 5 Go utiles : granite4.2:3b (3,8 Go), qui tient.
+  assert.equal(chosen.flash, 'granite4.2:3b')
+  assert.equal(chosen.medium, 'granite4.2:3b')
 })
 
 test('la machine de Léo (8 Go de VRAM, 63 Go de RAM) : modèles attendus', async () => {
   assert.deepEqual(await picks(8192, 63), {
     // Étape 340 : granite4.2:8b → qwen3.5:9b en Faible ; étape 348 : retour à granite4.2:8b (sa vitesse publiée est
     // passée de 47,1 à 97,3 tokens/s le 23/10/2026).
-    flash: 'granite4.2:8b',
-    medium: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
+    // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b et K2 Horizon 7B (8,3 Go chargés) ne tiennent plus.
+    flash: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
+    medium: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
     large: 'qwen3.8:27b',
     vision: 'qwen3.8:27b',
     code: 'qwen3.8:27b'
@@ -93,9 +99,10 @@ test('la machine de Léo (8 Go de VRAM, 63 Go de RAM) : modèles attendus', asyn
 
 test('étape 332 : sans carte graphique mais avec beaucoup de RAM, Élevé et Code gardent un vrai modèle (pas le gabarit des petits)', async () => {
   const chosen = await picks(0, 32)
-  assert.equal(chosen.flash, 'qwen3:1.7b')
+  assert.equal(chosen.flash, 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M')
   assert.equal(chosen.large, 'gpt-oss:20b')
-  assert.equal(chosen.code, 'devstral-small-2:24b')
+  // Étape 471 : devstral-small-2:24b prend 18,4 Go chargé, plus que les 16 Go de RAM utiles ; gpt-oss:20b (14,5 Go) tient.
+  assert.equal(chosen.code, 'gpt-oss:20b')
 })
 
 // Étape 346 : « Retester la configuration » choisissait d'autres modèles quand la version d'Ollama n'était pas encore

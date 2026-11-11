@@ -84,8 +84,9 @@ test('deux VRAM TOTALES dans le même intervalle obtiennent garanti le même mod
   assert.equal(result7.models.medium, 'qwen3.5:4b')
 })
 
-test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gemma4:12b), dès 9 Go', async () => {
-  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 9 * 1024 })
+test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gemma4:12b), dès 11 Go', async () => {
+  // Étape 471 : gemma4:12b prend 9,4 Go chargé (contexte 16 384) : il faut 11 Go de carte (1 Go réservé), plus 9.
+  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 11 * 1024 })
   const result = await pickBestModelsFromBenchmark()
   assert.equal(result.models.medium, 'gemma4:12b')
 })

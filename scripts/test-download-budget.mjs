@@ -50,12 +50,16 @@ const MACHINES = [null, 4, 6, 8, 12, 16, 24].flatMap((vram) => [8, 16, 32, 64].m
 
 test('chaque modèle que Jaris choisit pour une machine peut aussi y être téléchargé', async () => {
   for (const [vram, ram] of MACHINES) {
-    const picks = await scanFor(vram, ram).getMyModelPicks(null)
+    const scan = scanFor(vram, ram)
+    const picks = await scan.getMyModelPicks(null)
     const budget = resources.downloadBudgetGb(vram, ram)
     for (const role of ['flash', 'medium', 'large', 'vision', 'code']) {
       const entry = picks[role]
       if (!entry?.model) continue
-      assert.ok(entry.vramGb <= budget, `${vram ?? 'sans carte NVIDIA'} Go / ${ram} Go de RAM : ${role} = ${entry.model} (${entry.vramGb} Go) refusé au téléchargement (budget ${budget} Go)`)
+      // Étape 471 : `vramGb` d'un choix est la mémoire chargée (contexte 16 384) ; le filet de téléchargement, lui, compare
+      // la taille du FICHIER (manifeste) — celle des listes de candidats (modelSizeGb).
+      const fileGb = scan.modelSizeGb(entry.model)
+      assert.ok(fileGb <= budget, `${vram ?? 'sans carte NVIDIA'} Go / ${ram} Go de RAM : ${role} = ${entry.model} (${fileGb} Go) refusé au téléchargement (budget ${budget} Go)`)
     }
   }
 })

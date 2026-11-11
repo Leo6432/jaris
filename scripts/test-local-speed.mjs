@@ -131,9 +131,9 @@ const scanSource = ts.transpileModule(readFileSync(new URL('../electron/services
 }).outputText
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
 
-function scan(measured) {
-  const exec = (_cmd, opts, cb) => (typeof opts === 'function' ? opts : cb)(null, 'Fake GPU, 8192\n', '')
-  exec[promisify.custom] = () => Promise.resolve({ stdout: 'Fake GPU, 8192\n', stderr: '' })
+function scan(measured, vramMib = 8192) {
+  const exec = (_cmd, opts, cb) => (typeof opts === 'function' ? opts : cb)(null, `Fake GPU, ${vramMib}\n`, '')
+  exec[promisify.custom] = () => Promise.resolve({ stdout: `Fake GPU, ${vramMib}\n`, stderr: '' })
   const modules = {
     child_process: { exec },
     fs: {
@@ -155,12 +155,14 @@ function scan(measured) {
 }
 
 test('choix : sans mesure, identique à avant ; une vitesse mesurée lente fait perdre Faible', async () => {
-  const before = await scan(null).pickBestModelsFromBenchmark()
-  const noMeasure = await scan({}).pickBestModelsFromBenchmark()
+  // Étape 471 : une carte de 10 Go. Sur 8 Go, avec la mémoire réelle à 16 384, le Faible de Léo est aussi le plus fiable
+  // aux outils de ce qui tient : la vitesse de référence est la sienne, il ne peut pas passer sous le plancher.
+  const before = await scan(null, 10240).pickBestModelsFromBenchmark()
+  const noMeasure = await scan({}, 10240).pickBestModelsFromBenchmark()
   assert.equal(JSON.stringify(noMeasure), JSON.stringify(before), 'aucune mesure : la vitesse publiée, rien ne change')
   const fast = before.models.flash
   // Mesuré sur ce PC : le modèle Faible actuel est 20 fois plus lent qu'un autre petit modèle mesuré.
-  const slow = await scan({ [fast]: 3, 'ministral-3:3b': 60 }).pickBestModelsFromBenchmark()
+  const slow = await scan({ [fast]: 3, 'ministral-3:3b': 60 }, 10240).pickBestModelsFromBenchmark()
   assert.notEqual(slow.models.flash, fast, 'trop lent sur ce PC : il ne passe plus le plancher de Faible')
   assert.equal(slow.models.large, before.models.large, 'Élevé ne regarde pas la vitesse')
 })

@@ -71,7 +71,9 @@ test('Rapide sur 8 Go, seuil de 50 % (Léo, 04/10/2026) : le plus intelligent pa
   // Étape 348 : vitesses relues le 23/10/2026. Référence : ministral-3:8b (113,8), le plus rapide des 78/78 ;
   // plancher 56,9. granite4.2:8b (97,3, il était à 47,1) repasse au-dessus et a la meilleure note de ceux qui restent
   // (qwen3.5:9b, 58,8, passe aussi mais il est moins fiable : 74/78).
-  assert.equal(picks.flash, 'granite4.2:8b')
+  // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go) et qwen3.5:9b (7,7 Go) ne tiennent plus sur les
+  // 7 Go utiles : granite4.2:3b (3,8 Go). Sans version d'Ollama connue, K2 Horizon est écarté (étape 312).
+  assert.equal(picks.flash, 'granite4.2:3b')
 })
 
 // 03/10/2026, Léo : « une vraie analyse, avec un algorithme qui sait faire un entre-deux entre intelligence et
@@ -127,7 +129,8 @@ test('Rapide : un modèle nettement plus intelligent et un peu plus lent l’emp
 
 test('Rapide : un modèle plus intelligent mais bien plus lent ne passe JAMAIS devant', async () => {
   const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| qwen3.5:9b | 6/6 |', '| granite4.2:8b | 6/6 |'].join('\n')
-  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  // Étape 471 : 10 Go, pour que les trois tiennent vraiment sur la carte (qwen3.5:9b 7,7 Go, granite4.2:8b 8,3 Go chargés).
+  const r = await setup({ vramMib: 10 * 1024, scores }).pickBestModelsFromBenchmark()
   assert.equal(r.models.flash, 'ministral-3:3b')
 })
 
@@ -147,7 +150,8 @@ test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de 
   assert.ok(vramOf(r.models.flash) <= 7, `Rapide ${r.models.flash} ne tient pas sur la carte`)
   assert.ok(vramOf(r.models.medium) <= 7, `Médium ${r.models.medium} ne tient pas sur la carte`)
   // Étape 166 : granite4.2:8b (17/17) passe devant qwen3.5:9b (16/17) — la fiabilité départage d'abord.
-  assert.equal(r.models.medium, 'granite4.2:8b', 'Médium = le plus fiable, puis le plus intelligent, qui tient ENTIÈREMENT sur la carte')
+  // Étape 471 : avec la mémoire réelle à 16 384, ni l'un ni l'autre ne tient sur 8 Go (8,3 et 7,7 Go chargés).
+  assert.equal(r.models.medium, 'granite4.2:3b', 'Médium = le plus fiable, puis le plus intelligent, qui tient ENTIÈREMENT sur la carte')
 })
 
 test('Médium peut être un « gros » modèle quand la carte le permet (plus de liste réservée)', async () => {
@@ -209,7 +213,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
     return REAL_SCORES.slice(start, next < 0 ? undefined : next).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/\\d+) \\|`))?.[1] ?? null
   }
   const vl = byModel.get('qwen3-vl:8b')
-  assert.deepEqual({ ...vl.toolScores }, { conversation: tableScore('Conversation', 'qwen3-vl:8b'), vision: tableScore('Vision', 'qwen3-vl:8b'), code: null })
+  assert.deepEqual({ ...vl.toolScores }, { conversation: tableScore('Conversation', 'qwen3-vl:8b'), vision: tableScore('Vision', 'qwen3-vl:8b'), code: tableScore('Code', 'qwen3-vl:8b') })
+  // Étape 470 : qwen3-vl:8b a depuis son score de code (4/5).
+  assert.match(vl.toolScores.code, /^\d+\/5$/)
   assert.match(vl.toolScores.vision, /^\d+\/34$/, 'score de vision de qwen3-vl:8b')
   assert.match(vl.toolScores.conversation, /^\d+\/78$/, 'son appel d’outils reste celui du test de conversation')
   assert.equal(bare.get(VL).toolScores.conversation, null, 'pas encore de score de conversation : la colonne affiche « — »')
@@ -231,8 +237,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
 // Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
 // Étape 462 : GLM-4.6V-Flash retiré de Jaris — plus aucun modèle n'attend le test de Léo.
-// Étape 469 : Qwen3.5-0.8B corrigé (« qwen3.5:0.8b (update) »), ajouté sans score : à tester par Léo.
-const AWAITING = ['hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0']
+// Étape 469 : Qwen3.5-0.8B corrigé (« qwen3.5:0.8b (update) »), ajouté sans score ; noté à l'étape 472.
+// Étape 472 : l'original qwen3.5:0.8b « à remesurer » (comparaison dans les mêmes conditions) : proposé au test.
+const AWAITING = ['qwen3.5:0.8b']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -300,7 +307,9 @@ test('un score de conversation du test actuel (sur 78) dispense du test ; vision
 test('Médium : les modèles vraiment lents sont écartés (moins de 20 %), Puissant n’a pas de minimum', async () => {
   // Référence de vitesse : ministral-3:3b (194), plancher de Médium 38,8.
   const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 78/78 |', '| qwen3.5:4b | 78/78 |'].join('\n')
-  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  // Étape 471 : 10 Go — sur 8 Go, la carte serait plus petite que « deux fois le plus léger » (qwen3.5:4b, 4,3 Go chargé)
+  // et le repli des petites cartes (étape 332) déciderait à la place des planchers de vitesse testés ici.
+  const r = await setup({ vramMib: 10 * 1024, scores }).pickBestModelsFromBenchmark()
   // qwen3.5:4b est plus fort (13,1 × 0,21 = 2,7 contre 4,8 × 0,18 = 0,9) mais à 22, sous le plancher de 38,8.
   assert.equal(r.models.medium, 'ministral-3:3b')
   assert.equal(r.models.large, 'qwen3.5:4b')
@@ -308,7 +317,8 @@ test('Médium : les modèles vraiment lents sont écartés (moins de 20 %), Puis
 
 test('Médium : un modèle sans vitesse publiée reste candidat (choix de Léo), contrairement à Rapide', async () => {
   const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 78/78 |', '| granite4.1:8b | 78/78 |'].join('\n')
-  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  // Étape 471 : 10 Go, pour que granite4.1:8b (8,3 Go chargé) tienne vraiment sur la carte.
+  const r = await setup({ vramMib: 10 * 1024, scores }).pickBestModelsFromBenchmark()
   // granite4.1:8b (6,6, aucune vitesse publiée) bat ministral-3:3b (4,8) en Médium, mais ne peut pas être Rapide.
   assert.equal(r.models.medium, 'granite4.1:8b')
   assert.equal(r.models.flash, 'ministral-3:3b')
@@ -462,7 +472,8 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   const k2 = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
   const scores = SCORES_CODE_FOR_ALL.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
   assert.notEqual(scores, SCORES_CODE_FOR_ALL, 'section « À remesurer » introuvable dans le vrai fichier')
-  const scan = setup({ vramMib: 6 * 1024, ramGb: 16, scores })
+  // Étape 471 : 8 Go — K2 Horizon 3.7B prend 5,8 Go chargé, plus que les 5 Go utiles d'une carte de 6 Go.
+  const scan = setup({ vramMib: 8 * 1024, ramGb: 16, scores })
   // 0.40.4 : la version qui charge K2 Horizon, mais pas encore Spark-X2.6 (0.40.5) ni Bolt E4B (0.40.10), ajoutés
   // sans score à l'étape 347 — ce test ne porte que sur le modèle à remesurer.
   scan.setOllamaVersionSource(() => '0.40.4')
@@ -470,7 +481,7 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   assert.match(REAL_SCORES, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m, 'ses scores restent dans le fichier')
   assert.deepEqual(notAwaiting(scan.getUnscoredModels()), [k2], 'seul modèle proposé')
   const { models } = await scan.pickBestModelsFromBenchmark()
-  assert.equal(models.flash, k2, 'toujours choisi en attendant (carte de 6 Go)')
+  assert.equal(models.flash, k2, 'toujours choisi en attendant (carte de 8 Go)')
   const lines = [{ type: 'campagne', versions: { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
   for (let index = 0; index < 26; index++) for (let pass = 1; pass <= 3; pass++) lines.push({ type: 'question', model: k2, index, pass, ok: true })
   for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) lines.push({ type: 'demande', model: k2, id: `d${i % 24}`, pass: i < 24 ? 1 : 2, ok: true, turns: [], calls: [] })
@@ -496,7 +507,9 @@ test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au tes
   scan.setOllamaVersionSource(() => '0.40.5')
   const r = await scan.pickBestModelsFromBenchmark()
   // Étape 466 : qwen3.5:0.8b a désormais son vrai score de code (0/5) ; qwen3:1.7b (5/5) le remplace.
-  assert.equal(r.codeModel, 'qwen3:1.7b')
+  // Étape 471 : mémoire réelle — le plus léger noté est qwen3.5:0.8b (update) (1,4 Go chargé), le gabarit des petits
+  // va jusqu'à 2,8 Go : LFM2.5-2.6B (2,1 Go, 4/5), et plus qwen3:1.7b (3,4 Go chargé). Jamais K2 Horizon 0.9B.
+  assert.equal(r.codeModel, 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M')
 })
 
 test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
@@ -508,8 +521,10 @@ test('machine de Léo (8 Go, 32 Go de RAM) : modèles attendus', async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(picks)), {
     // Étape 340 : granite4.2:8b → qwen3.5:9b en Faible ; étape 348 : retour à granite4.2:8b (sa vitesse publiée est
     // passée de 47,1 à 97,3 tokens/s le 23/10/2026).
-    flash: 'granite4.2:8b',
-    medium: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
+    // Étape 471 (Léo : la mémoire réelle « aussi pour les choix ») : granite4.2:8b (8,3 Go) et K2 Horizon 7B (8,3 Go)
+    // chargés avec un contexte de 16 384 dépassent les 7 Go utiles et débordaient sur le processeur.
+    flash: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
+    medium: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
     large: 'qwen3.8:27b',
     vision: 'qwen3.8:27b',
     code: 'qwen3.8:27b'
@@ -578,8 +593,9 @@ test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont
   const codeSection = REAL_SCORES.slice(REAL_SCORES.indexOf('## Code'), REAL_SCORES.indexOf('\n## ', REAL_SCORES.indexOf('## Code') + 1))
   const tooNew = scan.modelsNeedingNewerOllama(null)
   const withoutCode = ALL_CANDIDATE_MODELS.filter((m) => !codeSection.includes(`| ${m} |`) && !tooNew.has(m))
-  // Étape 466 : 25 modèles ont depuis leur score de code ; il en reste une douzaine (délais à rejouer).
-  assert.ok(withoutCode.length >= 10, `des modèles sans code (${withoutCode.length})`)
+  // Étape 466 : 25 modèles ont depuis leur score de code. Étape 470 : les 12 rejoués aussi. Étape 472 : Qwen3.5-0.8B
+  // corrigé aussi : plus aucun modèle sans score de code.
+  assert.deepEqual(withoutCode, [])
   for (const model of withoutCode) {
     const entry = described.find((m) => m.model === model)
     assert.ok(entry?.needs.some((n) => n.test === 'code' && n.reason === 'missing'), `${model} : test de code à faire`)

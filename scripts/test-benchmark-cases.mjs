@@ -1344,6 +1344,8 @@ test('Qwen3.5-0.8B corrigé : ses réglages d’origine sont appliqués avant sa
       JARIS_ANALYSIS_SCOPE: 'code',
       JARIS_ONLY_MODELS: model,
       JARIS_RESUME: '1',
+      // Étape 472 : le modèle a depuis ses scores (verified-tool-scores.md) ; on le reteste quand même.
+      JARIS_RETEST_ALL: '1',
       // Le cas de Léo : la machine louée (sans elle, ce conteneur sans carte graphique sauterait le modèle).
       JARIS_MACHINE: fake.host,
       JARIS_MACHINE_VRAM_GB: '126',

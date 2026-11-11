@@ -610,7 +610,7 @@ export function getAllCandidateModelIds(): string[] {
 }
 
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
-  const fit = candidates.find((c) => c.vramGb <= budgetGb)
+  const fit = candidates.find((c) => memoryNeedGb(c) <= budgetGb)
   return (fit ?? candidates[candidates.length - 1]).model
 }
 
@@ -773,7 +773,7 @@ export function pickSafeModel(freeVramGb: number, installedModels: string[], fal
 function pickSafeAmong(pool: ModelCandidate[], freeVramGb: number, installedModels: string[], fallbackModel: string): string {
   const budget = Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB)
   const current = pool.find((c) => c.model === fallbackModel)
-  if (current && current.vramGb <= budget) return fallbackModel
+  if (current && memoryNeedGb(current) <= budget) return fallbackModel
   const installedCandidates = pool.filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
   return pickForBudget(installedCandidates, budget)
@@ -1521,6 +1521,84 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 'Q4_K_M'
 }
 
+/**
+ * Étape 471, Léo (« refais totalement VRAM nécessaire et calcule la VRAM qu'il faut pour un contexte de 16 384 », puis
+ * « aussi pour les choix ») : mémoire RÉELLE de chaque modèle chargé par Ollama 0.40.16 avec un contexte de 16 384 (le
+ * plus petit palier automatique de Jaris, AUTO_CONTEXT_STEPS dans ollama.ts), en Go. Ce n'est pas la taille du fichier
+ * (`vramGb` des listes de candidats, gardée pour les téléchargements et le disque) : il s'y ajoute la mémoire du
+ * contexte, celle des calculs, le lecteur d'images et le modèle brouillon. Exemples : qwen3:1.7b 1,4 Go de fichier,
+ * 3,4 Go chargé ; granite4.2:8b 5,3 → 8,3 Go.
+ *
+ * Mesuré avec scripts/measure-model-memory.py : le plan de mémoire de llama.cpp (celui d'Ollama), calculé depuis
+ * l'en-tête de chaque fichier, identique au MiB près à un vrai chargement (vérifié sur 4 modèles). Poids : la plus
+ * petite valeur entre le fichier et le plan (le plan d'un processeur réorganise les poids ; un fichier peut contenir
+ * des parties jamais chargées, comme la vision intégrée de ministral-3). Comparé aux mesures sur carte graphique de la
+ * machine louée (12 modèles d'un seul fichier) : 0,1 Go d'écart en moyenne. Deux exceptions, llama.cpp plantant sans
+ * carte graphique sur leur attention : GLM-4.7-Flash (19,0 Go de poids + 0,9 Go de contexte MLA + ~0,4 Go de calcul) et
+ * Ling-3.0-tiny (mesure de la machine louée, son contexte ×4 retiré). La taille affichée par `ollama ps` ne convient
+ * pas : elle oublie le lecteur d'images et le brouillon (0,94 Go annoncés pour qwen3.5:0.8b, 2,0 Go réels sur carte).
+ * Tout nouveau modèle doit y être mesuré (vérifié par test).
+ */
+export const MODEL_MEMORY_16K_GB: Record<string, number> = {
+  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': 1.4,
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.7,
+  'qwen3.5:0.8b': 2.0,
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 2.2,
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 2.4,
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 2.9,
+  'qwen3.5:2b': 3.3,
+  'qwen3:1.7b': 3.4,
+  'qwen3-vl:2b': 3.5,
+  'granite4.1:3b': 3.6,
+  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 3.7,
+  'granite4.2:3b': 3.8,
+  'qwen3.5:4b': 4.3,
+  'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': 4.5,
+  'ministral-3:3b': 4.5,
+  'phi4-mini': 4.8,
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 5.2,
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 5.8,
+  'qwen2.5-coder:7b': 6.0,
+  'qwen3-vl:4b': 6.4,
+  'gemma4:e4b': 7.4,
+  'ornith-1.5:9b': 7.7,
+  'qwen3.5:9b': 7.7,
+  'ministral-3:8b': 7.9,
+  'granite4.1:8b': 8.3,
+  'granite4.2:8b': 8.3,
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 8.3,
+  'nemotron-3.5-bolt:e4b': 8.7,
+  'gemma4:12b': 9.4,
+  'qwen3-vl:8b': 9.4,
+  'ministral-3:14b': 11.4,
+  'qwen2.5-coder:14b': 12.5,
+  'gpt-oss:20b': 14.4,
+  'devstral-small-2:24b': 17.8,
+  'mistral-small3.2:24b': 17.8,
+  'muse-glimmer:30b': 19.2,
+  'qwen3.5:27b': 19.3,
+  'qwen3.6:27b': 19.6,
+  'qwen3.8:27b': 19.6,
+  'north-mini-code-1.0': 19.7,
+  'gemma4:26b': 19.9,
+  'glm-4.7-flash:q4_K_M': 20.3,
+  'qwen3-coder:30b': 20.4,
+  'granite4.2:30b': 22.5,
+  'ornith-1.5:35b': 22.9,
+  'qwen3.5:35b': 22.9,
+  'qwen3.6:35b': 22.9,
+  'qwen3.6:35b-a3b': 22.9,
+  'gemma4:31b': 24.0,
+  'qwen2.5-coder:32b': 24.6,
+  'nemotron-3.5-lightning:30b': 24.7,
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 25.8
+}
+
+/** Mémoire qu'un candidat prend une fois chargé (contexte 16 384) ; repli : la taille de son fichier. */
+export function memoryNeedGb(candidate: { model: string; vramGb: number }): number {
+  return MODEL_MEMORY_16K_GB[candidate.model] ?? candidate.vramGb
+}
+
 /** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
 function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'localSpeed' | 'localSpeedKind' | 'omniscience' | 'terminalBench' | 'quantization' | 'duels'> {
   return {
@@ -1836,11 +1914,12 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     return { toolCalling: null }
   }
 
+  // Étape 471 : « VRAM nécessaire » = la mémoire réelle avec un contexte de 16 384 (MODEL_MEMORY_16K_GB).
   const entries: ModelOverviewEntry[] = [...ALL_MODELS]
-    .sort((a, b) => a.vramGb - b.vramGb)
+    .sort((a, b) => memoryNeedGb(a) - memoryNeedGb(b))
     .map((c) => ({
       model: c.model,
-      vramGb: c.vramGb,
+      vramGb: memoryNeedGb(c),
       category: modelCategory(c.vramGb),
       readsImages: READS_IMAGES.has(c.model),
       usedIn: usageByModel.get(c.model) ?? [],
@@ -2175,23 +2254,26 @@ function computeModelPicks(
   const conversationNote = duelStrength(conversationCategory)
   const codeNote = duelStrength('code')
 
+  // Étape 471 : chaque candidat avec la mémoire qu'il prend VRAIMENT une fois chargé (MODEL_MEMORY_16K_GB), pas la
+  // taille de son fichier — sinon un modèle « qui tient » débordait sur le processeur (granite4.2:8b : 5,3 → 8,3 Go).
+  const SIZED = ALL_MODELS.map((c) => ({ ...c, vramGb: memoryNeedGb(c) }))
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
-    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.flash, category: conversationCategory }),
+    flash: pickRole(SIZED, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.flash, category: conversationCategory }),
     // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
-    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.medium, category: conversationCategory }),
+    medium: pickRole(SIZED, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.medium, category: conversationCategory }),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.large, category: conversationCategory }),
+    large: pickRole(SIZED, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.large, category: conversationCategory }),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
-      ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
+      SIZED.filter((c) => READS_IMAGES.has(c.model)),
       (c) => resultFor(c, 'vision'),
       true,
       smartest,
       VISION_CHAIN_LENGTH
     ),
     // Code : le plus fort de tous en code, même lent (choix de Léo, étape 160) — Terminal-Bench 2.1 depuis l'étape 328.
-    code: pickRole(ALL_MODELS, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote, { model: current.code, category: 'code' })
+    code: pickRole(SIZED, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote, { model: current.code, category: 'code' })
   }
 }
 
@@ -2295,7 +2377,8 @@ async function assessDuelModels(category: DuelCategory, profile?: Profile | null
     // matériel, la version d'Ollama et un téléchargement bloqué écartent un modèle. Le choix des modèles garde le
     // test d'appel d'outils, que tous les modèles passent (getUnscoredModels).
     const limit = cardless ? cardlessBudgetGb : LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? ramOffloadBudgetGb : budgetGb
-    if (c.vramGb > limit) return { kind: 'tooBig', needGb: c.vramGb, budgetGb: Math.max(0, Math.round(limit * 10) / 10) }
+    // Étape 471 : la mémoire qu'il prend chargé, comme pour le choix des modèles.
+    if (memoryNeedGb(c) > limit) return { kind: 'tooBig', needGb: memoryNeedGb(c), budgetGb: Math.max(0, Math.round(limit * 10) / 10) }
     return null
   }
   return { scores, toolScore, budgetGb, cardless, assessed: ALL_MODELS.map((c) => ({ c, reason: reasonFor(c) })) }
@@ -2323,7 +2406,7 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
       // propose des challengers des deux côtés (selectDuelModels). Le Code n'a qu'un rôle, même lent.
       // Sans carte, les « petits » (6 Go au plus) tiennent le rôle de ceux qui tiendraient sur une carte : une session
       // garde des challengers rapides au lieu de n'aligner que des modèles de 20 Go et plus, très lents sur processeur.
-      group: category === 'code' ? 'code' : c.vramGb <= (cardless ? CARDLESS_SMALL_MODEL_GB : budgetGb) ? 'card' : 'ram'
+      group: category === 'code' ? 'code' : memoryNeedGb(c) <= (cardless ? CARDLESS_SMALL_MODEL_GB : budgetGb) ? 'card' : 'ram'
     }
   })
 }

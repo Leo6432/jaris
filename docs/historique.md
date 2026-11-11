@@ -11968,3 +11968,46 @@ Copie du tableau dans benchmark-models.mjs vérifiée par test.
 Candidat Rapide et Médium (comme qwen3.5:0.8b), nom affiché « qwen3.5:0.8b (update) », sans score : jamais choisi,
 proposé au test. Tests : `test-model-defaults.mjs` (mord : sans l'appel, échec), test du script (réglages AVANT la
 première question ; mord), faux ponts de 11 tests mis à jour pour le nouvel import.
+
+## Étape 470 — scores de code des 12 modèles rejoués (11/11/2026)
+
+Les 12 modèles bloqués (étape 468) rejoués par Léo sur la machine louée. Leurs 60 applications (dernier essai de chacune,
+3 fichiers de traces) rejugées avec le juge actuel : 3 passent de faux à juste (stockage, comme l'étape 466). Échecs
+sans erreur JavaScript relus un par un : tous des défauts du code (détail dans verified-tool-scores.md). gemma4:12b et
+granite4.1:8b 5/5 ; granite4.1:3b, granite4.2:3b, ministral-3:8b, qwen3-vl:8b, qwen3.5:35b, qwen3.5:4b, qwen3.6:35b 4/5 ;
+MiniCPM5-2B et qwen3-vl:2b 2/5 ; G9v3-3B 1/5. Choix : seul le rôle Code des petites cartes change.
+
+## Étape 471 — v0.61.0 : « VRAM nécessaire » = la vraie mémoire avec un contexte de 16 384, aussi pour les choix
+
+Léo : « refais totalement VRAM nécessaire et calcule la VRAM qu'il faut pour un contexte de 16 384 », puis, à la
+question, « aussi pour les choix ». La colonne montrait la taille du FICHIER : un modèle chargé prend aussi la mémoire du
+contexte, des calculs, du lecteur d'images et du modèle brouillon (qwen3:1.7b : 1,4 Go de fichier, 3,4 Go chargé ;
+granite4.2:8b 5,3 → 8,3 Go). Jaris croyait donc qu'il tenait sur 7 Go utiles, et il débordait sur le processeur.
+
+Mesure : Ollama 0.40.16 fait tourner chaque modèle avec llama.cpp (`llama-server`), qui calcule son plan de mémoire
+depuis l'EN-TÊTE des fichiers, avant de lire les poids. `scripts/measure-model-memory.py` recrée chaque fichier en
+« creux » (vrai en-tête, zéros épars), lance llama-server avec les options exactes d'Ollama (relevées dans son journal)
+et lit le plan : identique au MiB près à un vrai chargement (K2 Horizon 0.9B, qwen3.5:0.8b, sa version corrigée,
+gemma4:e4b), sans rien télécharger (52 modèles en quelques minutes ; le téléchargement réel, à 30 Mo/s, aurait pris des
+heures). Pièges : la « taille » d'`ollama ps` oublie le lecteur d'images et le brouillon (0,94 Go annoncés pour
+qwen3.5:0.8b, 2,0 Go réels) — d'où aussi des chiffres absurdes dans les placements des traces ; sur processeur,
+llama.cpp réorganise les poids (AMX) et leur taille change un peu, et un fichier peut contenir des parties jamais
+chargées (vision intégrée de ministral-3) : poids = le plus petit du fichier et du plan. Vérifié contre les mesures sur
+carte graphique de la machine louée (son contexte ×4, `OLLAMA_NUM_PARALLEL=4`, retiré) : 0,1 Go d'écart en moyenne sur
+12 modèles d'un seul fichier. GLM-4.7-Flash et Ling-3.0-tiny font planter llama.cpp sans carte graphique : calculés à
+part (commentaire de MODEL_MEMORY_16K_GB).
+
+Code : `MODEL_MEMORY_16K_GB` + `memoryNeedGb()` (hardwareScan.ts). Utilisés pour TOUT « tient-il sur la carte ? » :
+choix des rôles (computeModelPicks), repli en direct (pickSafeAmong), modèles admis en duel et leurs groupes. `vramGb`
+des listes reste la taille du fichier : téléchargements, disque, durées estimées. Test : chaque modèle a sa mesure.
+Choix qui changent (grille) : PC de Léo (8 Go) Faible granite4.2:8b et Moyen K2 Horizon 7B → K2 Horizon 3.7B ;
+sans carte ou 1-4 Go : MiniCPM5-2B (le gabarit des petits se mesure aussi en mémoire réelle) ; 6 Go : granite4.2:3b.
+Tests de règles déplacés sur une carte de 10 Go pour garder leur sens (les modèles comparés doivent y tenir).
+
+## Étape 472 — « qwen3.5:0.8b (update) » testé : 27/78, l'original remis au test
+
+Test complet de Léo sur son PC (Jaris 0.60.0, Ollama 0.40.10), réglages d'origine bien appliqués : 27/78, demandes 10/48,
+code 0/5 — contre 40/78, 13/48, 0/5 pour l'original (03/10, Ollama plus ancien). Aucune boucle (réflexion courte, chaque
+réponse finit normalement) : la correction de l'article vise les boucles de longues réflexions en maths, absentes ici ;
+les ratés sont des mauvais outils. Pour comparer à égalité, qwen3.5:0.8b est remis dans « À remesurer » (même PC,
+même Ollama) : le bouton « Tester les modèles » le propose.

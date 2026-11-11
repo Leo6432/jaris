@@ -175,6 +175,14 @@ tutoriels… Veux-tu que je t'ouvre le premier résultat ? » propose un clic sa
 devstral-small-2:24b, compté juste). Erreurs réelles : Peugeot dite notée sans l'être (×2), regard sur l'écran non
 demandé, Spotify ouvert sans musique, rappel à 1440 min au lieu de 1320, recette retenue au lieu d'être donnée.
 
+Étape 472 : « qwen3.5:0.8b (update) » (Qwen3.5-0.8B corrigé par Weight-Space Programming, étape 469) testé par Léo
+le 11/11/2026 sur son PC (Ollama 0.40.10, Jaris 0.60.0, réglages d'origine bien appliqués : presence_penalty 1.5…) :
+27/78, contre 40/78 pour l'original (mesuré le 03/10 avec un Ollama plus ancien). Aucune boucle : chaque réponse finit
+normalement, réflexion courte ; les ratés sont des mauvais outils (recherche web pour « écris bonjour dans le champ »)
+ou du texte au lieu d'un outil. Les réponses justes relues (note « Facticesurprise » : contient bien 75001 ;
+« Here are my drawings » : generate_image bien appelé avec un chat). L'original repasse le test dans les mêmes
+conditions (section « À remesurer ») pour une comparaison juste.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -228,6 +236,7 @@ demandé, Spotify ouvert sans musique, rappel à 1440 min au lieu de 1320, recet
 | qwen2.5-coder:32b | 12/78 |
 | devstral-small-2:24b | 72/78 |
 | qwen3-coder:30b | 69/78 |
+| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 27/78 |
 
 ## Vision — compréhension d'image
 
@@ -314,6 +323,15 @@ qwen3.6:35b. **Concerne aussi les scores d'octobre** : qwen3.6:35b-a3b et north-
 gardées dans le stockage du navigateur ») et K2 Horizon 0.9B (« stockage interdit ») ont perdu un point pour cette
 raison ; leurs applications ne sont pas dans ce fichier — à remesurer.
 
+Étape 470 : les 12 modèles en attente, rejoués par Léo le 11/11/2026 sur la machine louée (Jaris 0.59.3 : le rejeu
+de ces modèles était bloqué, étape 468). Leurs 60 applications (dernier essai de chacune, sur les 3 fichiers de
+traces) rejugées ici avec le juge actuel : 3 passent de faux à juste (même cause de stockage qu'à l'étape 466 :
+listes de qwen3.5:4b et qwen3.6:35b, formulaire de qwen3-vl:2b). Chaque échec sans erreur JavaScript relu : tous
+sont des défauts du code (message de confirmation caché par son propre CSS chez ministral-3:8b, compteur remis à
+zéro à chaque clic et bouton de conversion bloqué après un usage chez MiniCPM5-2B, envoi vers un serveur absent,
+somme affichée dans une fenêtre d'alerte chez qwen3-vl:2b, « +1 » désactivé après la remise à zéro et bouton
+« Supprimer » jamais reconnu chez G9v3-3B). La liste de qwen3-vl:2b est coupée par sa réflexion (fenêtre pleine).
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -355,6 +373,19 @@ raison ; leurs applications ne sont pas dans ce fichier — à remesurer.
 | qwen3.6:27b | 5/5 |
 | qwen3.8:27b | 5/5 |
 | qwen3:1.7b | 5/5 |
+| gemma4:12b | 5/5 |
+| granite4.1:8b | 5/5 |
+| granite4.1:3b | 4/5 |
+| granite4.2:3b | 4/5 |
+| ministral-3:8b | 4/5 |
+| qwen3-vl:8b | 4/5 |
+| qwen3.5:35b | 4/5 |
+| qwen3.5:4b | 4/5 |
+| qwen3.6:35b | 4/5 |
+| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 2/5 |
+| qwen3-vl:2b | 2/5 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 1/5 |
+| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 0/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -448,6 +479,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen2.5-coder:32b | 4/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
+| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 10/48 |
 
 ## À remesurer sur le PC de Léo
 
@@ -462,5 +494,9 @@ modèle de cette liste.
 demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deux essais d'un petit modèle peut être
 grand, surtout en code. Liste vide pour l'instant : chaque score de ce fichier vient désormais du PC de Léo.
 
+Étape 472 : qwen3.5:0.8b remis dans la liste (Léo : comparer l'original à « qwen3.5:0.8b (update) » dans les MÊMES
+conditions — même PC, même version d'Ollama que le test du 11/11/2026).
+
 | Modèle | Mesuré où |
 |---|---|
+| qwen3.5:0.8b | PC de Léo, 03/10/2026 (Ollama plus ancien) |
