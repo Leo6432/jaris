@@ -265,8 +265,17 @@ test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas d
     // Étape 273 (Léo : « enlève le bouton widget en bas à gauche ») : Cerveau et Options seulement, en bas.
     // Étape 355 : le Duel rejoint les modes ; Léo : Duel et Classement derrière « … ».
     // Étape 437 : Machine rejoint Cerveau et Options en bas.
-    assert.equal(await page.locator('.app-rail .rail__item').count(), 9, 'les 5 modes, « … » et les 3 outils sont dans la barre d’icônes')
-    assert.deepEqual(await page.locator('.app-rail__group--end .rail__label').allTextContents(), ['Machine', 'Cerveau', 'Options'])
+    // Étape 474 : « Support » (le Discord de Jaris) rejoint les outils du bas.
+    assert.equal(await page.locator('.app-rail .rail__item').count(), 10, 'les 5 modes, « … » et les 4 outils sont dans la barre d’icônes')
+    assert.deepEqual(await page.locator('.app-rail__group--end .rail__label').allTextContents(), ['Machine', 'Cerveau', 'Support', 'Options'])
+    const support = page.locator('.app-rail__group--end a.rail__item:has-text("Support")')
+    assert.equal(await support.getAttribute('href'), 'https://discord.gg/dVAQV7eJtr')
+    assert.equal(await support.getAttribute('target'), '_blank', 'ouvert dans le navigateur de Windows (setWindowOpenHandler)')
+    assert.equal(await support.evaluate((el) => getComputedStyle(el).textDecorationLine), 'none')
+    const box = await support.boundingBox()
+    const options = await page.locator('.app-rail__group--end .rail__item:has-text("Options")').boundingBox()
+    assert.equal(box.width, options.width, 'même taille que ses voisins')
+    assert.equal(box.height, options.height, 'même taille que ses voisins')
     assert.equal(await page.locator('.app-rail .rail__item[title*="widget" i]').count(), 0, 'bouton Widget revenu')
     assert.equal(await page.locator('.app-rail .rail__item').first().getAttribute('title'), 'Agent vocal', 'Vocal n’est pas en premier')
     assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
@@ -427,4 +436,19 @@ test('étape 437 : le bouton Machine de la barre d’icônes ouvre sa page ; une
     assert.equal(dot.width, '9px')
     assert.notEqual(dot.background, 'rgba(0, 0, 0, 0)', 'la pastille est bien colorée')
   })
+})
+
+// Étape 474 : avec « Support » en plus, la barre d'icônes tient encore à la hauteur minimale de la fenêtre (600 px).
+test('étape 474 : barre d’icônes entière à la hauteur minimale de la fenêtre', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.rail__item')
+      const last = await page.locator('.app-rail .rail__item').last().boundingBox()
+      assert.ok(last.y + last.height <= 600, `dernier bouton coupé : bas à ${last.y + last.height}px`)
+      const items = await page.locator('.app-rail .rail__item').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top))
+      for (let i = 1; i < items.length; i++) assert.ok(items[i] > items[i - 1], 'deux boutons se chevauchent')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/rail-600.png` })
+    },
+    { width: 760, height: 600 }
+  )
 })

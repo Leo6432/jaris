@@ -5164,6 +5164,11 @@ textarea:not(.composer__input):focus-visible {
   display: none;
 }
 
+/* Étape 474 : « Support » est un lien (navigateur de Windows) : même allure que les boutons voisins. */
+a.rail__item {
+  text-decoration: none;
+}
+
 .app-rail .rail__item:hover {
   color: var(--hud-text);
   background: var(--jv-hover);

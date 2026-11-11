@@ -364,6 +364,8 @@
   "app.rail.label": "Jaris modes",
   "app.brain": "Brain",
   "app.brain.title": "Jaris's brain",
+  "app.support": "Support",
+  "app.support.title": "Jaris help and community on Discord",
   "app.list.collapse": "Collapse the list",
   "app.local": "Local",
   "app.list.expand": "Show the list",

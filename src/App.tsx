@@ -62,6 +62,10 @@ const MORE_MODES: AppMode[] = ['duel', 'ranking']
 const ICON_MORE = 'M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0'
 /** Étape 437 : un serveur (deux baies), pour la machine louée. */
 const ICON_MACHINE = 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01'
+// Étape 474 (Léo : « ajoute un bouton support avec https://discord.gg/dVAQV7eJtr ») : un cercle avec un point d'interrogation.
+const ICON_SUPPORT = 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01'
+/** Le serveur Discord de Jaris (aide, communauté). Ouvert dans le navigateur de Windows (setWindowOpenHandler, main.ts). */
+const SUPPORT_URL = 'https://discord.gg/dVAQV7eJtr'
 
 const ICON_BRAIN =
   'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
@@ -763,6 +767,12 @@ export default function App(): JSX.Element {
                 />
               </div>
               <RailButton label={t('app.brain')} title={t('app.brain.title')} icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
+              {/* Un lien (et non un bouton) : target="_blank" passe par setWindowOpenHandler (main.ts), qui ouvre les seules
+                  adresses web dans le navigateur de Windows, jamais dans Jaris. */}
+              <a className="rail__item" href={SUPPORT_URL} target="_blank" rel="noreferrer" title={t('app.support.title')}>
+                <LineIcon d={ICON_SUPPORT} size={20} />
+                <span className="rail__label">{t('app.support')}</span>
+              </a>
               <RailButton
                 label={t('options.title')}
                 icon={ICON_OPTIONS}

@@ -12021,3 +12021,15 @@ qui ne servait qu'à lui, est retiré avec lui : ollama.ts, benchmark-models.mjs
 identiques à la v0.59.3, et les faux ponts des 11 tests reviennent à leur état d'avant. L'original n'est plus « à
 remesurer » (la comparaison n'a plus d'objet). Choix : le gabarit des petits se mesure de nouveau sur K2 Horizon 0.9B
 (1,7 Go chargé), mêmes modèles choisis qu'en 0.61.0 (tests inchangés).
+
+## Étape 474 — v0.61.2 : votes du 11/11 livrés, bouton « Support » (Discord)
+
+- Votes : `node scripts/import-duel-votes.mjs jaris-votes-2026-11-11.json` → 21 votes ajoutés (17 Code, 2 Conversation,
+  5 Vocal), 42 au total dans `scripts/shared-duel-votes.json`. Code : gemma4:e4b reste devant (7 duels) ; premiers votes
+  Vocal (G9v3-3B, gemma4:e4b devant).
+- Léo : « ajoute un bouton support avec https://discord.gg/dVAQV7eJtr ». Dans la barre d'icônes, en bas, entre
+  Cerveau et Options : un LIEN `target="_blank"` (pas d'IPC) — `setWindowOpenHandler` (main.ts) ouvre déjà toute
+  adresse web dans le navigateur de Windows, jamais dans Jaris. Icône « ? », libellé et infobulle en 24 langues
+  (`app.support`, `app.support.title`), `a.rail__item` sans soulignement. Test (test-window-chrome-ui.mjs) : 10
+  boutons, lien et cible, même taille que ses voisins, barre entière à la hauteur minimale de la fenêtre (600 px).
+  Capture vérifiée (760 × 600, ×2).

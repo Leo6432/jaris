@@ -374,6 +374,8 @@ export const fr = {
   "app.rail.label": "Modes de Jaris",
   "app.brain": "Cerveau",
   "app.brain.title": "Cerveau de Jaris",
+  "app.support": "Support",
+  "app.support.title": "Aide et communauté de Jaris sur Discord",
   "app.list.collapse": "Réduire la liste",
   "app.local": "Local",
   "app.list.expand": "Afficher la liste",

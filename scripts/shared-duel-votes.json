@@ -187,5 +187,194 @@
     "modelA": "gemma4:e4b",
     "modelB": "gpt-oss:20b",
     "outcome": "a"
+  },
+  {
+    "id": "da435cb3-a321-45e0-8088-c827d05a9b30",
+    "category": "conversation",
+    "at": 1793998506906,
+    "sessionId": "7d87754f-148a-4a2c-ae81-08e26999101e",
+    "modelA": "gemma4:e4b",
+    "modelB": "hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M",
+    "outcome": "tie"
+  },
+  {
+    "id": "3b5a7221-aec1-47dd-82e5-2e24f878c78e",
+    "category": "conversation",
+    "at": 1793998555805,
+    "sessionId": "7d87754f-148a-4a2c-ae81-08e26999101e",
+    "modelA": "hf.co/bartowski/ai9stars_G9v3-3B-GGUF",
+    "modelB": "hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M",
+    "outcome": "b"
+  },
+  {
+    "id": "a1be4fe4-a614-42e1-9752-865a71df37e5",
+    "category": "code",
+    "at": 1794165183895,
+    "sessionId": "8f2c5c30-1c7a-40fb-8893-d496e8b8f272",
+    "modelA": "hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M",
+    "modelB": "gemma4:e4b",
+    "outcome": "b"
+  },
+  {
+    "id": "e832cac5-d95c-4fd8-ba6e-ced9cef370ba",
+    "category": "code",
+    "at": 1794166288757,
+    "sessionId": "8f2c5c30-1c7a-40fb-8893-d496e8b8f272",
+    "modelA": "gemma4:e4b",
+    "modelB": "qwen3.5:0.8b",
+    "outcome": "a"
+  },
+  {
+    "id": "14cfa2b0-0c82-42b4-838c-89510be401cd",
+    "category": "voice",
+    "at": 1794254201499,
+    "sessionId": "a57f41ee-d172-4e2b-bd28-162af1b1fa8d",
+    "modelA": "qwen3.5:9b",
+    "modelB": "qwen3.5:27b",
+    "outcome": "tie"
+  },
+  {
+    "id": "f687869c-2225-4337-a20e-966438a28d9d",
+    "category": "voice",
+    "at": 1794255480966,
+    "sessionId": "d2c437c1-549b-4e5c-b42d-dafe57687561",
+    "modelA": "hf.co/bartowski/ai9stars_G9v3-3B-GGUF",
+    "modelB": "qwen3.5:0.8b",
+    "outcome": "a"
+  },
+  {
+    "id": "e65a0679-c194-4dce-812f-60c97b68833e",
+    "category": "voice",
+    "at": 1794255547134,
+    "sessionId": "d2c437c1-549b-4e5c-b42d-dafe57687561",
+    "modelA": "gemma4:e4b",
+    "modelB": "hf.co/bartowski/ai9stars_G9v3-3B-GGUF",
+    "outcome": "tie"
+  },
+  {
+    "id": "608e3f9a-3c21-44ea-8b23-6c28d11a1138",
+    "category": "voice",
+    "at": 1794255673620,
+    "sessionId": "d2c437c1-549b-4e5c-b42d-dafe57687561",
+    "modelA": "hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M",
+    "modelB": "hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M",
+    "outcome": "tie"
+  },
+  {
+    "id": "b05e8cb4-f002-4b67-a615-0faaa3c14c9c",
+    "category": "code",
+    "at": 1794337837967,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M",
+    "modelB": "qwen2.5-coder:7b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "a544b7ff-2364-430f-9fa9-b4eebb9a1a7d",
+    "category": "code",
+    "at": 1794337846920,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "qwen2.5-coder:7b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "b"
+  },
+  {
+    "id": "b84b3daa-ed5a-4beb-abd8-117a9a3cf825",
+    "category": "code",
+    "at": 1794337855118,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M",
+    "modelB": "qwen2.5-coder:7b",
+    "outcome": "a"
+  },
+  {
+    "id": "c62490fc-7fb5-425f-b240-5884ea4e1736",
+    "category": "code",
+    "at": 1794337859670,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "devstral-small-2:24b",
+    "modelB": "qwen3:1.7b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "24129643-87fe-46e0-8324-af5587a2fde1",
+    "category": "code",
+    "at": 1794337862378,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M",
+    "modelB": "devstral-small-2:24b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "9431267b-8dd9-4efd-97c0-0721c7b7e567",
+    "category": "code",
+    "at": 1794337872399,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "ministral-3:3b",
+    "modelB": "devstral-small-2:24b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "f54e7d88-d39a-4ed7-9444-6effc99f179f",
+    "category": "code",
+    "at": 1794337879762,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "qwen3:1.7b",
+    "outcome": "a"
+  },
+  {
+    "id": "6decf4af-724b-4042-b985-ad002ef2acff",
+    "category": "code",
+    "at": 1794337974348,
+    "sessionId": "b8874533-ebeb-48af-b296-3790c2446bf0",
+    "modelA": "hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M",
+    "modelB": "ministral-3:3b",
+    "outcome": "a"
+  },
+  {
+    "id": "67e7e4b8-5ac2-44d5-8a34-ef3a6429a1c3",
+    "category": "code",
+    "at": 1794340966308,
+    "sessionId": "9fd62636-7f5b-4e69-a82d-76355b06f1b7",
+    "modelA": "gemma4:12b",
+    "modelB": "mistral-small3.2:24b",
+    "outcome": "a"
+  },
+  {
+    "id": "18173735-5657-4e8c-a397-45cb49e503a5",
+    "category": "code",
+    "at": 1794343451889,
+    "sessionId": "6b30f5e7-f8ae-4272-b299-071cbab03c9b",
+    "modelA": "granite4.1:3b",
+    "modelB": "qwen3.5:9b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "5e9b0bdf-9e2f-4aa4-8c09-c5945162a457",
+    "category": "code",
+    "at": 1794345719071,
+    "sessionId": "32a6e7ba-31fb-4f00-b566-70e8e7f6734d",
+    "modelA": "granite4.2:8b",
+    "modelB": "ministral-3:8b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "3f75d599-fd0e-4799-afc2-a8be3267f4e7",
+    "category": "code",
+    "at": 1794346322175,
+    "sessionId": "32a6e7ba-31fb-4f00-b566-70e8e7f6734d",
+    "modelA": "granite4.2:8b",
+    "modelB": "hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "d030bd73-726d-4458-878d-abfcd3452ee6",
+    "category": "voice",
+    "at": 1794425567948,
+    "sessionId": "65ee83b5-bb4a-40a2-b660-3fa4ee25c043",
+    "modelA": "gemma4:26b",
+    "modelB": "gemma4:e4b",
+    "outcome": "b"
   }
 ]
