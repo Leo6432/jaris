@@ -136,15 +136,6 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.3 },
-  // Étape 469, Léo : « ajoute-le et mets qwen3.5:0.8b (update) ». Qwen3.5-0.8B corrigé par « Weight-Space
-  // Programming » (Rikiya Takehi, MIT, 02/11/2026) : un gros modèle a retiré des poids la « direction de boucle » de
-  // la réflexion (64 colonnes des MLP des couches 15 et 19, 0,016 % des poids, sans entraînement). Vérifié avant
-  // l'ajout : les poids de RikiyaT et de ovexhugi (source de ce GGUF) sont identiques (même sha256) ; seules ces
-  // 64 colonnes diffèrent de Qwen/Qwen3.5-0.8B ; le GGUF Q8_0 de mradermacher (quantifieur reconnu, même règle que
-  // Nanbeige) contient bien la correction (écart ~100 fois plus petit au modèle corrigé qu'à l'original) ; Apache 2.0 ;
-  // chargé ici par Ollama 0.40.16 (architecture qwen35, tools + thinking + vision, un outil réellement appelé),
-  // 0,95 Go. Q8_0 comme le qwen3.5:0.8b officiel. Sans score mesuré, jamais choisi.
-  { model: 'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0', vramGb: 1.0 },
   // K2 Horizon 0.9B : voir la note de l'étape 312 juste au-dessus de ministral-3:3b.
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
@@ -236,8 +227,6 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.3 },
-  // Qwen3.5-0.8B corrigé (« update ») : voir l'étape 469 dans FLASH_CANDIDATES.
-  { model: 'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0', vramGb: 1.0 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
@@ -1517,7 +1506,6 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 'Q4_K_M',
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 'Q4_K_M',
   'qwen3.5:0.8b': 'Q8_0',
-  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': 'Q8_0',
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 'Q4_K_M'
 }
 
@@ -1540,7 +1528,6 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
  * Tout nouveau modèle doit y être mesuré (vérifié par test).
  */
 export const MODEL_MEMORY_16K_GB: Record<string, number> = {
-  'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0': 1.4,
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.7,
   'qwen3.5:0.8b': 2.0,
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 2.2,

@@ -52,7 +52,6 @@ function loadOllama(fetchImpl) {
     {
       '../config': { config: { ollama: { host: 'http://ollama.test', numCtx: 8192, model: 'm' } } },
       './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 100, getDownloadBudgetGb: async () => 100 },
-      './modelDefaults': { applyModelDefaults: async () => {} },
       './huggingFaceImport': { importHuggingFaceModel: async () => {} },
       '../../shared/effort': sharedEffort
     },

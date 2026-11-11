@@ -39,15 +39,14 @@ test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être reco
   // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315), phi4-mini et K2 Horizon 0.9B (étape 317), Spark-X2.6-4B
   // (étape 442), nemotron-3.5-bolt:e4b (étape 445), et 25 modèles de la campagne de code ouverte à tous (étape 466).
   const code = rows(section('Code'))
-  // Étape 470 : les 12 modèles rejoués ; étape 472 : Qwen3.5-0.8B corrigé.
-  assert.equal(code.length, 52)
+  // Étape 470 : les 12 modèles rejoués.
+  assert.equal(code.length, 51)
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 
 test('demandes complètes : les 30 modèles de conversation, plus K2 Horizon 3.7B (étape 312), 0.9B, 7B et 32B (étape 314), phi4-mini (étape 317), Ornith 1.5 9B et 35B (étape 334), Muse Glimmer (étape 335), nemotron-3.5-bolt:e4b et Spark-X2.6-4B (étape 438), gemma4:31b, qwen3-vl:4b et 8b, qwen2.5-coder:7b (étape 442), qwen3-vl:2b et qwen2.5-coder:14b (étape 445), qwen3.6:35b-a3b, north-mini-code-1.0 et qwen2.5-coder:32b (étape 448), devstral-small-2:24b (étape 449), qwen3-coder:30b (étape 454), chacun sur 48', () => {
   const demandes = rows(section('Demandes'))
-  // Étape 472 : plus Qwen3.5-0.8B corrigé (« qwen3.5:0.8b (update) »).
-  assert.equal(demandes.length, 52)
+  assert.equal(demandes.length, 51)
   for (const [model, score] of demandes) assert.match(score, /^\d+\/48$/, `Demandes ${model} : ${score}`)
 })
 

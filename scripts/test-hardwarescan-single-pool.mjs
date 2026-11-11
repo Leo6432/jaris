@@ -237,9 +237,8 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 448 : north-mini-code-1.0, qwen2.5-coder:32b et qwen3.6:35b-a3b ont désormais tous leurs scores.
 // Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
 // Étape 462 : GLM-4.6V-Flash retiré de Jaris — plus aucun modèle n'attend le test de Léo.
-// Étape 469 : Qwen3.5-0.8B corrigé (« qwen3.5:0.8b (update) »), ajouté sans score ; noté à l'étape 472.
-// Étape 472 : l'original qwen3.5:0.8b « à remesurer » (comparaison dans les mêmes conditions) : proposé au test.
-const AWAITING = ['qwen3.5:0.8b']
+// Étape 473 : Qwen3.5-0.8B corrigé, ajouté (469), noté (472) puis retiré — plus aucun modèle n'attend le test de Léo.
+const AWAITING = []
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -274,8 +273,8 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333), Qwen3.5-0.8B corrigé (étape 469).
-  assert.equal(conversationModels.size, 35)
+  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333).
+  assert.equal(conversationModels.size, 34)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).
@@ -507,8 +506,8 @@ test('sans carte graphique, le Code ne tombe pas sur K2 Horizon 0.9B (1/5 au tes
   scan.setOllamaVersionSource(() => '0.40.5')
   const r = await scan.pickBestModelsFromBenchmark()
   // Étape 466 : qwen3.5:0.8b a désormais son vrai score de code (0/5) ; qwen3:1.7b (5/5) le remplace.
-  // Étape 471 : mémoire réelle — le plus léger noté est qwen3.5:0.8b (update) (1,4 Go chargé), le gabarit des petits
-  // va jusqu'à 2,8 Go : LFM2.5-2.6B (2,1 Go, 4/5), et plus qwen3:1.7b (3,4 Go chargé). Jamais K2 Horizon 0.9B.
+  // Étape 471 : mémoire réelle à 16 384 — le gabarit des petits (deux fois K2 Horizon 0.9B, 1,7 Go chargé) va jusqu'à
+  // 3,4 Go ; la meilleure note de code y est celle de LFM2.5-2.6B (2,1 Go, 4/5). Jamais K2 Horizon 0.9B.
   assert.equal(r.codeModel, 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M')
 })
 
@@ -593,8 +592,8 @@ test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont
   const codeSection = REAL_SCORES.slice(REAL_SCORES.indexOf('## Code'), REAL_SCORES.indexOf('\n## ', REAL_SCORES.indexOf('## Code') + 1))
   const tooNew = scan.modelsNeedingNewerOllama(null)
   const withoutCode = ALL_CANDIDATE_MODELS.filter((m) => !codeSection.includes(`| ${m} |`) && !tooNew.has(m))
-  // Étape 466 : 25 modèles ont depuis leur score de code. Étape 470 : les 12 rejoués aussi. Étape 472 : Qwen3.5-0.8B
-  // corrigé aussi : plus aucun modèle sans score de code.
+  // Étape 466 : 25 modèles ont depuis leur score de code. Étape 470 : les 12 rejoués aussi. Plus aucun modèle sans
+  // score de code.
   assert.deepEqual(withoutCode, [])
   for (const model of withoutCode) {
     const entry = described.find((m) => m.model === model)

@@ -62,10 +62,10 @@ test('"Tous les modèles" : une seule liste, triée par VRAM croissante, le moin
     assert.ok(overview.entries[i - 1].vramGb <= overview.entries[i].vramGb, `pas trié : ${overview.entries[i].model}`)
   }
   // Étape 312 : K2 Horizon 0.9B (0,7 Go) passe devant qwen3.5:0.8b (1 Go).
-  // Étape 471 : la colonne montre la mémoire réelle chargée (contexte 16 384) : Qwen3.5-0.8B corrigé (1,4 Go) passe
-  // devant K2 Horizon 0.9B (1,7 Go : son contexte, sans attention économe, pèse plus que ses poids).
-  assert.equal(overview.entries[0].model, 'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0')
-  assert.equal(overview.entries[0].vramGb, 1.4)
+  // Étape 471 : la colonne montre la mémoire réelle chargée (contexte 16 384) : K2 Horizon 0.9B (1,7 Go) reste devant
+  // qwen3.5:0.8b (2,0 Go avec son lecteur d'images et son modèle brouillon).
+  assert.equal(overview.entries[0].model, 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M')
+  assert.equal(overview.entries[0].vramGb, 1.7)
   assert.equal(overview.entries.find((e) => e.model === 'granite4.2:8b').vramGb, 8.3, 'mémoire chargée, pas la taille du fichier (5,3 Go)')
 })
 

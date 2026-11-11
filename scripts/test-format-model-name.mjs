@@ -36,12 +36,6 @@ test('G9v3-3B (bartowski, exception explicite) s\'affiche sans le préfixe d\'or
   assert.equal(formatModelName('hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B')
 })
 
-test('étape 469 : Qwen3.5-0.8B corrigé (Weight-Space Programming) s’affiche « qwen3.5:0.8b (update) », avec ou sans la quantification', () => {
-  const model = 'hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0'
-  assert.equal(formatModelName(model), 'qwen3.5:0.8b (update)')
-  assert.equal(formatModelName(model, { quant: false }), 'qwen3.5:0.8b (update)')
-})
-
 test('étape 195 : le sélecteur du champ de saisie affiche le nom sans la quantification', () => {
   assert.equal(formatModelName('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', { quant: false }), 'GLM-4.6V-Flash')
   assert.equal(formatModelName('hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', { quant: false }), 'G9v3-3B')

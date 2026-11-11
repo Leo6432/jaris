@@ -61,9 +61,9 @@ test('sans carte graphique : jamais le modèle qui rate toutes les demandes comp
       // Étape 332 : avec sa vraie taille (1,4 Go et non 2), qwen3:1.7b (28/48) entre dans le gabarit des petits et
       // passe devant qwen3.5:0.8b (13/48) pour la conversation. Étape 466 : le Code aussi — qwen3.5:0.8b a son vrai
       // score de code (0/5), qwen3:1.7b le sien (5/5).
-      // Étape 471 : avec la mémoire réelle à 16 384, le plus léger noté est qwen3.5:0.8b (update) (1,4 Go chargé) : le
-      // gabarit des petits va jusqu'à 2,8 Go. qwen3:1.7b (3,4 Go chargé) en sort ; MiniCPM5-2B (2,4 Go, 37/48) en
-      // conversation, LFM2.5-2.6B (2,1 Go, 4/5) en code.
+      // Étape 471 : avec la mémoire réelle à 16 384, le gabarit des petits (deux fois K2 Horizon 0.9B, 1,7 Go chargé) va
+      // jusqu'à 3,4 Go ; les meilleures notes y sont MiniCPM5-2B (2,4 Go, 37/48) en conversation, LFM2.5-2.6B (2,1 Go,
+      // 4/5) en code.
       assert.equal(chosen[role], role === 'code' ? 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M' : 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', `${role} avec ${ramGb} Go de RAM`)
     }
   }

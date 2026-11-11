@@ -25,7 +25,6 @@ const ollama = loadTsModule('electron/services/ollama.ts', {
   '../config': { config: fakeConfig },
   '../../shared/effort': { parseModelThinking: () => null },
   './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
-  './modelDefaults': { applyModelDefaults: async () => {} },
   './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
 })
 

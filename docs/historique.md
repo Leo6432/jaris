@@ -12011,3 +12011,13 @@ code 0/5 — contre 40/78, 13/48, 0/5 pour l'original (03/10, Ollama plus ancien
 réponse finit normalement) : la correction de l'article vise les boucles de longues réflexions en maths, absentes ici ;
 les ratés sont des mauvais outils. Pour comparer à égalité, qwen3.5:0.8b est remis dans « À remesurer » (même PC,
 même Ollama) : le bouton « Tester les modèles » le propose.
+
+## Étape 473 — v0.61.1 : « qwen3.5:0.8b (update) » retiré
+
+Léo : « enlève qwen3.5:0.8b (update) si ça fait moins » — 27/78 contre 40/78 (étape 472). Retiré des listes de candidats
+(hardwareScan.ts), du script de test, des tableaux de quantification et de mémoire, du nom affiché ; ses lignes de
+score aussi (note gardée dans verified-tool-scores.md). Le mécanisme de réglages d'origine (modelDefaults.ts, étape 469),
+qui ne servait qu'à lui, est retiré avec lui : ollama.ts, benchmark-models.mjs et formatModelName.ts redeviennent
+identiques à la v0.59.3, et les faux ponts des 11 tests reviennent à leur état d'avant. L'original n'est plus « à
+remesurer » (la comparaison n'a plus d'objet). Choix : le gabarit des petits se mesure de nouveau sur K2 Horizon 0.9B
+(1,7 Go chargé), mêmes modèles choisis qu'en 0.61.0 (tests inchangés).

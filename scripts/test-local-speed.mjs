@@ -83,7 +83,6 @@ test('chaque réponse d’Ollama donne sa vitesse (modèle, tokens écrits, dur�
       '../config': { config: { ollama: { host: 'http://ollama.test', model: 'x', numCtx: 8192 } } },
       '../../shared/effort': { parseModelThinking: () => null },
       './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
-      './modelDefaults': { applyModelDefaults: async () => {} },
       './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
     })
     const seen = []
@@ -112,7 +111,6 @@ test('étape 377 : une réponse d’un Ollama d’une autre machine (duel sur un
       '../config': { config: { ollama: { host: 'https://pod-11434.proxy.runpod.net', model: 'x', numCtx: 8192, remote: true } } },
       '../../shared/effort': { parseModelThinking: () => null },
       './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
-      './modelDefaults': { applyModelDefaults: async () => {} },
       './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
     })
     const seen = []

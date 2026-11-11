@@ -180,8 +180,8 @@ le 11/11/2026 sur son PC (Ollama 0.40.10, Jaris 0.60.0, réglages d'origine bien
 27/78, contre 40/78 pour l'original (mesuré le 03/10 avec un Ollama plus ancien). Aucune boucle : chaque réponse finit
 normalement, réflexion courte ; les ratés sont des mauvais outils (recherche web pour « écris bonjour dans le champ »)
 ou du texte au lieu d'un outil. Les réponses justes relues (note « Facticesurprise » : contient bien 75001 ;
-« Here are my drawings » : generate_image bien appelé avec un chat). L'original repasse le test dans les mêmes
-conditions (section « À remesurer ») pour une comparaison juste.
+« Here are my drawings » : generate_image bien appelé avec un chat). Léo : « enlève-le si ça fait moins » : retiré de Jaris
+(étape 473), sa ligne de score aussi.
 
 | Modèle | Appel d'outils |
 |---|---|
@@ -236,7 +236,6 @@ conditions (section « À remesurer ») pour une comparaison juste.
 | qwen2.5-coder:32b | 12/78 |
 | devstral-small-2:24b | 72/78 |
 | qwen3-coder:30b | 69/78 |
-| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 27/78 |
 
 ## Vision — compréhension d'image
 
@@ -385,7 +384,6 @@ somme affichée dans une fenêtre d'alerte chez qwen3-vl:2b, « +1 » désactiv�
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 2/5 |
 | qwen3-vl:2b | 2/5 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 1/5 |
-| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 0/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -479,7 +477,6 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen2.5-coder:32b | 4/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
-| hf.co/mradermacher/Qwen3.5-0.8B-weight-space-programming-GGUF:Q8_0 | 10/48 |
 
 ## À remesurer sur le PC de Léo
 
@@ -494,9 +491,5 @@ modèle de cette liste.
 demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deux essais d'un petit modèle peut être
 grand, surtout en code. Liste vide pour l'instant : chaque score de ce fichier vient désormais du PC de Léo.
 
-Étape 472 : qwen3.5:0.8b remis dans la liste (Léo : comparer l'original à « qwen3.5:0.8b (update) » dans les MÊMES
-conditions — même PC, même version d'Ollama que le test du 11/11/2026).
-
 | Modèle | Mesuré où |
 |---|---|
-| qwen3.5:0.8b | PC de Léo, 03/10/2026 (Ollama plus ancien) |
