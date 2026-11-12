@@ -3,7 +3,9 @@
 Assistant IA personnel, vocal et écrit, **100 % local** : la voix, la réflexion et les réponses tournent sur le PC
 (Ollama), sans abonnement ni API payante. Application Windows (Electron + React + TypeScript).
 
-🌐 **Site et vidéo de présentation : [jaris-site.vercel.app](https://jaris-site.vercel.app/)**
+[![Vidéo de présentation de Jaris](https://img.youtube.com/vi/TWc15KZZq2M/maxresdefault.jpg)](https://youtu.be/TWc15KZZq2M)
+
+▶️ **[Voir la vidéo de présentation](https://youtu.be/TWc15KZZq2M)** · 🌐 **Site : [jaris-site.vercel.app](https://jaris-site.vercel.app/)**
 
 💬 **Aide, bugs, idées : [le Discord de Jaris](https://discord.gg/dVAQV7eJtr)** (aussi le bouton « ? » en bas à gauche dans Jaris).
 Jaris est en version bêta : si vous trouvez un bug, dites-le sur le Discord.
