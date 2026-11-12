@@ -86,7 +86,7 @@ function newSeriesStore() {
 }
 
 function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [], judge = null } = {}) {
-  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [] }
+  const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [], vision: [] }
   let ollamaDown = false
   const votes = [...priorVotes]
   // Étape 399 : les votes proposés par Claude, et ce que le faux Claude a reçu.
@@ -180,7 +180,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         ...MODELS.map((model, index) => ({ model, vramGb: index + 2, reason: null })),
         { model: 'echo-model:70b', vramGb: 42, reason: { kind: 'tooBig', needGb: 42, budgetGb: 23 } }
       ],
-      pickModelsForDuelCategory: async () => ({ flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b', code: 'delta-model:7b' })
+      pickModelsForDuelCategory: async () => ({ flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b', code: 'delta-model:7b', vision: 'charlie-model:4b' })
     },
     './ollama': {
       deleteModel: async (model) => {
@@ -196,6 +196,14 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         return true
       },
       getModelThinking: async (model) => THINKING[model] ?? null,
+      // Étape 475 : le Duel Vision parle directement au modèle (image + consigne), sans passer par converse().
+      chatWithOllama: async (messages, tools, model, think, signal, numCtx, onToken) => {
+        calls.vision.push({ messages, tools, model, think })
+        onToken?.('Une ')
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        if (signal?.aborted) throw Object.assign(new Error('arrêté'), { name: 'AbortError' })
+        return { role: 'assistant', content: `Une photo décrite (${calls.vision.length}).` }
+      },
       fetchOllamaVersion: async () => {
         if (ollamaDown) throw new Error('Ollama ne répond pas')
         return '0.40.10'
@@ -640,6 +648,45 @@ test('duel Vocal terminé : seuls les modèles de la VOIX changent, ceux du Chat
   await env.session.endDuel()
   assert.deepEqual(env.profile.models, { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' })
   assert.deepEqual(env.profile.voiceModels, { flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b' })
+})
+
+// Étape 475 (Léo : « ajoute un Duel Vision, l'utilisateur met juste une image, et aucun prompt, et il doit décrire »).
+const IMAGE = Buffer.from('une vraie image').toString('base64')
+test('étape 475 : Duel Vision — une image, aucune question : chaque modèle décrit LA même image, sans outils ni suite', async () => {
+  const env = setup({ installed: MODELS, profile: { name: 'Léo', models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, visionModel: 'alpha-model:3b' } })
+  await env.session.startDuel('vision', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  // Une question écrite, une image qui n'en est pas une (adresse, chemin, vide) : refusées par main.
+  assert.throws(() => env.session.askDuel('Que vois-tu ?'), /Demande invalide|invalide/i)
+  for (const bad of ['', 'file:///C:/secret.png', 'https://exemple.fr/a.png', 42, null]) assert.throws(() => env.session.askDuelImage(bad), /invalide/i, String(bad))
+  env.session.askDuelImage(IMAGE)
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  assert.equal(env.calls.vision.length, 1, 'B attend A, comme les autres duels')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  const [a, b] = env.calls.vision
+  for (const call of [a, b]) {
+    assert.equal(call.tools, undefined, 'aucun outil : décrire seulement')
+    assert.equal(call.messages.at(-1).content, 'Décris cette image.', 'la même consigne fixe, aucune question de Léo')
+    assert.deepEqual(call.messages.at(-1).images, [IMAGE], 'la même image aux deux')
+    assert.match(call.messages[0].content, /Décris-la précisément/)
+  }
+  assert.notEqual(a.model, b.model, 'chaque côté avec SON modèle (jamais remplacé par un plus petit)')
+  assert.equal(env.calls.converse.length, 0, 'jamais par converse() (outils, raccourcis de Jaris)')
+  const round = env.session.getDuelView().round
+  assert.equal(round.a.text, 'Une photo décrite (1).')
+  assert.equal(round.b.text, 'Une photo décrite (2).')
+  assert.equal(round.prompt, 'Décris cette image.')
+  assert.ok(!JSON.stringify(env.session.getDuelView()).includes(IMAGE), 'l’image ne repart jamais vers l’écran à chaque mise à jour')
+  // Pas de réponse de Léo aux modèles : le duel se juge sur la seule description.
+  assert.throws(() => env.session.followUpDuel('Et la couleur ?'), /invalide/i)
+  await env.session.voteDuel('b')
+  assert.ok(!JSON.stringify(env.votes).includes(IMAGE), 'l’image n’est jamais gardée avec le vote')
+  const summary = await env.session.endDuel()
+  assert.equal(summary.category, 'vision')
+  assert.deepEqual(summary.changes.map((c) => [c.role, c.from, c.to, c.applied]), [['vision', 'alpha-model:3b', 'charlie-model:4b', true]])
+  assert.equal(env.profile.visionModel, 'charlie-model:4b', 'les votes Vision choisissent le modèle Vision')
+  assert.deepEqual(env.profile.models, { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, 'ni les rôles de conversation')
 })
 
 test('duel Code : l’application est écrite par CE modèle, montrée dans l’aperçu, jamais rangée dans « Tes applications »', async () => {

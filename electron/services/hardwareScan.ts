@@ -1651,17 +1651,12 @@ export function noteBreakdown(
   conversationCategory: 'conversation' | 'voice' = 'conversation'
 ): ModelNoteBreakdown {
   const chain = role === 'vision' ? VISION_CHAIN_LENGTH : TOOL_CHAIN_LENGTH
-  // Étape 358 : Faible, Moyen, Élevé et Code sont notés par les duels seuls (0 point = force 1 sans vote) ; Vision n'a
-  // pas de duel et garde l'intelligence d'Artificial Analysis.
-  const voted = role === 'vision' ? undefined : votedStanding(role === 'code' ? 'code' : conversationCategory, model)
-  const intelligence = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
-  const strength = role === 'vision' ? intelligenceStrength(model) : voted?.strength ?? 1
-  const base: ModelNoteBreakdown['base'] =
-    role === 'vision'
-      ? intelligence === undefined
-        ? null
-        : { kind: 'intelligence', value: intelligence }
-      : { kind: 'duel', value: strength as number, duels: voted?.duels ?? 0, points: Math.log(strength as number) * DUEL_POINTS_PER_UNIT }
+  // Étape 358 : Faible, Moyen, Élevé et Code sont notés par les duels seuls (0 point = force 1 sans vote). Étape 475
+  // (Léo : « pourquoi il y a encore Intelligence 33,7 sur Vision ? », puis « ajoute un Duel Vision ») : Vision aussi,
+  // par les duels Vision — la même source que son choix (computeModelPicks).
+  const voted = votedStanding(role === 'code' ? 'code' : role === 'vision' ? 'vision' : conversationCategory, model)
+  const strength = voted?.strength ?? 1
+  const base: ModelNoteBreakdown['base'] = { kind: 'duel', value: strength, duels: voted?.duels ?? 0, points: Math.log(strength) * DUEL_POINTS_PER_UNIT }
   const rate = parseToolScore(toolCalling)
   const demands = role === 'conversation' ? demandsFactor(demandScore, toolCalling) : null
   return {
@@ -1983,7 +1978,7 @@ function computeModelPicks(
   // Étape 355 : la voix a son propre classement de duels (« Vocal ») pour Faible, Moyen et Élevé.
   conversationCategory: 'conversation' | 'voice' = 'conversation',
   // Étape 360 : les modèles déjà en service, gardés sauf preuve qu'un autre est meilleur (provenBetter).
-  current: Partial<Record<'flash' | 'medium' | 'large' | 'code', string>> = {}
+  current: Partial<Record<'flash' | 'medium' | 'large' | 'code' | 'vision', string>> = {}
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -2251,13 +2246,17 @@ function computeModelPicks(
     medium: pickRole(SIZED, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.medium, category: conversationCategory }),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
     large: pickRole(SIZED, conversation, true, smartest, TOOL_CHAIN_LENGTH, true, conversationNote, { model: current.large, category: conversationCategory }),
-    // Vision : le plus intelligent parmi ceux qui lisent une image.
+    // Vision : le plus fort parmi ceux qui lisent une image. Étape 475 (Léo : « ajoute un Duel Vision ») : sa force
+    // vient des duels Vision, comme les autres rôles (0 point tant qu'il n'a pas été voté), plus d'Artificial Analysis.
     vision: pickRole(
       SIZED.filter((c) => READS_IMAGES.has(c.model)),
       (c) => resultFor(c, 'vision'),
       true,
       smartest,
-      VISION_CHAIN_LENGTH
+      VISION_CHAIN_LENGTH,
+      false,
+      duelStrength('vision'),
+      { model: current.vision, category: 'vision' }
     ),
     // Code : le plus fort de tous en code, même lent (choix de Léo, étape 160) — Terminal-Bench 2.1 depuis l'étape 328.
     code: pickRole(SIZED, code, true, smartest, TOOL_CHAIN_LENGTH, false, codeNote, { model: current.code, category: 'code' })
@@ -2265,10 +2264,10 @@ function computeModelPicks(
 }
 
 /** Étape 360 : les modèles en service d'un profil, par rôle (la voix : les siens, sinon ceux du Chat). */
-function inServiceModels(profile: Profile | null | undefined, category: 'conversation' | 'voice'): Partial<Record<'flash' | 'medium' | 'large' | 'code', string>> {
+function inServiceModels(profile: Profile | null | undefined, category: 'conversation' | 'voice'): Partial<Record<'flash' | 'medium' | 'large' | 'code' | 'vision', string>> {
   if (!profile) return {}
   const models = category === 'voice' ? profile.voiceModels ?? profile.models : profile.models
-  return { ...(models ?? {}), ...(profile.codeModel ? { code: profile.codeModel } : {}) }
+  return { ...(models ?? {}), ...(profile.codeModel ? { code: profile.codeModel } : {}), ...(profile.visionModel ? { vision: profile.visionModel } : {}) }
 }
 
 export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set(), profile?: Profile | null): Promise<CapacityScanResult> {
@@ -2354,8 +2353,13 @@ async function assessDuelModels(category: DuelCategory, profile?: Profile | null
   const tooNew = machine ? modelsNeedingNewerOllama(machine.ollamaVersion) : modelsNeedingNewerOllama()
   // Un téléchargement bloqué sur CE PC (Ollama trop ancien pour un import hf.co/) ne dit rien d'une autre machine.
   const blocked = new Set(machine ? [] : Object.keys(profile?.blockedModels ?? {}))
+  // Étape 475 : en Vision, le score du test de vision (le Duel Vision ne propose que les modèles qui lisent une image).
   const toolScore = (model: string): string | null =>
-    (category === 'code' ? scores.code.get(model) ?? scores.conversation.get(model) : scores.conversation.get(model)) ?? null
+    (category === 'code'
+      ? scores.code.get(model) ?? scores.conversation.get(model)
+      : category === 'vision'
+        ? scores.vision.get(model)
+        : scores.conversation.get(model)) ?? null
   const reasonFor = (c: ModelCandidate): DuelUnavailableReason | null => {
     if (tooNew.has(c.model)) return { kind: 'ollama', version: MIN_OLLAMA_VERSION[c.model] ?? '' }
     if (blocked.has(c.model)) return { kind: 'blocked' }
@@ -2368,7 +2372,9 @@ async function assessDuelModels(category: DuelCategory, profile?: Profile | null
     if (memoryNeedGb(c) > limit) return { kind: 'tooBig', needGb: memoryNeedGb(c), budgetGb: Math.max(0, Math.round(limit * 10) / 10) }
     return null
   }
-  return { scores, toolScore, budgetGb, cardless, assessed: ALL_MODELS.map((c) => ({ c, reason: reasonFor(c) })) }
+  // Étape 475 : un Duel Vision ne met face à face que des modèles qui lisent une image.
+  const pool = category === 'vision' ? ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)) : ALL_MODELS
+  return { scores, toolScore, budgetGb, cardless, assessed: pool.map((c) => ({ c, reason: reasonFor(c) })) }
 }
 
 export async function getDuelCandidates(category: DuelCategory, profile?: Profile | null, machine?: DuelMachineOverride): Promise<DuelCandidate[]> {
@@ -2378,15 +2384,17 @@ export async function getDuelCandidates(category: DuelCategory, profile?: Profil
   const used =
     category === 'code'
       ? [profile?.codeModel]
-      : Object.values((category === 'voice' ? profile?.voiceModels ?? profile?.models : profile?.models) ?? {})
+      : category === 'vision'
+        ? [profile?.visionModel]
+        : Object.values((category === 'voice' ? profile?.voiceModels ?? profile?.models : profile?.models) ?? {})
   const inUse = new Set(used.filter((m): m is string => Boolean(m)))
   return assessed.filter(({ reason }) => reason === null).map(({ c }) => {
     const tools = toolScore(c.model)
-    const demands = category === 'code' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value
+    const demands = category === 'code' || category === 'vision' ? undefined : demandsFactor(currentDemandScore(scores, c.model), tools).value
     return {
       model: c.model,
       vramGb: c.vramGb,
-      note: modelNote(strengthOf(c.model), tools, TOOL_CHAIN_LENGTH, demands),
+      note: modelNote(strengthOf(c.model), tools, category === 'vision' ? VISION_CHAIN_LENGTH : TOOL_CHAIN_LENGTH, demands),
       duels: standings.get(c.model)?.duels ?? 0,
       inUse: inUse.has(c.model),
       // Conversation et Vocal : Faible et Moyen doivent tenir sur la carte, Élevé peut déborder sur la RAM — une session
@@ -2421,7 +2429,7 @@ export async function getDuelModelList(category: DuelCategory, profile?: Profile
 export async function pickModelsForDuelCategory(
   category: DuelCategory,
   profile?: Profile | null
-): Promise<{ flash: string; medium: string; large: string; code: string }> {
+): Promise<{ flash: string; medium: string; large: string; code: string; vision: string }> {
   const { vramGb } = await detectGpu()
   const conversationCategory = category === 'voice' ? 'voice' : 'conversation'
   const picks = computeModelPicks(
@@ -2432,7 +2440,7 @@ export async function pickModelsForDuelCategory(
     conversationCategory,
     inServiceModels(profile, conversationCategory)
   )
-  return { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model, code: picks.code.model }
+  return { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model, code: picks.code.model, vision: picks.vision.model }
 }
 
 /**

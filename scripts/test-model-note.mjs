@@ -51,7 +51,7 @@ const product = (note) => note.base.value * (note.omniscienceShare ?? 1) * note.
 
 test('machine de Léo (8 Go, 32 Go) : chaque mesure du calcul vient de la bonne source, et le produit fait la note', async () => {
   // Étape 358 : sans vote de duel, Faible, Moyen, Élevé et Code partent tous de 0 point (force 1) — plus
-  // d'Artificial Analysis ni de Terminal-Bench ; seule la fiabilité les sépare. Vision garde l'intelligence publiée.
+  // d'Artificial Analysis ni de Terminal-Bench ; seule la fiabilité les sépare. Vision aussi depuis l'étape 475 (Duel Vision).
   const picks = await setup({ vramMib: 8 * 1024 }).getMyModelPicks(null)
   const large = picks.large
   assert.equal(large.model, 'qwen3.5:27b')
@@ -66,8 +66,8 @@ test('machine de Léo (8 Go, 32 Go) : chaque mesure du calcul vient de la bonne 
   assert.equal(code.note.omniscienceShare, null)
   assert.equal(code.note.demandsShare, null)
 
-  // Vision : l'intelligence d'Artificial Analysis, une seule lecture par demande (chaîne de 1).
-  assert.equal(picks.vision.note.base.kind, 'intelligence')
+  // Vision : étape 475, les duels Vision (0 point sans vote), une seule lecture par demande (chaîne de 1).
+  assert.deepEqual([picks.vision.note.base.kind, picks.vision.note.base.value], ['duel', 1])
   assert.equal(picks.vision.note.chain, 1)
   close(picks.vision.note.toolsShare, 1, 'Vision : 34/34')
 
@@ -100,8 +100,8 @@ test('cas sans note : jamais testé, mesure non publiée — jamais un zéro ; d
   const unpublished = noteBreakdown('qwen2.5-coder:14b', 'code', '5/5', null)
   assert.deepEqual([unpublished.base.kind, unpublished.base.value], ['duel', 1])
   close(unpublished.total, 1, 'force 1 × 5/5')
-  // Vision sans intelligence publiée : toujours pas de note, jamais un zéro.
-  assert.equal(noteBreakdown('qwen2.5-coder:14b', 'vision', '5/5', null).total, null)
+  // Étape 475 : Vision aussi part de 0 point de duel (force 1), publié ou non — jamais un zéro.
+  close(noteBreakdown('qwen2.5-coder:14b', 'vision', '5/5', null).total, 1, 'force 1 × 5/5 (chaîne de 1)')
   // Sans score de demandes du test actuel : la part est estimée sur le test d'outils (jamais 1), et dite estimée.
   const estimated = noteBreakdown('granite4.2:8b', 'conversation', '70/78', null)
   assert.equal(estimated.demandsEstimated, true)

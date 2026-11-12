@@ -7952,7 +7952,8 @@ ul.reply-list--nested {
 
 .duel-categories {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Étape 475 : quatre sortes de duel (Vision en plus) — 4 de front quand il y a la place, sinon 2 par ligne. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
 
@@ -8479,6 +8480,82 @@ ul.reply-list--nested {
   padding: 10px 16px;
   background: var(--jv-bubble);
   border-radius: 18px;
+}
+
+/* Étape 475 : Duel Vision — l'image à décrire, à la place de la question. */
+.duel-round__prompt--image {
+  max-width: min(420px, 85%);
+}
+
+.duel-round__image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  margin-top: 6px;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.duel-vision-ask {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+
+.duel-vision-ask__title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.duel-vision-ask__hint {
+  margin: 0;
+  color: var(--hud-text-dim);
+}
+
+.duel-vision-drop {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 2px dashed var(--hud-line);
+  border-radius: 16px;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.duel-vision-drop:hover,
+.duel-vision-drop:focus-visible,
+.duel-vision-drop--over {
+  border-color: var(--hud-text-dim);
+  background: var(--jv-hover);
+  outline: none;
+}
+
+.duel-vision-drop--filled {
+  border-style: solid;
+  padding: 8px;
+}
+
+.duel-vision-drop__image {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.duel-vision-ask__actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .duel-round__prompt-label {

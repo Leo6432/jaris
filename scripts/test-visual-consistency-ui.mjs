@@ -247,7 +247,8 @@ for (const scheme of ['dark', 'light']) {
     })
   })
 
-  test(`${scheme} : à 760 px, les dix colonnes du Classement sont visibles, « Duels : 3 » d'un seul tenant`, options, async () => {
+  // Étape 475 : onze colonnes, avec « Duels Vision ».
+  test(`${scheme} : à 760 px, les onze colonnes du Classement sont visibles, « Duels : 3 » d'un seul tenant`, options, async () => {
     await withPage(scheme, 760, async (page) => {
       await openRanking(page)
       const table = await page.evaluate(() => {
@@ -260,7 +261,7 @@ for (const scheme of ['dark', 'light']) {
           counts: [...document.querySelectorAll('.options-menu__duel-count')].map(lines)
         }
       })
-      assert.equal(table.columns, 10)
+      assert.equal(table.columns, 11)
       assert.deepEqual(table.hidden, [], `colonnes cachées : ${table.hidden.join(', ')}`)
       assert.ok(table.counts.length >= 4 && table.counts.every((n) => n === 1), `« Duels : n » sur ${table.counts.join(', ')} lignes`)
     })

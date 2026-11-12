@@ -49,19 +49,23 @@ import type { MessageKey } from '../../shared/i18n'
 const CATEGORY_LABEL: Record<DuelCategory, MessageKey> = {
   conversation: 'duel.category.conversation',
   code: 'duel.category.code',
-  voice: 'duel.category.voice'
+  voice: 'duel.category.voice',
+  vision: 'duel.category.vision'
 }
 
 const CATEGORY_HINT: Record<DuelCategory, MessageKey> = {
   conversation: 'duel.category.conversation.hint',
   code: 'duel.category.code.hint',
-  voice: 'duel.category.voice.hint'
+  voice: 'duel.category.voice.hint',
+  vision: 'duel.category.vision.hint'
 }
 
 const CATEGORY_ICON: Record<DuelCategory, string> = {
   conversation: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z',
   code: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16',
-  voice: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3'
+  voice: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3',
+  // Étape 475 : une image (cadre, soleil, montagne).
+  vision: 'M4 5h16v14H4zM8.5 9.5a1.5 1.5 0 1 0 0 .01M20 15l-5-5L5 19'
 }
 
 /** Étape 372 (Léo : « plus de phrases d'idées ») : 10 idées par catégorie, 4 montrées au hasard à chaque duel. */
@@ -71,7 +75,9 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
   conversation: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.conversation.${i + 1}` as MessageKey),
   // Étape 382 : 40 idées d'applications (la série y tire ses demandes, comme l'écran).
   code: Array.from({ length: DUEL_CODE_IDEAS }, (_, i) => `duel.suggest.code.${i + 1}` as MessageKey),
-  voice: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.voice.${i + 1}` as MessageKey)
+  voice: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.voice.${i + 1}` as MessageKey),
+  // Étape 475 : pas d'idée de phrase en Vision — on n'y écrit rien, on donne une image.
+  vision: []
 }
 
 /** 4 idées au hasard, en évitant celles déjà montrées (« Autres idées » montre vraiment d'autres phrases). */
@@ -410,7 +416,8 @@ const ROLE_LABEL: Record<DuelSummary['changes'][number]['role'], MessageKey> = {
   flash: 'role.flash',
   medium: 'role.medium',
   large: 'role.large',
-  code: 'app.mode.code'
+  code: 'app.mode.code',
+  vision: 'role.vision'
 }
 
 function LineIcon({ d, size = 20 }: { d: string; size?: number }): JSX.Element {
@@ -770,7 +777,8 @@ interface SideCardProps {
 function SideCard({ name, side, category, now, playing, onStop, onListen, model, followUps, waiting, onSwap, swapDisabled, onWriteNow }: SideCardProps): JSX.Element {
   const running = side.status === 'running'
   const final = finished(side)
-  const showActions = category !== 'code' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
+  // Étape 475 : en Vision, le modèle ne fait rien sur le PC (aucun outil) — pas de cadre « Ce qu'il a demandé ».
+  const showActions = category !== 'code' && category !== 'vision' && (side.actions.length > 0 || (final && side.status !== 'stopped'))
   const empty = final && side.status === 'done' && !side.text.trim() && !side.previewUrl
   const progress = codeProgress(side.activity)
   return (
@@ -986,7 +994,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
         )}
       </header>
       <EarlierTurns turns={side.earlier ?? []} followUps={entry.followUps ?? []} category={entry.category} />
-      {entry.category !== 'code' && (
+      {entry.category !== 'code' && entry.category !== 'vision' && (
         <div className="duel-side__actions">
           <h3 className="duel-side__actions-title">{t('duel.actions.title')}</h3>
           {side.actions.length ? (
@@ -1186,7 +1194,7 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
                       </button>
                     </div>
                   )}
-                  <p className="duel-summary__round-prompt">{entry.prompt}</p>
+                  <p className="duel-summary__round-prompt">{shownPrompt(entry.category, entry.prompt)}</p>
                   <p className="duel-summary__round-models">
                     {t('duel.summary.versus', { a: formatModelName(entry.modelA ?? '—'), b: formatModelName(entry.modelB ?? '—') })}
                   </p>
@@ -1438,6 +1446,129 @@ function DuelReviewScreen({ onBack }: { onBack: () => void }): JSX.Element {
  * coupe une voix qui parle ; A répond à voix haute ; « Poser la même question au modèle B » ; B répond à voix haute ;
  * puis le vote, en dessous comme avant. Même dictée que le micro du Chat (useDictation).
  */
+/** Étape 475 : la demande d'un duel telle qu'affichée — en Vision, la consigne fixe ne se montre pas (elle est en français). */
+function shownPrompt(category: DuelCategory, prompt: string): string {
+  return category === 'vision' ? t('duel.vision.asked') : prompt
+}
+
+/** Largeur maximale de l'image d'un Duel Vision, comme une capture d'écran (MAX_SCREENSHOT_WIDTH, vision.ts). */
+const VISION_IMAGE_MAX_WIDTH = 1280
+
+/** Une image choisie par Léo, réduite et réencodée en JPEG : `base64` part aux modèles, `dataUrl` s'affiche. */
+interface DuelImage {
+  base64: string
+  dataUrl: string
+}
+
+async function shrinkImage(file: Blob): Promise<DuelImage> {
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, VISION_IMAGE_MAX_WIDTH / bitmap.width)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('canvas')
+  // Fond blanc : une image transparente (PNG) ne devient pas noire en JPEG.
+  context.fillStyle = '#fff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+  return { dataUrl, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) }
+}
+
+/**
+ * Étape 475 (Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit décrire ») : l'accueil d'un Duel
+ * Vision. Une image — choisie, glissée ou collée —, aperçue avant de partir ; aucun champ de texte.
+ */
+function VisionDuelAsk({ busy, onSend, onError }: { busy: boolean; onSend: (image: DuelImage) => void; onError: (message: string) => void }): JSX.Element {
+  const [image, setImage] = useState<DuelImage | null>(null)
+  const [over, setOver] = useState(false)
+  const load = async (file: Blob | null | undefined): Promise<void> => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      onError(t('duel.vision.notImage'))
+      return
+    }
+    try {
+      setImage(await shrinkImage(file))
+      onError('')
+    } catch {
+      onError(t('duel.vision.unreadable'))
+    }
+  }
+  // Coller une image (Ctrl+V) n'importe où sur l'écran du duel.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent): void => {
+      const file = [...(event.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'))
+      if (!file) return
+      event.preventDefault()
+      void load(file)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  })
+  // Le sélecteur NATIF, ouvert par le main (garde dialogOpen, étape 185) — jamais un <input> de fichier côté écran.
+  const choose = (): void => {
+    void window.jaris
+      .pickImageFile()
+      .then((picked) => {
+        if (!picked) return
+        const bytes = Uint8Array.from(atob(picked.base64), (c) => c.charCodeAt(0))
+        return load(new Blob([bytes], { type: picked.type }))
+      })
+      .catch((err: unknown) => onError(ipcErrorMessage(err)))
+  }
+  return (
+    <div className="duel-vision-ask">
+      <h2 className="duel-vision-ask__title">{t('duel.vision.title')}</h2>
+      <p className="duel-vision-ask__hint">{t('duel.vision.hint')}</p>
+      <div
+        className={`duel-vision-drop${over ? ' duel-vision-drop--over' : ''}${image ? ' duel-vision-drop--filled' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-label={t('duel.vision.drop')}
+        onClick={choose}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            choose()
+          }
+        }}
+        onDragOver={(event) => {
+          event.preventDefault()
+          setOver(true)
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault()
+          setOver(false)
+          void load(event.dataTransfer.files[0])
+        }}
+      >
+        {image ? (
+          <img className="duel-vision-drop__image" src={image.dataUrl} alt={t('duel.vision.preview')} />
+        ) : (
+          <>
+            <LineIcon d={CATEGORY_ICON.vision} size={28} />
+            <span className="duel-vision-drop__text">{t('duel.vision.drop')}</span>
+          </>
+        )}
+      </div>
+      <div className="duel-vision-ask__actions">
+        {image && (
+          <button type="button" className="duel-btn" onClick={choose} disabled={busy}>
+            {t('duel.vision.change')}
+          </button>
+        )}
+        <button type="button" className="duel-btn duel-btn--primary" onClick={() => image && onSend(image)} disabled={!image || busy}>
+          {busy ? t('common.loading') : t('duel.vision.send')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function VoiceDuelStage({
   round,
   now,
@@ -1592,6 +1723,8 @@ export default function DuelPanel(): JSX.Element {
   const [reviewCount, setReviewCount] = useState(0)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [prompt, setPrompt] = useState('')
+  // Étape 475 : l'image du Duel Vision en cours, montrée au-dessus des deux descriptions (jamais gardée ailleurs).
+  const [sentImage, setSentImage] = useState<{ round: number; dataUrl: string } | null>(null)
   // Étape 401 : la réponse de Léo aux deux modèles, avant de voter.
   const [reply, setReply] = useState('')
   // Étape 450 : en Duel Vocal, le champ texte n'apparaît que si Léo choisit « Écrire plutôt » (micro absent, en panne).
@@ -1810,6 +1943,14 @@ export default function DuelPanel(): JSX.Element {
     void run('ask', async () => {
       setView(await window.jaris.duelAsk(text))
       setPrompt('')
+    })
+  }
+
+  /** Étape 475 : l'image d'un Duel Vision part aux deux modèles, sans aucune question. */
+  const askImage = (image: DuelImage, round: number): void => {
+    void run('ask', async () => {
+      setView(await window.jaris.duelAskImage(image.base64))
+      setSentImage({ round, dataUrl: image.dataUrl })
     })
   }
 
@@ -2229,7 +2370,8 @@ export default function DuelPanel(): JSX.Element {
           )}
 
           <ul className="duel-home__facts">
-            <li>{t('duel.realActions')}</li>
+            {/* Étape 475 : en Vision, les modèles ne font rien sur le PC (ils décrivent une image, sans outil). */}
+            {category !== 'vision' && <li>{t('duel.realActions')}</li>}
             <li>{t('duel.anonymous')}</li>
           </ul>
 
@@ -2394,7 +2536,8 @@ export default function DuelPanel(): JSX.Element {
     const followUps = round.followUps ?? []
     // Étape 401 : Léo peut répondre aux deux modèles (une question sur sa ville…) avant de voter. Étape 415 : en Code
     // aussi — une modification que chaque modèle apporte à SON application.
-    const canFollowUp = bothDone && !trouble && !round.revealed && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS
+    // Étape 475 : un Duel Vision se juge sur la seule description, sans réponse de Léo ensuite.
+    const canFollowUp = bothDone && !trouble && !round.revealed && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS && view.category !== 'vision'
     const code = view.category === 'code'
     const waitingB = (
       <>
@@ -2440,6 +2583,10 @@ export default function DuelPanel(): JSX.Element {
         {round.prompt === null && batchEditing && view.category === 'code' ? (
           <div className="duel__scroll">
             <DuelBatchEditor category={view.category} busy={pending !== null} onStart={startBatch} onCancel={() => setBatchEditing(false)} />
+          </div>
+        ) : round.prompt === null && view.category === 'vision' ? (
+          <div className="duel__scroll duel__center">
+            <VisionDuelAsk key={`${view.id}-${round.number}`} busy={pending === 'ask'} onSend={(image) => askImage(image, round.number)} onError={setError} />
           </div>
         ) : round.prompt === null && view.category === 'voice' ? (
           <div className="duel__scroll duel__center">
@@ -2495,10 +2642,21 @@ export default function DuelPanel(): JSX.Element {
                 />
               ) : (
                 <>
-                <div className="duel-round__prompt">
-                  <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
-                  <p>{round.prompt}</p>
-                </div>
+                {view.category === 'vision' ? (
+                  <div className="duel-round__prompt duel-round__prompt--image">
+                    <span className="duel-round__prompt-label">{t('duel.vision.yourImage')}</span>
+                    {sentImage?.round === round.number ? (
+                      <img className="duel-round__image" src={sentImage.dataUrl} alt={t('duel.vision.yourImage')} />
+                    ) : (
+                      <p>{t('duel.vision.asked')}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="duel-round__prompt">
+                    <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
+                    <p>{round.prompt}</p>
+                  </div>
+                )}
                 {round.together && <p className="duel-home__note duel-round__together">{t('duel.together')}</p>}
                 <div className={`duel-round__sides${view.category === 'code' ? ' duel-round__sides--code' : ''}`}>
                   <SideCard
@@ -2619,7 +2777,7 @@ export default function DuelPanel(): JSX.Element {
             {t('duel.voice.write')}
           </button>
         )}
-        {round.prompt === null && !batchEditing && (view.category !== 'voice' || voiceWrite) && (
+        {round.prompt === null && !batchEditing && view.category !== 'vision' && (view.category !== 'voice' || voiceWrite) && (
           <Composer
             value={prompt}
             onChange={setPrompt}
@@ -2679,7 +2837,7 @@ export default function DuelPanel(): JSX.Element {
                   <ol className="duel-summary__rounds">
                     {summary.rounds.map((r, index) => (
                       <li key={index} className="duel-summary__round">
-                        <p className="duel-summary__round-prompt">{r.prompt}</p>
+                        <p className="duel-summary__round-prompt">{shownPrompt(summary.category, r.prompt)}</p>
                         <p className="duel-summary__round-models">
                           {t('duel.summary.versus', { a: formatModelName(r.modelA), b: formatModelName(r.modelB) })}
                         </p>

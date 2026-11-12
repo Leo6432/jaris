@@ -284,6 +284,7 @@ const api = {
   duelReviews: (): Promise<DuelReviewView[]> => invoke(IPC_CHANNELS.duelReviews),
   duelReviewDecide: (id: string, accept: boolean): Promise<DuelReviewView[]> => invoke(IPC_CHANNELS.duelReviewDecide, id, accept),
   duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
+  duelAskImage: (image: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAskImage, image),
   duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
   duelFollowUp: (message: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelFollowUp, message),
   duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),

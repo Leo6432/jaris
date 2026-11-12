@@ -750,13 +750,13 @@ test('« Choisir les modèles » : cases à cocher avec la durée, total de la s
 // rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
 // taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
 // précisément la distinction qui manquait pour attraper le problème avant livraison.
-test('une barre "Trier par" VISIBLE propose les 9 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
+test('une barre "Trier par" VISIBLE propose les 10 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Vision', 'Code', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Vision', 'Code', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Duels Vision', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.

@@ -83,6 +83,7 @@ import { checkClaudeKey } from './services/duelJudge'
 import {
   abortDuel,
   askDuel,
+  askDuelImage,
   closeDuel,
   deleteDuelModels,
   duelAudio,
@@ -1900,6 +1901,11 @@ app.whenReady().then(async () => {
     // modèle — elle le ralentirait, et seulement lui, au détriment de la comparaison.
     cancelMemoryExtraction()
     return askDuel(prompt)
+  })
+  // Étape 475 : l'image du Duel Vision, revérifiée par askDuelImage (base64 seulement, taille bornée).
+  ipcMain.handle(IPC_CHANNELS.duelAskImage, (_event, image: unknown) => {
+    cancelMemoryExtraction()
+    return askDuelImage(image)
   })
   ipcMain.handle(IPC_CHANNELS.duelRunB, () => {
     cancelMemoryExtraction()

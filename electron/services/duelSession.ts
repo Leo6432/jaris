@@ -14,7 +14,7 @@ import {
   type DuelCandidate,
   type DuelMachineOverride
 } from './hardwareScan'
-import { deleteModel, fetchOllamaVersion, type OllamaMessage, getModelThinking, listInstalledModels, loadedOllamaModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
+import { chatWithOllama, deleteModel, fetchOllamaVersion, type OllamaMessage, getModelThinking, listInstalledModels, loadedOllamaModels, pullModelIfMissing, repairModelsViewIfNeeded } from './ollama'
 import { getProfile, patchProfile } from './profileStore'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb } from './systemResources'
 import { TOOLS } from './tools'
@@ -49,6 +49,7 @@ import {
   DUEL_CATEGORIES,
   DUEL_FORBIDDEN_TOOLS,
   DUEL_FOLLOW_UP_MAX_CHARS,
+  DUEL_VISION_IMAGE_MAX_CHARS,
   DUEL_HISTORY_TEXT_MAX,
   DUEL_MAX_FOLLOW_UPS,
   DUEL_MIN_CHOSEN,
@@ -97,7 +98,7 @@ import type {
   DuelSummary,
   Profile
 } from '../../shared/ipc'
-import { formatDecimal, t, tn, type MessageKey } from '../../shared/i18n'
+import { formatDecimal, replyLanguageRule, t, tn, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
 
 /**
@@ -178,6 +179,11 @@ interface RoundState {
    * gardés pour B : les deux modèles ont exactement les mêmes. `null` tant que A n'a pas commencé.
    */
   tools: ReadonlySet<string> | null
+  /**
+   * Étape 475 : l'image d'un Duel Vision (base64, sans en-tête), la même pour A et B. Gardée le temps du duel seulement :
+   * jamais écrite avec le vote (elle peut être personnelle), seule la consigne l'est. Absente hors Duel Vision.
+   */
+  image?: string | null
 }
 
 /**
@@ -728,7 +734,7 @@ function nextRound(current: Session): void {
     return
   }
   const together = canRunDuelTogether(current.category, [current.sizes.get(pair[0]) ?? NaN, current.sizes.get(pair[1]) ?? NaN], current.vramGb)
-  current.round = { number: current.history.length + 1, pair, prompt: null, followUps: [], sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null, together }
+  current.round = { number: current.history.length + 1, pair, prompt: null, followUps: [], sides: { a: emptySide(), b: emptySide() }, revealed: null, tools: null, together, image: null }
 }
 
 function sideFinished(side: SideState): boolean {
@@ -772,9 +778,33 @@ export function askDuel(prompt: string): DuelSessionView {
   if (!current || current.phase !== 'ready' || !current.round) throw new Error(t('duel.error.noRound'))
   if (current.round.prompt !== null) throw new Error(t('duel.error.alreadyAsked'))
   if (!text) throw new Error(t('duel.error.emptyPrompt'))
+  // Étape 475 : un Duel Vision ne part que d'une image (askDuelImage), jamais d'un texte.
+  if (current.category === 'vision') throw new Error(t('duel.error.badRequest'))
   current.round.prompt = text
   void runSide(current, current.round, 'a')
   // Étape 379 : en Code, avec assez de mémoire pour les deux, B n'attend pas A.
+  if (current.round.together) void runSide(current, current.round, 'b')
+  return getDuelView() as DuelSessionView
+}
+
+/**
+ * Étape 475 (Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit décrire ») : Léo donne l'image du
+ * Duel Vision ; les deux modèles la décrivent avec la même consigne fixe (DUEL_VISION_ASK), A d'abord. La consigne
+ * est gardée comme « demande » du duel (historique, vote) ; l'image, elle, n'est jamais écrite.
+ */
+export function askDuelImage(image: unknown): DuelSessionView {
+  const current = session
+  if (current?.judge) throw new Error(t('duel.error.notYourTurn'))
+  if (!current || current.phase !== 'ready' || !current.round) throw new Error(t('duel.error.noRound'))
+  if (current.category !== 'vision') throw new Error(t('duel.error.badRequest'))
+  if (current.round.prompt !== null) throw new Error(t('duel.error.alreadyAsked'))
+  // Revérifié ici : seulement du base64 (jamais une adresse ni un chemin), d'une taille raisonnable.
+  if (typeof image !== 'string' || !image || image.length > DUEL_VISION_IMAGE_MAX_CHARS || !/^[A-Za-z0-9+/]+={0,2}$/.test(image)) {
+    throw new Error(t('duel.error.badRequest'))
+  }
+  current.round.image = image
+  current.round.prompt = DUEL_VISION_ASK
+  void runSide(current, current.round, 'a')
   if (current.round.together) void runSide(current, current.round, 'b')
   return getDuelView() as DuelSessionView
 }
@@ -806,6 +836,8 @@ export function followUpDuel(message: unknown): DuelSessionView {
   if (!current || current.phase !== 'ready' || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   // L'écran ne propose jamais de répondre dans ces cas : une telle demande ne vient pas de lui.
   if (current.batch?.includes(round)) throw new Error(t('duel.error.badRequest'))
+  // Étape 475 : un Duel Vision se juge sur la seule description de l'image, sans échange ensuite.
+  if (current.category === 'vision') throw new Error(t('duel.error.badRequest'))
   if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
   if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
@@ -1506,7 +1538,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
     // Ollama arrêté : `null`, et le niveau part tel quel (Ollama le ramène à un niveau du modèle).
     const think = equivalentThink(DUEL_THINK_LEVEL, await onModels(current.remote, () => getModelThinking(model)))
     // Les outils sont ceux de CE PC, même quand les modèles tournent ailleurs.
-    if (current.category !== 'code' && !round.tools) round.tools = await duelToolsHere()
+    if ((current.category === 'conversation' || current.category === 'voice') && !round.tools) round.tools = await duelToolsHere()
     // « Arrêter » pendant ces lectures : le modèle ne doit pas partir quand même (le signal est déjà donné).
     if (!controller.signal.aborted) {
       const tools = round.tools ?? new Set<string>()
@@ -1515,7 +1547,9 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
         () =>
           current.category === 'code'
             ? runCode(current, side, model, codeAsk(round, side, prompt), think, controller.signal)
-            : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
+            : current.category === 'vision'
+              ? runVision(side, model, round.image ?? '', think, controller.signal)
+              : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
         current.sizes
       )
     }
@@ -1638,6 +1672,45 @@ async function runConversation(
       side.audioError = err instanceof Error ? err.message : String(err)
     }
   }
+}
+
+/**
+ * Étape 475 : la consigne du Duel Vision, la même pour tous. Léo ne pose aucune question : le modèle doit seulement
+ * décrire. Écrite en français comme les autres consignes de Jaris ; la langue de la réponse suit celle de Jaris.
+ */
+export const DUEL_VISION_ASK = 'Décris cette image.'
+const DUEL_VISION_SYSTEM_PROMPT =
+  "Tu es Jaris. L'utilisateur t'envoie une image, sans question. Décris-la précisément : ce qu'elle montre, les " +
+  'personnes, objets et lieux, les textes visibles recopiés tels quels, les couleurs et la disposition. Ne décris que ' +
+  "ce qui est réellement visible : si un détail est illisible ou incertain, dis-le au lieu de l'inventer."
+
+/**
+ * Étape 475 : un côté du Duel Vision — le modèle du duel lui-même (jamais remplacé par un plus petit comme le fait
+ * describeImage), sans outils, la réponse affichée au fil de l'écriture.
+ */
+async function runVision(side: SideState, model: string, image: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
+  if (!image) throw new Error(t('duel.error.badRequest'))
+  let streamed = ''
+  const message = await chatWithOllama(
+    [
+      // La langue de la réponse : celle de Jaris (replyLanguageRule) — la consigne ne nomme aucune langue.
+      { role: 'system', content: DUEL_VISION_SYSTEM_PROMPT + replyLanguageRule() },
+      { role: 'user', content: DUEL_VISION_ASK, images: [image] }
+    ],
+    undefined,
+    model,
+    think,
+    signal,
+    undefined,
+    (delta) => {
+      streamed += delta
+      side.text = streamed
+      side.activity = { kind: 'writing' }
+      emitSoon()
+    }
+  )
+  side.text = message.content?.trim() || streamed.trim()
+  if (!side.text && !signal.aborted) throw new Error(t('vision.empty', { model }))
 }
 
 function codeActivity(progress: CodeGenProgress): DuelActivity {
@@ -2375,6 +2448,13 @@ export async function endDuel(force = false): Promise<DuelSummary> {
         const applied = isInstalled(picks.code, installed)
         changes.push({ role: 'code', from: profile.codeModel ?? null, to: picks.code, applied })
         if (applied) await patchProfile({ codeModel: picks.code })
+      }
+    } else if (current.category === 'vision') {
+      // Étape 475 : les votes Vision choisissent le modèle du rôle Vision, comme ceux du Code choisissent le modèle Code.
+      if (!profile.visionModel || !sameModel(profile.visionModel, picks.vision)) {
+        const applied = isInstalled(picks.vision, installed)
+        changes.push({ role: 'vision', from: profile.visionModel ?? null, to: picks.vision, applied })
+        if (applied) await patchProfile({ visionModel: picks.vision })
       }
     } else {
       const before = (current.category === 'voice' ? profile.voiceModels ?? profile.models : profile.models) ?? null

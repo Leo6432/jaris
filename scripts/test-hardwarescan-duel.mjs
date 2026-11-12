@@ -65,7 +65,8 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go chargé) ne tient plus sur les 7 Go utiles.
   assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:27b' })
   assert.equal(none.codeModel, 'ornith-1.5:35b')
-  assert.equal(none.visionModel, LARGE, 'Vision n’a pas de duel : elle garde Artificial Analysis')
+  // Étape 475 : Vision a ses duels ; sans vote, sa fiabilité au test de vision départage (0 point pour tous).
+  assert.equal(none.visionModel, LARGE)
   assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
 })
 
@@ -163,6 +164,24 @@ test('Code : les votes Code décident du modèle Code, pas des rôles de convers
   assert.equal(picks.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
 })
 
+// Étape 475 (Léo : « ajoute un Duel Vision ») : les votes Vision décident du modèle Vision, et de lui seul.
+test('étape 475 : les votes Vision choisissent le modèle Vision ; seuls les modèles qui lisent une image y entrent', async () => {
+  const VL = 'qwen3-vl:4b'
+  const voted = await setup(wins(8, VL, LARGE, 'vision')).pickBestModelsFromBenchmark()
+  assert.equal(voted.visionModel, VL, '8 victoires en Vision : il prend le rôle Vision')
+  assert.equal(voted.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
+  // Des votes d'une AUTRE catégorie ne touchent pas à la Vision.
+  assert.equal((await setup(wins(8, VL, LARGE, 'conversation')).pickBestModelsFromBenchmark()).visionModel, LARGE)
+  // Le Duel Vision ne met face à face que des modèles qui lisent une image.
+  const m = setup([])
+  const readers = new Set((await m.getModelOverview()).entries.filter((e) => e.readsImages).map((e) => e.model))
+  const candidates = await m.getDuelCandidates('vision', { visionModel: LARGE })
+  assert.ok(candidates.length >= 4, `assez de modèles pour une session (${candidates.length})`)
+  for (const c of candidates) assert.ok(readers.has(c.model), `${c.model} ne lit pas les images`)
+  assert.equal(candidates.find((c) => c.model === LARGE)?.inUse, true, 'le modèle Vision en service est marqué')
+  assert.ok((await m.getDuelModelList('vision')).every((o) => readers.has(o.model)), 'la liste à cocher aussi')
+})
+
 test('le calcul affiché dit d’où vient la note : les duels (points et nombre de votes), 0 point sans vote', async () => {
   const m = setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, LARGE, CHALLENGER, 'voice')])
   const profile = {
@@ -182,8 +201,8 @@ test('le calcul affiché dit d’où vient la note : les duels (points et nombre
   // Jamais en duel : 0 point, force 1 — plus d'Artificial Analysis ni de Terminal-Bench pour ces rôles.
   assert.deepEqual([picks.medium.note.base.kind, picks.medium.note.base.value, picks.medium.note.base.points], ['duel', 1, 0])
   assert.deepEqual([picks.code.note.base.kind, picks.code.note.base.duels], ['duel', 0])
-  // Vision n'a pas de duel : elle garde l'intelligence d'Artificial Analysis.
-  assert.equal(picks.vision.note.base.kind, 'intelligence')
+  // Étape 475 : Vision a désormais ses duels — sans vote Vision, 0 point aussi (plus d'Artificial Analysis).
+  assert.deepEqual([picks.vision.note.base.kind, picks.vision.note.base.duels, picks.vision.note.base.points], ['duel', 0, 0])
   // Le produit des parts affichées fait toujours la note.
   const note = picks.large.note
   assert.ok(Math.abs(note.base.value * note.toolsShare * (note.demandsShare ?? 1) - note.total) < 1e-9)

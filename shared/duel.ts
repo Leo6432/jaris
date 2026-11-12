@@ -7,9 +7,19 @@
  * des actions faites par un modèle se testent sans rien simuler.
  */
 
-/** Les trois sortes de duel. Vocal : la réponse est écrite pour être lue à voix haute, puis lue par Jaris. */
-export type DuelCategory = 'conversation' | 'code' | 'voice'
-export const DUEL_CATEGORIES: readonly DuelCategory[] = ['conversation', 'code', 'voice']
+/**
+ * Les sortes de duel. Vocal : la réponse est écrite pour être lue à voix haute, puis lue par Jaris. Vision (étape 475,
+ * Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit décrire ») : les deux modèles décrivent la
+ * même image, sans autre consigne ; leurs votes choisissent le modèle du rôle Vision.
+ */
+export type DuelCategory = 'conversation' | 'code' | 'voice' | 'vision'
+export const DUEL_CATEGORIES: readonly DuelCategory[] = ['conversation', 'code', 'voice', 'vision']
+
+/**
+ * Étape 475 : la plus longue image (en caractères base64) qu'un Duel Vision accepte, revérifiée côté main. L'écran la
+ * réduit avant (1 280 pixels de large au plus, comme une capture d'écran) : une photo de téléphone y tient largement.
+ */
+export const DUEL_VISION_IMAGE_MAX_CHARS = 12_000_000
 
 /** « Les deux sont nuls » compte comme une égalité pour le classement (comme sur LMArena), mais reste noté à part. */
 export type DuelOutcome = 'a' | 'b' | 'tie' | 'bothBad'

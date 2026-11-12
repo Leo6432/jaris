@@ -47,7 +47,8 @@ window.__plan = window.__plan || {
 window.__rankings = window.__rankings || [
   { category: 'conversation', votes: 3, pending: 0, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
   { category: 'code', votes: 0, pending: 2, ranking: [] },
-  { category: 'voice', votes: 0, pending: 0, ranking: [] }
+  { category: 'voice', votes: 0, pending: 0, ranking: [] },
+  { category: 'vision', votes: 0, pending: 0, ranking: [] }
 ]
 window.__view = window.__view === undefined ? null : window.__view
 const listeners = []
@@ -67,6 +68,12 @@ window.jaris = {
     window.__calls.push(judged !== undefined ? ['start', category, count, series, judged, judgeScreens] : series === undefined ? ['start', category, count] : ['start', category, count, series])
     window.__category = category
     return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
+  },
+  // Étape 475 : le sélecteur d'image NATIF (via le main) et l'envoi de l'image d'un Duel Vision.
+  pickImageFile: async () => { window.__calls.push('pickImage'); return window.__pickImage ?? null },
+  duelAskImage: async (image) => {
+    window.__calls.push(['askImage', image])
+    return ready({ number: 1, prompt: 'Décris cette image.', a: side({ status: 'running', startedAt: Date.now() - 2000, activity: { kind: 'writing' }, text: 'Une ' }), b: side() })
   },
   duelAsk: async (prompt) => {
     window.__calls.push(['ask', prompt])
@@ -229,11 +236,18 @@ const NAMES = ['qwen3.5', 'granite4.2', 'ministral', 'gemma4', 'Qwen3.5', 'Grani
 /** Laisse React finir son rendu après un évènement simulé (piège noté à l'étape 324). */
 const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 
-test('accueil : trois catégories (Conversation, Code, Vocal — pas d’images), le nombre de modèles, ce qui sera téléchargé', options, async () => {
+// Étape 475 (Léo : « ajoute un Duel Vision ») : une quatrième catégorie, Vision (une image, aucune question).
+test('accueil : quatre catégories (Conversation, Code, Vocal, Vision), le nombre de modèles, ce qui sera téléchargé', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.duel-category')
-    assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal'])
+    assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal', 'Vision'])
     assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Conversation')
+    assert.match(await page.textContent('.duel-home__facts'), /agissent vraiment sur ton PC/)
+    // Étape 475 : en Vision, rien n'est fait sur le PC — pas d'avertissement à ce sujet.
+    await page.click('.duel-category:has-text("Vision")')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'plan' && c[1] === 'vision'))
+    assert.doesNotMatch(await page.textContent('.duel-home__facts'), /agissent vraiment/)
+    await page.click('.duel-category:has-text("Conversation")')
     await page.waitForSelector('.duel-size')
     assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size').allTextContents(), ['4', '5', '6'])
     assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
@@ -1520,4 +1534,52 @@ test('duel Vocal : quitter l’écran Duel coupe la voix ; une voix attendue ne 
     await page.waitForTimeout(300)
     assert.equal(await page.evaluate(() => window.__media.includes('play')), false)
   }, VOICE_ROUND)
+})
+
+// Étape 475 (Léo : « ajoute un Duel Vision, l'utilisateur met juste une image, et aucun prompt, et il doit décrire »).
+const PNG_4x3 = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGM4EaABRww4OQAsNg8BoqhHXQAAAABJRU5ErkJggg=='
+test('étape 475 : Duel Vision — une image (sélecteur natif), aucun champ de texte, l’image au-dessus des deux descriptions', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-vision-ask')
+      assert.equal(await page.locator('.composer__input').count(), 0, 'aucun champ : on ne pose pas de question')
+      assert.equal(await page.locator('.empty-state__suggestion, .empty-state__more').count(), 0, 'aucune idée de phrase')
+      const send = page.locator('.duel-vision-ask .duel-btn--primary')
+      assert.equal(await send.isDisabled(), true, 'rien à envoyer sans image')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-1-accueil.png` })
+      // Un fichier qui n'est pas une image (extension inconnue : type vide) est refusé avec une phrase claire.
+      await page.evaluate(() => (window.__pickImage = { name: 'notes.txt', type: '', base64: btoa('bonjour') }))
+      await page.click('.duel-vision-drop')
+      await page.waitForFunction(() => document.querySelector('.duel__error')?.textContent.includes("n'est pas une image"))
+      // Une vraie image, choisie par le sélecteur NATIF du main (jamais un <input type="file">).
+      // SHOTS_IMAGE : une vraie photo pour les captures montrées à Léo (le test, lui, garde une image minuscule).
+      const png = process.env.SHOTS_IMAGE ? readFileSync(process.env.SHOTS_IMAGE).toString('base64') : PNG_4x3
+      await page.evaluate((b64) => (window.__pickImage = { name: 'photo.png', type: 'image/png', base64: b64 }), png)
+      await page.click('.duel-vision-drop')
+      await page.waitForSelector('.duel-vision-drop__image')
+      assert.equal(await page.locator('.duel__error').count(), 0, 'l’erreur précédente s’efface')
+      assert.equal(await send.isDisabled(), false)
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-2-image.png` })
+      await send.click()
+      await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'askImage'))
+      const sent = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'askImage')[1]
+      assert.match(sent, /^\/9j\//, 'réencodée en JPEG (base64 sans en-tête data:)')
+      // Le duel : l'image à la place de la question — la consigne fixe (en français) ne s'affiche pas.
+      await page.waitForSelector('.duel-round__image')
+      assert.match(await page.getAttribute('.duel-round__image', 'src'), /^data:image\/jpeg;base64,/)
+      assert.equal(await page.locator('text=Décris cette image.').count(), 0)
+      assert.match(await page.textContent('.duel-round__prompt'), /Ton image/)
+      // Les deux ont décrit : le vote, et aucune réponse de Léo aux modèles (ni champ, ni indication).
+      await page.evaluate(() =>
+        window.__emit(window.__ready({ number: 1, prompt: 'Décris cette image.', a: window.__side({ status: 'done', text: 'Un chat roux sur un canapé gris.', durationMs: 3000 }), b: window.__side({ status: 'done', text: 'Un chien.', durationMs: 2000 }) }))
+      )
+      await page.waitForSelector('.duel-vote__button')
+      assert.equal(await page.locator('.composer__input').count(), 0)
+      assert.equal(await page.locator('.duel-vote__follow-hint').count(), 0)
+      assert.equal(await page.locator('.duel-side__actions').count(), 0, 'aucun cadre « Ce qu’il a demandé à ton PC » : rien n’est fait sur le PC')
+      assert.ok(await page.locator('.duel-round__image').isVisible(), 'l’image reste au-dessus des descriptions')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-3-vote.png` })
+    },
+    "window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }"
+  )
 })

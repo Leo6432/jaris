@@ -12033,3 +12033,36 @@ remesurer » (la comparaison n'a plus d'objet). Choix : le gabarit des petits se
   (`app.support`, `app.support.title`), `a.rail__item` sans soulignement. Test (test-window-chrome-ui.mjs) : 10
   boutons, lien et cible, même taille que ses voisins, barre entière à la hauteur minimale de la fenêtre (600 px).
   Capture vérifiée (760 × 600, ×2).
+
+## Étape 475 — v0.62.0 : Duel Vision (une image, aucune question, les deux modèles décrivent)
+
+Léo : « pourquoi il y a encore Intelligence 33,7 sur Vision ? » (le rôle Vision n'avait pas de duel et gardait
+l'intelligence d'Artificial Analysis), puis « ajoute un Duel Vision, l'utilisateur met juste une image, et aucun
+prompt, et il doit décrire ».
+- `shared/duel.ts` : `DuelCategory` gagne `'vision'` (DUEL_CATEGORIES, votes, classement suivent).
+  `DUEL_VISION_IMAGE_MAX_CHARS` borne l'image.
+- `duelSession.ts` : `askDuelImage(image)` (canal `duelAskImage`, revérifié : base64 seulement, taille bornée — jamais
+  une adresse ni un chemin) ; `askDuel` (texte) refusé en Vision ; consigne fixe `DUEL_VISION_ASK` (« Décris cette
+  image. ») gardée comme demande du vote, l'image JAMAIS écrite (ni avec le vote, ni dans la vue envoyée à l'écran à
+  chaque mise à jour). `runVision` : `chatWithOllama` avec le modèle du duel lui-même (jamais remplacé par un plus
+  petit comme `describeImage`), sans outils, réponse au fil de l'écriture. Pas de réponse de Léo aux modèles ensuite
+  (`followUpDuel` refusé). Fin de session : les votes Vision changent `visionModel`, comme le Code `codeModel`.
+- `hardwareScan.ts` : le rôle Vision prend la force des duels Vision (`duelStrength('vision')`, modèle en service gardé
+  sauf preuve, comme les autres rôles) ; `noteBreakdown` affiche donc des points de duel pour Vision, plus
+  « Intelligence 33,7 ». Candidats d'un Duel Vision : seulement les modèles qui lisent une image (`READS_IMAGES`),
+  notés sur leur score de vision.
+- Écran : 4e catégorie (icône image), accueil sans champ de texte ni idées — une zone où glisser, coller (Ctrl+V) ou
+  choisir une image par le sélecteur NATIF du main (`pickImageFile`, garde dialogOpen : un `<input type="file">` était
+  refusé par test-native-dialog-guard.mjs, règle de l'étape 185). Image réduite à 1 280 px et réencodée en JPEG côté
+  écran ; montrée au-dessus des deux descriptions à la place de la question (la consigne française n'est jamais
+  affichée : « Description d'une image (l'image n'est pas gardée) » dans l'historique). Pas de cadre « Ce qu'il a
+  demandé à ton PC », pas d'avertissement « les modèles agissent sur ton PC » en Vision. Colonne « Duels Vision » dans le
+  Classement (11 colonnes, toutes visibles à 760 px, mesuré). 13 textes en 24 langues (portugais du Brésil corrigé
+  après test : « arquivo », « você »).
+- Choix : sans vote Vision, la fiabilité au test de vision départage seule (plus Artificial Analysis) : sur les petites
+  machines (0 à 16 Go de carte avec 16 Go de RAM), Vision passe de qwen3.5:4b à qwen3-vl:4b ; PC de Léo inchangé.
+- Tests (tous mordent quand on retire la branche) : test-duel-session.mjs (image, consigne fixe, aucun outil, pas de
+  converse(), modèle de chaque côté, refus texte/adresse/chemin/suite, image jamais gardée, visionModel appliqué),
+  test-hardwarescan-duel.mjs (votes Vision → rôle Vision ; seuls les lecteurs d'images en duel),
+  test-duel-panel-ui.mjs (sélecteur natif, refus d'un fichier non image, JPEG envoyé, image au-dessus, aucun champ ni
+  suite), Classement à 11 colonnes, 10 critères de tri. Captures montrées à Léo avant publication.

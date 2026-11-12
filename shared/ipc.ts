@@ -512,7 +512,7 @@ export interface ModelOverviewEntry {
    * Étape 370, Léo (« pourquoi il y a encore les anciens scores de Terminal-Bench et d'Artificial Analysis ») : les
    * points de duel de ce modèle par catégorie (ce qui décide maintenant), absents tant qu'il n'a jamais été voté.
    */
-  duels?: Partial<Record<'conversation' | 'code' | 'voice', { points: number; duels: number }>>
+  duels?: Partial<Record<'conversation' | 'code' | 'voice' | 'vision', { points: number; duels: number }>>
   /**
    * Étape 329, Léo (« ça utilise combien de pourcentage ») : le calcul de la note de ce modèle pour le rôle où il
    * est affiché, facteur par facteur. Seulement dans « Modèles utilisés sur ta machine » (une note n'a de sens que
@@ -1226,7 +1226,7 @@ export interface DuelSummary {
   /** Le classement de la catégorie, TOUS les votes compris (pas seulement cette session). */
   ranking: DuelStandingView[]
   /** Ce que les votes changent au choix de Jaris : `applied` = déjà en service (le modèle est installé). */
-  changes: { role: 'flash' | 'medium' | 'large' | 'code'; from: string | null; to: string; applied: boolean }[]
+  changes: { role: 'flash' | 'medium' | 'large' | 'code' | 'vision'; from: string | null; to: string; applied: boolean }[]
   /** Modèles téléchargés pour la session ; `inUse` = Jaris s'en sert, jamais proposé à la suppression. */
   downloaded: { model: string; sizeGb: number; inUse: boolean }[]
 }
@@ -1522,6 +1522,8 @@ export const IPC_CHANNELS = {
   duelReviews: 'jaris:duel-reviews',
   duelReviewDecide: 'jaris:duel-review-decide',
   duelAsk: 'jaris:duel-ask',
+  /** Étape 475 : l'image d'un Duel Vision (base64), que les deux modèles décrivent. */
+  duelAskImage: 'jaris:duel-ask-image',
   duelRunB: 'jaris:duel-run-b',
   /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */
   duelFollowUp: 'jaris:duel-follow-up',

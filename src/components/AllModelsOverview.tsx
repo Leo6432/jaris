@@ -69,7 +69,7 @@ const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash
  * comptent dans le choix depuis l'étape 328 ont leur colonne — Omniscience (« n'invente pas », Faible/Moyen/Élevé)
  * et Terminal-Bench 2.1 (Code) —, triables comme les autres, du meilleur au moins bon au premier clic.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'vision' | 'code' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'artificialAnalysisSpeed'
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'vision' | 'code' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'duelVision' | 'artificialAnalysisSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -83,6 +83,7 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   duelConversation: 'desc',
   duelCode: 'desc',
   duelVoice: 'desc',
+  duelVision: 'desc',
   artificialAnalysisSpeed: 'desc'
 }
 
@@ -95,6 +96,7 @@ const SORT_LABELS: Record<SortKey, MessageKey> = {
   duelConversation: 'models.sort.duelConversation',
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
+  duelVision: 'models.sort.duelVision',
   artificialAnalysisSpeed: 'models.sort.speed'
 }
 
@@ -109,10 +111,11 @@ const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
   duelConversation: 'models.sort.duelConversation',
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
+  duelVision: 'models.sort.duelVision',
   artificialAnalysisSpeed: 'models.chip.speed'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'vision', 'code', 'duelConversation', 'duelCode', 'duelVoice', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'vision', 'code', 'duelConversation', 'duelCode', 'duelVoice', 'duelVision', 'artificialAnalysisSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -176,6 +179,7 @@ function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'duelConversation') return entry.duels?.conversation?.points ?? null
   if (key === 'duelCode') return entry.duels?.code?.points ?? null
   if (key === 'duelVoice') return entry.duels?.voice?.points ?? null
+  if (key === 'duelVision') return entry.duels?.vision?.points ?? null
   return entry[key] ?? null
 }
 
@@ -384,7 +388,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                               </th>
                               {/* Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — ce sont
                                   les points de duel qui décident, une colonne par catégorie de duel. */}
-                              {(['duelConversation', 'duelCode', 'duelVoice'] as const).map((key) => (
+                              {(['duelConversation', 'duelCode', 'duelVoice', 'duelVision'] as const).map((key) => (
                                 <th key={key} className="options-menu__col-num" title={t('models.col.duel.title')}>
                                   <SortButton sortKey={key} sort={sort} onSort={toggleSort} />
                                 </th>
@@ -427,6 +431,8 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                 <DuelCell cell={entry.duels?.conversation} />
                                 <DuelCell cell={entry.duels?.code} />
                                 <DuelCell cell={entry.duels?.voice} />
+                                {/* Étape 475 : le Duel Vision, seulement pour les modèles qui lisent une image. */}
+                                <DuelCell cell={entry.duels?.vision} />
                                 <SpeedCell entry={entry} />
                               </tr>
                             ))}
