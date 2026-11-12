@@ -29,7 +29,11 @@ export interface JudgeVerdict {
 
 /** Une panne qui doit arrêter les duels automatiques (clé refusée, plus de crédit, réseau…), avec un message lisible. */
 export class JudgeStopError extends Error {
-  constructor(message: string) {
+  /** Étape 476 : la nature de la panne, pour qu'un autre écran (avis du Duel Vision) la dise avec ses propres mots. */
+  constructor(
+    message: string,
+    readonly kind: 'key' | 'rate' | 'network' | 'api' | 'unreadable' = 'api'
+  ) {
     super(message)
     this.name = 'JudgeStopError'
   }
@@ -142,10 +146,10 @@ function textOf(message: Anthropic.Message): string {
 function stopFor(err: unknown): Error {
   if (err instanceof Anthropic.APIUserAbortError) return err
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-    return new JudgeStopError(t('judge.error.key'))
+    return new JudgeStopError(t('judge.error.key'), 'key')
   }
-  if (err instanceof Anthropic.RateLimitError) return new JudgeStopError(t('judge.error.rate'))
-  if (err instanceof Anthropic.APIConnectionError) return new JudgeStopError(t('judge.error.network'))
+  if (err instanceof Anthropic.RateLimitError) return new JudgeStopError(t('judge.error.rate'), 'rate')
+  if (err instanceof Anthropic.APIConnectionError) return new JudgeStopError(t('judge.error.network'), 'network')
   if (err instanceof Anthropic.APIError) return new JudgeStopError(t('judge.error.api', { error: err.message }))
   return err instanceof Error ? err : new Error(String(err))
 }
@@ -170,7 +174,7 @@ async function ask<T>(
     value = null
   }
   const parsed = parse(value)
-  if (parsed === null) throw new JudgeStopError(t('judge.error.unreadable'))
+  if (parsed === null) throw new JudgeStopError(t('judge.error.unreadable'), 'unreadable')
   return parsed
 }
 
@@ -291,6 +295,54 @@ export async function judgeDuel(apiKey: string, input: JudgeInput, signal?: Abor
       system,
       messages: [{ role: 'user', content }],
       output_config: { effort: 'high', format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
+    },
+    (value) => {
+      const v = value as { winner?: unknown; reason?: unknown } | null
+      if (!v || !isDuelOutcome(v.winner) || typeof v.reason !== 'string') return null
+      return { outcome: v.winner, reason: v.reason.trim().slice(0, 2000) }
+    },
+    signal
+  )
+}
+
+/**
+ * Étape 476 (Léo : « demander à l'IA laquelle elle préfère, pour t'aider à voter ») : l'avis de Claude sur les deux
+ * descriptions d'un Duel Vision. Claude voit l'image elle-même, donc peut vérifier chaque détail décrit. Ce n'est
+ * qu'un conseil affiché à Léo : il n'est jamais compté comme un vote.
+ */
+export async function adviseVisionDuel(
+  apiKey: string,
+  input: { image: string; a: string; b: string },
+  signal?: AbortSignal
+): Promise<JudgeVerdict> {
+  const language = languageName()
+  const task = [
+    '# Your task: compare two descriptions of the same image',
+    'Two small local vision models were each asked to describe the image below. Decide which description is better,',
+    'using these criteria in order:',
+    '1. Accuracy: anything described that is not in the image (invented objects, wrong text, wrong colours or counts)',
+    '   counts heavily against it.',
+    '2. Coverage: the important things in the image (main subject, any readable text, notable details) are mentioned.',
+    `3. Clarity: written in ${language}, clear and without padding.`,
+    'Ignore which side came first, and do not reward length for its own sake.',
+    'Answer "tie" when both are about equally good, "bothBad" when neither is acceptable.',
+    `Give the reason in ${language}, in one or two short sentences, naming the detail that decided it.`
+  ].join('\n')
+  const text = ['=== Description A ===', input.a.trim() || '(empty)', '', '=== Description B ===', input.b.trim() || '(empty)'].join('\n')
+  return ask(
+    apiKey,
+    {
+      system: task,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: input.image } },
+            { type: 'text', text }
+          ]
+        }
+      ],
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
     },
     (value) => {
       const v = value as { winner?: unknown; reason?: unknown } | null

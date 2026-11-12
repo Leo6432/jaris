@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
-import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -71,6 +71,13 @@ window.jaris = {
   },
   // Étape 475 : le sélecteur d'image NATIF (via le main) et l'envoi de l'image d'un Duel Vision.
   pickImageFile: async () => { window.__calls.push('pickImage'); return window.__pickImage ?? null },
+  // Étape 476 : les images proposées (lues par le main) et l'avis de Claude avant le vote.
+  duelVisionSamples: async () => window.__samples ?? [],
+  duelVisionAdvice: async () => {
+    window.__calls.push('advice')
+    if (window.__adviceError) throw new Error(window.__adviceError)
+    return { outcome: 'a', reason: 'A décrit bien le chat roux et le canapé ; B voit un chien qui n’existe pas.' }
+  },
   duelAskImage: async (image) => {
     window.__calls.push(['askImage', image])
     return ready({ number: 1, prompt: 'Décris cette image.', a: side({ status: 'running', startedAt: Date.now() - 2000, activity: { kind: 'writing' }, text: 'Une ' }), b: side() })
@@ -247,6 +254,11 @@ test('accueil : quatre catégories (Conversation, Code, Vocal, Vision), le nombr
     await page.click('.duel-category:has-text("Vision")')
     await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'plan' && c[1] === 'vision'))
     assert.doesNotMatch(await page.textContent('.duel-home__facts'), /agissent vraiment/)
+    // Étape 476 : en Vision, la clé Claude (facultative) pour son avis avant le vote — et ce qui part chez Anthropic.
+    assert.match(await page.textContent('#duel-advice-title'), /Avis de Claude/)
+    assert.match(await page.textContent('.duel-judge'), /envoyées à Anthropic/)
+    assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-0-accueil-cle.png`, fullPage: true })
     await page.click('.duel-category:has-text("Conversation")')
     await page.waitForSelector('.duel-size')
     assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size').allTextContents(), ['4', '5', '6'])
@@ -1582,4 +1594,107 @@ test('étape 475 : Duel Vision — une image (sélecteur natif), aucun champ de 
     },
     "window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } }"
   )
+})
+
+// Étape 476 (Léo : « ajoute des images que tu proposes, plein de différentes »).
+const SAMPLE_DIR = join(projectRoot, 'scripts', 'duel-vision')
+const SAMPLES = readdirSync(SAMPLE_DIR)
+  .filter((name) => name.endsWith('.jpg'))
+  .sort()
+  .slice(0, 8)
+  .map((name) => ({ name, type: 'image/jpeg', base64: readFileSync(join(SAMPLE_DIR, name)).toString('base64') }))
+const VISION_IDLE = "window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
+
+test('étape 476 : Duel Vision — 4 images proposées, « Autres images » en montre d’autres, un clic la choisit', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-vision-samples__item img')
+      const shown = () => page.locator('.duel-vision-samples__item img').evaluateAll((imgs) => imgs.map((img) => img.getAttribute('src')))
+      const first = await shown()
+      assert.equal(first.length, 4)
+      for (const src of first) assert.match(src, /^data:image\/jpeg;base64,\/9j\//)
+      // Les vignettes s'affichent vraiment (une vraie image décodée, pas un cadre vide).
+      assert.ok(await page.locator('.duel-vision-samples__item img').first().evaluate((img) => img.complete && img.naturalWidth > 100))
+      const box = await page.locator('.duel-vision-samples__item').first().boundingBox()
+      assert.ok(box.width > 60 && box.height > 45, `vignette assez grande pour être reconnue (${box.width}×${box.height})`)
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-4-images-proposees.png` })
+      // « Autres images » montre d'abord celles jamais vues (8 en tout : 4 nouvelles).
+      await page.click('.duel-vision-samples .empty-state__more')
+      await settle(page)
+      const second = await shown()
+      assert.equal(second.length, 4)
+      assert.equal(second.filter((src) => !first.includes(src)).length, 4, 'quatre images pas encore montrées')
+      // Un clic la met dans l'aperçu, et c'est elle qui part (réencodée en JPEG).
+      await page.locator('.duel-vision-samples__item').first().click()
+      await page.waitForSelector('.duel-vision-drop__image')
+      await page.click('.duel-vision-ask .duel-btn--primary')
+      await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'askImage'))
+      const sent = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'askImage')[1]
+      assert.match(sent, /^\/9j\//)
+    },
+    `window.__samples = ${JSON.stringify(SAMPLES)}; ${VISION_IDLE}`
+  )
+  // Fenêtre étroite (760 px) : toujours 4 vignettes reconnaissables, sans défilement horizontal.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-vision-samples__item img')
+      const widths = await page.locator('.duel-vision-samples__item').evaluateAll((items) => items.map((item) => item.getBoundingClientRect().width))
+      assert.equal(widths.length, 4)
+      for (const width of widths) assert.ok(width > 60, `vignette de ${width} px`)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-4b-760.png` })
+    },
+    `window.__samples = ${JSON.stringify(SAMPLES)}; ${VISION_IDLE}`,
+    { width: 760, height: 760 }
+  )
+})
+
+test('étape 476 : Duel Vision sans images proposées — l’accueil reste utilisable, sans cadre vide', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vision-ask')
+    await settle(page)
+    assert.equal(await page.locator('.duel-vision-samples').count(), 0)
+    assert.equal(await page.locator('.duel__error').count(), 0)
+  }, VISION_IDLE)
+})
+
+test('étape 476 : avis de Claude au vote d’un Duel Vision — seulement avec la clé, affiché, jamais compté comme vote', options, async () => {
+  const doneRound = () => (page) =>
+    page.evaluate(() =>
+      window.__emit(window.__ready({ number: 1, prompt: 'Décris cette image.', a: window.__side({ status: 'done', text: 'Un chat roux sur un canapé gris.', durationMs: 3000 }), b: window.__side({ status: 'done', text: 'Un chien.', durationMs: 2000 }) }))
+    )
+  // Sans clé : aucun bouton.
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vision-ask')
+    await doneRound()(page)
+    await page.waitForSelector('.duel-vote__button')
+    assert.equal(await page.locator('.duel-advice').count(), 0)
+  }, VISION_IDLE)
+  // Avec la clé : le bouton, puis l'avis — Léo vote ensuite lui-même.
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vision-ask')
+    await doneRound()(page)
+    await page.waitForSelector('.duel-advice button')
+    assert.equal(await page.textContent('.duel-advice button'), "Demander l'avis de Claude")
+    await page.click('.duel-advice button')
+    await page.waitForSelector('.duel-advice__text')
+    const text = await page.textContent('.duel-advice__text')
+    assert.match(text, /Avis de Claude : A est meilleur\./)
+    assert.match(text, /chat roux/)
+    assert.match(text, /C'est toi qui votes/)
+    const calls = await page.evaluate(() => window.__calls)
+    assert.equal(calls.filter((c) => c === 'advice').length, 1)
+    assert.equal(calls.some((c) => Array.isArray(c) && c[0] === 'vote'), false, 'l’avis n’est jamais un vote')
+    assert.equal(await page.locator('.duel-vote__button').count(), 4, 'les boutons de vote restent')
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-5-avis-claude.png` })
+  }, `window.__claudeKey = { saved: true, last4: 'abcd' }; ${VISION_IDLE}`)
+  // Une panne : son vrai message, et on peut redemander.
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-vision-ask')
+    await doneRound()(page)
+    await page.click('.duel-advice button')
+    await page.waitForSelector('.duel-advice .duel-home__note--warn')
+    assert.match(await page.textContent('.duel-advice .duel-home__note--warn'), /Impossible de joindre Anthropic/)
+    assert.equal(await page.locator('.duel-advice button').isDisabled(), false)
+  }, `window.__claudeKey = { saved: true, last4: 'abcd' }; window.__adviceError = 'Impossible de joindre Anthropic (connexion internet ?).'; ${VISION_IDLE}`)
 })

@@ -48,6 +48,8 @@ extraResources:
       - benchmark-browser.mjs
       - vision-tests/*.png
       - vision-tests/*.json
+      # Étape 476 : images proposées du Duel Vision (domaine public ou faites maison, voir duel-vision/SOURCES.md).
+      - duel-vision/*.jpg
   # Étape 214 : parler à Jaris depuis son téléphone. jaris-tunnel.exe (Tailscale embarqué, compilé par la CI
   # depuis tunnel/) est un vrai programme lancé à côté de Jaris, donc hors de l'archive asar ; la page du
   # téléphone (phone/) est servie telle quelle par le serveur local de Jaris.

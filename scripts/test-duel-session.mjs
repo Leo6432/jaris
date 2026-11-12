@@ -33,6 +33,14 @@ class JudgeRefusalError extends Error {
     this.name = 'JudgeRefusalError'
   }
 }
+/** Étape 476 : une panne de l'API Claude, avec sa nature (comme le vrai duelJudge.ts). */
+class JudgeStopError extends Error {
+  constructor(message, kind = 'api') {
+    super(message)
+    this.name = 'JudgeStopError'
+    this.kind = kind
+  }
+}
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 async function waitFor(predicate, what) {
@@ -91,7 +99,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
   const votes = [...priorVotes]
   // Étape 399 : les votes proposés par Claude, et ce que le faux Claude a reçu.
   const reviews = []
-  calls.judge = { questions: [], verdicts: [] }
+  calls.judge = { questions: [], verdicts: [], advice: [] }
   const apps = new Map()
   const emitted = []
   let profile = initialProfile ?? {
@@ -257,6 +265,12 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     './duelJudge': {
       JUDGE_MODEL: 'claude-sonnet-5-5',
       JudgeRefusalError,
+      JudgeStopError,
+      adviseVisionDuel: async (key, input) => {
+        calls.judge.advice.push({ key, ...input })
+        if (judge?.adviceImpl) return judge.adviceImpl()
+        return { outcome: 'a', reason: 'A voit bien le chat.' }
+      },
       writeDuelQuestion: async (key, tools, previous, signal) => {
         calls.judge.questions.push({ key, tools: tools.map((tool) => tool.name), previous: [...previous] })
         if (judge?.questionImpl) return judge.questionImpl(calls.judge.questions.length, signal)
@@ -687,6 +701,68 @@ test('étape 475 : Duel Vision — une image, aucune question : chaque modèle d
   assert.deepEqual(summary.changes.map((c) => [c.role, c.from, c.to, c.applied]), [['vision', 'alpha-model:3b', 'charlie-model:4b', true]])
   assert.equal(env.profile.visionModel, 'charlie-model:4b', 'les votes Vision choisissent le modèle Vision')
   assert.deepEqual(env.profile.models, { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, 'ni les rôles de conversation')
+})
+
+// Étape 476 (Léo : « mettre une API d'IA et à la fin lui demander laquelle elle préfère, pour t'aider à voter »).
+test('étape 476 : avis de Claude au Duel Vision — après les deux descriptions, avec la clé, jamais compté comme vote', async () => {
+  let advice = null
+  const env = setup({
+    installed: MODELS,
+    profile: { name: 'Léo', models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, visionModel: 'alpha-model:3b' },
+    judge: { key: 'sk-ant-cle', adviceImpl: () => advice() }
+  })
+  await env.session.startDuel('vision', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  await assert.rejects(() => env.session.adviseVisionDuel(), /Aucun duel|pas encore/i, 'rien à comparer avant l’image')
+  env.session.askDuelImage(IMAGE)
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  await assert.rejects(() => env.session.adviseVisionDuel(), /doivent d'abord finir/, 'B n’a pas encore décrit')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  advice = () => ({ outcome: 'b', reason: 'B voit le chat roux.' })
+  assert.deepEqual(await env.session.adviseVisionDuel(), { outcome: 'b', reason: 'B voit le chat roux.' })
+  const sent = env.calls.judge.advice[0]
+  assert.equal(sent.key, 'sk-ant-cle')
+  assert.equal(sent.image, IMAGE, 'Claude voit la même image que les deux modèles')
+  assert.deepEqual([sent.a, sent.b], ['Une photo décrite (1).', 'Une photo décrite (2).'])
+  for (const name of MODELS) assert.ok(!JSON.stringify(sent).includes(name), `aucun nom de modèle envoyé (${name})`)
+  // Les pannes : des mots pour CET écran (pas les « votes déjà faits » des duels automatiques).
+  advice = () => {
+    throw new JudgeRefusalError()
+  }
+  await assert.rejects(() => env.session.adviseVisionDuel(), /n'a pas voulu donner son avis/)
+  advice = () => {
+    throw new JudgeStopError('Impossible de joindre Anthropic (connexion internet ?). Les votes déjà faits sont gardés.', 'network')
+  }
+  await assert.rejects(() => env.session.adviseVisionDuel(), (err) => /joindre Anthropic/.test(err.message) && !/votes déjà faits/.test(err.message))
+  advice = () => {
+    throw new JudgeStopError('Ta clé API Claude est refusée par Anthropic.', 'key')
+  }
+  await assert.rejects(() => env.session.adviseVisionDuel(), /clé API Claude est refusée/)
+  assert.equal(env.votes.length, 0, 'l’avis n’est jamais un vote')
+  await env.session.voteDuel('a')
+  await assert.rejects(() => env.session.adviseVisionDuel(), /déjà vot/i, 'plus d’avis une fois voté')
+})
+
+test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vision, refusé', async () => {
+  const env = setup({ installed: MODELS, profile: { name: 'Léo', models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, visionModel: 'alpha-model:3b' } })
+  await env.session.startDuel('vision', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  env.session.askDuelImage(IMAGE)
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  await assert.rejects(() => env.session.adviseVisionDuel(), /Ajoute d'abord ta clé API Claude/)
+  assert.equal(env.calls.judge.advice.length, 0)
+  const chat = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
+  await chat.session.startDuel('conversation', 4)
+  await waitFor(() => chat.session.getDuelView()?.phase === 'ready', 'prête')
+  chat.session.askDuel('Bonjour')
+  await waitFor(() => chat.session.getDuelView().round.a.status === 'done', 'A')
+  chat.session.runDuelB()
+  await waitFor(() => chat.session.getDuelView().round.b.status === 'done', 'B')
+  await assert.rejects(() => chat.session.adviseVisionDuel(), /invalide/i)
+  assert.equal(chat.calls.judge.advice.length, 0)
 })
 
 test('duel Code : l’application est écrite par CE modèle, montrée dans l’aperçu, jamais rangée dans « Tes applications »', async () => {

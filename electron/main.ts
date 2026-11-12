@@ -37,7 +37,7 @@ import {
 import { removeLeftoverMontage, removeLeftoverSearxng, removeLeftoverTerminalBench, removeLeftoverVideoDuel } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { copyFile, readFile, rm, writeFile } from 'fs/promises'
+import { copyFile, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -83,6 +83,7 @@ import { checkClaudeKey } from './services/duelJudge'
 import {
   abortDuel,
   askDuel,
+  adviseVisionDuel,
   askDuelImage,
   closeDuel,
   deleteDuelModels,
@@ -1906,6 +1907,16 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.duelAskImage, (_event, image: unknown) => {
     cancelMemoryExtraction()
     return askDuelImage(image)
+  })
+  ipcMain.handle(IPC_CHANNELS.duelVisionAdvice, () => adviseVisionDuel())
+  // Étape 476 : les images proposées du Duel Vision, lues ici — l'écran (file:// en production) ne pourrait ni les
+  // relire par fetch ni les redessiner sans « salir » son canevas. Livrées avec l'appli (extraResources).
+  ipcMain.handle(IPC_CHANNELS.duelVisionSamples, async (): Promise<PickedImageFile[]> => {
+    const folder = join(resourcesRoot(), 'scripts', 'duel-vision')
+    const names = (await readdir(folder)).filter((name) => name.toLowerCase().endsWith('.jpg')).sort()
+    return Promise.all(
+      names.map(async (name) => ({ name, type: 'image/jpeg', base64: (await readFile(join(folder, name))).toString('base64') }))
+    )
   })
   ipcMain.handle(IPC_CHANNELS.duelRunB, () => {
     cancelMemoryExtraction()

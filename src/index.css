@@ -8558,6 +8558,73 @@ ul.reply-list--nested {
   flex-wrap: wrap;
 }
 
+/* Étape 476 : images proposées sous la zone de dépôt (4 à la fois, « Autres images »). */
+.duel-vision-samples {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.duel-vision-samples__label {
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
+.duel-vision-samples__list {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.duel-vision-samples__item {
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--jv-hover);
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.duel-vision-samples__item:hover:not(:disabled),
+.duel-vision-samples__item:focus-visible {
+  border-color: var(--hud-text-dim);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.duel-vision-samples__item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Étape 476 : l'avis de Claude, sous les boutons de vote d'un Duel Vision. */
+.duel-advice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.duel-advice__text {
+  margin: 0;
+  max-width: 640px;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.duel-advice__note {
+  color: var(--hud-text-faint);
+}
+
 .duel-round__prompt-label {
   font-size: 12px;
   color: var(--hud-text-faint);

@@ -36,7 +36,7 @@ import {
   type DuelVoteSide
 } from '../../shared/duel'
 import type { JarisEmotion } from '@/store/useJarisStore'
-import type { ClaudeKeyStatus, DuelActivity, DuelRoundView, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary } from '../../shared/ipc'
+import type { ClaudeKeyStatus, DuelActivity, DuelRoundView, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary, DuelVisionAdvice, PickedImageFile } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -1295,6 +1295,40 @@ function JudgeKeyBox({ status, onChanged }: { status: ClaudeKeyStatus | null; on
   )
 }
 
+/**
+ * Étape 476 : « Demander l'avis de Claude » au moment du vote d'un Duel Vision (clé enregistrée). Claude voit l'image
+ * et les deux descriptions ; son avis s'affiche ici, Léo vote ensuite lui-même. Remonté à chaque duel (key).
+ */
+function VisionAdvice(): JSX.Element {
+  const [advice, setAdvice] = useState<DuelVisionAdvice | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const ask = (): void => {
+    setBusy(true)
+    setProblem(null)
+    window.jaris
+      .duelVisionAdvice()
+      .then(setAdvice)
+      .catch((err) => setProblem(ipcErrorMessage(err)))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <div className="duel-advice" aria-live="polite">
+      {advice ? (
+        <p className="duel-advice__text">
+          <strong>{t('duel.vision.advice.verdict', { choice: verdictLabel(advice.outcome) })}</strong> {advice.reason}
+          <span className="duel-advice__note"> {t('duel.vision.advice.yourVote')}</span>
+        </p>
+      ) : (
+        <button type="button" className="duel-btn" onClick={ask} disabled={busy}>
+          {busy ? t('duel.vision.advice.asking') : t('duel.vision.advice.ask')}
+        </button>
+      )}
+      {problem && <p className="duel-home__note duel-home__note--warn">{problem}</p>}
+    </div>
+  )
+}
+
 const JUDGE_STEP_LABEL: Record<'question' | 'a' | 'b' | 'judge', MessageKey> = {
   question: 'judge.step.question',
   a: 'judge.step.a',
@@ -1477,6 +1511,27 @@ async function shrinkImage(file: Blob): Promise<DuelImage> {
   return { dataUrl, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) }
 }
 
+/** Étape 476 : nombre d'images proposées visibles à la fois (« Autres images » en tire d'autres). */
+const VISION_SAMPLES_SHOWN = 4
+
+/** Les images proposées à montrer : d'abord celles qu'on n'a pas encore vues, au hasard (comme pickIdeas). */
+function pickSamples(all: readonly PickedImageFile[], shown: readonly PickedImageFile[] = []): PickedImageFile[] {
+  const shuffle = (items: PickedImageFile[]): PickedImageFile[] => {
+    const out = [...items]
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[out[i], out[j]] = [out[j], out[i]]
+    }
+    return out
+  }
+  const seen = new Set(shown.map((s) => s.name))
+  return [...shuffle(all.filter((s) => !seen.has(s.name))), ...shuffle(all.filter((s) => seen.has(s.name)))].slice(0, VISION_SAMPLES_SHOWN)
+}
+
+function base64Blob(file: PickedImageFile): Blob {
+  return new Blob([Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0))], { type: file.type })
+}
+
 /**
  * Étape 475 (Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit décrire ») : l'accueil d'un Duel
  * Vision. Une image — choisie, glissée ou collée —, aperçue avant de partir ; aucun champ de texte.
@@ -1484,6 +1539,24 @@ async function shrinkImage(file: Blob): Promise<DuelImage> {
 function VisionDuelAsk({ busy, onSend, onError }: { busy: boolean; onSend: (image: DuelImage) => void; onError: (message: string) => void }): JSX.Element {
   const [image, setImage] = useState<DuelImage | null>(null)
   const [over, setOver] = useState(false)
+  // Étape 476 (Léo : « ajoute des images que tu proposes, plein de différentes ») : lues par le main, une fois.
+  const [samples, setSamples] = useState<PickedImageFile[]>([])
+  const [shownSamples, setShownSamples] = useState<PickedImageFile[]>([])
+  useEffect(() => {
+    let alive = true
+    window.jaris
+      .duelVisionSamples()
+      .then((all) => {
+        if (!alive) return
+        setSamples(all)
+        setShownSamples(pickSamples(all))
+      })
+      // Sans images proposées, on peut toujours choisir la sienne : pas de message d'erreur pour si peu.
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [])
   const load = async (file: Blob | null | undefined): Promise<void> => {
     if (!file) return
     if (!file.type.startsWith('image/')) {
@@ -1514,8 +1587,7 @@ function VisionDuelAsk({ busy, onSend, onError }: { busy: boolean; onSend: (imag
       .pickImageFile()
       .then((picked) => {
         if (!picked) return
-        const bytes = Uint8Array.from(atob(picked.base64), (c) => c.charCodeAt(0))
-        return load(new Blob([bytes], { type: picked.type }))
+        return load(base64Blob(picked))
       })
       .catch((err: unknown) => onError(ipcErrorMessage(err)))
   }
@@ -1565,6 +1637,30 @@ function VisionDuelAsk({ busy, onSend, onError }: { busy: boolean; onSend: (imag
           {busy ? t('common.loading') : t('duel.vision.send')}
         </button>
       </div>
+      {shownSamples.length > 0 && (
+        <div className="duel-vision-samples">
+          <span className="duel-vision-samples__label">{t('duel.vision.samples')}</span>
+          <div className="duel-vision-samples__list">
+            {shownSamples.map((sample, index) => (
+              <button
+                key={sample.name}
+                type="button"
+                className="duel-vision-samples__item"
+                disabled={busy}
+                aria-label={t('duel.vision.sample', { number: index + 1 })}
+                onClick={() => void load(base64Blob(sample))}
+              >
+                <img src={`data:${sample.type};base64,${sample.base64}`} alt="" />
+              </button>
+            ))}
+          </div>
+          {samples.length > VISION_SAMPLES_SHOWN && (
+            <button type="button" className="empty-state__more" disabled={busy} onClick={() => setShownSamples(pickSamples(samples, shownSamples))}>
+              {t('duel.vision.samplesMore')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2285,6 +2381,17 @@ export default function DuelPanel(): JSX.Element {
             </section>
           )}
 
+          {/* Étape 476 : la clé Claude, facultative, pour demander son avis sur les deux descriptions avant de voter. */}
+          {category === 'vision' && (
+            <section className="duel-home__section duel-judge" aria-labelledby="duel-advice-title">
+              <h2 id="duel-advice-title" className="duel-home__label">
+                {t('duel.vision.advice.title')}
+              </h2>
+              <p className="duel-home__note">{t('duel.vision.advice.lead')}</p>
+              <JudgeKeyBox status={claudeKey} onChanged={setClaudeKey} />
+            </section>
+          )}
+
           {category === 'conversation' && (
             <section className="duel-home__section duel-judge" aria-labelledby="duel-judge-title">
               <h2 id="duel-judge-title" className="duel-home__label">
@@ -2760,6 +2867,7 @@ export default function DuelPanel(): JSX.Element {
                       </button>
                     ))}
                   </div>
+                  {view.category === 'vision' && claudeKey?.saved && <VisionAdvice key={`${view.id}-${round.number}`} />}
                   {/* Étape 460 : le fichier du duel AVANT de voter (à l'aveugle), pour demander l'avis d'une IA. */}
                   <div className="duel-vote__export">
                     <DuelExportButton key={`${view.id}-${round.number}-${followUps.length}`} category={view.category} />

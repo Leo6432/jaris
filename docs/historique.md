@@ -12066,3 +12066,33 @@ prompt, et il doit décrire ».
   test-hardwarescan-duel.mjs (votes Vision → rôle Vision ; seuls les lecteurs d'images en duel),
   test-duel-panel-ui.mjs (sélecteur natif, refus d'un fichier non image, JPEG envoyé, image au-dessus, aucun champ ni
   suite), Classement à 11 colonnes, 10 critères de tri. Captures montrées à Léo avant publication.
+
+## Étape 476 — Duel Vision : images proposées et avis de Claude avant le vote (v0.63.0)
+
+Léo : « ajoute des images que tu proposes, plein de différentes, et aussi pouvoir avant mettre une API d'IA et à la fin
+demander à l'IA laquelle elle préfère, pour t'aider à voter ».
+- **16 images proposées** (`scripts/duel-vision/`, sources dans `SOURCES.md`) : 8 œuvres du Met (Open Access CC0, champ
+  `isPublicDomain` lu dans son API officielle — l'API Wikimedia bloquait par limite de débit), 2 photos NASA Apollo
+  (domaine public, centre JSC), 6 écrans/documents faits pour Jaris (agenda, code, message d'erreur, graphique, note
+  manuscrite, ticket de caisse : ce que « regarder l'écran » doit savoir lire). Toutes ≤ 1 024 px, < 400 Ko.
+- **Chargement par le main** (canal `duelVisionSamples`) : en production l'écran est en file:// — un `fetch` d'un
+  fichier livré peut échouer et dessiner une image file:// sur un canevas le « salit » (toDataURL refusé). Le main lit
+  `resourcesRoot()/scripts/duel-vision` (livré par `extraResources`, filtre `duel-vision/*.jpg`) et renvoie le base64,
+  le même chemin que le sélecteur natif. Sous la zone de dépôt : 4 vignettes au hasard, « Autres images » montre d'abord
+  celles pas encore vues (comme « Autres idées ») ; un clic la met dans l'aperçu. Sans images (erreur), l'accueil reste
+  utilisable, sans message.
+- **Avis de Claude** : sur l'accueil Vision, la clé API Claude (facultative, même `JudgeKeyBox` que le juge) avec ce qui
+  part chez Anthropic. Au vote, si la clé est enregistrée : « Demander l'avis de Claude » → `adviseVisionDuel`
+  (duelJudge.ts, Sonnet 5.5 comme le juge) envoie l'image + les deux descriptions anonymes A/B, sortie JSON imposée
+  (`winner`, `reason` dans la langue de Léo). Affiché « Avis de Claude : A est meilleur. <raison> C'est toi qui votes. »
+  Jamais compté comme vote, ni gardé. Garde côté main (`duelSession.adviseVisionDuel`) : Duel Vision seulement, les deux
+  descriptions finies, pas encore voté, image présente, clé chargée.
+- Les messages d'erreur du juge parlent des « votes déjà faits » (duels automatiques) : `JudgeStopError` gagne `kind`
+  (`key`/`rate`/`network`/`api`/`unreadable`) et l'avis les redit avec ses propres mots (refus, limite, réseau,
+  réponse illisible). 13 textes en 24 langues.
+- Tests (mordent : retirer la garde « déjà voté », le message réseau, la condition de clé ou la priorité aux images non
+  vues les fait échouer) : test-duel-judge.mjs (requête : bloc image JPEG + A/B, schéma, langue ; réponse hors choix
+  refusée ; nature des pannes ; images = vrais JPEG ≤ 1 024 px, sources notées, livrées, dossier lu par le main),
+  test-duel-session.mjs (gardes, aucun nom de modèle envoyé, messages propres à l'avis, jamais un vote),
+  test-duel-panel-ui.mjs (4 vignettes décodées, 4 nouvelles après « Autres images », clic → JPEG envoyé, 760 px sans
+  défilement, avis seulement avec clé, panne affichée et bouton réutilisable, clé sur l'accueil Vision).

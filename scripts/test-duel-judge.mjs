@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
@@ -130,4 +131,59 @@ test('la clé : seule une vraie clé Anthropic est acceptée, nettoyée de ses e
   assert.equal(claudeKey.cleanClaudeKey('sk-ant-court'), null)
   assert.equal(claudeKey.cleanClaudeKey('sk-ant-abcdefghijklmnopqrstuvwxyz"; rm -rf /'), null)
   assert.equal(claudeKey.cleanClaudeKey(42), null)
+})
+
+// Étape 476 (Léo : « demander à l'IA laquelle elle préfère, pour t'aider à voter ») : l'avis du Duel Vision.
+test('avis du Duel Vision : Claude voit l’image elle-même et les deux descriptions anonymes, verdict relu', async () => {
+  const sent = fake(message(JSON.stringify({ winner: 'b', reason: 'B lit bien le texte du ticket.' })))
+  const advice = await judge.adviseVisionDuel('sk-ant-cle', { image: '/9j/AAAA', a: 'Un ticket.', b: 'Un ticket de 12,50 €.' })
+  assert.deepEqual(advice, { outcome: 'b', reason: 'B lit bien le texte du ticket.' })
+  const { apiKey, body } = sent[0]
+  assert.equal(apiKey, 'sk-ant-cle')
+  assert.equal(body.model, 'claude-sonnet-5-5')
+  assert.deepEqual(body.output_config.format.schema.required, ['winner', 'reason'])
+  const [image, text] = body.messages[0].content
+  assert.deepEqual(image, { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/AAAA' } })
+  assert.match(text.text, /=== Description A ===\nUn ticket\.\n\n=== Description B ===\nUn ticket de 12,50 €\./)
+  assert.match(body.system, /in French/, 'la raison dans la langue de Léo')
+  assert.match(body.system, /Accuracy/)
+  // Une réponse illisible ou hors des choix possibles n'est jamais affichée comme un avis.
+  fake(message(JSON.stringify({ winner: 'c', reason: '?' })))
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.name === 'JudgeStopError' && err.kind === 'unreadable')
+  // La nature de la panne voyage avec elle (l'écran du Duel Vision la dit avec ses mots).
+  fake(new Anthropic.APIConnectionError({ message: 'Connection error.' }))
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.kind === 'network')
+  fake(new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }, 'slow down', new Headers()))
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.kind === 'rate')
+})
+
+/** Largeur et hauteur d'un JPEG (premier marqueur SOF). */
+function jpegSize(bytes) {
+  let i = 2
+  while (i < bytes.length) {
+    const marker = bytes[i + 1]
+    const length = bytes.readUInt16BE(i + 2)
+    if (marker >= 0xc0 && marker <= 0xc3) return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) }
+    i += 2 + length
+  }
+  return null
+}
+
+test('étape 476 : les images proposées du Duel Vision — de vrais JPEG raisonnables, sources notées, livrés avec l’appli', () => {
+  const dir = new URL('./duel-vision/', import.meta.url)
+  const images = readdirSync(dir).filter((name) => name.endsWith('.jpg'))
+  assert.ok(images.length >= 12, `assez d'images variées (${images.length})`)
+  const sources = readFileSync(new URL('SOURCES.md', dir), 'utf8')
+  for (const name of images) {
+    const bytes = readFileSync(new URL(name, dir))
+    assert.equal(bytes.readUInt16BE(0), 0xffd8, `${name} : un vrai JPEG`)
+    const size = jpegSize(bytes)
+    assert.ok(size && Math.max(size.width, size.height) <= 1024, `${name} : 1024 px au plus`)
+    assert.ok(bytes.length < 400_000, `${name} : léger (${bytes.length} octets)`)
+    assert.ok(sources.includes(name), `${name} : sa source (licence) est notée dans SOURCES.md`)
+  }
+  const builder = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
+  assert.match(builder, /- duel-vision\/\*\.jpg/, 'les images partent avec l’installeur')
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.match(main, /join\(resourcesRoot\(\), 'scripts', 'duel-vision'\)/, 'le main lit le dossier livré (scripts/ dans les ressources)')
 })
