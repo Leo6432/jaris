@@ -136,11 +136,14 @@ test('la clé : seule une vraie clé Anthropic est acceptée, nettoyée de ses e
 // Étape 476 (Léo : « demander à l'IA laquelle elle préfère, pour t'aider à voter ») : l'avis du Duel Vision.
 test('avis du Duel Vision : Claude voit l’image elle-même et les deux descriptions anonymes, verdict relu', async () => {
   const sent = fake(message(JSON.stringify({ winner: 'b', reason: 'B lit bien le texte du ticket.' })))
-  const advice = await judge.adviseVisionDuel('sk-ant-cle', { image: '/9j/AAAA', a: 'Un ticket.', b: 'Un ticket de 12,50 €.' })
+  const advice = await judge.adviseVisionDuel('sk-ant-cle', { image: '/9j/AAAA', a: 'Un ticket.', b: 'Un ticket de 12,50 €.', model: 'claude-opus-5-5', effort: 'xhigh' })
   assert.deepEqual(advice, { outcome: 'b', reason: 'B lit bien le texte du ticket.' })
   const { apiKey, body } = sent[0]
   assert.equal(apiKey, 'sk-ant-cle')
-  assert.equal(body.model, 'claude-sonnet-5-5')
+  // Étape 477 : le modèle et l'effort choisis, et assez de place pour la réflexion aux efforts élevés.
+  assert.equal(body.model, 'claude-opus-5-5')
+  assert.equal(body.output_config.effort, 'xhigh')
+  assert.equal(body.max_tokens, 64000)
   assert.deepEqual(body.output_config.format.schema.required, ['winner', 'reason'])
   const [image, text] = body.messages[0].content
   assert.deepEqual(image, { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/AAAA' } })
@@ -149,12 +152,12 @@ test('avis du Duel Vision : Claude voit l’image elle-même et les deux descrip
   assert.match(body.system, /Accuracy/)
   // Une réponse illisible ou hors des choix possibles n'est jamais affichée comme un avis.
   fake(message(JSON.stringify({ winner: 'c', reason: '?' })))
-  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.name === 'JudgeStopError' && err.kind === 'unreadable')
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b', model: 'claude-haiku-5-5', effort: 'low' }), (err) => err.name === 'JudgeStopError' && err.kind === 'unreadable')
   // La nature de la panne voyage avec elle (l'écran du Duel Vision la dit avec ses mots).
   fake(new Anthropic.APIConnectionError({ message: 'Connection error.' }))
-  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.kind === 'network')
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b', model: 'claude-haiku-5-5', effort: 'low' }), (err) => err.kind === 'network')
   fake(new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }, 'slow down', new Headers()))
-  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b' }), (err) => err.kind === 'rate')
+  await assert.rejects(() => judge.adviseVisionDuel('k', { image: 'x', a: 'a', b: 'b', model: 'claude-haiku-5-5', effort: 'low' }), (err) => err.kind === 'rate')
 })
 
 /** Largeur et hauteur d'un JPEG (premier marqueur SOF). */

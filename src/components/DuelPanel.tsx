@@ -11,9 +11,13 @@ import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
 import { formatDecimal, formatPercent, t, tn } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
+import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { useScreenActive } from '@/lib/shellContext'
 import { useDictation } from '@/lib/useDictation'
 import {
+  DUEL_ADVICE_DEFAULT,
+  DUEL_ADVICE_EFFORTS,
+  DUEL_ADVICE_MODELS,
   DUEL_BATCH_MAX,
   DUEL_BATCH_MIN,
   DUEL_CATEGORIES,
@@ -28,7 +32,11 @@ import {
   fastestDuelModels,
   planDuelSeries,
   baseModelTag,
+  isDuelAdviceEffort,
+  isDuelAdviceModel,
   type DuelAction,
+  type DuelAdviceEffort,
+  type DuelAdviceModel,
   type DuelCategory,
   type DuelOutcome,
   type DuelSide,
@@ -1299,31 +1307,108 @@ function JudgeKeyBox({ status, onChanged }: { status: ClaudeKeyStatus | null; on
  * Étape 476 : « Demander l'avis de Claude » au moment du vote d'un Duel Vision (clé enregistrée). Claude voit l'image
  * et les deux descriptions ; son avis s'affiche ici, Léo vote ensuite lui-même. Remonté à chaque duel (key).
  */
+/** Étape 477 : noms des modèles Claude (noms propres, non traduits) et leur place dans la gamme. */
+const ADVICE_MODEL_NAME: Record<DuelAdviceModel, string> = {
+  'claude-haiku-5-5': 'Haiku 5.5',
+  'claude-sonnet-5-5': 'Sonnet 5.5',
+  'claude-opus-5-5': 'Opus 5.5',
+  'claude-fable-5-2': 'Fable 5.2'
+}
+const ADVICE_MODEL_HINT: Record<DuelAdviceModel, MessageKey> = {
+  'claude-haiku-5-5': 'duel.vision.advice.hint.haiku',
+  'claude-sonnet-5-5': 'duel.vision.advice.hint.sonnet',
+  'claude-opus-5-5': 'duel.vision.advice.hint.opus',
+  'claude-fable-5-2': 'duel.vision.advice.hint.fable'
+}
+const ADVICE_EFFORT_LABEL: Record<DuelAdviceEffort, MessageKey> = {
+  low: 'duel.vision.advice.effort.low',
+  medium: 'duel.vision.advice.effort.medium',
+  high: 'duel.vision.advice.effort.high',
+  xhigh: 'duel.vision.advice.effort.xhigh',
+  max: 'duel.vision.advice.effort.max'
+}
+const ADVICE_MODEL_SAVED = 'jaris.duel.adviceModel'
+const ADVICE_EFFORT_SAVED = 'jaris.duel.adviceEffort'
+
 function VisionAdvice(): JSX.Element {
-  const [advice, setAdvice] = useState<DuelVisionAdvice | null>(null)
+  const [advice, setAdvice] = useState<(DuelVisionAdvice & { model: DuelAdviceModel; effort: DuelAdviceEffort }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // Étape 477 (Léo : « pouvoir choisir le modèle et l'effort avant de cliquer ») : retenus d'un duel à l'autre.
+  const [model, setModel] = useState<DuelAdviceModel>(() => {
+    const saved = readSaved(ADVICE_MODEL_SAVED)
+    return isDuelAdviceModel(saved) ? saved : DUEL_ADVICE_DEFAULT.model
+  })
+  const [effort, setEffort] = useState<DuelAdviceEffort>(() => {
+    const saved = readSaved(ADVICE_EFFORT_SAVED)
+    return isDuelAdviceEffort(saved) ? saved : DUEL_ADVICE_DEFAULT.effort
+  })
   const ask = (): void => {
     setBusy(true)
     setProblem(null)
+    const asked = { model, effort }
     window.jaris
-      .duelVisionAdvice()
-      .then(setAdvice)
+      .duelVisionAdvice(asked.model, asked.effort)
+      .then((result) => setAdvice({ ...result, ...asked }))
       .catch((err) => setProblem(ipcErrorMessage(err)))
       .finally(() => setBusy(false))
   }
   return (
     <div className="duel-advice" aria-live="polite">
-      {advice ? (
+      {advice && (
         <p className="duel-advice__text">
           <strong>{t('duel.vision.advice.verdict', { choice: verdictLabel(advice.outcome) })}</strong> {advice.reason}
-          <span className="duel-advice__note"> {t('duel.vision.advice.yourVote')}</span>
+          <span className="duel-advice__note">
+            {' '}
+            {t('duel.vision.advice.by', { model: ADVICE_MODEL_NAME[advice.model], effort: t(ADVICE_EFFORT_LABEL[advice.effort]) })}{' '}
+            {t('duel.vision.advice.yourVote')}
+          </span>
         </p>
-      ) : (
-        <button type="button" className="duel-btn" onClick={ask} disabled={busy}>
+      )}
+      <div className="duel-advice__controls">
+        <label className="duel-advice__field">
+          <span className="duel-advice__label">{t('duel.vision.advice.model')}</span>
+          <select
+            className="duel-advice__select"
+            value={model}
+            disabled={busy}
+            onChange={(event) => {
+              if (!isDuelAdviceModel(event.target.value)) return
+              setModel(event.target.value)
+              writeSaved(ADVICE_MODEL_SAVED, event.target.value)
+            }}
+          >
+            {DUEL_ADVICE_MODELS.map((option) => (
+              <option key={option} value={option}>
+                {`${ADVICE_MODEL_NAME[option]} — ${t(ADVICE_MODEL_HINT[option])}`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="duel-advice__field">
+          <span className="duel-advice__label">{t('duel.vision.advice.effort')}</span>
+          <select
+            className="duel-advice__select"
+            value={effort}
+            disabled={busy}
+            onChange={(event) => {
+              if (!isDuelAdviceEffort(event.target.value)) return
+              setEffort(event.target.value)
+              writeSaved(ADVICE_EFFORT_SAVED, event.target.value)
+            }}
+          >
+            {DUEL_ADVICE_EFFORTS.map((option) => (
+              <option key={option} value={option}>
+                {t(ADVICE_EFFORT_LABEL[option])}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="duel-btn duel-advice__ask" onClick={ask} disabled={busy}>
           {busy ? t('duel.vision.advice.asking') : t('duel.vision.advice.ask')}
         </button>
-      )}
+      </div>
+      <p className="duel-advice__hint">{t('duel.vision.advice.costHint')}</p>
       {problem && <p className="duel-home__note duel-home__note--warn">{problem}</p>}
     </div>
   )

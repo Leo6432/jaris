@@ -1,6 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
 import type { LanguageSetting } from '../shared/i18n/languages'
@@ -240,7 +240,7 @@ declare global {
       /** Étape 475 : l'image d'un Duel Vision (base64, sans en-tête). */
       duelAskImage: (image: string) => Promise<DuelSessionView>
       duelVisionSamples: () => Promise<PickedImageFile[]>
-      duelVisionAdvice: () => Promise<DuelVisionAdvice>
+      duelVisionAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelVisionAdvice>
       duelRunB: () => Promise<DuelSessionView>
       duelFollowUp: (message: string) => Promise<DuelSessionView>
       duelStop: () => Promise<void>

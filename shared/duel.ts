@@ -148,6 +148,26 @@ export function isDuelOutcome(value: unknown): value is DuelOutcome {
   return typeof value === 'string' && (DUEL_OUTCOMES as readonly string[]).includes(value)
 }
 
+/**
+ * Étape 477 (Léo : « pouvoir choisir le modèle et l'effort avant de cliquer sur Demander à Claude ») : les modèles
+ * Claude proposés pour l'avis du Duel Vision, du moins cher au plus fort. Identifiants et niveaux d'effort relus dans
+ * la documentation de l'API (les quatre acceptent les cinq niveaux, de low à max).
+ */
+export const DUEL_ADVICE_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-2'] as const
+export type DuelAdviceModel = (typeof DUEL_ADVICE_MODELS)[number]
+export const DUEL_ADVICE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+export type DuelAdviceEffort = (typeof DUEL_ADVICE_EFFORTS)[number]
+/** Le réglage d'avant l'étape 477 : Sonnet 5.5 (le juge choisi par Léo), effort moyen. */
+export const DUEL_ADVICE_DEFAULT: { model: DuelAdviceModel; effort: DuelAdviceEffort } = { model: 'claude-sonnet-5-5', effort: 'medium' }
+
+export function isDuelAdviceModel(value: unknown): value is DuelAdviceModel {
+  return typeof value === 'string' && (DUEL_ADVICE_MODELS as readonly string[]).includes(value)
+}
+
+export function isDuelAdviceEffort(value: unknown): value is DuelAdviceEffort {
+  return typeof value === 'string' && (DUEL_ADVICE_EFFORTS as readonly string[]).includes(value)
+}
+
 /** Un vote lu sur le disque, ou `null` s'il n'a pas la bonne forme (fichier abîmé, autre version). */
 export function parseDuelVote(value: unknown): DuelVote | null {
   if (typeof value !== 'object' || value === null) return null

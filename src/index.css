@@ -8625,6 +8625,46 @@ ul.reply-list--nested {
   color: var(--hud-text-faint);
 }
 
+/* Étape 477 : le modèle et l'effort de Claude, choisis juste avant de demander son avis. */
+.duel-advice__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+}
+
+.duel-advice__field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.duel-advice__label {
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.duel-advice__select {
+  padding: 7px 10px;
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.duel-advice__select:disabled {
+  opacity: 0.6;
+}
+
+.duel-advice__hint {
+  margin: 0;
+  max-width: 560px;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+  text-align: center;
+}
+
 .duel-round__prompt-label {
   font-size: 12px;
   color: var(--hud-text-faint);

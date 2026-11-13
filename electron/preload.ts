@@ -1,6 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
+import type { DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
 import { contextBridge, ipcRenderer } from 'electron'
@@ -287,7 +287,7 @@ const api = {
   duelAsk: (prompt: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAsk, prompt),
   duelAskImage: (image: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelAskImage, image),
   duelVisionSamples: (): Promise<PickedImageFile[]> => invoke(IPC_CHANNELS.duelVisionSamples),
-  duelVisionAdvice: (): Promise<DuelVisionAdvice> => invoke(IPC_CHANNELS.duelVisionAdvice),
+  duelVisionAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort): Promise<DuelVisionAdvice> => invoke(IPC_CHANNELS.duelVisionAdvice, model, effort),
   duelRunB: (): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelRunB),
   duelFollowUp: (message: string): Promise<DuelSessionView> => invoke(IPC_CHANNELS.duelFollowUp, message),
   duelStop: (): Promise<void> => invoke(IPC_CHANNELS.duelStop),

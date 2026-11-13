@@ -713,15 +713,21 @@ test('étape 476 : avis de Claude au Duel Vision — après les deux description
   })
   await env.session.startDuel('vision', 4)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
-  await assert.rejects(() => env.session.adviseVisionDuel(), /Aucun duel|pas encore/i, 'rien à comparer avant l’image')
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /Aucun duel|pas encore/i, 'rien à comparer avant l’image')
   env.session.askDuelImage(IMAGE)
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
-  await assert.rejects(() => env.session.adviseVisionDuel(), /doivent d'abord finir/, 'B n’a pas encore décrit')
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /doivent d'abord finir/, 'B n’a pas encore décrit')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
   advice = () => ({ outcome: 'b', reason: 'B voit le chat roux.' })
-  assert.deepEqual(await env.session.adviseVisionDuel(), { outcome: 'b', reason: 'B voit le chat roux.' })
+  // Étape 477 : seulement un modèle et un effort de la liste (revérifiés par main).
+  for (const [model, effort] of [['gpt-5', 'medium'], ['claude-sonnet-5-5', 'ultra'], [undefined, undefined], ['claude-opus-5-5', 42]]) {
+    await assert.rejects(() => env.session.adviseVisionDuel(model, effort), /invalide/i, `${model} / ${effort}`)
+  }
+  assert.equal(env.calls.judge.advice.length, 0)
+  assert.deepEqual(await env.session.adviseVisionDuel('claude-opus-5-5', 'max'), { outcome: 'b', reason: 'B voit le chat roux.' })
   const sent = env.calls.judge.advice[0]
+  assert.deepEqual([sent.model, sent.effort], ['claude-opus-5-5', 'max'], 'le modèle et l’effort choisis par Léo')
   assert.equal(sent.key, 'sk-ant-cle')
   assert.equal(sent.image, IMAGE, 'Claude voit la même image que les deux modèles')
   assert.deepEqual([sent.a, sent.b], ['Une photo décrite (1).', 'Une photo décrite (2).'])
@@ -730,18 +736,18 @@ test('étape 476 : avis de Claude au Duel Vision — après les deux description
   advice = () => {
     throw new JudgeRefusalError()
   }
-  await assert.rejects(() => env.session.adviseVisionDuel(), /n'a pas voulu donner son avis/)
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /n'a pas voulu donner son avis/)
   advice = () => {
     throw new JudgeStopError('Impossible de joindre Anthropic (connexion internet ?). Les votes déjà faits sont gardés.', 'network')
   }
-  await assert.rejects(() => env.session.adviseVisionDuel(), (err) => /joindre Anthropic/.test(err.message) && !/votes déjà faits/.test(err.message))
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), (err) => /joindre Anthropic/.test(err.message) && !/votes déjà faits/.test(err.message))
   advice = () => {
     throw new JudgeStopError('Ta clé API Claude est refusée par Anthropic.', 'key')
   }
-  await assert.rejects(() => env.session.adviseVisionDuel(), /clé API Claude est refusée/)
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /clé API Claude est refusée/)
   assert.equal(env.votes.length, 0, 'l’avis n’est jamais un vote')
   await env.session.voteDuel('a')
-  await assert.rejects(() => env.session.adviseVisionDuel(), /déjà vot/i, 'plus d’avis une fois voté')
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /déjà vot/i, 'plus d’avis une fois voté')
 })
 
 test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vision, refusé', async () => {
@@ -752,7 +758,7 @@ test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vi
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
-  await assert.rejects(() => env.session.adviseVisionDuel(), /Ajoute d'abord ta clé API Claude/)
+  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /Ajoute d'abord ta clé API Claude/)
   assert.equal(env.calls.judge.advice.length, 0)
   const chat = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
   await chat.session.startDuel('conversation', 4)
@@ -761,7 +767,7 @@ test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vi
   await waitFor(() => chat.session.getDuelView().round.a.status === 'done', 'A')
   chat.session.runDuelB()
   await waitFor(() => chat.session.getDuelView().round.b.status === 'done', 'B')
-  await assert.rejects(() => chat.session.adviseVisionDuel(), /invalide/i)
+  await assert.rejects(() => chat.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /invalide/i)
   assert.equal(chat.calls.judge.advice.length, 0)
 })
 

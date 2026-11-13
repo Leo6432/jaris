@@ -73,8 +73,8 @@ window.jaris = {
   pickImageFile: async () => { window.__calls.push('pickImage'); return window.__pickImage ?? null },
   // Étape 476 : les images proposées (lues par le main) et l'avis de Claude avant le vote.
   duelVisionSamples: async () => window.__samples ?? [],
-  duelVisionAdvice: async () => {
-    window.__calls.push('advice')
+  duelVisionAdvice: async (model, effort) => {
+    window.__calls.push(['advice', model, effort])
     if (window.__adviceError) throw new Error(window.__adviceError)
     return { outcome: 'a', reason: 'A décrit bien le chat roux et le canapé ; B voit un chien qui n’existe pas.' }
   },
@@ -1676,18 +1676,47 @@ test('étape 476 : avis de Claude au vote d’un Duel Vision — seulement avec 
     await doneRound()(page)
     await page.waitForSelector('.duel-advice button')
     assert.equal(await page.textContent('.duel-advice button'), "Demander l'avis de Claude")
+    // Étape 477 : le modèle et l'effort se choisissent AVANT de demander — Sonnet 5.5, effort moyen par défaut.
+    const [modelSelect, effortSelect] = [page.locator('.duel-advice__select').nth(0), page.locator('.duel-advice__select').nth(1)]
+    assert.equal(await modelSelect.inputValue(), 'claude-sonnet-5-5')
+    assert.equal(await effortSelect.inputValue(), 'medium')
+    assert.deepEqual(await modelSelect.locator('option').allTextContents(), ['Haiku 5.5 — rapide, le moins cher', 'Sonnet 5.5 — équilibré', 'Opus 5.5 — plus fort', 'Fable 5.2 — le plus fort, le plus cher'])
+    assert.deepEqual(await effortSelect.locator('option').allTextContents(), ['Faible', 'Moyen', 'Élevé', 'Très élevé', 'Maximum'])
+    await modelSelect.selectOption('claude-opus-5-5')
+    await effortSelect.selectOption('max')
     await page.click('.duel-advice button')
     await page.waitForSelector('.duel-advice__text')
     const text = await page.textContent('.duel-advice__text')
     assert.match(text, /Avis de Claude : A est meilleur\./)
     assert.match(text, /chat roux/)
+    assert.match(text, /\(Opus 5\.5, effort Maximum\)/, 'qui a donné l’avis, et avec quel effort')
     assert.match(text, /C'est toi qui votes/)
     const calls = await page.evaluate(() => window.__calls)
-    assert.equal(calls.filter((c) => c === 'advice').length, 1)
+    assert.deepEqual(calls.filter((c) => c[0] === 'advice'), [['advice', 'claude-opus-5-5', 'max']], 'le choix part avec la demande')
+    // On peut redemander à un autre modèle pour comparer.
+    await modelSelect.selectOption('claude-haiku-5-5')
+    await page.click('.duel-advice button')
+    await page.waitForFunction(() => window.__calls.filter((c) => c[0] === 'advice').length === 2)
+    await page.waitForFunction(() => document.querySelector('.duel-advice__text')?.textContent.includes('Haiku 5.5'))
     assert.equal(calls.some((c) => Array.isArray(c) && c[0] === 'vote'), false, 'l’avis n’est jamais un vote')
     assert.equal(await page.locator('.duel-vote__button').count(), 4, 'les boutons de vote restent')
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-5-avis-claude.png` })
   }, `window.__claudeKey = { saved: true, last4: 'abcd' }; ${VISION_IDLE}`)
+  // Étape 477 : à 760 px, les deux choix et le bouton restent visibles, sans défilement horizontal.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-vision-ask')
+      await doneRound()(page)
+      await page.waitForSelector('.duel-advice__select')
+      for (const box of await page.locator('.duel-advice__select, .duel-advice button').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()))) {
+        assert.ok(box.width > 60 && box.right <= 760 && box.left >= 0, JSON.stringify(box))
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-6-choix-760.png` })
+    },
+    `window.__claudeKey = { saved: true, last4: 'abcd' }; ${VISION_IDLE}`,
+    { width: 760, height: 760 }
+  )
   // Une panne : son vrai message, et on peut redemander.
   await withPage(async (page) => {
     await page.waitForSelector('.duel-vision-ask')

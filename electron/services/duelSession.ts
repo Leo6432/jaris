@@ -68,6 +68,8 @@ import {
   DUEL_SERIES_SLOTS_PER_MODEL,
   type SeriesPlacement,
   isDuelSeriesCount,
+  isDuelAdviceEffort,
+  isDuelAdviceModel,
   planDuelSeries,
   baseModelTag,
   countDuelPairs,
@@ -815,8 +817,10 @@ export function askDuelImage(image: unknown): DuelSessionView {
  * l'avis de Claude sur les deux descriptions d'un Duel Vision, avec la clé API de Léo. Seulement un conseil : Léo vote
  * toujours lui-même, et l'avis n'est ni gardé ni compté. Les noms des modèles ne partent jamais (A et B seulement).
  */
-export async function adviseVisionDuel(): Promise<DuelVisionAdvice> {
+export async function adviseVisionDuel(model: unknown, effort: unknown): Promise<DuelVisionAdvice> {
   const current = session
+  // Étape 477 : revérifiés ici — seulement un modèle et un effort de la liste proposée.
+  if (!isDuelAdviceModel(model) || !isDuelAdviceEffort(effort)) throw new Error(t('duel.error.badRequest'))
   const round = current?.round
   if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   if (current.category !== 'vision' || !round.image) throw new Error(t('duel.error.badRequest'))
@@ -825,7 +829,7 @@ export async function adviseVisionDuel(): Promise<DuelVisionAdvice> {
   const apiKey = await loadClaudeKey()
   if (!apiKey) throw new Error(t('judge.error.noKey'))
   try {
-    const verdict = await askClaudeVisionAdvice(apiKey, { image: round.image, a: round.sides.a.text, b: round.sides.b.text })
+    const verdict = await askClaudeVisionAdvice(apiKey, { image: round.image, a: round.sides.a.text, b: round.sides.b.text, model, effort })
     return { outcome: verdict.outcome, reason: verdict.reason }
   } catch (err) {
     // Les messages du juge parlent des « votes déjà faits » (duels automatiques) : ici, des mots à cet écran.

@@ -12096,3 +12096,26 @@ demander à l'IA laquelle elle préfère, pour t'aider à voter ».
   test-duel-session.mjs (gardes, aucun nom de modèle envoyé, messages propres à l'avis, jamais un vote),
   test-duel-panel-ui.mjs (4 vignettes décodées, 4 nouvelles après « Autres images », clic → JPEG envoyé, 760 px sans
   défilement, avis seulement avec clé, panne affichée et bouton réutilisable, clé sur l'accueil Vision).
+
+## Étape 477 — Duel Vision : choisir le modèle Claude et l'effort de l'avis (v0.64.0)
+
+Léo : « pouvoir choisir le modèle et l'effort, avant de cliquer sur Demander à Claude ».
+- Juste à côté du bouton, deux menus : **Modèle** (Haiku 5.5 « rapide, le moins cher », Sonnet 5.5 « équilibré »,
+  Opus 5.5 « plus fort », Fable 5.2 « le plus fort, le plus cher ») et **Effort** (Faible, Moyen, Élevé, Très élevé,
+  Maximum). Par défaut Sonnet 5.5 / Moyen (le réglage de l'étape 476). Choix retenus d'un duel à l'autre
+  (`savedSetting`). L'avis affiché dit qui l'a donné : « (Opus 5.5, effort Maximum) ». On peut redemander à un autre
+  modèle pour comparer.
+- Identifiants et niveaux relus dans la documentation de l'API (pas de mémoire) : les quatre modèles acceptent
+  `low` à `max`. Liste dans `shared/duel.ts` (`DUEL_ADVICE_MODELS`, `DUEL_ADVICE_EFFORTS`), revérifiée par main
+  (`adviseVisionDuel(model, effort)` refuse toute autre valeur).
+- **Demande en flux** (`messages.stream(...).finalMessage()`) et `max_tokens` 64 000 pour l'avis : aux efforts élevés la
+  réflexion compte dans la limite (16 000 aurait coupé la réponse avant le JSON). Vérifié pour de vrai : le kit
+  Anthropic 1.3 REFUSE une demande non diffusée à 64 000 jetons (« Streaming is required for operations that may take
+  longer than 10 minutes »). Le juge des duels Conversation passe aussi en flux (même usine), sans autre changement.
+- Constat en passant : le kit 1.3 envoie la clé dans `Authorization: Bearer`, plus dans `x-api-key`.
+- Tests : test-duel-judge-stream.mjs (nouveau : VRAI client du kit contre un faux serveur Anthropic local via
+  `ANTHROPIC_BASE_URL` — `stream: true`, modèle, effort, 64 000, réponse diffusée en morceaux recollée ; mord : sans
+  flux, le kit refuse), test-duel-judge.mjs (modèle/effort/limite dans la requête), test-duel-session.mjs (valeurs hors
+  liste refusées, choix transmis), test-duel-panel-ui.mjs (Sonnet/Moyen par défaut, 4 modèles et 5 efforts affichés,
+  le choix part avec la demande, « (Opus 5.5, effort Maximum) », redemander à Haiku, 760 px sans défilement).
+  13 textes en 24 langues.

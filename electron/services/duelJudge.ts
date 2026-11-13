@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { languageInfo } from '../../shared/i18n/languages'
 import { currentLanguage, t } from '../../shared/i18n'
-import { isDuelOutcome, type DuelAction, type DuelOutcome } from '../../shared/duel'
+import { isDuelOutcome, type DuelAction, type DuelAdviceEffort, type DuelAdviceModel, type DuelOutcome } from '../../shared/duel'
 
 /**
  * Étape 399 (Léo : « ma clé API Claude ; il pose la question, attend les deux réponses, vote A ou B et continue ») :
@@ -50,9 +50,13 @@ export class JudgeRefusalError extends Error {
 /** Le strict nécessaire de `client.messages.create`, pour pouvoir le simuler dans les tests. */
 type CreateMessage = (body: Anthropic.MessageCreateParamsNonStreaming, options?: { signal?: AbortSignal }) => Promise<Anthropic.Message>
 
+/**
+ * Étape 477 : en flux (stream), réassemblé à la fin. Aux efforts « très élevé » et « maximum », la réflexion peut
+ * dépasser 16 000 jetons : une demande non diffusée aussi longue risque l'expiration du kit Anthropic.
+ */
 let clientFactory: (apiKey: string) => CreateMessage = (apiKey) => {
   const client = new Anthropic({ apiKey, maxRetries: 4 })
-  return (body, options) => client.messages.create(body, options)
+  return (body, options) => client.messages.stream(body, options).finalMessage()
 }
 
 /** Tests : remplace l'appel à l'API par un faux. */
@@ -156,7 +160,7 @@ function stopFor(err: unknown): Error {
 
 async function ask<T>(
   apiKey: string,
-  body: Omit<Anthropic.MessageCreateParamsNonStreaming, 'model' | 'max_tokens'>,
+  body: Omit<Anthropic.MessageCreateParamsNonStreaming, 'model' | 'max_tokens'> & { model?: string; max_tokens?: number },
   parse: (value: unknown) => T | null,
   signal?: AbortSignal
 ): Promise<T> {
@@ -312,7 +316,7 @@ export async function judgeDuel(apiKey: string, input: JudgeInput, signal?: Abor
  */
 export async function adviseVisionDuel(
   apiKey: string,
-  input: { image: string; a: string; b: string },
+  input: { image: string; a: string; b: string; model: DuelAdviceModel; effort: DuelAdviceEffort },
   signal?: AbortSignal
 ): Promise<JudgeVerdict> {
   const language = languageName()
@@ -332,6 +336,10 @@ export async function adviseVisionDuel(
   return ask(
     apiKey,
     {
+      // Étape 477 : le modèle et l'effort choisis par Léo. 64 000 jetons : de la place pour la réflexion aux efforts
+      // élevés (elle compte dans la limite), sans quoi la réponse serait coupée avant le JSON.
+      model: input.model,
+      max_tokens: 64000,
       system: task,
       messages: [
         {
@@ -342,7 +350,7 @@ export async function adviseVisionDuel(
           ]
         }
       ],
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
+      output_config: { effort: input.effort, format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
     },
     (value) => {
       const v = value as { winner?: unknown; reason?: unknown } | null
