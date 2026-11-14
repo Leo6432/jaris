@@ -12155,3 +12155,24 @@ générer d'images » ; et « quand je vais sur Image, je ne peux pas ajouter d'
   vision.ts : « Dessine une miniature Roblox… » → generate_image ; « Fais-moi une affiche… » → generate_image ;
   « Il y a quoi ? » → description, sans outil ; « Combien d'argent ? » → réponse, sans outil (4/4). Le dessin lui-même
   (sd-cli `-r` sous Windows) n'est vérifié qu'en lecture de la doc et par test : pas de Windows ici.
+
+## Étape 479 — Plus d'images au Duel Vision, plus de jeux au Duel Code (v0.66.0)
+
+Léo : « ajoute d'autres propositions d'images en plus, et aussi pour le code, comme d'autres jeux ».
+- **21 nouvelles images** (37 au total, `scripts/duel-vision/`, sources dans SOURCES.md) : 11 œuvres du Met
+  (`isPublicDomain: true` relu dans l'API officielle — Bruegel, Homer, Cézanne, Degas, Vermeer, Seurat, Van Gogh,
+  Fantin-Latour, Giambologna, un perroquet sculpté, une locomotive), 2 photos NASA (décollage d'Apollo 11, S69-39961 ;
+  lever de Terre d'Artemis II, art002e016299), 8 écrans faits pour Jaris (menu de restaurant, météo, tableur, jeu
+  vidéo dessiné pour l'occasion, conversation, formulaire avec erreurs, plan de tram d'une ville inventée, facture).
+  Regardées une par une : une photo NASA annoncée « Space Shuttle Discovery Launch » montrait en fait un buffet avec des
+  personnes reconnaissables — retirée et remplacée ; une estampe trop étroite (219 px) retirée.
+- **40 nouvelles idées de jeux** pour le Duel Code (`DUEL_CODE_IDEAS` 100 → 140, `duel.suggest.code.101` à `.140`,
+  24 langues) : billard, bowling, mini-golf, basket, foot à deux, tennis, fléchettes, pêche, cuisine, ferme, défense de
+  tours, course de voitures, moto, aventure en texte, jeu de rôle, donjon, ville, magasin, jeu à cliquer, tir spatial,
+  zombies, esquive, rythme, drapeaux, mots croisés, dominos, bataille, go, petits chevaux, jeu de l'oie, rues à acheter,
+  catapulte, empilement, anneaux, saut vers le haut, serpent à deux, trois bonbons alignés, pixels par numéros, escape
+  game, tir à l'arc. Noms génériques (pas de marque).
+- Trouvé par le nouveau test : en bulgare, l'idée 45 (« Une bataille navale ») était traduite « Морски шах » (le
+  morpion, déjà l'idée 6) — corrigée en « Морски бой ».
+- Tests : test-duel-judge.mjs (≥ 35 images, chacune un vrai JPEG ≤ 1 024 px avec sa source notée ; 140 idées présentes
+  et distinctes dans les 23 catalogues JSON, la 140e en français).

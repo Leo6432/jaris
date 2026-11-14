@@ -175,7 +175,8 @@ function jpegSize(bytes) {
 test('étape 476 : les images proposées du Duel Vision — de vrais JPEG raisonnables, sources notées, livrés avec l’appli', () => {
   const dir = new URL('./duel-vision/', import.meta.url)
   const images = readdirSync(dir).filter((name) => name.endsWith('.jpg'))
-  assert.ok(images.length >= 12, `assez d'images variées (${images.length})`)
+  // Étape 479 (Léo : « ajoute d'autres propositions d'images ») : 37 images.
+  assert.ok(images.length >= 35, `assez d'images variées (${images.length})`)
   const sources = readFileSync(new URL('SOURCES.md', dir), 'utf8')
   for (const name of images) {
     const bytes = readFileSync(new URL(name, dir))
@@ -189,4 +190,21 @@ test('étape 476 : les images proposées du Duel Vision — de vrais JPEG raison
   assert.match(builder, /- duel-vision\/\*\.jpg/, 'les images partent avec l’installeur')
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   assert.match(main, /join\(resourcesRoot\(\), 'scripts', 'duel-vision'\)/, 'le main lit le dossier livré (scripts/ dans les ressources)')
+})
+
+test('étape 479 : 140 idées d’applications pour le Duel Code, dans les 24 langues, sans doublon', async () => {
+  const { readdirSync: list } = await import('node:fs')
+  const duel = loadTsModule('shared/duel.ts')
+  assert.equal(duel.DUEL_CODE_IDEAS, 140)
+  const dir = new URL('../shared/i18n/locales/', import.meta.url)
+  const catalogs = list(dir).filter((name) => name.endsWith('.json'))
+  assert.equal(catalogs.length, 23)
+  for (const name of catalogs) {
+    const catalog = JSON.parse(readFileSync(new URL(name, dir), 'utf8'))
+    const ideas = Array.from({ length: duel.DUEL_CODE_IDEAS }, (_, i) => catalog[`duel.suggest.code.${i + 1}`])
+    assert.ok(ideas.every((idea) => typeof idea === 'string' && idea.trim()), `${name} : une idée manque`)
+    assert.equal(new Set(ideas).size, ideas.length, `${name} : deux idées identiques`)
+  }
+  const fr = readFileSync(new URL('../shared/i18n/fr.ts', import.meta.url), 'utf8')
+  assert.match(fr, /"duel\.suggest\.code\.140": "Un jeu de tir à l'arc avec le vent"/)
 })
