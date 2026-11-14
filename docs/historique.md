@@ -12283,13 +12283,18 @@ Vision oubliée à l'étape 475 (le choix du modèle Vision et le classement du 
 - Test (test-hardwarescan-duel.mjs, mord sans Vision) : points Vision positifs/négatifs, nombre de duels, autres
   catégories inchangées, rien pour un modèle sans duel Vision.
 
-## Étape 486 — Nombre de duels votés sous le tableau des modèles (v0.68.2)
+## Étape 486 — Nombre de duels votés en dernière ligne du tableau des modèles (v0.68.2)
 
-Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout ».
-- Sous le tableau du Classement : « Duels votés — Code : 64 · Vision : 12 · Conversation : 8 · Vocal : 5 · En tout : 89 ».
+Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout », puis, sur la première
+capture (une phrase sous le tableau) : « améliore le design, et mets-les en dessous des colonnes ».
+- Une ligne de total (`<tfoot>`) dans le tableau du Classement : « Duels votés / En tout : 89 » sous « Modèle », et
+  chaque nombre sous SA colonne (Duels Conversation 8, Code 64, Vocal 5, Vision 12), en gras, fond légèrement marqué,
+  trait au-dessus. Vérifié en thème clair et sombre, à 1 200 et 760 px.
 - `getModelOverview` renvoie `duelTotals` : pour chaque catégorie (`OVERVIEW_DUEL_CATEGORIES`), la somme des duels des
   modèles divisée par deux — chaque duel compte dans le total de ses DEUX modèles. Vérifié sur les vrais votes : exactement
   le nombre de votes par catégorie (Code 64, Vision 12, Conversation 8, Vocal 5 ; « les deux sont nuls » compris).
-- Texte en 24 langues, avec les noms des catégories repris tels quels des duels de chaque langue (allemand « Sehen »…).
+- 2 textes en 24 langues (`models.duelTotals.label`, `.total`).
 - Tests : test-hardwarescan-duel.mjs (chaque duel compté une fois ; aucun vote → 0 partout), test-options-reorganization-
-  ui.mjs (texte exact, SOUS le tableau). Capture vérifiée.
+  ui.mjs (chaque nombre mesuré sous l'en-tête de sa colonne, total sous « Modèle », une seule ligne de total).
+- Vu en passant : « étape 453 : disque de la machine juste » (test-benchmark-cases.mjs) a échoué UNE fois dans une
+  suite complète, puis réussi seul 3 fois et dans la suite complète relancée — sensible à la charge de la machine.

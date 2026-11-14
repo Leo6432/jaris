@@ -1171,22 +1171,40 @@ test('Classement : titres et valeurs des colonnes chiffrées centrés l’un sou
   })
 })
 
-// Étape 486 (Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout »).
-test('étape 486 : sous le tableau des modèles, le nombre de duels votés par catégorie et en tout', options, async () => {
+// Étape 486 (Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout », puis
+// « améliore le design, et mets-les en dessous des colonnes »).
+test('étape 486 : dernière ligne du tableau — chaque nombre de duels sous SA colonne, le total sous « Modèle »', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
-    await page.waitForSelector('.options-menu__duel-totals')
-    assert.equal(
-      (await page.textContent('.options-menu__duel-totals')).replace(/ /g, ' '),
-      'Duels votés — Code : 64 · Vision : 12 · Conversation : 8 · Vocal : 5 · En tout : 89'
-    )
-    // Sous le tableau, pas au-dessus.
-    const below = await page.evaluate(() => {
-      const table = document.querySelector('.options-page--models .options-menu__model-overview').getBoundingClientRect()
-      return document.querySelector('.options-menu__duel-totals').getBoundingClientRect().top >= table.bottom
+    await page.waitForSelector('.options-menu__totals-row')
+    assert.equal((await page.textContent('.options-menu__totals-label')).replace(/ /g, ' '), 'Duels votésEn tout : 89')
+    // Chaque nombre centré sous l'en-tête de sa colonne (mesuré, pas supposé).
+    const columns = await page.evaluate(() => {
+      const heads = [...document.querySelectorAll('.options-page--models thead th')].map((th) => ({ text: th.textContent.trim(), box: th.getBoundingClientRect() }))
+      const cells = [...document.querySelectorAll('.options-menu__totals-count')].map((td) => ({ text: td.textContent.trim(), box: td.getBoundingClientRect() }))
+      return cells.map((cell) => {
+        const center = cell.box.left + cell.box.width / 2
+        const head = heads.find((h) => center >= h.box.left && center <= h.box.right)
+        return [head?.text.replace(/\s+/g, ' '), cell.text]
+      })
     })
-    assert.equal(below, true)
-    await page.locator('.options-menu__duel-totals').scrollIntoViewIfNeeded()
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/totaux-duels.png` })
+    assert.deepEqual(columns, [
+      ['Duels Conversation ↕', '8'],
+      ['Duels Code ↕', '64'],
+      ['Duels Vocal ↕', '5'],
+      ['Duels Vision ↕', '12']
+    ])
+    // Dans le tableau, après les modèles (dernière ligne), et une seule fois.
+    assert.equal(await page.locator('.options-page--models tfoot tr').count(), 1)
+    assert.equal(await page.locator('.options-menu__duel-totals').count(), 0, 'plus de phrase à part sous le tableau')
+    await page.locator('.options-menu__totals-row').scrollIntoViewIfNeeded()
+    if (process.env.SHOTS) {
+      await page.screenshot({ path: `${process.env.SHOTS}/totaux-duels.png` })
+      // Le thème de Léo (sombre), et une fenêtre étroite.
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.setViewportSize({ width: 760, height: 900 })
+      await page.locator('.options-menu__totals-row').scrollIntoViewIfNeeded()
+      await page.screenshot({ path: `${process.env.SHOTS}/totaux-duels-sombre-760.png` })
+    }
   })
 })

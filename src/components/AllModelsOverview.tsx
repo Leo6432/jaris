@@ -465,23 +465,34 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                               </tr>
                             ))}
                           </tbody>
+                          {overview?.duelTotals && (
+                            // Étape 486 (Léo : « le nombre de duels en bas, sous les colonnes ») : une ligne de total, chaque
+                            // nombre sous SA colonne de duels ; le total général sous « Modèle ».
+                            <tfoot>
+                              <tr className="options-menu__totals-row">
+                                <th scope="row" className="options-menu__totals-label">
+                                  {t('models.duelTotals.label')}
+                                  <span className="options-menu__totals-all">
+                                    {t('models.duelTotals.total', {
+                                      total: formatDecimal(
+                                        overview.duelTotals.conversation + overview.duelTotals.code + overview.duelTotals.voice + overview.duelTotals.vision
+                                      )
+                                    })}
+                                  </span>
+                                </th>
+                                <td colSpan={5} />
+                                {(['conversation', 'code', 'voice', 'vision'] as const).map((category) => (
+                                  <td key={category} className="options-menu__col-num options-menu__totals-count">
+                                    {formatDecimal(overview.duelTotals?.[category] ?? 0)}
+                                  </td>
+                                ))}
+                                <td />
+                              </tr>
+                            </tfoot>
+                          )}
                         </table>
                       </div>
                     </div>
-                  )}
-                  {overview?.duelTotals && (
-                    // Étape 486 : sous le tableau, le nombre de duels votés par catégorie et en tout.
-                    <p className="options-menu__duel-totals" role="status">
-                      {t('models.duelTotals', {
-                        code: formatDecimal(overview.duelTotals.code),
-                        vision: formatDecimal(overview.duelTotals.vision),
-                        conversation: formatDecimal(overview.duelTotals.conversation),
-                        voice: formatDecimal(overview.duelTotals.voice),
-                        total: formatDecimal(
-                          overview.duelTotals.code + overview.duelTotals.vision + overview.duelTotals.conversation + overview.duelTotals.voice
-                        )
-                      })}
-                    </p>
                   )}
                 </div>
               </section>
