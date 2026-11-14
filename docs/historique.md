@@ -12237,3 +12237,17 @@ en ligne.
 - Tests (mordent : sans `revivePreviews`, aucun aperçu refait) : test-generated-preview.mjs (effacé après 20 autres →
   404, reconnu, refait), test-duel-session.mjs (aperçu encore là jamais refait ; effacé → refait sans réécrire
   l'application ; côté sans application → rien). Faux ponts mis à jour (test-duel-remote, test-duel-series-move).
+
+## Étape 483 — v0.67.2 : votes du 14/11 livrés
+
+- Votes : `node scripts/import-duel-votes.mjs jaris-votes-2026-11-14.json` (export de Jaris 0.67.1, 71 votes dont 24 déjà
+  connus) → 47 votes ajoutés (30 Code, 12 Vision — les premiers —, 5 Conversation), 89 au total dans
+  `scripts/shared-duel-votes.json`.
+- Classements : Code, gemma4:e4b toujours devant (7-0), puis gemma4:31b et qwen3.8:27b ; Vision, gemma4:26b devant
+  (2-0 contre muse-glimmer:30b et qwen3-vl:4b), puis muse-glimmer:30b, ornith-1.5:35b, qwen3.8:27b ; Conversation,
+  qwen3.5:27b (3-0).
+- Choix comparés avant/après sur 24 machines types (carte 0 à 32 Go × RAM 16/32/64 Go) : le rôle Vision change partout
+  (gros PC : qwen3.8:27b → gemma4:26b ; 0-4 Go : qwen3-vl:4b → qwen3.5:4b ; 12-16 Go/16 Go : qwen3-vl:4b →
+  qwen3-vl:8b) ; Vocal suit maintenant le Chat sur 12-32 Go (granite4.2:8b au lieu de gemma4:e4b) ; Code des petites
+  machines : phi4-mini / qwen3-vl:4b → qwen3:1.7b. Machine de Léo (8 Go/32 Go) : seul Vision change (qwen3.8:27b →
+  gemma4:26b), et seulement si les votes prouvent qu'il fait mieux que celui en service (règle des duels).

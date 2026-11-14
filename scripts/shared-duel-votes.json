@@ -90,6 +90,51 @@
     "outcome": "a"
   },
   {
+    "id": "a48e2b57-9594-499c-a48c-ce5639f9767c",
+    "category": "conversation",
+    "at": 1793529121877,
+    "sessionId": "30b54b57-5c58-4134-9a17-a68d9abb5c31",
+    "modelA": "granite4.2:8b",
+    "modelB": "nemotron-3.5-lightning:30b",
+    "outcome": "a"
+  },
+  {
+    "id": "669f9c99-9f43-426b-a41a-72ed613662eb",
+    "category": "conversation",
+    "at": 1793529250044,
+    "sessionId": "30b54b57-5c58-4134-9a17-a68d9abb5c31",
+    "modelA": "gemma4:e4b",
+    "modelB": "nemotron-3.5-lightning:30b",
+    "outcome": "b"
+  },
+  {
+    "id": "a6ac8f58-d368-4d17-a10d-99c0cea77bc5",
+    "category": "conversation",
+    "at": 1793530139107,
+    "sessionId": "30b54b57-5c58-4134-9a17-a68d9abb5c31",
+    "modelA": "qwen3.5:27b",
+    "modelB": "hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "4a1a5608-3cb1-430f-876c-a25b9549dd99",
+    "category": "conversation",
+    "at": 1793530576861,
+    "sessionId": "30b54b57-5c58-4134-9a17-a68d9abb5c31",
+    "modelA": "qwen3.5:27b",
+    "modelB": "hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "44b61dca-9318-463c-b22b-af0092fee578",
+    "category": "conversation",
+    "at": 1793530747454,
+    "sessionId": "30b54b57-5c58-4134-9a17-a68d9abb5c31",
+    "modelA": "qwen2.5-coder:7b",
+    "modelB": "qwen3.5:27b",
+    "outcome": "b"
+  },
+  {
     "id": "f0cf9106-2808-49a4-a123-9558eaac1c10",
     "category": "code",
     "at": 1793649286315,
@@ -375,6 +420,384 @@
     "sessionId": "65ee83b5-bb4a-40a2-b660-3fa4ee25c043",
     "modelA": "gemma4:26b",
     "modelB": "gemma4:e4b",
+    "outcome": "b"
+  },
+  {
+    "id": "622bce0c-da0d-453f-b3dd-cbe4593c5cae",
+    "category": "vision",
+    "at": 1794503800004,
+    "sessionId": "4d62c8a1-204a-4129-bad3-f7f5b39f9fee",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b"
+  },
+  {
+    "id": "9f91aa75-a09d-43f8-9f63-1904be1fb449",
+    "category": "vision",
+    "at": 1794508875304,
+    "sessionId": "5c836523-96ea-44cf-9670-aaa5b03454ac",
+    "modelA": "qwen3.5:4b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b"
+  },
+  {
+    "id": "a9f7a1de-8404-44c3-ba39-3e8e674b1364",
+    "category": "vision",
+    "at": 1794512220644,
+    "sessionId": "5c836523-96ea-44cf-9670-aaa5b03454ac",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "b"
+  },
+  {
+    "id": "9b0353a1-bfda-4b28-a351-193f40ea8645",
+    "category": "vision",
+    "at": 1794513782515,
+    "sessionId": "5c836523-96ea-44cf-9670-aaa5b03454ac",
+    "modelA": "qwen3.8:27b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a"
+  },
+  {
+    "id": "2f1a3c73-eed6-47ec-92b8-9f3aec46c42d",
+    "category": "vision",
+    "at": 1794514576852,
+    "sessionId": "5c836523-96ea-44cf-9670-aaa5b03454ac",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3.8:27b",
+    "outcome": "a"
+  },
+  {
+    "id": "4fdbdc29-9459-477d-8334-4bfdbe10205f",
+    "category": "vision",
+    "at": 1794571748006,
+    "sessionId": "9a514897-acd5-4ff8-9a4f-17df19a0d6e4",
+    "modelA": "qwen3.5:4b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "b"
+  },
+  {
+    "id": "5d95f4fc-a084-4496-8f47-4171542e1d46",
+    "category": "vision",
+    "at": 1794572507654,
+    "sessionId": "9a514897-acd5-4ff8-9a4f-17df19a0d6e4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "a"
+  },
+  {
+    "id": "6b28e3d6-30db-42df-86c7-3894025aee46",
+    "category": "vision",
+    "at": 1794599664397,
+    "sessionId": "941b5aa5-b15a-4b70-afc7-682c50db4a65",
+    "modelA": "gemma4:26b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "a"
+  },
+  {
+    "id": "20eeae25-b8f2-4bc3-b1e0-bd6b0b736f56",
+    "category": "vision",
+    "at": 1794600614263,
+    "sessionId": "941b5aa5-b15a-4b70-afc7-682c50db4a65",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "b"
+  },
+  {
+    "id": "714902a0-7ec3-49a1-b185-09c9f2552b17",
+    "category": "vision",
+    "at": 1794603017591,
+    "sessionId": "941b5aa5-b15a-4b70-afc7-682c50db4a65",
+    "modelA": "qwen3.5:4b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "b"
+  },
+  {
+    "id": "96e74060-a958-440f-9c79-ba5c0ad7c4d3",
+    "category": "vision",
+    "at": 1794649500032,
+    "sessionId": "e896b2b9-52df-4b5d-aa13-f80ce690f737",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "gemma4:26b",
+    "outcome": "b"
+  },
+  {
+    "id": "3266dad5-c65b-4cbe-8499-db1ec6b08b14",
+    "category": "vision",
+    "at": 1794650054637,
+    "sessionId": "e896b2b9-52df-4b5d-aa13-f80ce690f737",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "b"
+  },
+  {
+    "id": "398f597e-a203-476c-ade2-d281b7fb907e",
+    "category": "code",
+    "at": 1794660387886,
+    "sessionId": "4985afb6-0069-41c8-a0df-01b9abbde7d2",
+    "modelA": "granite4.1:8b",
+    "modelB": "gemma4:31b",
+    "outcome": "b"
+  },
+  {
+    "id": "8cdc51bd-4fd5-490f-80fa-6eaab7d01218",
+    "category": "code",
+    "at": 1794660777547,
+    "sessionId": "4985afb6-0069-41c8-a0df-01b9abbde7d2",
+    "modelA": "muse-glimmer:30b",
+    "modelB": "glm-4.7-flash:q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "3e017c5e-9062-4833-9d06-357f8d838194",
+    "category": "code",
+    "at": 1794661374793,
+    "sessionId": "4985afb6-0069-41c8-a0df-01b9abbde7d2",
+    "modelA": "granite4.1:8b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "tie"
+  },
+  {
+    "id": "34e87b94-db99-49ec-a769-87279d3d6ce0",
+    "category": "code",
+    "at": 1794662219393,
+    "sessionId": "4985afb6-0069-41c8-a0df-01b9abbde7d2",
+    "modelA": "gemma4:31b",
+    "modelB": "ministral-3:8b",
+    "outcome": "a"
+  },
+  {
+    "id": "9f558299-13b9-41e5-8259-e2b466aac3a8",
+    "category": "code",
+    "at": 1794665508684,
+    "sessionId": "efd140eb-b50b-4d17-8c4e-3460ebf9b7ff",
+    "modelA": "nemotron-3.5-bolt:e4b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "a"
+  },
+  {
+    "id": "0d22bd27-93eb-47ef-a090-d196060c5364",
+    "category": "code",
+    "at": 1794672845663,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M",
+    "modelB": "qwen3.5:2b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "a81a8de4-2b4e-49c4-b571-f96c56c6d9dc",
+    "category": "code",
+    "at": 1794672929158,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3-vl:8b",
+    "modelB": "hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "4bf0d911-6735-416e-b079-34c0c8ec678f",
+    "category": "code",
+    "at": 1794672990420,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "phi4-mini",
+    "modelB": "qwen3.5:27b",
+    "outcome": "b"
+  },
+  {
+    "id": "ce47f3c4-32bc-450c-903f-e0bee30d559d",
+    "category": "code",
+    "at": 1794673001610,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "hf.co/bartowski/ai9stars_G9v3-3B-GGUF",
+    "modelB": "phi4-mini",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "16adb39c-e906-4375-baf5-dec536c6ef5e",
+    "category": "code",
+    "at": 1794673013038,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen2.5-coder:14b",
+    "modelB": "hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "ed5765d6-4c91-472a-93cd-2ef870507330",
+    "category": "code",
+    "at": 1794673372557,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M",
+    "modelB": "qwen2.5-coder:32b",
+    "outcome": "b"
+  },
+  {
+    "id": "182b5155-2aba-4ff7-bc0e-07b7712703c7",
+    "category": "code",
+    "at": 1794674252190,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "north-mini-code-1.0",
+    "modelB": "qwen3-coder:30b",
+    "outcome": "b"
+  },
+  {
+    "id": "9f3a355d-834b-4346-b993-3b1691ddd65d",
+    "category": "code",
+    "at": 1794674271451,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.5:4b",
+    "modelB": "qwen3-coder:30b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "1d0830a5-8270-4e83-ab6e-a317aca87c5e",
+    "category": "code",
+    "at": 1794674293348,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "mistral-small3.2:24b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "20309a6f-e998-4d6e-8a1e-1aeb1977a644",
+    "category": "code",
+    "at": 1794674306826,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.6:35b-a3b",
+    "modelB": "ministral-3:14b",
+    "outcome": "a"
+  },
+  {
+    "id": "fbeb601f-090c-438b-9a9b-f4d929643b58",
+    "category": "code",
+    "at": 1794674337275,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.6:35b-a3b",
+    "modelB": "granite4.2:3b",
+    "outcome": "a"
+  },
+  {
+    "id": "e619b244-925f-4489-be2a-011013811e17",
+    "category": "code",
+    "at": 1794674504955,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.5:35b",
+    "modelB": "hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "9f154567-a58c-4333-a08a-a9e0e344c969",
+    "category": "code",
+    "at": 1794674648803,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.6:35b",
+    "modelB": "qwen3.5:2b",
+    "outcome": "a"
+  },
+  {
+    "id": "bb92ea48-9e91-4eed-849d-7b533d7789b7",
+    "category": "code",
+    "at": 1794674698177,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.5:35b",
+    "modelB": "hf.co/bartowski/ai9stars_G9v3-3B-GGUF",
+    "outcome": "a"
+  },
+  {
+    "id": "42c3e524-0a11-49cd-981e-f4e090761f2b",
+    "category": "code",
+    "at": 1794674716907,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "nemotron-3.5-lightning:30b",
+    "modelB": "granite4.2:3b",
+    "outcome": "a"
+  },
+  {
+    "id": "aacaf59c-e942-417d-bf91-e097180a2335",
+    "category": "code",
+    "at": 1794674734499,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.5:27b",
+    "modelB": "hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M",
+    "outcome": "a"
+  },
+  {
+    "id": "f519280c-1b58-4114-8217-3a0c84e3cca0",
+    "category": "code",
+    "at": 1794674753927,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "nemotron-3.5-bolt:e4b",
+    "modelB": "qwen3-vl:8b",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "c730ba16-46b4-4564-90f6-c29121e6fd28",
+    "category": "code",
+    "at": 1794674763821,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "granite4.2:30b",
+    "modelB": "granite4.1:3b",
+    "outcome": "a"
+  },
+  {
+    "id": "7789f18f-7128-46e7-99ae-9e7d62c7ecd5",
+    "category": "code",
+    "at": 1794674781185,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "gemma4:12b",
+    "modelB": "qwen2.5-coder:14b",
+    "outcome": "a"
+  },
+  {
+    "id": "c835295b-1df6-445d-a6c2-ea2ab95c12bb",
+    "category": "code",
+    "at": 1794674801050,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "ornith-1.5:9b",
+    "modelB": "qwen3.5:9b",
+    "outcome": "a"
+  },
+  {
+    "id": "52804e56-30ed-478f-907f-08492cc561f2",
+    "category": "code",
+    "at": 1794674838199,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "qwen2.5-coder:32b",
+    "outcome": "b"
+  },
+  {
+    "id": "84136f57-6db4-4e58-97b0-30f3faf61abb",
+    "category": "code",
+    "at": 1794674851463,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "qwen3.6:35b",
+    "modelB": "glm-4.7-flash:q4_K_M",
+    "outcome": "bothBad"
+  },
+  {
+    "id": "397c7702-d829-4ec0-9520-3470038e7901",
+    "category": "code",
+    "at": 1794674873388,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "ministral-3:14b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b"
+  },
+  {
+    "id": "c93edb41-dace-4277-b8e9-cc01e9cf4712",
+    "category": "code",
+    "at": 1794674887309,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "north-mini-code-1.0",
+    "modelB": "qwen3.6:27b",
+    "outcome": "b"
+  },
+  {
+    "id": "474137ac-f151-438c-8ce9-6cabb8a80c25",
+    "category": "code",
+    "at": 1794674901469,
+    "sessionId": "83ab6b61-55cd-42cb-9e01-8f20d1c2e0ea",
+    "modelA": "ministral-3:14b",
+    "modelB": "qwen3.5:4b",
     "outcome": "b"
   }
 ]
