@@ -12201,3 +12201,21 @@ comme Vision ».
   64 000, tours d'avant, voix ; juge automatique inchangé ; Code : code complet, coupe annoncée, application absente
   dite), test-duel-session.mjs (Conversation avec suite, Code, Vocal), test-duel-panel-ui.mjs (bloc et appel dans les
   trois catégories ; clé sur chaque accueil).
+
+## Étape 481 — Duel Code sur la machine louée : la fenêtre de contexte reste telle quelle (décision de Léo)
+
+Captures de Léo (OVH 4 × V100S, série Code, `OLLAMA_NUM_PARALLEL=4`) : des modèles à CONTEXT 45056 ou 65536,
+« Stopping… », et K2-Horizon à 62 % sur le processeur. Cause lue dans le code : en Duel Code, la fenêtre part de
+`DUEL_CODE_NUM_CTX` (32 768) mais `computeCodeNumCtx` la monte pour une longue application, puis la double si elle est
+pleine (jusqu'à `CODE_NUM_CTX_MAX` = 65 536). Ollama doit alors recharger le modèle et attend que TOUS ses duels en cours
+finissent (« Stopping… ») ; le modèle rechargé, plus gros, peut ne plus tenir sur les cartes.
+- Vérifié avec le vrai Ollama 0.40.16 : avec `OLLAMA_NUM_PARALLEL=4`, `num_ctx` 8192 lance `llama-server -c 32768 -np 4`
+  — la place réservée est multipliée par le nombre de duels à la fois.
+- Mesure (outil d'en-têtes GGUF de l'étape 471, contexte MAXIMUM du modèle × 4 places) : K2-Horizon-3.7B 314 Go,
+  ministral-3:14b 181 Go, Spark-X2.6-4B 161 Go, gemma4:31b 115 Go, mistral-small3.2:24b 101 Go, granite4.1:8b 92 Go,
+  qwen3.5:27b 88 Go, ornith-1.5:35b 45 Go, nemotron-3.5-bolt:e4b et qwen3.5:2b 18 Go. Le « maximum de chaque modèle »
+  (premier choix de Léo) ne tient pas sur 127 Go pour la moitié des modèles.
+- Propositions faites : 32 768 fixe (refusé : « on ne doit pas brider les modèles »), 65 536 fixe dès le départ.
+  **Décision de Léo : laisser comme aujourd'hui** (fenêtre qui grandit au besoin, comme le mode Code). Ne pas changer
+  sans lui redemander. Conséquence acceptée : des rechargements et parfois du processeur ; le message orange de Jaris
+  dit quoi faire (`sudo systemctl restart ollama`).
