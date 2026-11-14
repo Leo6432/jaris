@@ -12219,3 +12219,21 @@ finissent (« Stopping… ») ; le modèle rechargé, plus gros, peut ne plus te
   **Décision de Léo : laisser comme aujourd'hui** (fenêtre qui grandit au besoin, comme le mode Code). Ne pas changer
   sans lui redemander. Conséquence acceptée : des rechargements et parfois du processeur ; le message orange de Jaris
   dit quoi faire (`sudo systemctl restart ollama`).
+
+## Étape 482 — Série de duels Code : aperçus tout blancs (v0.67.1)
+
+Captures de Léo (série de 25 duels Code sur la machine louée) : un Puissance 4 et un formateur de JSON à fond bleu foncé
+affichés comme des cadres TOUT BLANCS, alors que l'onglet code les montrait et qu'ils marchaient dans un afficheur HTML
+en ligne.
+- Reproduit en vrai navigateur : le code exact du Puissance 4, servi avec la CSP et le sandbox de l'aperçu
+  (`PREVIEW_CSP`) dans un iframe, s'affiche bien — ce n'était pas l'application. Une application à fond foncé
+  affichée en blanc : la page n'était pas chargée du tout.
+- Cause (lue dans le code) : `generatedAppPreview.ts` ne garde que 21 aperçus en mémoire (`remember` efface le plus
+  ancien) — prévu pour le mode Code, où seul le dernier projet s'affiche. Une série en écrit jusqu'à 2 par duel : les
+  aperçus des premières applications finies étaient effacés avant que Léo ouvre leur duel (adresse morte → 404). Le
+  code, lui, est relu à part (`duelSideCode`, depuis `side.html`), d'où un onglet code qui marchait.
+- Correctif : `previewAvailable(url)` ; `getDuelView` refait l'aperçu du duel affiché à partir du code gardé quand le
+  sien a été effacé (`revivePreviews`) — quel que soit le chemin qui l'ouvre (liste de la série, duel courant).
+- Tests (mordent : sans `revivePreviews`, aucun aperçu refait) : test-generated-preview.mjs (effacé après 20 autres →
+  404, reconnu, refait), test-duel-session.mjs (aperçu encore là jamais refait ; effacé → refait sans réécrire
+  l'application ; côté sans application → rien). Faux ponts mis à jour (test-duel-remote, test-duel-series-move).

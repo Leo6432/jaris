@@ -68,7 +68,7 @@ function setup(t) {
         return { html: `<html><body>${host}|${options.model}</body></html>`, issues: [] }
       }
     },
-    './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` },
+    './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html`, previewAvailable: (url) => !globalThis.__previewsGone && Boolean(url) },
     './imageGenerator': { imageDrawingAvailable: async () => true },
     './hardwareScan': {
       duelMachine: async (machine) => (machine ? { vramGb: machine.vramGb, ramGb: machine.ramGb } : { vramGb: 8, ramGb: 32 }),

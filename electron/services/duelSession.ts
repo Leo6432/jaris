@@ -3,7 +3,7 @@ import { config, runWithLocalOllama, runWithOllamaHost } from '../config'
 import { connectedMachine, machineFreeDiskGb } from './remoteMachine'
 import { converse, type ConverseRestrictions } from './assistant'
 import { generateApp } from './codeGenerator'
-import { createGeneratedAppPreview } from './generatedAppPreview'
+import { createGeneratedAppPreview, previewAvailable } from './generatedAppPreview'
 import { imageDrawingAvailable } from './imageGenerator'
 import {
   duelMachine,
@@ -354,6 +354,17 @@ function emptySide(): SideState {
   }
 }
 
+/**
+ * Étape 482 : l'aperçu d'une application finie a pu être effacé de la mémoire des aperçus (21 au plus, une série en
+ * écrit bien plus) — il s'affichait tout blanc. Le code est gardé dans le côté : l'aperçu est refait à partir de lui.
+ */
+function revivePreviews(round: RoundState | null): void {
+  if (!round) return
+  for (const side of [round.sides.a, round.sides.b]) {
+    if (side.html && !previewAvailable(side.previewUrl)) side.previewUrl = createGeneratedAppPreview(side.html)
+  }
+}
+
 function sideView(side: SideState): DuelSideView {
   const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, writeNow: _hurry, ...view } = side
   return view
@@ -362,6 +373,8 @@ function sideView(side: SideState): DuelSideView {
 export function getDuelView(): DuelSessionView | null {
   if (!session) return null
   const round = session.round
+  // Le duel affiché : son aperçu doit exister (étape 482), quel que soit le chemin qui l'a ouvert.
+  revivePreviews(round)
   return {
     id: session.id,
     category: session.category,

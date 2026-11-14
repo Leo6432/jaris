@@ -82,7 +82,7 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
         return { html: '<html></html>', issues: [] }
       }
     },
-    './generatedAppPreview': { createGeneratedAppPreview: () => 'jaris-preview://app/x/index.html' },
+    './generatedAppPreview': { createGeneratedAppPreview: () => 'jaris-preview://app/x/index.html', previewAvailable: (url) => Boolean(url) },
     './imageGenerator': { imageDrawingAvailable: async () => true },
     './hardwareScan': {
       duelMachine: async (machine) => {

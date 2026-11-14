@@ -33,3 +33,14 @@ test('chaque nouvelle génération obtient son propre aperçu',async()=>{
  const {api,request}=setup();const first=api.createGeneratedAppPreview('premier');const next=api.createGeneratedAppPreview('suivant')
  assert.notEqual(first,next);assert.equal(await request(next).text(),api.withMemoryStorage('suivant'));assert.equal(await request(first).text(),api.withMemoryStorage('premier'))
 })
+// Étape 482 (captures de Léo : en série de duels Code, des aperçus tout blancs) : la mémoire des aperçus est limitée.
+test('étape 482 : un aperçu effacé de la mémoire se reconnaît (previewAvailable), un nouveau le remplace',async()=>{
+ const {api,request}=setup();const first=api.createGeneratedAppPreview('<p>premier</p>')
+ assert.equal(api.previewAvailable(first),true)
+ for(let i=0;i<25;i++)api.createGeneratedAppPreview(`<p>${i}</p>`)
+ assert.equal(api.previewAvailable(first),false,'effacé après plus de 20 autres')
+ assert.equal(request(first).status,404,'c’est ce que voyait Léo : un cadre vide')
+ assert.equal(api.previewAvailable(null),false);assert.equal(api.previewAvailable('pas une adresse'),false)
+ const again=api.createGeneratedAppPreview('<p>premier</p>')
+ assert.equal(api.previewAvailable(again),true);assert.equal(request(again).status,200)
+})

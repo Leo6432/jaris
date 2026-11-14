@@ -32,6 +32,20 @@ function remember(source: PreviewSource): string {
   return id
 }
 
+/**
+ * Étape 482 (captures de Léo : en série de duels Code, des aperçus tout blancs alors que le code, lui, s'affiche) :
+ * seuls les 21 derniers aperçus restent en mémoire (`remember`). Une série en écrit jusqu'à 50 : ceux des premières
+ * applications finies étaient effacés avant que Léo ouvre leur duel. Vrai si l'aperçu de cette adresse existe encore.
+ */
+export function previewAvailable(url: string | null | undefined): boolean {
+  if (!url) return false
+  try {
+    return previews.has(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
 /** Le HTML provient uniquement d'une génération terminée ; aucune URL ne sert de chemin de fichier. */
 export function createGeneratedAppPreview(html: string): string {
   return `${SCHEME}://${remember({ kind: 'html', html })}/index.html`

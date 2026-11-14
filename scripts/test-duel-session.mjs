@@ -136,7 +136,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         }
       }
     },
-    './generatedAppPreview': { createGeneratedAppPreview: (html) => `jaris-preview://app/${html.length}/index.html` }
+    './generatedAppPreview': { createGeneratedAppPreview: (html) => { globalThis.__previewsMade = (globalThis.__previewsMade ?? 0) + 1; return `jaris-preview://app/${html.length}/index.html` }, previewAvailable: (url) => !globalThis.__previewsGone && Boolean(url) }
   }
   async function generateBody(prompt, options) {
     // Étape 382 : un modèle qui n'est pas sur le disque ne peut pas écrire (comme le vrai Ollama).
@@ -825,6 +825,30 @@ test('étape 480 : avis de Claude en Vocal — Claude sait que la réponse est L
   const sent = env.calls.judge.verdicts.at(-1)
   assert.equal(sent.spoken, true)
   assert.equal(sent.prompt, 'Quel temps fera-t-il demain ?')
+})
+
+// Étape 482 (captures de Léo : aperçus tout blancs en série de duels Code, code pourtant lisible) : la mémoire des
+// aperçus ne garde que les derniers ; le duel affiché refait le sien à partir du code gardé.
+test('étape 482 : l’aperçu d’une application finie, effacé de la mémoire, est refait quand le duel s’affiche', async () => {
+  const env = setup({ installed: MODELS })
+  await env.session.startDuel('code', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  env.session.askDuel('Un jeu de puissance 4')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  const before = env.calls.generate.length
+  const made = globalThis.__previewsMade
+  env.session.getDuelView()
+  assert.equal(globalThis.__previewsMade, made, 'un aperçu encore là n’est pas refait')
+  globalThis.__previewsGone = true
+  try {
+    const view = env.session.getDuelView()
+    assert.equal(globalThis.__previewsMade, made + 1, 'un aperçu refait, pas une adresse morte')
+    assert.match(view.round.a.previewUrl, /^jaris-preview:/)
+    assert.equal(env.calls.generate.length, before, 'refait à partir du code gardé, sans réécrire l’application')
+    assert.equal(view.round.b.previewUrl, null, 'B n’a rien écrit : pas d’aperçu inventé')
+  } finally {
+    globalThis.__previewsGone = false
+  }
 })
 
 test('duel Code : l’application est écrite par CE modèle, montrée dans l’aperçu, jamais rangée dans « Tes applications »', async () => {
