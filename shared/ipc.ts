@@ -1132,7 +1132,7 @@ export interface DuelBatchItemView {
 }
 
 /** Étape 476 : l'avis de Claude sur les deux descriptions d'un Duel Vision (un conseil, jamais un vote). */
-export interface DuelVisionAdvice {
+export interface DuelAdvice {
   outcome: DuelOutcome
   reason: string
 }
@@ -1532,8 +1532,8 @@ export const IPC_CHANNELS = {
   duelAskImage: 'jaris:duel-ask-image',
   /** Étape 476 : les images proposées du Duel Vision (scripts/duel-vision, lues par le main). */
   duelVisionSamples: 'jaris:duel-vision-samples',
-  /** Étape 476 : l'avis de Claude (clé API de Léo) sur les deux descriptions, avant que Léo vote. */
-  duelVisionAdvice: 'jaris:duel-vision-advice',
+  /** Étape 476 : l'avis de Claude (clé API de Léo) avant que Léo vote — étape 480 : pour toutes les catégories. */
+  duelAdvice: 'jaris:duel-advice',
   duelRunB: 'jaris:duel-run-b',
   /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */
   duelFollowUp: 'jaris:duel-follow-up',

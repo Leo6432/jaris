@@ -12,7 +12,7 @@ import type {
   DuelPlan,
   DuelRankingView,
   DuelSessionView,
-  DuelVisionAdvice,
+  DuelAdvice,
   ClaudeKeyStatus,
   DuelReviewView,
   DuelSummary,
@@ -240,7 +240,7 @@ declare global {
       /** Étape 475 : l'image d'un Duel Vision (base64, sans en-tête). */
       duelAskImage: (image: string) => Promise<DuelSessionView>
       duelVisionSamples: () => Promise<PickedImageFile[]>
-      duelVisionAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelVisionAdvice>
+      duelAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelAdvice>
       duelRunB: () => Promise<DuelSessionView>
       duelFollowUp: (message: string) => Promise<DuelSessionView>
       duelStop: () => Promise<void>

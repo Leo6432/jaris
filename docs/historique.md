@@ -12176,3 +12176,28 @@ Léo : « ajoute d'autres propositions d'images en plus, et aussi pour le code, 
   morpion, déjà l'idée 6) — corrigée en « Морски бой ».
 - Tests : test-duel-judge.mjs (≥ 35 images, chacune un vrai JPEG ≤ 1 024 px avec sa source notée ; 140 idées présentes
   et distinctes dans les 23 catalogues JSON, la 140e en français).
+
+## Étape 480 — L'avis de Claude dans tous les duels (Conversation, Code, Vocal) (v0.67.0)
+
+Léo : « ajoute le système demander à Claude à Code aussi, et à Message et à Vocal, à tout en fait, avec l'effort etc.,
+comme Vision ».
+- Même bloc qu'en Vision (étapes 476-477) au moment du vote, dans toutes les catégories : choix du modèle (Haiku 5.5,
+  Sonnet 5.5, Opus 5.5, Fable 5.2) et de l'effort, « Demander l'avis de Claude », avis affiché avec qui l'a donné ;
+  jamais compté comme vote. En Code, le bloc est remonté après chaque modification demandée (clé du composant).
+- `duelSession.adviseDuel(model, effort)` (canal renommé `duelAdvice`, type `DuelAdvice`) choisit ce que Claude voit :
+  - **Conversation et Vocal** : `judgeDuel`, exactement ce que voit le juge automatique (outils appelés ET leurs
+    résultats, pas seulement ce que le modèle affirme ; outils proposés pendant CE duel), plus les tours où Léo a
+    répondu aux deux modèles (`followUps`, `earlier`), le modèle et l'effort de Léo (64 000 jetons, en flux). En Vocal,
+    une consigne en plus : la réponse est LUE à voix haute (courte, sans mise en forme). Le juge automatique ne change
+    pas (Sonnet 5.5, effort élevé, 16 000) — vérifié par test.
+  - **Code** : `adviseCodeDuel`, le code complet des deux applications (coupé au-delà de 120 000 caractères, et c'est
+    dit), la demande et les modifications demandées ensuite ; Claude ne les lance pas, il lit le code.
+  - **Vision** : inchangé.
+  - Refusé en mode « Claude vote » (il vote déjà), avant la fin des deux côtés, après le vote, ou si un outil de Jaris a
+    échoué (le duel se rejoue). Jamais de nom de modèle envoyé.
+- Accueil : la clé Claude (facultative) avec ce qui part chez Anthropic, en Code, Vocal et Vision ; en Conversation,
+  dans « Qui vote ? » quand « Moi » est choisi. 3 textes en 24 langues.
+- Tests (mordent : Code envoyé au mauvais juge, voix oubliée) : test-duel-judge.mjs (requête : modèle, effort,
+  64 000, tours d'avant, voix ; juge automatique inchangé ; Code : code complet, coupe annoncée, application absente
+  dite), test-duel-session.mjs (Conversation avec suite, Code, Vocal), test-duel-panel-ui.mjs (bloc et appel dans les
+  trois catégories ; clé sur chaque accueil).

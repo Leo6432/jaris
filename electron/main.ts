@@ -83,7 +83,7 @@ import { checkClaudeKey } from './services/duelJudge'
 import {
   abortDuel,
   askDuel,
-  adviseVisionDuel,
+  adviseDuel,
   askDuelImage,
   closeDuel,
   deleteDuelModels,
@@ -1908,7 +1908,7 @@ app.whenReady().then(async () => {
     cancelMemoryExtraction()
     return askDuelImage(image)
   })
-  ipcMain.handle(IPC_CHANNELS.duelVisionAdvice, (_event, model: unknown, effort: unknown) => adviseVisionDuel(model, effort))
+  ipcMain.handle(IPC_CHANNELS.duelAdvice, (_event, model: unknown, effort: unknown) => adviseDuel(model, effort))
   // Étape 476 : les images proposées du Duel Vision, lues ici — l'écran (file:// en production) ne pourrait ni les
   // relire par fetch ni les redessiner sans « salir » son canevas. Livrées avec l'appli (extraResources).
   ipcMain.handle(IPC_CHANNELS.duelVisionSamples, async (): Promise<PickedImageFile[]> => {

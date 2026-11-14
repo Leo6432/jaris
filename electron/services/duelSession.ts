@@ -33,7 +33,7 @@ import {
   saveDuelApp
 } from './duelStore'
 import { loadClaudeKey } from './claudeKey'
-import { JUDGE_MODEL, JudgeRefusalError, JudgeStopError, adviseVisionDuel as askClaudeVisionAdvice, judgeDuel, writeDuelQuestion, type DuelScreens, type JudgedSide } from './duelJudge'
+import { JUDGE_MODEL, JudgeRefusalError, JudgeStopError, adviseCodeDuel, adviseVisionDuel as askClaudeVisionAdvice, judgeDuel, writeDuelQuestion, type DuelScreens, type JudgedSide } from './duelJudge'
 import {
   SERIES_FORMAT,
   SERIES_VERSION,
@@ -98,7 +98,7 @@ import type {
   DuelSideView,
   DuelStandingView,
   DuelSummary,
-  DuelVisionAdvice,
+  DuelAdvice,
   Profile
 } from '../../shared/ipc'
 import { formatDecimal, replyLanguageRule, t, tn, type MessageKey } from '../../shared/i18n'
@@ -817,23 +817,52 @@ export function askDuelImage(image: unknown): DuelSessionView {
  * l'avis de Claude sur les deux descriptions d'un Duel Vision, avec la clé API de Léo. Seulement un conseil : Léo vote
  * toujours lui-même, et l'avis n'est ni gardé ni compté. Les noms des modèles ne partent jamais (A et B seulement).
  */
-export async function adviseVisionDuel(model: unknown, effort: unknown): Promise<DuelVisionAdvice> {
+export async function adviseDuel(model: unknown, effort: unknown): Promise<DuelAdvice> {
   const current = session
   // Étape 477 : revérifiés ici — seulement un modèle et un effort de la liste proposée.
   if (!isDuelAdviceModel(model) || !isDuelAdviceEffort(effort)) throw new Error(t('duel.error.badRequest'))
+  // Avec Claude comme juge, c'est déjà lui qui vote : pas d'avis en plus.
+  if (current?.judge) throw new Error(t('duel.error.notYourTurn'))
   const round = current?.round
   if (!current || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
-  if (current.category !== 'vision' || !round.image) throw new Error(t('duel.error.badRequest'))
+  if (current.category === 'vision' && !round.image) throw new Error(t('duel.error.badRequest'))
   if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
+  if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
   const apiKey = await loadClaudeKey()
   if (!apiKey) throw new Error(t('judge.error.noKey'))
+  const { a, b } = round.sides
   try {
-    const verdict = await askClaudeVisionAdvice(apiKey, { image: round.image, a: round.sides.a.text, b: round.sides.b.text, model, effort })
+    // Étape 480 (Léo : « le système demander à Claude, à Code aussi, et à Message et à Vocal, à tout ») : chaque
+    // catégorie montre à Claude ce qui compte pour elle. Jamais les noms des modèles (A et B seulement).
+    const verdict =
+      current.category === 'vision'
+        ? await askClaudeVisionAdvice(apiKey, { image: round.image ?? '', a: a.text, b: b.text, model, effort })
+        : current.category === 'code'
+          ? await adviseCodeDuel(apiKey, {
+              prompt: round.prompt,
+              followUps: round.followUps,
+              a: { html: a.html, error: a.error },
+              b: { html: b.html, error: b.error },
+              model,
+              effort
+            })
+          : await judgeDuel(apiKey, {
+              // Conversation et Vocal : exactement ce que voit le juge automatique (outils appelés et leurs résultats,
+              // pas seulement ce que le modèle affirme), plus les tours où Léo a répondu aux deux modèles.
+              prompt: round.prompt,
+              a: { ...judgedSide(a), earlier: a.earlier.map((turn) => turn.text) },
+              b: { ...judgedSide(b), earlier: b.earlier.map((turn) => turn.text) },
+              tools: TOOLS.filter((tool) => round.tools?.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description })),
+              followUps: round.followUps,
+              spoken: current.category === 'voice',
+              model,
+              effort
+            })
     return { outcome: verdict.outcome, reason: verdict.reason }
   } catch (err) {
     // Les messages du juge parlent des « votes déjà faits » (duels automatiques) : ici, des mots à cet écran.
-    if (err instanceof JudgeRefusalError) throw new Error(t('duel.vision.advice.refused'))
+    if (err instanceof JudgeRefusalError) throw new Error(t(current.category === 'vision' ? 'duel.vision.advice.refused' : 'duel.advice.refused'))
     if (err instanceof JudgeStopError && err.kind === 'rate') throw new Error(t('duel.vision.advice.rate'))
     if (err instanceof JudgeStopError && err.kind === 'network') throw new Error(t('duel.vision.advice.network'))
     if (err instanceof JudgeStopError && err.kind === 'unreadable') throw new Error(t('duel.vision.advice.unreadable'))

@@ -208,3 +208,62 @@ test('étape 479 : 140 idées d’applications pour le Duel Code, dans les 24 la
   const fr = readFileSync(new URL('../shared/i18n/fr.ts', import.meta.url), 'utf8')
   assert.match(fr, /"duel\.suggest\.code\.140": "Un jeu de tir à l'arc avec le vent"/)
 })
+
+// Étape 480 : l'avis demandé à la main, pour toutes les catégories.
+test('étape 480 : avis en Conversation/Vocal — modèle et effort de Léo, les tours d’avant, la voix', async () => {
+  const sent = fake(message(JSON.stringify({ winner: 'a', reason: 'A a vraiment cherché la météo.' })))
+  const verdict = await judge.judgeDuel('k', {
+    prompt: 'Quel temps demain ?',
+    a: side('Il fera beau.', { earlier: ['Où es-tu ?'] }),
+    b: side('Je ne sais pas.', { earlier: ['Dans quelle ville ?'] }),
+    tools: [],
+    followUps: ['À Lyon'],
+    spoken: true,
+    model: 'claude-fable-5-2',
+    effort: 'max'
+  })
+  assert.deepEqual(verdict, { outcome: 'a', reason: 'A a vraiment cherché la météo.' })
+  const { body } = sent[0]
+  assert.equal(body.model, 'claude-fable-5-2')
+  assert.equal(body.output_config.effort, 'max')
+  assert.equal(body.max_tokens, 64000)
+  const text = body.messages[0].content[0].text
+  assert.match(text, /Reply to turn 1:\nOù es-tu \?\nLéo then wrote: À Lyon\nTool calls: none[\s\S]*Final reply:\nIl fera beau\./)
+  assert.match(text, /Reply to turn 1:\nDans quelle ville \?\nLéo then wrote: À Lyon/)
+  assert.match(body.system.map((b) => b.text).join('\n'), /read ALOUD/)
+  // Le juge automatique, lui, ne change pas : Sonnet 5.5, effort élevé, pas de voix ni de tours d'avant.
+  const auto = fake(message(JSON.stringify({ winner: 'tie', reason: 'Pareil.' })))
+  await judge.judgeDuel('k', { prompt: 'x', a: side('a'), b: side('b'), tools: [] })
+  assert.equal(auto[0].body.model, 'claude-sonnet-5-5')
+  assert.equal(auto[0].body.output_config.effort, 'high')
+  assert.equal(auto[0].body.max_tokens, 16000)
+  assert.doesNotMatch(auto[0].body.system.map((b) => b.text).join('\n'), /read ALOUD/)
+  assert.doesNotMatch(auto[0].body.messages[0].content[0].text, /Reply to turn/)
+})
+
+test('étape 480 : avis en Code — le code complet des deux applications (coupé s’il est énorme), les modifications demandées', async () => {
+  const sent = fake(message(JSON.stringify({ winner: 'b', reason: 'B compte les quilles.' })))
+  const huge = `<html>${'x'.repeat(130_000)}</html>`
+  const verdict = await judge.adviseCodeDuel('k', {
+    prompt: 'Un jeu de bowling',
+    followUps: ['Ajoute un score'],
+    a: { html: huge, error: null },
+    b: { html: '<html><script>let quilles = 10</script></html>', error: null },
+    model: 'claude-opus-5-5',
+    effort: 'high'
+  })
+  assert.deepEqual(verdict, { outcome: 'b', reason: 'B compte les quilles.' })
+  const { body } = sent[0]
+  assert.equal(body.model, 'claude-opus-5-5')
+  assert.equal(body.output_config.effort, 'high')
+  assert.match(body.system, /cannot run them/)
+  const text = body.messages[0].content
+  assert.match(text, /^Request: Un jeu de bowling\nChange asked afterwards \(1\): Ajoute un score/)
+  assert.match(text, /=== Application B ===\n```html\n<html><script>let quilles = 10<\/script><\/html>\n```/)
+  assert.match(text, /\[\.\.\. cut: \d+ more characters\]/, 'une application énorme est coupée, et c’est dit')
+  assert.ok(text.length < 130_000)
+  // Une application absente (panne) est dite, jamais inventée.
+  const empty = fake(message(JSON.stringify({ winner: 'a', reason: 'B est vide.' })))
+  await judge.adviseCodeDuel('k', { prompt: 'x', followUps: [], a: { html: '<html></html>', error: null }, b: { html: null, error: 'Modèle arrêté' }, model: 'claude-haiku-5-5', effort: 'low' })
+  assert.match(empty[0].body.messages[0].content, /=== Application B ===\nError: Modèle arrêté\n\(no application\)/)
+})

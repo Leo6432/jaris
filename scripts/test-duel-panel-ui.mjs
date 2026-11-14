@@ -73,7 +73,7 @@ window.jaris = {
   pickImageFile: async () => { window.__calls.push('pickImage'); return window.__pickImage ?? null },
   // Étape 476 : les images proposées (lues par le main) et l'avis de Claude avant le vote.
   duelVisionSamples: async () => window.__samples ?? [],
-  duelVisionAdvice: async (model, effort) => {
+  duelAdvice: async (model, effort) => {
     window.__calls.push(['advice', model, effort])
     if (window.__adviceError) throw new Error(window.__adviceError)
     return { outcome: 'a', reason: 'A décrit bien le chat roux et le canapé ; B voit un chien qui n’existe pas.' }
@@ -1726,4 +1726,42 @@ test('étape 476 : avis de Claude au vote d’un Duel Vision — seulement avec 
     assert.match(await page.textContent('.duel-advice .duel-home__note--warn'), /Impossible de joindre Anthropic/)
     assert.equal(await page.locator('.duel-advice button').isDisabled(), false)
   }, `window.__claudeKey = { saved: true, last4: 'abcd' }; window.__adviceError = 'Impossible de joindre Anthropic (connexion internet ?).'; ${VISION_IDLE}`)
+})
+
+// Étape 480 (Léo : « ajoute le système demander à Claude à Code aussi, et à Message et à Vocal, à tout, avec l'effort »).
+test('étape 480 : l’avis de Claude (modèle et effort) au vote des duels Conversation, Code et Vocal', options, async () => {
+  for (const category of ['conversation', 'code', 'voice']) {
+    await withPage(
+      async (page) => {
+        await page.evaluate(() =>
+          window.__emit(window.__ready({ number: 1, prompt: 'Un jeu de bowling', a: window.__side({ status: 'done', text: 'Réponse A', durationMs: 3000, previewUrl: window.__category === 'code' ? 'jaris-preview://a/index.html' : null }), b: window.__side({ status: 'done', text: 'Réponse B', durationMs: 2000, previewUrl: window.__category === 'code' ? 'jaris-preview://b/index.html' : null }) }))
+        )
+        await page.waitForSelector('.duel-vote__button')
+        await page.waitForSelector('.duel-advice__select', { timeout: 5000 })
+        assert.equal(await page.locator('.duel-advice__select').count(), 2, `${category} : modèle et effort`)
+        await page.locator('.duel-advice__select').nth(1).selectOption('high')
+        await page.click('.duel-advice button')
+        await page.waitForSelector('.duel-advice__text')
+        assert.match(await page.textContent('.duel-advice__text'), /Avis de Claude : A est meilleur\. .*\(Sonnet 5\.5, effort Élevé\)/)
+        assert.deepEqual((await page.evaluate(() => window.__calls)).filter((c) => c[0] === 'advice'), [['advice', 'claude-sonnet-5-5', 'high']])
+        if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/avis-${category}.png` })
+      },
+      `window.__claudeKey = { saved: true, last4: 'abcd' }; window.__category = '${category}'; window.__view = { id: 'session-1', category: '${category}', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };`
+    )
+  }
+})
+
+test('étape 480 : la clé Claude (facultative) sur l’accueil de chaque catégorie, avec ce qui part chez Anthropic', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-category')
+    // Conversation, « Moi » : la clé pour l'avis, sans rien changer à « Qui vote ? ».
+    assert.match(await page.textContent('.duel-judge'), /laquelle des deux réponses il préfère/)
+    assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
+    await page.click('.duel-category:has-text("Code")')
+    await page.waitForFunction(() => /laquelle des deux applications/.test(document.querySelector('.duel-judge')?.textContent ?? ''))
+    assert.match(await page.textContent('.duel-judge'), /le code des deux applications/)
+    await page.click('.duel-category:has-text("Vocal")')
+    await page.waitForFunction(() => /laquelle des deux réponses/.test(document.querySelector('.duel-judge')?.textContent ?? ''))
+    assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
+  })
 })

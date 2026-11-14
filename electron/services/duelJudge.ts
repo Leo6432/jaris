@@ -20,6 +20,11 @@ export interface JudgedSide {
   toolLog: readonly string[]
   error: string | null
   text: string
+  /**
+   * Étape 480 (avis demandé par Léo à la main) : les réponses de CE côté aux tours d'avant, quand Léo a répondu aux
+   * deux modèles avant de voter (`followUps` dans JudgeInput). Absent : un seul tour.
+   */
+  earlier?: readonly string[]
 }
 
 export interface JudgeVerdict {
@@ -236,8 +241,12 @@ export async function writeDuelQuestion(
   )
 }
 
-function describeSide(name: 'A' | 'B', side: JudgedSide): string {
+function describeSide(name: 'A' | 'B', side: JudgedSide, followUps: readonly string[] = []): string {
   const lines = [`=== Assistant ${name} ===`]
+  side.earlier?.forEach((reply, index) => {
+    lines.push(`Reply to turn ${index + 1}:`, reply.trim() || '(empty)')
+    if (followUps[index]) lines.push(`Léo then wrote: ${followUps[index]}`)
+  })
   if (side.toolLog.length) lines.push('Tool calls and results:', ...side.toolLog.map((line) => `  ${line}`))
   else if (side.actions.length) lines.push('Actions:', ...side.actions.map((a) => `  ${a.tool}${a.detail ? ` (${a.detail})` : ''}`))
   else lines.push('Tool calls: none')
@@ -259,6 +268,13 @@ export interface JudgeInput {
   b: JudgedSide
   tools: readonly JudgeTool[]
   screens?: DuelScreens | null
+  /** Étape 480 : ce que Léo a répondu aux deux modèles après la demande, dans l'ordre. */
+  followUps?: readonly string[]
+  /** Étape 480 : Duel Vocal — la réponse est LUE à voix haute (pas de mise en forme, courte). */
+  spoken?: boolean
+  /** Étape 480 : le modèle Claude et l'effort choisis par Léo pour son avis (défaut : le juge, effort élevé). */
+  model?: DuelAdviceModel
+  effort?: DuelAdviceEffort
 }
 
 function screenBlocks(screens: DuelScreens | null | undefined): Anthropic.ContentBlockParam[] {
@@ -286,19 +302,25 @@ export async function judgeDuel(apiKey: string, input: JudgeInput, signal?: Abor
     '   provided, use them to check what really appeared on the screen.',
     '2. Is it correct? Invented facts count against, especially facts that needed a web search it did not do.',
     `3. Does it answer the actual request, in ${language}, clearly and without padding?`,
+    ...(input.spoken
+      ? ['4. Each reply is read ALOUD by a voice: it must sound natural when spoken, short, with no formatting (lists,', '   tables, markdown, emojis) and no links.']
+      : []),
     'Ignore which side came first, and do not reward length for its own sake.',
     'Answer "tie" when both are about equally good, "bothBad" when neither is acceptable.',
     `Give the reason in ${language}, in one or two short sentences, saying what decided it (Léo reads it to check your vote).`
   ].join('\n')
   const system: Anthropic.TextBlockParam[] = [briefBlock(input.tools), { type: 'text', text: task }]
-  const text = [`Request: ${input.prompt}`, '', describeSide('A', input.a), '', describeSide('B', input.b)].join('\n')
+  const followUps = input.followUps ?? []
+  const text = [`Request: ${input.prompt}`, '', describeSide('A', input.a, followUps), '', describeSide('B', input.b, followUps)].join('\n')
   const content: Anthropic.ContentBlockParam[] = [{ type: 'text', text }, ...screenBlocks(input.screens)]
   return ask(
     apiKey,
     {
+      // Étape 480 : avis demandé à la main — le modèle et l'effort de Léo, de la place pour réfléchir (en flux).
+      ...(input.model ? { model: input.model, max_tokens: 64000 } : {}),
       system,
       messages: [{ role: 'user', content }],
-      output_config: { effort: 'high', format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
+      output_config: { effort: input.effort ?? 'high', format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
     },
     (value) => {
       const v = value as { winner?: unknown; reason?: unknown } | null
@@ -350,6 +372,68 @@ export async function adviseVisionDuel(
           ]
         }
       ],
+      output_config: { effort: input.effort, format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
+    },
+    (value) => {
+      const v = value as { winner?: unknown; reason?: unknown } | null
+      if (!v || !isDuelOutcome(v.winner) || typeof v.reason !== 'string') return null
+      return { outcome: v.winner, reason: v.reason.trim().slice(0, 2000) }
+    },
+    signal
+  )
+}
+
+/** Étape 480 : ce que Claude voit d'un côté d'un Duel Code — l'application finale (HTML complet), ou l'erreur. */
+export interface CodeSide {
+  html: string | null
+  error: string | null
+}
+
+/** Une application très longue est coupée (le reste est signalé) : l'avis reste payable et rapide. */
+const CODE_ADVICE_MAX_CHARS = 120_000
+
+function describeApp(name: 'A' | 'B', side: CodeSide): string {
+  const lines = [`=== Application ${name} ===`]
+  if (side.error) lines.push(`Error: ${side.error}`)
+  if (!side.html?.trim()) lines.push('(no application)')
+  else {
+    const html = side.html.length > CODE_ADVICE_MAX_CHARS ? `${side.html.slice(0, CODE_ADVICE_MAX_CHARS)}\n[... cut: ${side.html.length - CODE_ADVICE_MAX_CHARS} more characters]` : side.html
+    lines.push('```html', html, '```')
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Étape 480 (Léo : « ajoute le système demander à Claude à Code aussi, et à Message et à Vocal ») : l'avis de Claude sur
+ * les deux applications d'un Duel Code. Claude ne peut pas les lancer : il lit le code complet de chacune.
+ */
+export async function adviseCodeDuel(
+  apiKey: string,
+  input: { prompt: string; followUps: readonly string[]; a: CodeSide; b: CodeSide; model: DuelAdviceModel; effort: DuelAdviceEffort },
+  signal?: AbortSignal
+): Promise<JudgeVerdict> {
+  const language = languageName()
+  const task = [
+    '# Your task: compare two single-file web applications',
+    'Two small local models each wrote a complete HTML application (HTML, CSS and JavaScript in one file) for the same',
+    'request. You cannot run them: read the code carefully. Decide which one serves Léo better, using these criteria in order:',
+    '1. Does it really do what was asked? A missing feature, a game that cannot be played or won, or a bug that breaks it',
+    '   (JavaScript error, wrong variable, controls that do nothing) counts heavily against it.',
+    '2. Does it work in a browser without anything else (no missing file, no external service that is required)?',
+    '3. Is it pleasant to use: clear layout, readable text, sensible controls, the text shown in ' + language + '?',
+    'Ignore which side came first, and do not reward length for its own sake.',
+    'Answer "tie" when both are about equally good, "bothBad" when neither is acceptable.',
+    `Give the reason in ${language}, in one or two short sentences, naming the feature or bug that decided it.`
+  ].join('\n')
+  const asks = [`Request: ${input.prompt}`, ...input.followUps.map((followUp, i) => `Change asked afterwards (${i + 1}): ${followUp}`)]
+  const text = [...asks, '', describeApp('A', input.a), '', describeApp('B', input.b)].join('\n')
+  return ask(
+    apiKey,
+    {
+      model: input.model,
+      max_tokens: 64000,
+      system: task,
+      messages: [{ role: 'user', content: text }],
       output_config: { effort: input.effort, format: { type: 'json_schema', schema: VERDICT_SCHEMA } }
     },
     (value) => {

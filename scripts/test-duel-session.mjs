@@ -99,7 +99,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
   const votes = [...priorVotes]
   // Étape 399 : les votes proposés par Claude, et ce que le faux Claude a reçu.
   const reviews = []
-  calls.judge = { questions: [], verdicts: [], advice: [] }
+  calls.judge = { questions: [], verdicts: [], advice: [], codeAdvice: [] }
   const apps = new Map()
   const emitted = []
   let profile = initialProfile ?? {
@@ -266,6 +266,11 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       JUDGE_MODEL: 'claude-sonnet-5-5',
       JudgeRefusalError,
       JudgeStopError,
+      // Étape 480 : l'avis sur les deux applications d'un Duel Code.
+      adviseCodeDuel: async (key, input) => {
+        calls.judge.codeAdvice.push({ key, ...JSON.parse(JSON.stringify(input)) })
+        return { outcome: 'b', reason: 'B a un vrai bouton Recommencer.' }
+      },
       adviseVisionDuel: async (key, input) => {
         calls.judge.advice.push({ key, ...input })
         if (judge?.adviceImpl) return judge.adviceImpl()
@@ -278,7 +283,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       },
       judgeDuel: async (key, input, signal) => {
         const { prompt, a, b, tools, screens } = input
-        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)), tools: tools.map((tool) => tool.name), screens: screens ?? null })
+        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)), tools: tools.map((tool) => tool.name), screens: screens ?? null, followUps: input.followUps ?? null, spoken: input.spoken ?? null, model: input.model ?? null, effort: input.effort ?? null })
         if (judge?.verdictImpl) return judge.verdictImpl(calls.judge.verdicts.length, signal)
         return { outcome: 'a', reason: 'A a vraiment ouvert l’application.' }
       }
@@ -713,19 +718,19 @@ test('étape 476 : avis de Claude au Duel Vision — après les deux description
   })
   await env.session.startDuel('vision', 4)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /Aucun duel|pas encore/i, 'rien à comparer avant l’image')
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /Aucun duel|pas encore/i, 'rien à comparer avant l’image')
   env.session.askDuelImage(IMAGE)
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /doivent d'abord finir/, 'B n’a pas encore décrit')
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /doivent d'abord finir/, 'B n’a pas encore décrit')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
   advice = () => ({ outcome: 'b', reason: 'B voit le chat roux.' })
   // Étape 477 : seulement un modèle et un effort de la liste (revérifiés par main).
   for (const [model, effort] of [['gpt-5', 'medium'], ['claude-sonnet-5-5', 'ultra'], [undefined, undefined], ['claude-opus-5-5', 42]]) {
-    await assert.rejects(() => env.session.adviseVisionDuel(model, effort), /invalide/i, `${model} / ${effort}`)
+    await assert.rejects(() => env.session.adviseDuel(model, effort), /invalide/i, `${model} / ${effort}`)
   }
   assert.equal(env.calls.judge.advice.length, 0)
-  assert.deepEqual(await env.session.adviseVisionDuel('claude-opus-5-5', 'max'), { outcome: 'b', reason: 'B voit le chat roux.' })
+  assert.deepEqual(await env.session.adviseDuel('claude-opus-5-5', 'max'), { outcome: 'b', reason: 'B voit le chat roux.' })
   const sent = env.calls.judge.advice[0]
   assert.deepEqual([sent.model, sent.effort], ['claude-opus-5-5', 'max'], 'le modèle et l’effort choisis par Léo')
   assert.equal(sent.key, 'sk-ant-cle')
@@ -736,21 +741,21 @@ test('étape 476 : avis de Claude au Duel Vision — après les deux description
   advice = () => {
     throw new JudgeRefusalError()
   }
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /n'a pas voulu donner son avis/)
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /n'a pas voulu donner son avis/)
   advice = () => {
     throw new JudgeStopError('Impossible de joindre Anthropic (connexion internet ?). Les votes déjà faits sont gardés.', 'network')
   }
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), (err) => /joindre Anthropic/.test(err.message) && !/votes déjà faits/.test(err.message))
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), (err) => /joindre Anthropic/.test(err.message) && !/votes déjà faits/.test(err.message))
   advice = () => {
     throw new JudgeStopError('Ta clé API Claude est refusée par Anthropic.', 'key')
   }
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /clé API Claude est refusée/)
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /clé API Claude est refusée/)
   assert.equal(env.votes.length, 0, 'l’avis n’est jamais un vote')
   await env.session.voteDuel('a')
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /déjà vot/i, 'plus d’avis une fois voté')
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /déjà vot/i, 'plus d’avis une fois voté')
 })
 
-test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vision, refusé', async () => {
+test('étape 476 : avis de Claude — sans clé, un message clair', async () => {
   const env = setup({ installed: MODELS, profile: { name: 'Léo', models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, visionModel: 'alpha-model:3b' } })
   await env.session.startDuel('vision', 4)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
@@ -758,8 +763,12 @@ test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vi
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
-  await assert.rejects(() => env.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /Ajoute d'abord ta clé API Claude/)
+  await assert.rejects(() => env.session.adviseDuel('claude-sonnet-5-5', 'medium'), /Ajoute d'abord ta clé API Claude/)
   assert.equal(env.calls.judge.advice.length, 0)
+})
+
+// Étape 480 (Léo : « ajoute le système demander à Claude à Code aussi, et à Message et à Vocal, à tout, avec l'effort »).
+test('étape 480 : avis de Claude en Conversation — ce que voit le juge (outils, résultats), les suites, le modèle et l’effort choisis', async () => {
   const chat = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
   await chat.session.startDuel('conversation', 4)
   await waitFor(() => chat.session.getDuelView()?.phase === 'ready', 'prête')
@@ -767,8 +776,55 @@ test('étape 476 : avis de Claude — sans clé, un message clair ; hors Duel Vi
   await waitFor(() => chat.session.getDuelView().round.a.status === 'done', 'A')
   chat.session.runDuelB()
   await waitFor(() => chat.session.getDuelView().round.b.status === 'done', 'B')
-  await assert.rejects(() => chat.session.adviseVisionDuel('claude-sonnet-5-5', 'medium'), /invalide/i)
-  assert.equal(chat.calls.judge.advice.length, 0)
+  // Léo répond aux deux modèles, puis demande l'avis : Claude voit les deux tours de chacun.
+  chat.session.followUpDuel('Et demain ?')
+  await waitFor(() => chat.session.getDuelView().round.a.status === 'done', 'A (suite)')
+  chat.session.runDuelB()
+  await waitFor(() => chat.session.getDuelView().round.b.status === 'done', 'B (suite)')
+  const before = chat.calls.judge.verdicts.length
+  assert.deepEqual(await chat.session.adviseDuel('claude-opus-5-5', 'xhigh'), { outcome: 'a', reason: 'A a vraiment ouvert l’application.' })
+  const sent = chat.calls.judge.verdicts[before]
+  assert.equal(sent.key, 'sk-ant-cle')
+  assert.equal(sent.prompt, 'Bonjour')
+  assert.deepEqual(sent.followUps, ['Et demain ?'])
+  assert.equal(sent.a.earlier.length, 1, 'la première réponse de A')
+  assert.equal(sent.b.earlier.length, 1)
+  assert.ok(Array.isArray(sent.a.toolLog), 'les outils appelés et leurs résultats, comme pour le juge')
+  assert.ok(sent.tools.length > 0, 'les outils proposés pendant CE duel')
+  assert.deepEqual([sent.model, sent.effort, sent.spoken], ['claude-opus-5-5', 'xhigh', false])
+  assert.equal(chat.votes.length, 0, 'un avis n’est jamais un vote')
+})
+
+test('étape 480 : avis de Claude en Code — le code des deux applications, sans nom de modèle', async () => {
+  const code = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
+  await code.session.startDuel('code', 4)
+  await waitFor(() => code.session.getDuelView()?.phase === 'ready', 'prête')
+  code.session.askDuel('Un jeu de bowling')
+  await waitFor(() => code.session.getDuelView().round.a.status === 'done', 'A')
+  code.session.runDuelB()
+  await waitFor(() => code.session.getDuelView().round.b.status === 'done', 'B')
+  assert.deepEqual(await code.session.adviseDuel('claude-haiku-5-5', 'low'), { outcome: 'b', reason: 'B a un vrai bouton Recommencer.' })
+  const [sent] = code.calls.judge.codeAdvice
+  assert.equal(sent.prompt, 'Un jeu de bowling')
+  assert.match(sent.a.html, /^<html>/)
+  assert.match(sent.b.html, /^<html>/)
+  assert.deepEqual([sent.model, sent.effort], ['claude-haiku-5-5', 'low'])
+  for (const name of MODELS) assert.ok(!JSON.stringify(sent).includes(name), `aucun nom de modèle (${name})`)
+  assert.equal(code.calls.judge.advice.length, 0, 'pas le chemin Vision')
+})
+
+test('étape 480 : avis de Claude en Vocal — Claude sait que la réponse est LUE à voix haute', async () => {
+  const env = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
+  await env.session.startDuel('voice', 4)
+  await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  env.session.askDuel('Quel temps fera-t-il demain ?')
+  await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
+  env.session.runDuelB()
+  await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+  await env.session.adviseDuel('claude-sonnet-5-5', 'medium')
+  const sent = env.calls.judge.verdicts.at(-1)
+  assert.equal(sent.spoken, true)
+  assert.equal(sent.prompt, 'Quel temps fera-t-il demain ?')
 })
 
 test('duel Code : l’application est écrite par CE modèle, montrée dans l’aperçu, jamais rangée dans « Tes applications »', async () => {

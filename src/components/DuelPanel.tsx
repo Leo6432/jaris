@@ -44,7 +44,7 @@ import {
   type DuelVoteSide
 } from '../../shared/duel'
 import type { JarisEmotion } from '@/store/useJarisStore'
-import type { ClaudeKeyStatus, DuelActivity, DuelRoundView, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary, DuelVisionAdvice, PickedImageFile } from '../../shared/ipc'
+import type { ClaudeKeyStatus, DuelActivity, DuelRoundView, DuelBatchItemView, DuelHistoryEntry, DuelModelOption, DuelPlan, DuelRankingView, DuelReviewView, DuelSessionView, DuelSideView, DuelStandingView, DuelSummary, DuelAdvice, PickedImageFile } from '../../shared/ipc'
 import type { MessageKey } from '../../shared/i18n'
 
 /**
@@ -1327,11 +1327,18 @@ const ADVICE_EFFORT_LABEL: Record<DuelAdviceEffort, MessageKey> = {
   xhigh: 'duel.vision.advice.effort.xhigh',
   max: 'duel.vision.advice.effort.max'
 }
+/** Étape 480 : ce qui part chez Anthropic pour l'avis, dit sur l'accueil de chaque catégorie. */
+const ADVICE_LEAD: Record<DuelCategory, MessageKey> = {
+  conversation: 'duel.advice.lead',
+  voice: 'duel.advice.lead',
+  code: 'duel.advice.leadCode',
+  vision: 'duel.vision.advice.lead'
+}
 const ADVICE_MODEL_SAVED = 'jaris.duel.adviceModel'
 const ADVICE_EFFORT_SAVED = 'jaris.duel.adviceEffort'
 
-function VisionAdvice(): JSX.Element {
-  const [advice, setAdvice] = useState<(DuelVisionAdvice & { model: DuelAdviceModel; effort: DuelAdviceEffort }) | null>(null)
+function ClaudeAdvice(): JSX.Element {
+  const [advice, setAdvice] = useState<(DuelAdvice & { model: DuelAdviceModel; effort: DuelAdviceEffort }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   // Étape 477 (Léo : « pouvoir choisir le modèle et l'effort avant de cliquer ») : retenus d'un duel à l'autre.
@@ -1348,7 +1355,7 @@ function VisionAdvice(): JSX.Element {
     setProblem(null)
     const asked = { model, effort }
     window.jaris
-      .duelVisionAdvice(asked.model, asked.effort)
+      .duelAdvice(asked.model, asked.effort)
       .then((result) => setAdvice({ ...result, ...asked }))
       .catch((err) => setProblem(ipcErrorMessage(err)))
       .finally(() => setBusy(false))
@@ -2467,12 +2474,13 @@ export default function DuelPanel(): JSX.Element {
           )}
 
           {/* Étape 476 : la clé Claude, facultative, pour demander son avis sur les deux descriptions avant de voter. */}
-          {category === 'vision' && (
+          {/* Étape 480 : en Code, Vocal et Vision (en Conversation, dans « Qui vote ? » ci-dessous, avec « Moi »). */}
+          {category !== 'conversation' && (
             <section className="duel-home__section duel-judge" aria-labelledby="duel-advice-title">
               <h2 id="duel-advice-title" className="duel-home__label">
                 {t('duel.vision.advice.title')}
               </h2>
-              <p className="duel-home__note">{t('duel.vision.advice.lead')}</p>
+              <p className="duel-home__note">{t(ADVICE_LEAD[category])}</p>
               <JudgeKeyBox status={claudeKey} onChanged={setClaudeKey} />
             </section>
           )}
@@ -2496,6 +2504,13 @@ export default function DuelPanel(): JSX.Element {
                   </button>
                 ))}
               </div>
+              {/* Étape 480 : « Moi » vote, Claude peut quand même donner son avis avant (clé facultative). */}
+              {!judgeMode && (
+                <>
+                  <p className="duel-home__note duel-advice__home-lead">{t(ADVICE_LEAD.conversation)}</p>
+                  <JudgeKeyBox status={claudeKey} onChanged={setClaudeKey} />
+                </>
+              )}
               {judgeMode && (
                 <>
                   <p className="duel-home__note">{t('judge.lead')}</p>
@@ -2952,7 +2967,8 @@ export default function DuelPanel(): JSX.Element {
                       </button>
                     ))}
                   </div>
-                  {view.category === 'vision' && claudeKey?.saved && <VisionAdvice key={`${view.id}-${round.number}`} />}
+                  {/* Étape 480 : l'avis de Claude dans toutes les catégories (Code : après chaque modification aussi). */}
+                  {claudeKey?.saved && <ClaudeAdvice key={`${view.id}-${round.number}-${followUps.length}`} />}
                   {/* Étape 460 : le fichier du duel AVANT de voter (à l'aveugle), pour demander l'avis d'une IA. */}
                   <div className="duel-vote__export">
                     <DuelExportButton key={`${view.id}-${round.number}-${followUps.length}`} category={view.category} />
