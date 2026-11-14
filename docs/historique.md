@@ -12272,3 +12272,13 @@ Léo : « ajoute les séries dans Vision ».
 - Tests (mordent : catégorie oubliée à la reprise ou à la relecture du fichier) : test-duel-session.mjs (série Vision
   complète : images tirées, consigne, aucun outil, fichier sans image, vote ; reprise avec image disparue ; refus sans
   images), test-duel-panel-ui.mjs (choix « Série » en Vision, vignettes, image du duel ouvert). Captures vérifiées.
+
+## Étape 485 — Tableau des modèles : la colonne « Duels Vision » restait vide (v0.68.1)
+
+Capture de Léo (0.67.2, Options → Modèles, tri « Duels Vision ») : « – » partout, alors que les 12 votes Vision étaient
+livrés (qwen3.5:4b : 6 duels). Cause : `duelPointsOf` (hardwareScan.ts) ne parcourait que conversation, code et voix —
+Vision oubliée à l'étape 475 (le choix du modèle Vision et le classement du Duel, eux, utilisaient bien les votes).
+- Correctif : `OVERVIEW_DUEL_CATEGORIES`, un `Record<DuelCategory, true>` — une catégorie ajoutée sans y figurer ne
+  compile plus (pas d'import de valeur de shared/duel dans hardwareScan.ts : les tests le chargent sans TypeScript).
+- Test (test-hardwarescan-duel.mjs, mord sans Vision) : points Vision positifs/négatifs, nombre de duels, autres
+  catégories inchangées, rien pour un modèle sans duel Vision.

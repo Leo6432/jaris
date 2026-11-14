@@ -1602,10 +1602,17 @@ function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAna
   }
 }
 
+/**
+ * Étape 485 : toutes les catégories de duel — un `Record` sur DuelCategory, donc une catégorie ajoutée sans être
+ * listée ici ne compile plus (la Vision avait été oubliée).
+ */
+const OVERVIEW_DUEL_CATEGORIES: Record<DuelCategory, true> = { conversation: true, code: true, voice: true, vision: true }
+
 /** Étape 370 : points de duel par catégorie (votes de la catégorie elle-même, sans le repli Vocal → Conversation). */
 function duelPointsOf(model: string): NonNullable<ModelOverviewEntry['duels']> {
   const out: NonNullable<ModelOverviewEntry['duels']> = {}
-  for (const category of ['conversation', 'code', 'voice'] as const) {
+  // Étape 485 (capture de Léo : colonne « Duels Vision » vide malgré 12 votes Vision) : Vision oubliée à l'étape 475.
+  for (const category of Object.keys(OVERVIEW_DUEL_CATEGORIES) as DuelCategory[]) {
     const standing = duelStandings(category).get(model)
     if (standing && standing.duels > 0) {
       out[category] = { points: Math.log(standing.strength) * DUEL_POINTS_PER_UNIT, duels: standing.duels }

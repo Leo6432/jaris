@@ -330,3 +330,16 @@ test('étape 377 : les modèles sur une autre machine (B300 louée) — SA carte
   const candidates = await scan.getDuelCandidates('conversation', null, away)
   assert.equal(candidates.length, there.filter((m) => m.reason === null).length)
 })
+
+// Étape 485 (capture de Léo : colonne « Duels Vision » du tableau des modèles vide malgré 12 votes Vision).
+test('étape 485 : le tableau des modèles montre les points de duel Vision, comme les autres catégories', async () => {
+  const votes = [...wins(3, 'qwen3.5:4b', 'qwen3-vl:4b', 'vision'), ...wins(2, 'qwen3.5:4b', 'qwen3-vl:4b', 'code')]
+  const entries = new Map((await setup(votes).getModelOverview()).entries.map((e) => [e.model, e]))
+  const winner = entries.get('qwen3.5:4b')
+  const loser = entries.get('qwen3-vl:4b')
+  assert.equal(winner.duels.vision.duels, 3)
+  assert.ok(winner.duels.vision.points > 0, 'gagnant : points positifs')
+  assert.ok(loser.duels.vision.points < 0, 'perdant : points négatifs')
+  assert.equal(winner.duels.code.duels, 2, 'les autres catégories ne changent pas')
+  assert.equal(entries.get('granite4.2:8b')?.duels?.vision, undefined, 'sans duel Vision : rien (« – » à l’écran)')
+})
