@@ -1177,6 +1177,17 @@ function refreshTrayMenu(): void {
 }
 
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
+/**
+ * Étape 476 : les images proposées du Duel Vision, lues ici — l'écran (file:// en production) ne pourrait ni les relire
+ * par fetch ni les redessiner sans « salir » son canevas. Livrées avec l'appli (extraResources). Étape 484 : aussi pour
+ * les séries Vision.
+ */
+async function readVisionSamples(): Promise<PickedImageFile[]> {
+  const folder = join(resourcesRoot(), 'scripts', 'duel-vision')
+  const names = (await readdir(folder)).filter((name) => name.toLowerCase().endsWith('.jpg')).sort()
+  return Promise.all(names.map(async (name) => ({ name, type: 'image/jpeg', base64: (await readFile(join(folder, name))).toString('base64') })))
+}
+
 function broadcast(channel: string, payload?: unknown): void {
   if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
   for (const win of [fullWindow, widgetWindow, splashWindow]) {
@@ -1802,6 +1813,8 @@ app.whenReady().then(async () => {
   onMachineChanged((view) => broadcast(IPC_CHANNELS.machineChanged, view))
   setDuelEnvironment({
     onReminderFire: fireReminder,
+    // Étape 484 : les séries Vision tirent leurs images parmi les images proposées (les mêmes que l'écran).
+    visionSamples: () => readVisionSamples(),
     emit: (view) => broadcast(IPC_CHANNELS.duelChanged, view),
     keepAwake: (on) => {
       if (on && seriesAwake === null) seriesAwake = powerSaveBlocker.start('prevent-app-suspension')
@@ -1909,15 +1922,8 @@ app.whenReady().then(async () => {
     return askDuelImage(image)
   })
   ipcMain.handle(IPC_CHANNELS.duelAdvice, (_event, model: unknown, effort: unknown) => adviseDuel(model, effort))
-  // Étape 476 : les images proposées du Duel Vision, lues ici — l'écran (file:// en production) ne pourrait ni les
-  // relire par fetch ni les redessiner sans « salir » son canevas. Livrées avec l'appli (extraResources).
-  ipcMain.handle(IPC_CHANNELS.duelVisionSamples, async (): Promise<PickedImageFile[]> => {
-    const folder = join(resourcesRoot(), 'scripts', 'duel-vision')
-    const names = (await readdir(folder)).filter((name) => name.toLowerCase().endsWith('.jpg')).sort()
-    return Promise.all(
-      names.map(async (name) => ({ name, type: 'image/jpeg', base64: (await readFile(join(folder, name))).toString('base64') }))
-    )
-  })
+  // Étape 476 : les images proposées du Duel Vision (voir readVisionSamples).
+  ipcMain.handle(IPC_CHANNELS.duelVisionSamples, (): Promise<PickedImageFile[]> => readVisionSamples())
   ipcMain.handle(IPC_CHANNELS.duelRunB, () => {
     cancelMemoryExtraction()
     return runDuelB()

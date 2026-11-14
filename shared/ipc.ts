@@ -1121,6 +1121,8 @@ export interface DuelRoundView {
    * sans rien refaire de l'autre côté. Faux après le vote, après une réponse de Léo, en série ou avec Claude.
    */
   canSwap?: boolean
+  /** Étape 484 : série Vision — le nom de l'image proposée à décrire (l'écran l'affiche depuis duelVisionSamples). */
+  sample?: string
 }
 
 export interface DuelBatchItemView {
@@ -1129,6 +1131,8 @@ export interface DuelBatchItemView {
   a: DuelSideView['status']
   b: DuelSideView['status']
   revealed: { a: string; b: string; outcome: DuelOutcome; voteId?: string } | null
+  /** Étape 484 : série Vision — le nom de l'image proposée. */
+  sample?: string
 }
 
 /** Étape 476 : l'avis de Claude sur les deux descriptions d'un Duel Vision (un conseil, jamais un vote). */

@@ -12251,3 +12251,24 @@ en ligne.
   qwen3-vl:8b) ; Vocal suit maintenant le Chat sur 12-32 Go (granite4.2:8b au lieu de gemma4:e4b) ; Code des petites
   machines : phi4-mini / qwen3-vl:4b → qwen3:1.7b. Machine de Léo (8 Go/32 Go) : seul Vision change (qwen3.8:27b →
   gemma4:26b), et seulement si les votes prouvent qu'il fait mieux que celui en service (règle des duels).
+
+## Étape 484 — Séries de duels en Vision (v0.68.0)
+
+Léo : « ajoute les séries dans Vision ».
+- Comme en Code (étape 382) : « Série (je vote plus tard) » sur l'accueil Vision ; Jaris enchaîne les duels seul,
+  chaque modèle téléchargé juste avant ses duels puis supprimé ; Léo vote quand il veut. Décrire une image n'agit pas
+  sur le PC : rien à surveiller.
+- Images : tirées au hasard parmi les images proposées (étapes 476/479), paquet mélangé (pas deux fois la même tant
+  qu'il en reste) ; consigne fixe du Duel Vision. Lues par le main (`readVisionSamples`, partagé avec l'écran) via
+  `DuelEnvironment.visionSamples`. Sans images → refus clair (`duel.vision.noSamples`).
+- Gardée sur le disque comme une série Code, avec en plus `category` (absent = Code, séries d'avant) et, par duel, le
+  NOM de l'image (jamais l'image : revérifié `^[a-z0-9-]+\.jpg$`). Reprise après redémarrage : images relues par leur
+  nom ; un duel dont l'image a disparu (mise à jour sans elle) est retiré plutôt que lancé sans rien à décrire. Le vote
+  ne garde jamais l'image (seulement la consigne), comme le Duel Vision.
+- Gardien « rien n'avance » : du texte décrit en plus compte comme un progrès (`noteSeriesProgress` dans `runVision`).
+- Écran : liste de la série avec une vignette de l'image et « Décrire cette image » ; duel ouvert : l'image au-dessus
+  des deux descriptions (libellé « Décrire cette image » en série, « Ton image » sinon) ; images lues une fois
+  (`useVisionSampleUrls`, seulement en Vision). 3 textes en 24 langues.
+- Tests (mordent : catégorie oubliée à la reprise ou à la relecture du fichier) : test-duel-session.mjs (série Vision
+  complète : images tirées, consigne, aucun outil, fichier sans image, vote ; reprise avec image disparue ; refus sans
+  images), test-duel-panel-ui.mjs (choix « Série » en Vision, vignettes, image du duel ouvert). Captures vérifiées.

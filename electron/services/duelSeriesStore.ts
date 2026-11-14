@@ -2,7 +2,7 @@ import { mkdir, readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { UNREADABLE_DATA_DIR, readJsonDataFile, writeFileAtomic } from './atomicFile'
 import { getDataRoot } from './dataLocation'
-import { DUEL_SERIES_MAX } from '../../shared/duel'
+import { DUEL_SERIES_MAX, type DuelCategory } from '../../shared/duel'
 
 /**
  * Étape 382 : une série de duels Code tourne toute une nuit, sans Léo. Une mise à jour de Windows qui redémarre le PC,
@@ -35,6 +35,8 @@ export interface SeriesRoundSnapshot {
   number: number
   pair: [string, string]
   prompt: string
+  /** Étape 484 : série Vision — le nom de l'image proposée (jamais l'image). */
+  sample?: string
   a: SeriesSideSnapshot
   b: SeriesSideSnapshot
 }
@@ -54,6 +56,8 @@ export interface SeriesSnapshot {
   dropped: number
   dropReason: string | null
   deleted: number
+  /** Étape 484 : absent dans les séries d'avant (toujours Code). */
+  category?: DuelCategory
   rounds: SeriesRoundSnapshot[]
 }
 
@@ -99,8 +103,12 @@ export function parseSeriesSnapshot(value: unknown): SeriesSnapshot | null {
     const a = parseSide(r.a)
     const b = parseSide(r.b)
     if (!a || !b) return null
-    rounds.push({ number: r.number, pair: [pair[0], pair[1]], prompt: r.prompt, a, b })
+    // Étape 484 : un nom d'image proposée seulement (lettres, chiffres, tirets, .jpg) — jamais un chemin.
+    if (r.sample !== undefined && !(isString(r.sample) && /^[a-z0-9-]+\.jpg$/.test(r.sample))) return null
+    rounds.push({ number: r.number, pair: [pair[0], pair[1]], prompt: r.prompt, ...(isString(r.sample) ? { sample: r.sample } : {}), a, b })
   }
+  // Étape 484 : seules les catégories qui ont des séries ; absent = Code (séries d'avant).
+  if (s.category !== undefined && s.category !== 'code' && s.category !== 'vision') return null
   return {
     format: SERIES_FORMAT,
     version: SERIES_VERSION,
@@ -115,6 +123,7 @@ export function parseSeriesSnapshot(value: unknown): SeriesSnapshot | null {
     dropped: typeof s.dropped === 'number' ? s.dropped : 0,
     dropReason: isString(s.dropReason) ? s.dropReason : null,
     deleted: typeof s.deleted === 'number' ? s.deleted : 0,
+    ...(s.category === 'vision' ? { category: 'vision' as DuelCategory } : {}),
     rounds
   }
 }

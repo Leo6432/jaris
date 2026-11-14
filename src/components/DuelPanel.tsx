@@ -343,6 +343,26 @@ function EndConfirm({ count, busy, onCancel, onConfirm }: { count: number; busy:
   )
 }
 
+/**
+ * Étape 484 : les images proposées (nom → adresse data:), lues une fois par le main, pour les séries Vision : la liste
+ * et le duel ouvert montrent l'image à décrire. Vide tant que `enabled` est faux (rien n'est lu pour les autres duels).
+ */
+function useVisionSampleUrls(enabled: boolean): ReadonlyMap<string, string> {
+  const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map())
+  useEffect(() => {
+    if (!enabled || urls.size) return
+    let alive = true
+    window.jaris
+      .duelVisionSamples()
+      .then((all) => alive && setUrls(new Map(all.map((s) => [s.name, `data:${s.type};base64,${s.base64}`]))))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [enabled, urls.size])
+  return urls
+}
+
 function DuelBatchList({
   batch,
   onOpen,
@@ -357,6 +377,7 @@ function DuelBatchList({
   view: DuelSessionView
 }): JSX.Element {
   const done = batch.filter((item) => ['ready', 'voted'].includes(batchStatus(item))).length
+  const sampleUrls = useVisionSampleUrls(view.category === 'vision')
   return (
     <div className="duel-batch">
       <h1 className="duel-batch__title">{t('duel.batch.title')}</h1>
@@ -373,7 +394,15 @@ function DuelBatchList({
             <li key={item.number}>
               <button type="button" className={`duel-batch__item duel-batch__item--${status}`} onClick={() => onOpen(item.number)} disabled={disabled}>
                 <span className="duel-batch__number">{t('duel.batch.item', { number: item.number })}</span>
-                <span className="duel-batch__prompt">{item.prompt}</span>
+                {item.sample ? (
+                  // Étape 484 : série Vision — l'image à décrire, en vignette (la consigne est la même pour tous).
+                  <span className="duel-batch__prompt duel-batch__prompt--image">
+                    {sampleUrls.get(item.sample) && <img className="duel-batch__thumb" src={sampleUrls.get(item.sample)} alt="" />}
+                    {t('duel.vision.seriesItem')}
+                  </span>
+                ) : (
+                  <span className="duel-batch__prompt">{item.prompt}</span>
+                )}
                 <span className={`duel-batch__status duel-batch__status--${status}`}>
                   {item.revealed
                     ? outcomeLabel({ outcome: item.revealed.outcome, modelA: item.revealed.a, modelB: item.revealed.b })
@@ -1913,6 +1942,8 @@ export default function DuelPanel(): JSX.Element {
   const [prompt, setPrompt] = useState('')
   // Étape 475 : l'image du Duel Vision en cours, montrée au-dessus des deux descriptions (jamais gardée ailleurs).
   const [sentImage, setSentImage] = useState<{ round: number; dataUrl: string } | null>(null)
+  // Étape 484 : les images des séries Vision (lues seulement en Vision).
+  const sampleUrls = useVisionSampleUrls(category === 'vision' || view?.category === 'vision')
   // Étape 401 : la réponse de Léo aux deux modèles, avant de voter.
   const [reply, setReply] = useState('')
   // Étape 450 : en Duel Vocal, le champ texte n'apparaît que si Léo choisit « Écrire plutôt » (micro absent, en panne).
@@ -2117,7 +2148,8 @@ export default function DuelPanel(): JSX.Element {
     void run('start', async () => {
       setEnded(null)
       setDeleted(null)
-      const series = category === 'code' && seriesMode ? perModel : undefined
+      // Étape 484 : séries en Code et en Vision.
+      const series = (category === 'code' || category === 'vision') && seriesMode ? perModel : undefined
       const judged = category === 'conversation' && judgeMode ? perModel : undefined
       const pick = pickMode === 'random' ? size : pickMode === 'fast' ? fastest : pickedNow
       setView(await window.jaris.duelStart(category, pick, series, judged, judged !== undefined && judgeScreens))
@@ -2268,7 +2300,7 @@ export default function DuelPanel(): JSX.Element {
     const remoteDown = Boolean(plan?.remote?.error)
     // Étape 382 : une série ne télécharge qu'un modèle à la fois (supprimé après ses duels) : il suffit que le plus gros
     // tienne sur le disque.
-    const series = category === 'code' && seriesMode
+    const series = (category === 'code' || category === 'vision') && seriesMode
     // Étape 399 : duels Conversation jugés par Claude — même calcul « au moins N duels par modèle » qu'une série.
     const judged = category === 'conversation' && judgeMode
     const seriesCount = manual ? chosenList.length : size
@@ -2403,7 +2435,7 @@ export default function DuelPanel(): JSX.Element {
             )}
           </section>
 
-          {category === 'code' && (
+          {(category === 'code' || category === 'vision') && (
             <section className="duel-home__section" aria-labelledby="duel-series-title">
               <h2 id="duel-series-title" className="duel-home__label">
                 {t('duel.series.title')}
@@ -2424,7 +2456,7 @@ export default function DuelPanel(): JSX.Element {
               </div>
               {seriesMode && (
                 <>
-                  <p className="duel-home__note">{t('duel.series.lead')}</p>
+                  <p className="duel-home__note">{t(category === 'vision' ? 'duel.series.leadVision' : 'duel.series.lead')}</p>
                   <div className="duel-series__count">
                     <span className="duel-series__count-label" id="duel-series-count">
                       {t('duel.series.perModel')}
@@ -2851,9 +2883,13 @@ export default function DuelPanel(): JSX.Element {
                 <>
                 {view.category === 'vision' ? (
                   <div className="duel-round__prompt duel-round__prompt--image">
-                    <span className="duel-round__prompt-label">{t('duel.vision.yourImage')}</span>
+                    {/* Étape 484 : en série, l'image vient des images proposées, pas de Léo. */}
+                    <span className="duel-round__prompt-label">{t(round.sample ? 'duel.vision.seriesItem' : 'duel.vision.yourImage')}</span>
                     {sentImage?.round === round.number ? (
                       <img className="duel-round__image" src={sentImage.dataUrl} alt={t('duel.vision.yourImage')} />
+                    ) : round.sample && sampleUrls.get(round.sample) ? (
+                      // Étape 484 : série Vision — l'image proposée que les deux modèles décrivent.
+                      <img className="duel-round__image" src={sampleUrls.get(round.sample)} alt={t('duel.vision.yourImage')} />
                     ) : (
                       <p>{t('duel.vision.asked')}</p>
                     )}

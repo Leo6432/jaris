@@ -8558,6 +8558,23 @@ ul.reply-list--nested {
   flex-wrap: wrap;
 }
 
+/* Étape 484 : série Vision — l'image à décrire en vignette dans la liste des duels. */
+.duel-batch__prompt--image {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.duel-batch__thumb {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--hud-line);
+}
+
 /* Étape 476 : images proposées sous la zone de dépôt (4 à la fois, « Autres images »). */
 .duel-vision-samples {
   display: flex;

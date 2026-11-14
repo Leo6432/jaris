@@ -187,6 +187,8 @@ interface RoundState {
    * jamais écrite avec le vote (elle peut être personnelle), seule la consigne l'est. Absente hors Duel Vision.
    */
   image?: string | null
+  /** Étape 484 : série Vision — le nom de l'image proposée (scripts/duel-vision), pour la retrouver et l'afficher. */
+  sample?: string | null
 }
 
 /**
@@ -307,6 +309,8 @@ export interface DuelEnvironment {
    * modèles ont vraiment fait. `null` si la capture échoue : le vote se fait alors sans elle.
    */
   captureScreen?: () => Promise<string | null>
+  /** Étape 484 : les images proposées du Duel Vision (nom et JPEG en base64), pour les séries Vision. */
+  visionSamples?: () => Promise<{ name: string; base64: string }[]>
 }
 
 let environment: DuelEnvironment = { onReminderFire: () => {}, emit: () => {} }
@@ -394,7 +398,8 @@ export function getDuelView(): DuelSessionView | null {
           b: sideView(round.sides.b),
           revealed: round.revealed,
           together: round.together,
-          canSwap: swapCandidates(session, round).length > 0 && swapAllowed(session, round)
+          canSwap: swapCandidates(session, round).length > 0 && swapAllowed(session, round),
+          ...(round.sample ? { sample: round.sample } : {})
         }
       : null,
     batch: session.batch
@@ -403,7 +408,8 @@ export function getDuelView(): DuelSessionView | null {
           prompt: r.prompt ?? '',
           a: r.sides.a.status,
           b: r.sides.b.status,
-          revealed: r.revealed
+          revealed: r.revealed,
+          ...(r.sample ? { sample: r.sample } : {})
         }))
       : null,
     series: session.series
@@ -587,9 +593,15 @@ export async function startDuel(
     if (!(await loadClaudeKey())) throw new Error(t('judge.error.noKey'))
   }
   // Étape 382 : une série de duels (Code seulement, comme la file de l'étape 381 : les modèles n'agissent pas sur le PC).
+  // Étape 484 (Léo : « ajoute les séries dans Vision ») : Vision aussi — décrire une image n'agit pas sur le PC non plus.
+  let samples: { name: string; base64: string }[] = []
   if (seriesPerModel !== undefined) {
-    if (category !== 'code') throw new Error(t('duel.error.batchCodeOnly'))
+    if (category !== 'code' && category !== 'vision') throw new Error(t('duel.error.batchCodeOnly'))
     if (!isDuelSeriesCount(seriesPerModel)) throw new Error(t('duel.error.badRequest'))
+    if (category === 'vision') {
+      samples = (await environment.visionSamples?.().catch(() => [])) ?? []
+      if (!samples.length) throw new Error(t('duel.vision.noSamples'))
+    }
   }
   const profile = await getProfile()
   const away = await remoteMachine()
@@ -614,7 +626,7 @@ export async function startDuel(
   const shuffled = [...chosen].sort(() => Math.random() - 0.5)
   // Étape 384 : les duels déjà votés comptent (votes de ce PC et votes livrés avec Jaris).
   const seriesPlan =
-    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), 'code'), countDuelPairs(getAllDuelVotes(), 'code'))
+    seriesPerModel === undefined ? null : planDuelSeries(shuffled, seriesPerModel, Math.random, countDuelsByModel(getAllDuelVotes(), category), countDuelPairs(getAllDuelVotes(), category))
   if (seriesPlan && !seriesPlan.length) throw new Error(tn('duel.series.allDone', seriesPerModel as number))
   // Étape 399 : chaque modèle fait au moins N duels, en comptant les votes déjà faits ET ceux de Claude encore à vérifier.
   const judgePlan =
@@ -681,7 +693,7 @@ export async function startDuel(
       tools: null,
       together: false
     }))
-    assignSeriesPrompts(current.batch)
+    assignSeriesPrompts(current.batch, category, samples)
     current.series = newSeriesState(Date.now(), seriesPerModel)
     emitNow()
     persistSeries(current)
@@ -1237,7 +1249,31 @@ async function refreshSeriesPlacement(current: Session, series: SeriesState): Pr
 }
 
 /** Les demandes de la série : des applications tirées au hasard dans la liste d'idées, toutes vues avant qu'une revienne. */
-function assignSeriesPrompts(rounds: RoundState[], random: () => number = Math.random): void {
+function assignSeriesPrompts(
+  rounds: RoundState[],
+  category: DuelCategory = 'code',
+  samples: readonly { name: string; base64: string }[] = [],
+  random: () => number = Math.random
+): void {
+  // Étape 484 : série Vision — une image proposée tirée au hasard par duel (paquet mélangé, comme les idées du Code :
+  // pas deux fois la même tant qu'il en reste), et la consigne fixe du Duel Vision.
+  if (category === 'vision') {
+    let pile: { name: string; base64: string }[] = []
+    for (const round of rounds) {
+      if (!pile.length) {
+        pile = [...samples]
+        for (let i = pile.length - 1; i > 0; i--) {
+          const j = Math.floor(random() * (i + 1))
+          ;[pile[i], pile[j]] = [pile[j], pile[i]]
+        }
+      }
+      const sample = pile.pop() as { name: string; base64: string }
+      round.prompt = DUEL_VISION_ASK
+      round.image = sample.base64
+      round.sample = sample.name
+    }
+    return
+  }
   let deck: number[] = []
   for (const round of rounds) {
     if (!deck.length) {
@@ -1510,9 +1546,12 @@ function seriesSnapshot(current: Session, series: SeriesState): SeriesSnapshot {
     dropped: current.dropped,
     dropReason: current.dropReason,
     deleted: series.deleted,
+    // Étape 484 : la catégorie (absente avant : une série était toujours Code) et, en Vision, le NOM de l'image
+    // proposée — jamais l'image elle-même, relue au lancement suivant.
+    category: current.category,
     rounds: (current.batch ?? [])
       .filter((r) => !r.revealed)
-      .map((r) => ({ number: r.number, pair: r.pair, prompt: r.prompt ?? '', a: side(r.sides.a), b: side(r.sides.b) }))
+      .map((r) => ({ number: r.number, pair: r.pair, prompt: r.prompt ?? '', ...(r.sample ? { sample: r.sample } : {}), a: side(r.sides.a), b: side(r.sides.b) }))
   }
 }
 
@@ -1552,8 +1591,14 @@ export async function restoreDuelSeries(): Promise<boolean> {
       previewUrl: html ? createGeneratedAppPreview(html) : null
     }
   }
+  const category: DuelCategory = snapshot.category ?? 'code'
+  // Étape 484 : série Vision — les images proposées relues par leur nom ; un duel dont l'image a disparu (Jaris mis à
+  // jour sans elle) est retiré plutôt que lancé sans rien à décrire.
+  const images = category === 'vision' ? new Map(((await environment.visionSamples?.().catch(() => [])) ?? []).map((s) => [s.name, s.base64])) : null
   const rounds: RoundState[] = []
   for (const r of snapshot.rounds) {
+    const image = images && r.sample ? images.get(r.sample) ?? null : null
+    if (images && !image) continue
     rounds.push({
       number: r.number,
       pair: r.pair,
@@ -1562,8 +1607,13 @@ export async function restoreDuelSeries(): Promise<boolean> {
       sides: { a: await restoreSide(r.number, 'a', r.a), b: await restoreSide(r.number, 'b', r.b) },
       revealed: null,
       tools: null,
-      together: false
+      together: false,
+      ...(images ? { image, sample: r.sample ?? null } : {})
     })
+  }
+  if (!rounds.length) {
+    await clearSeries().catch(() => {})
+    return false
   }
   if (session) return false
   const series = newSeriesState(snapshot.createdAt, snapshot.perModel)
@@ -1573,7 +1623,7 @@ export async function restoreDuelSeries(): Promise<boolean> {
     remote: snapshot.remote ? { host: snapshot.remote.host, machine: { vramGb: snapshot.remote.vramGb, ramGb: snapshot.remote.ramGb, ollamaVersion: null } } : null,
     vramGb: snapshot.vramGb,
     sizes: new Map(Object.entries(snapshot.sizes)),
-    category: 'code',
+    category,
     phase: 'ready',
     models: snapshot.models,
     downloaded: new Map(Object.entries(snapshot.downloaded)),
@@ -1780,6 +1830,8 @@ async function runVision(side: SideState, model: string, image: string, think: T
       streamed += delta
       side.text = streamed
       side.activity = { kind: 'writing' }
+      // Étape 484 : en série Vision, du texte en plus est un vrai progrès (gardien « rien n'avance », étape 457).
+      noteSeriesProgress()
       emitSoon()
     }
   )

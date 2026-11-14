@@ -157,7 +157,7 @@ window.jaris = {
     const batch = window.__view.batch
     const item = batch.find((b) => b.number === number)
     const done = side({ status: 'done', text: 'Fini', durationMs: 4000, previewUrl: 'data:text/html,<p>app</p>' })
-    return (window.__view = { ...ready({ number, prompt: item.prompt, a: done, b: done, revealed: null, together: false }), batch })
+    return (window.__view = { ...ready({ number, prompt: item.prompt, a: done, b: done, revealed: null, together: false, ...(item.sample ? { sample: item.sample } : {}) }), batch })
   },
   duelBatchClose: async () => {
     window.__calls.push('batchClose')
@@ -1764,4 +1764,35 @@ test('étape 480 : la clé Claude (facultative) sur l’accueil de chaque catég
     await page.waitForFunction(() => /laquelle des deux réponses/.test(document.querySelector('.duel-judge')?.textContent ?? ''))
     assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
   })
+})
+
+// Étape 484 (Léo : « ajoute les séries dans Vision »).
+test('étape 484 : série Vision — « Série (je vote plus tard) » en Vision, vignettes dans la liste, image dans le duel ouvert', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-category')
+    await page.click('.duel-category:has-text("Vision")')
+    await page.waitForSelector('#duel-series-title')
+    await page.click('.duel-series__mode .duel-size:has-text("Série")')
+    assert.match(await page.textContent('.duel-home__section:has(#duel-series-title)'), /images tirées au hasard parmi les images proposées/)
+    await page.click('.duel-home__start, button:has-text("Lancer la série")')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'start' && c[1] === 'vision'))
+    const call = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'start' && c[1] === 'vision')
+    assert.equal(typeof call[3], 'number', 'une série : le nombre de duels par modèle part avec la demande')
+  })
+  // La liste de la série et un duel ouvert.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-batch__thumb')
+      const thumbs = await page.locator('.duel-batch__thumb').evaluateAll((imgs) => imgs.map((img) => img.getAttribute('src')))
+      assert.equal(thumbs.length, 2)
+      for (const src of thumbs) assert.match(src, /^data:image\/jpeg;base64,\/9j\//)
+      assert.equal(await page.locator('.duel-batch__prompt--image').first().textContent(), 'Décrire cette image')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/serie-vision-liste.png` })
+      await page.locator('.duel-batch__item').first().click()
+      await page.waitForSelector('.duel-round__image')
+      assert.equal(await page.getAttribute('.duel-round__image', 'src'), thumbs[0], 'l’image que les deux modèles ont décrite')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/serie-vision-duel.png` })
+    },
+    `window.__samples = ${JSON.stringify(SAMPLES.slice(0, 2))}; window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: null, series: { perModel: 2, download: null, waiting: null, deleted: 0, active: true }, batch: [{ number: 1, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[0].name)}, a: 'done', b: 'done', revealed: null }, { number: 2, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[1].name)}, a: 'running', b: 'idle', revealed: null }] };`
+  )
 })

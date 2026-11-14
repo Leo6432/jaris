@@ -93,7 +93,7 @@ function newSeriesStore() {
   return store
 }
 
-function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [], judge = null } = {}) {
+function setup({ installed = [], failPull = [], category = 'conversation', profile: initialProfile, converseImpl, ttsFails = false, blind = false, repairs = true, canDraw = true, vramGb = 8, generateGate = null, seriesStore = newSeriesStore(), freeDiskGb = 100, sizes = null, generateImpl = null, podDiskGb = null, priorVotes = [], judge = null, visionSamples = null } = {}) {
   const calls = { pulls: [], converse: [], generate: [], deleted: [], patches: [], speech: [], drawChecks: 0, awake: [], active: new Map(), mostModels: 0, pulled: [], vision: [] }
   let ollamaDown = false
   const votes = [...priorVotes]
@@ -317,6 +317,8 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     onReminderFire: () => {},
     emit: (view) => emitted.push(JSON.parse(JSON.stringify(view))),
     keepAwake: (on) => calls.awake.push(on),
+    // Étape 484 : les images proposées des séries Vision.
+    ...(visionSamples ? { visionSamples: async () => visionSamples } : {}),
     // Étape 399 : chaque capture rend une image numérotée, et dit ce que faisait le duel à ce moment-là.
     ...(judge?.screens
       ? {
@@ -1530,6 +1532,74 @@ test('étape 382 : « model not found » — le modèle est retéléchargé et l
   await waitFor(() => seriesDone(env), 'la série a fini de tourner')
   assert.ok(failed)
   assert.equal(env.session.getDuelView().batch.filter((r) => r.a === 'error' || r.b === 'error').length, 0)
+})
+
+// Étape 484 (Léo : « ajoute les séries dans Vision »).
+const SAMPLES = [
+  { name: 'chat-egyptien.jpg', base64: 'SU1HMQ==' },
+  { name: 'iris.jpg', base64: 'SU1HMg==' },
+  { name: 'meteo.jpg', base64: 'SU1HMw==' }
+]
+const VISION_PROFILE = { name: 'Léo', models: { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' }, visionModel: 'alpha-model:3b' }
+
+test('étape 484 : série Vision — chaque duel décrit une image proposée tirée au hasard, gardée par son NOM', async () => {
+  const store = newSeriesStore()
+  const env = setup({ installed: MODELS, profile: VISION_PROFILE, seriesStore: store, visionSamples: SAMPLES })
+  env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const started = await env.session.startDuel('vision', 4, 2)
+  assert.equal(started.category, 'vision')
+  assert.ok(started.batch.length >= 4)
+  for (const item of started.batch) assert.ok(SAMPLES.some((s) => s.name === item.sample), `image proposée : ${item.sample}`)
+  // Paquet mélangé : les 3 images sortent avant qu'une revienne.
+  assert.equal(new Set(started.batch.slice(0, 3).map((item) => item.sample)).size, 3)
+  await waitFor(() => seriesDone(env), 'la série Vision a fini de tourner')
+  // Chaque modèle a décrit l'image de SON duel, avec la consigne fixe, sans outil.
+  assert.equal(env.calls.vision.length, started.batch.length * 2)
+  for (const call of env.calls.vision) {
+    assert.equal(call.messages.at(-1).content, 'Décris cette image.')
+    assert.ok(SAMPLES.some((s) => call.messages.at(-1).images[0] === s.base64))
+    assert.equal(call.tools, undefined)
+  }
+  assert.equal(env.calls.converse.length, 0)
+  // Gardée sur le disque : la catégorie et le nom de l'image, jamais l'image.
+  assert.equal(store.snapshot.category, 'vision')
+  assert.ok(store.snapshot.rounds.every((r) => SAMPLES.some((s) => s.name === r.sample)))
+  assert.ok(!store.json.includes('SU1H'), 'aucune image dans le fichier de la série')
+  // Le duel ouvert dit quelle image afficher ; le vote marche comme en Code.
+  const first = env.session.getDuelView().batch[0]
+  env.session.openBatchRound(first.number)
+  assert.equal(env.session.getDuelView().round.sample, first.sample)
+  await env.session.voteDuel('a')
+  assert.equal(env.votes.at(-1).category, 'vision')
+  assert.equal(JSON.stringify(env.votes).includes('SU1H'), false, 'l’image n’est jamais gardée avec le vote')
+})
+
+test('étape 484 : série Vision reprise après un redémarrage — images relues par leur nom ; sans image, le duel est retiré', async () => {
+  const store = newSeriesStore()
+  const first = setup({ installed: MODELS, profile: VISION_PROFILE, seriesStore: store, visionSamples: SAMPLES })
+  first.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  const started = await first.session.startDuel('vision', 4, 2)
+  first.session.abortDuel()
+  await waitFor(() => !first.session.getDuelView().series?.active, 'série arrêtée')
+  const saved = store.snapshot
+  // Jaris mis à jour sans l'image « iris.jpg » : ses duels sont retirés, les autres reprennent avec la bonne image.
+  const kept = SAMPLES.filter((s) => s.name !== 'iris.jpg')
+  const second = setup({ installed: MODELS, profile: VISION_PROFILE, seriesStore: store, visionSamples: kept })
+  second.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+  assert.equal(await second.session.restoreDuelSeries(), true)
+  const restored = second.session.getDuelView()
+  assert.equal(restored.category, 'vision')
+  assert.equal(restored.batch.length, saved.rounds.filter((r) => r.sample !== 'iris.jpg').length)
+  await waitFor(() => seriesDone(second), 'la série reprise a fini')
+  for (const call of second.calls.vision) assert.ok(kept.some((s) => call.messages.at(-1).images[0] === s.base64))
+  assert.ok(started.batch.length >= restored.batch.length)
+})
+
+test('étape 484 : série Vision sans images proposées — refusée avec une phrase claire ; Conversation toujours refusée', async () => {
+  const env = setup({ installed: MODELS, profile: VISION_PROFILE, visionSamples: [] })
+  await assert.rejects(() => env.session.startDuel('vision', 4, 2), /images proposées sont introuvables/)
+  const chat = setup({ installed: MODELS })
+  await assert.rejects(() => chat.session.startDuel('conversation', 4, 2), /seulement en Code/)
 })
 
 test('étape 382 : Jaris fermé en pleine série, puis rouvert — les duels finis attendent le vote, les autres reprennent', async () => {
