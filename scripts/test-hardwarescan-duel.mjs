@@ -343,3 +343,12 @@ test('étape 485 : le tableau des modèles montre les points de duel Vision, com
   assert.equal(winner.duels.code.duels, 2, 'les autres catégories ne changent pas')
   assert.equal(entries.get('granite4.2:8b')?.duels?.vision, undefined, 'sans duel Vision : rien (« – » à l’écran)')
 })
+
+// Étape 486 (Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout »).
+test('étape 486 : le nombre de duels votés par catégorie — chaque duel compté une fois, pas deux', async () => {
+  const votes = [...wins(3, 'qwen3.5:4b', 'qwen3-vl:4b', 'vision'), ...wins(2, 'qwen3.5:4b', 'gemma4:e4b', 'code'), ...wins(1, 'gemma4:e4b', 'qwen3.5:4b', 'code')]
+  // Copie JSON : l'objet vient d'un autre contexte (vm), que deepEqual ne compare pas directement.
+  const plain = async (v) => JSON.parse(JSON.stringify((await setup(v).getModelOverview()).duelTotals))
+  assert.deepEqual(await plain(votes), { conversation: 0, code: 3, voice: 0, vision: 3 })
+  assert.deepEqual(await plain([]), { conversation: 0, code: 0, voice: 0, vision: 0 })
+})

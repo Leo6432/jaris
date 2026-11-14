@@ -8558,6 +8558,13 @@ ul.reply-list--nested {
   flex-wrap: wrap;
 }
 
+/* Étape 486 : sous le tableau des modèles, le nombre de duels votés par catégorie et en tout. */
+.options-menu__duel-totals {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
 /* Étape 484 : série Vision — l'image à décrire en vignette dans la liste des duels. */
 .duel-batch__prompt--image {
   display: flex;

@@ -657,6 +657,7 @@
   "models.sort.duelCode": "Dueļi Kods",
   "models.sort.duelVoice": "Dueļi Balss",
   "models.sort.duelVision": "Redzes dueļi",
+  "models.duelTotals": "Nobalsotie dueļi — Kods: {code} · Redze: {vision} · Saruna: {conversation} · Balss: {voice} · Kopā: {total}",
   "models.col.duel.title": "Tavu dueļu punkti šajā kategorijā: katrs modelis sāk no 0, un balsis to paceļ vai nolaiž. “—”: nekad nav bijis duelī.",
   "models.duel.count": "Dueļi: {count}",
   "models.duel.reliability": "Jo vairāk dueļu, jo drošāks vērtējums: sarkans = ļoti maz dueļu, zaļš = uzticams vērtējums (dueļu skaits: no {reliable}).",

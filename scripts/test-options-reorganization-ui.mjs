@@ -134,6 +134,8 @@ const overrides = {
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
+    // Étape 486 : le nombre de duels votés, sous le tableau.
+    duelTotals: { conversation: 8, code: 64, voice: 5, vision: 12 },
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
       { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', toolScores: { conversation: '6/6', vision: '30/34', code: '4/5' }, demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
@@ -1166,5 +1168,25 @@ test('Classement : titres et valeurs des colonnes chiffrées centrés l’un sou
       assert.ok(Math.abs(c.value - c.cell) <= 3, `${c.name} : valeur décalée dans sa colonne (${c.value} pour un centre à ${c.cell})`)
       assert.ok(Math.abs(c.title - c.cell) <= 3, `${c.name} : titre décalé dans sa colonne (${c.title} pour un centre à ${c.cell})`)
     }
+  })
+})
+
+// Étape 486 (Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout »).
+test('étape 486 : sous le tableau des modèles, le nombre de duels votés par catégorie et en tout', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-menu__duel-totals')
+    assert.equal(
+      (await page.textContent('.options-menu__duel-totals')).replace(/ /g, ' '),
+      'Duels votés — Code : 64 · Vision : 12 · Conversation : 8 · Vocal : 5 · En tout : 89'
+    )
+    // Sous le tableau, pas au-dessus.
+    const below = await page.evaluate(() => {
+      const table = document.querySelector('.options-page--models .options-menu__model-overview').getBoundingClientRect()
+      return document.querySelector('.options-menu__duel-totals').getBoundingClientRect().top >= table.bottom
+    })
+    assert.equal(below, true)
+    await page.locator('.options-menu__duel-totals').scrollIntoViewIfNeeded()
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/totaux-duels.png` })
   })
 })

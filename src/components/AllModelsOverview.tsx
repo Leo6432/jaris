@@ -469,6 +469,20 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                       </div>
                     </div>
                   )}
+                  {overview?.duelTotals && (
+                    // Étape 486 : sous le tableau, le nombre de duels votés par catégorie et en tout.
+                    <p className="options-menu__duel-totals" role="status">
+                      {t('models.duelTotals', {
+                        code: formatDecimal(overview.duelTotals.code),
+                        vision: formatDecimal(overview.duelTotals.vision),
+                        conversation: formatDecimal(overview.duelTotals.conversation),
+                        voice: formatDecimal(overview.duelTotals.voice),
+                        total: formatDecimal(
+                          overview.duelTotals.code + overview.duelTotals.vision + overview.duelTotals.conversation + overview.duelTotals.voice
+                        )
+                      })}
+                    </p>
+                  )}
                 </div>
               </section>
             </div>

@@ -657,6 +657,7 @@
   "models.sort.duelCode": "Dvoboji Kod",
   "models.sort.duelVoice": "Dvoboji Glas",
   "models.sort.duelVision": "Dvoboji Vid",
+  "models.duelTotals": "Izglasani dvoboji — Kod: {code} · Vid: {vision} · Razgovor: {conversation} · Glas: {voice} · Ukupno: {total}",
   "models.col.duel.title": "Bodovi iz tvojih dvoboja u ovoj kategoriji: svaki model počinje od 0, a glasovi ga podižu ili spuštaju. „—”: nikad u dvoboju.",
   "models.duel.count": "Dvoboji: {count}",
   "models.duel.reliability": "Što je više dvoboja, to je ocjena sigurnija: crveno = vrlo malo dvoboja, zeleno = pouzdana ocjena (broj dvoboja: od {reliable}).",

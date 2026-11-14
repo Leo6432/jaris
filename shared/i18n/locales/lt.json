@@ -657,6 +657,7 @@
   "models.sort.duelCode": "Dvikovos Kodas",
   "models.sort.duelVoice": "Dvikovos Balsas",
   "models.sort.duelVision": "Regos dvikovos",
+  "models.duelTotals": "Įvertintos dvikovos — Kodas: {code} · Rega: {vision} · Pokalbis: {conversation} · Balsas: {voice} · Iš viso: {total}",
   "models.col.duel.title": "Tavo dvikovų taškai šioje kategorijoje: kiekvienas modelis pradeda nuo 0, o balsai jį pakelia arba nuleidžia. „—“: niekada nedalyvavo dvikovoje.",
   "models.duel.count": "Dvikovos: {count}",
   "models.duel.reliability": "Kuo daugiau dvikovų, tuo patikimesnis įvertinimas: raudona = labai mažai dvikovų, žalia = patikimas įvertinimas (dvikovų: nuo {reliable}).",

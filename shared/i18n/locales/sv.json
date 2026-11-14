@@ -647,6 +647,7 @@
   "models.sort.duelCode": "Dueller Kod",
   "models.sort.duelVoice": "Dueller Röst",
   "models.sort.duelVision": "Dueller Syn",
+  "models.duelTotals": "Röstade dueller — Kod: {code} · Syn: {vision} · Samtal: {conversation} · Röst: {voice} · Totalt: {total}",
   "models.col.duel.title": "Poäng från dina dueller i den här kategorin: varje modell börjar på 0 och rösterna får den att stiga eller sjunka. ”—”: aldrig i en duell.",
   "models.duel.count": "Dueller: {count}",
   "models.duel.reliability": "Ju fler dueller, desto säkrare poäng: rött = mycket få dueller, grönt = tillförlitlig poäng (från {reliable} dueller).",

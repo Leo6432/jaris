@@ -647,6 +647,7 @@
   "models.sort.duelCode": "Duellid Kood",
   "models.sort.duelVoice": "Duellid Hääl",
   "models.sort.duelVision": "Nägemise duellid",
+  "models.duelTotals": "Hääletatud duellid — Kood: {code} · Nägemine: {vision} · Vestlus: {conversation} · Hääl: {voice} · Kokku: {total}",
   "models.col.duel.title": "Sinu duellide punktid selles kategoorias: iga mudel alustab nullist ja hääled tõstavad või langetavad seda. „—“: pole kunagi duellis olnud.",
   "models.duel.count": "Duellid: {count}",
   "models.duel.reliability": "Mida rohkem duelle, seda kindlam hinne: punane = väga vähe duelle, roheline = usaldusväärne hinne (alates {reliable} duellist).",

@@ -1923,7 +1923,14 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
       ...publishedScores(c.model)
     }))
 
-  return { vramGb, entries, codeModel: picks.code.model }
+  // Étape 486 : chaque duel compte dans le total de ses DEUX modèles — la somme divisée par deux est le nombre de duels.
+  const duelTotals = Object.fromEntries(
+    (Object.keys(OVERVIEW_DUEL_CATEGORIES) as DuelCategory[]).map((category) => [
+      category,
+      Math.round([...duelStandings(category).values()].reduce((sum, standing) => sum + standing.duels, 0) / 2)
+    ])
+  ) as Record<DuelCategory, number>
+  return { vramGb, entries, codeModel: picks.code.model, duelTotals }
 }
 
 /**

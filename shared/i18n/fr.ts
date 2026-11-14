@@ -657,6 +657,7 @@ export const fr = {
   "models.sort.duelCode": "Duels Code",
   "models.sort.duelVoice": "Duels Vocal",
   "models.sort.duelVision": "Duels Vision",
+  "models.duelTotals": "Duels votés — Code : {code} · Vision : {vision} · Conversation : {conversation} · Vocal : {voice} · En tout : {total}",
   "models.col.duel.title": "Points de tes duels dans cette catégorie : chaque modèle part de 0, les votes le font monter ou descendre. « — » : jamais passé en duel.",
   "models.duel.count": "Duels : {count}",
   "models.duel.reliability": "Plus il y a de duels, plus la note est sûre : rouge = très peu de duels, vert = note sûre (à partir de {reliable} duels).",

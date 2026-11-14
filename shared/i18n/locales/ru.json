@@ -667,6 +667,7 @@
   "models.sort.duelCode": "Дуэли Код",
   "models.sort.duelVoice": "Дуэли Голос",
   "models.sort.duelVision": "Дуэли Зрение",
+  "models.duelTotals": "Оценённые поединки — Код: {code} · Зрение: {vision} · Разговор: {conversation} · Голос: {voice} · Всего: {total}",
   "models.col.duel.title": "Очки из твоих дуэлей в этой категории: каждая модель начинает с 0, а голоса поднимают или опускают её. «—»: ни разу не участвовала в дуэли.",
   "models.duel.count": "Дуэли: {count}",
   "models.duel.reliability": "Чем больше дуэлей, тем надёжнее оценка: красный = очень мало дуэлей, зелёный = надёжная оценка (число дуэлей: от {reliable}).",

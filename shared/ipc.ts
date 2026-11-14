@@ -559,6 +559,11 @@ export interface ModelOverviewResult {
    * hardwareScan.ts) si aucun choix explicite n'est enregistré dans le profil — toujours défini, jamais null.
    */
   codeModel: string
+  /**
+   * Étape 486 (Léo : « mets en bas tous les duels de Code, tous les duels de Vision, et tous les duels en tout ») :
+   * le nombre de duels votés par catégorie (chacun compté une fois, même si deux modèles y ont participé).
+   */
+  duelTotals?: Record<DuelCategory, number>
 }
 
 /**

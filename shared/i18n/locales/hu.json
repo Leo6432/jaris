@@ -647,6 +647,7 @@
   "models.sort.duelCode": "Párbajok Kód",
   "models.sort.duelVoice": "Párbajok Hang",
   "models.sort.duelVision": "Látás párbajok",
+  "models.duelTotals": "Megszavazott párbajok — Kód: {code} · Látás: {vision} · Beszélgetés: {conversation} · Hang: {voice} · Összesen: {total}",
   "models.col.duel.title": "A párbajaidból szerzett pontok ebben a kategóriában: minden modell 0-ról indul, a szavazatok felfelé vagy lefelé viszik. „—”: még nem volt párbajban.",
   "models.duel.count": "Párbajok: {count}",
   "models.duel.reliability": "Minél több párbaj, annál biztosabb a pontszám: piros = nagyon kevés párbaj, zöld = megbízható pontszám (párbajok száma: legalább {reliable}).",
