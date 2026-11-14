@@ -196,7 +196,7 @@ const api = {
   getImageStudioStatus: (): Promise<ImageStudioStatus> => invoke(IPC_CHANNELS.getImageStudioStatus),
   installImageStudio: (): Promise<void> => invoke(IPC_CHANNELS.installImageStudio),
   onImageStudioLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.imageStudioLog, cb),
-  generateStudioImage: (prompt: string): Promise<GeneratedImageSummary> => invoke(IPC_CHANNELS.generateStudioImage, prompt),
+  generateStudioImage: (prompt: string, reference?: string): Promise<GeneratedImageSummary> => invoke(IPC_CHANNELS.generateStudioImage, prompt, reference),
   cancelStudioImage: (): void => ipcRenderer.send(IPC_CHANNELS.cancelStudioImage),
   listGeneratedImages: (): Promise<GeneratedImageSummary[]> => invoke(IPC_CHANNELS.listGeneratedImages),
   readGeneratedImage: (fileName: string): Promise<string | null> => invoke(IPC_CHANNELS.readGeneratedImage, fileName),

@@ -164,7 +164,7 @@ declare global {
       getImageStudioStatus: () => Promise<ImageStudioStatus>
       installImageStudio: () => Promise<void>
       onImageStudioLog: (cb: (message: string) => void) => () => void
-      generateStudioImage: (prompt: string) => Promise<GeneratedImageSummary>
+      generateStudioImage: (prompt: string, reference?: string) => Promise<GeneratedImageSummary>
       cancelStudioImage: () => void
       listGeneratedImages: () => Promise<GeneratedImageSummary[]>
       readGeneratedImage: (fileName: string) => Promise<string | null>

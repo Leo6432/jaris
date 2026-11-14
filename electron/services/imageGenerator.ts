@@ -1,7 +1,8 @@
 import { execFile, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { createReadStream, existsSync } from 'fs'
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
@@ -119,15 +120,37 @@ export interface SdArgsInput {
   seed: number
   /** Décodage de l'image sur le processeur (étape 345 : seulement si la carte graphique y a échoué). */
   decodeOnCpu?: boolean
+  /** Étape 478 : chemin de l'image de départ (dessiner à partir d'une image). */
+  reference?: string
+}
+
+/** Étape 478 : une image de départ de 15 Mo au plus (base64), une vraie image JPEG ou PNG. */
+const REFERENCE_MAX_CHARS = 20_000_000
+
+/**
+ * L'image de départ venue de l'écran ou du Chat, revérifiée ici : du base64 seulement (jamais un chemin), une taille
+ * bornée, et les premiers octets d'un JPEG ou d'un PNG (ce que sd-cli sait lire). Renvoie les octets, ou lève.
+ */
+export function referenceImageBytes(base64: unknown): { bytes: Buffer; extension: 'jpg' | 'png' } {
+  if (typeof base64 !== 'string' || !base64 || base64.length > REFERENCE_MAX_CHARS || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+    throw new Error(t('image.badReference'))
+  }
+  const bytes = Buffer.from(base64, 'base64')
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { bytes, extension: 'jpg' }
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { bytes, extension: 'png' }
+  throw new Error(t('image.badReference'))
 }
 
 /** Ligne de commande de sd-cli pour FLUX.2 klein, telle que documentée par sd.cpp (docs/flux2.md). */
-export function buildSdArgs({ models, prompt, output, seed, decodeOnCpu = false }: SdArgsInput): string[] {
+export function buildSdArgs({ models, prompt, output, seed, decodeOnCpu = false, reference }: SdArgsInput): string[] {
   return [
     '--diffusion-model', models.diffusion,
     '--vae', models.vae,
     '--llm', models.llm,
     '-p', prompt,
+    // Étape 478 : dessiner à partir d'une image — exactement l'exemple « edit » de FLUX.2 klein dans docs/flux2.md de
+    // sd.cpp (version épinglée SD_TAG) : `-r <image>` et l'échantillonneur euler.
+    ...(reference ? ['-r', reference, '--sampling-method', 'euler'] : []),
     '--cfg-scale', '1.0',
     '--steps', String(IMAGE_STEPS),
     '-W', String(IMAGE_SIZE),
@@ -543,10 +566,18 @@ export async function imageDrawingAvailable(): Promise<boolean> {
   return isImageModelInstalled()
 }
 
-export async function generateImage(prompt: string, onLog: Log = () => {}, signal?: AbortSignal, translate?: PromptTranslate): Promise<GeneratedImage> {
+export async function generateImage(
+  prompt: string,
+  onLog: Log = () => {},
+  signal?: AbortSignal,
+  translate?: PromptTranslate,
+  // Étape 478 : image de départ (base64 JPEG ou PNG), revérifiée par referenceImageBytes.
+  referenceBase64?: string
+): Promise<GeneratedImage> {
   if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
   const text = cleanPrompt(prompt)
   if (!text) throw new Error(t('image.noPrompt'))
+  const reference = referenceBase64 === undefined ? null : referenceImageBytes(referenceBase64)
   // Étape 174 : même décision que la ligne « Image » d'Options → Modèles. Vérifié AVANT tout téléchargement :
   // 5 Go téléchargés pour une machine qui ne pourra jamais dessiner seraient 5 Go perdus.
   const { vramGb } = await detectGpu()
@@ -578,27 +609,36 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     const output = join(dir, fileName)
     onLog(t('image.preparing'))
     const seed = Math.floor(Math.random() * 2 ** 31)
-    const draw = async (decodeOnCpu: boolean): Promise<void> => {
-      await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed, decodeOnCpu }), onLog, signal)
-      if ((await sizeOf(output)) === null) throw new Error(t('image.noOutput'))
-    }
-    if (await decodeOnCpuRemembered()) {
-      await draw(true)
-      return { path: output, fileName }
-    }
+    // Étape 478 : l'image de départ, posée dans un dossier temporaire du système (jamais dans les données de Léo) et
+    // effacée après le dessin, réussi ou non.
+    const referenceDir = reference ? await mkdtemp(join(tmpdir(), 'jaris-reference-')) : null
     try {
-      await draw(false)
-    } catch (err) {
-      // Étape 345 : sur certaines cartes, le moteur Vulkan s'arrête net pendant le décodage (0xC0000409, étape
-      // 344). Une annulation demandée n'est jamais réessayée ; tout autre échec l'est UNE fois, décodeur sur le
-      // processeur. Retenu seulement si ce second essai réussit : une autre panne n'est jamais mise sur la carte.
-      if (signal?.aborted) throw err
-      onLog(t('image.gpuDecodeRetry'))
-      await rm(output, { force: true })
-      await draw(true)
-      await rememberDecodeOnCpu()
+      const referencePath = reference && referenceDir ? join(referenceDir, `reference.${reference.extension}`) : undefined
+      if (reference && referencePath) await writeFile(referencePath, reference.bytes)
+      const draw = async (decodeOnCpu: boolean): Promise<void> => {
+        await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed, decodeOnCpu, reference: referencePath }), onLog, signal)
+        if ((await sizeOf(output)) === null) throw new Error(t('image.noOutput'))
+      }
+      if (await decodeOnCpuRemembered()) {
+        await draw(true)
+        return { path: output, fileName }
+      }
+      try {
+        await draw(false)
+      } catch (err) {
+        // Étape 345 : sur certaines cartes, le moteur Vulkan s'arrête net pendant le décodage (0xC0000409, étape
+        // 344). Une annulation demandée n'est jamais réessayée ; tout autre échec l'est UNE fois, décodeur sur le
+        // processeur. Retenu seulement si ce second essai réussit : une autre panne n'est jamais mise sur la carte.
+        if (signal?.aborted) throw err
+        onLog(t('image.gpuDecodeRetry'))
+        await rm(output, { force: true })
+        await draw(true)
+        await rememberDecodeOnCpu()
+      }
+      return { path: output, fileName }
+    } finally {
+      if (referenceDir) await rm(referenceDir, { recursive: true, force: true })
     }
-    return { path: output, fileName }
   } finally {
     releaseEngine()
   }

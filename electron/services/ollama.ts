@@ -645,6 +645,33 @@ export async function fitToModelContext(model: string, numCtx: number): Promise<
   return native !== null && native < numCtx ? native : numCtx
 }
 
+/**
+ * Étape 478 : le modèle sait-il appeler un outil (`capabilities` contient « tools » dans `/api/show`) ? Un modèle sans
+ * cette capacité fait échouer toute demande qui lui propose un outil. `null` : Ollama muet ou injoignable (non mis en
+ * cache, relu la fois suivante).
+ */
+const toolsCapabilityCache = new Map<string, boolean>()
+
+export async function modelCanCallTools(model: string): Promise<boolean | null> {
+  const cached = toolsCapabilityCache.get(model)
+  if (cached !== undefined) return cached
+  try {
+    const response = await fetch(`${config.ollama.host}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model })
+    })
+    if (!response.ok) return null
+    const capabilities = ((await response.json()) as { capabilities?: unknown })?.capabilities
+    if (!Array.isArray(capabilities)) return null
+    const can = capabilities.includes('tools')
+    toolsCapabilityCache.set(model, can)
+    return can
+  } catch {
+    return null
+  }
+}
+
 export async function getModelThinking(model: string): Promise<ModelThinking | null> {
   const cached = thinkingCache.get(model)
   if (cached) return cached

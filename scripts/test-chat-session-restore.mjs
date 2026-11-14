@@ -18,9 +18,9 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cha
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = null } = {}) {
+function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = null, canDraw = true, visionDraws = null } = {}) {
   const appended = []
-  const calls = { converse: 0, vision: [], exchanges: [], memoryCancels: 0, cancelsSeenByConverse: [] }
+  const calls = { converse: 0, vision: [], exchanges: [], memoryCancels: 0, cancelsSeenByConverse: [], drawings: [] }
   const modules = {
     './assistant': {
       converse: async (prompt, ...rest) => {
@@ -56,13 +56,15 @@ function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = nul
     // Étape 91 : une image jointe part au modèle de VISION, jamais au modèle de conversation (qui ne sait
     // pas lire une image, et ne tient de toute façon pas en VRAM en même temps que lui).
     '../config': { config: { ollama: { visionModel: 'vision-par-defaut' } } },
+    // Étape 478 : le modèle de vision répond, ou décide de dessiner à partir de l'image (visionDraws : sa description).
     './vision': {
-      IMAGE_CHAT_SYSTEM_PROMPT: 'prompt-image-chat',
-      describeImage: async (imageBase64, question, model, systemPrompt) => {
-        calls.vision.push({ imageBase64, question, model, systemPrompt })
-        return "C'est une photo de chat."
+      answerImageInChat: async (imageBase64, question, model, offerDrawing, signal) => {
+        calls.vision.push({ imageBase64, question, model, canDraw: offerDrawing, signal })
+        if (visionDraws && offerDrawing) return { kind: 'draw', prompt: visionDraws }
+        return { kind: 'text', text: "C'est une photo de chat." }
       }
     },
+    './promptTranslator': { toEnglishPrompt: async (text) => ({ text, translated: false }) },
     './conversationStore': {
       getConversationHistory: async () => {
         if (historyDelayMs) await new Promise((resolve) => setTimeout(resolve, historyDelayMs))
@@ -82,7 +84,12 @@ function setup(pastEntries, { historyDelayMs = 0, onConverse = null, store = nul
     './profileStore': { getProfile: async () => null },
     './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok', message: '' }) },
     './imageGenerator': {
-      readGeneratedImageDataUrl: async (fileName) => (fileName === 'chat.png' ? 'data:image/png;base64,UE5H' : null)
+      readGeneratedImageDataUrl: async (fileName) => (fileName === 'chat.png' ? 'data:image/png;base64,UE5H' : null),
+      imageDrawingAvailable: async () => canDraw,
+      generateImage: async (prompt, onLog, signal, translate, reference) => {
+        calls.drawings.push({ prompt, reference, translated: typeof translate === 'function', signal })
+        return { path: '/donnees/generated-images/chat.png', fileName: 'chat.png' }
+      }
     }
   }
   const exports = {}
@@ -177,7 +184,8 @@ test('une image jointe part au modèle de vision, jamais au modèle de conversat
   assert.equal(calls.vision.length, 1)
   assert.equal(calls.vision[0].imageBase64, 'BASE64IMAGE')
   assert.equal(calls.vision[0].question, 'Il y a quoi sur cette photo ?')
-  assert.equal(calls.vision[0].systemPrompt, 'prompt-image-chat')
+  assert.equal(calls.vision[0].model, 'vision-par-defaut')
+  assert.equal(calls.drawings.length, 0, 'une question sur l’image ne dessine rien')
   assert.equal(reply.content, "C'est une photo de chat.")
 
   // L'échange rejoint l'historique sous forme de TEXTE : une question de suivi garde le contexte, sans que
@@ -199,6 +207,35 @@ test('une image sans texte est acceptée : la question devient une demande de de
   const { chatSession, calls } = setup([])
   await chatSession.send('', () => {}, () => {}, undefined, undefined, 'BASE64IMAGE')
   assert.equal(calls.vision[0].question, 'Décris cette image.')
+})
+
+// Étape 478 (Léo : « Dessine une miniature Roblox pour mon jeu, et voici une image de mon jeu » → « je ne peux pas
+// générer d'images »).
+test('étape 478 : image jointe + demande de dessin — le dessin part de l’image jointe, affiché sous la réponse', async () => {
+  const { chatSession, calls, appended } = setup([], { visionDraws: 'a Roblox game thumbnail of this island city' })
+  const reply = await chatSession.send('Dessine une miniature Roblox pour mon jeu', () => {}, () => {}, undefined, undefined, 'BASE64IMAGE')
+  assert.equal(calls.vision[0].canDraw, true, 'le modèle de vision peut dessiner')
+  assert.ok(calls.vision[0].signal, '« Arrêter » interrompt aussi la lecture de l’image')
+  assert.equal(calls.drawings.length, 1)
+  assert.equal(calls.drawings[0].prompt, 'a Roblox game thumbnail of this island city')
+  assert.equal(calls.drawings[0].reference, 'BASE64IMAGE', 'l’image jointe sert de modèle au dessin')
+  assert.equal(calls.drawings[0].translated, true, 'traduite au besoin, comme dans le mode Image')
+  assert.equal(calls.converse, 0)
+  assert.equal(reply.image, 'data:image/png;base64,UE5H')
+  assert.match(reply.content, /Voilà ton image|image/i)
+  assert.equal(appended[0].image, 'chat.png')
+  assert.equal(JSON.stringify(appended[0]).includes('BASE64IMAGE'), false, 'l’image jointe n’est jamais gardée')
+})
+
+test('étape 478 : un PC qui ne dessine pas (ou le téléphone sans dessin) — le modèle de vision ne reçoit pas l’outil', async () => {
+  const noDraw = setup([], { canDraw: false, visionDraws: 'x' })
+  const reply = await noDraw.chatSession.send('Dessine une miniature', () => {}, () => {}, undefined, undefined, 'BASE64IMAGE')
+  assert.equal(noDraw.calls.vision[0].canDraw, false)
+  assert.equal(noDraw.calls.drawings.length, 0)
+  assert.equal(reply.content, "C'est une photo de chat.")
+  const phone = setup([], { visionDraws: 'x' })
+  await phone.chatSession.send('Dessine', () => {}, () => {}, undefined, undefined, 'BASE64IMAGE', { allowedTools: new Set(['search_web']), note: '', refusal: '' })
+  assert.equal(phone.calls.vision[0].canDraw, false, 'un tour limité sans generate_image ne dessine pas')
 })
 
 test('image dessinée (étape 173) : affichée sous la réponse, enregistrée par son NOM de fichier seulement', async () => {

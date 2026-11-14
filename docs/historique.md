@@ -12119,3 +12119,39 @@ Léo : « pouvoir choisir le modèle et l'effort, avant de cliquer sur Demander 
   liste refusées, choix transmis), test-duel-panel-ui.mjs (Sonnet/Moyen par défaut, 4 modèles et 5 efforts affichés,
   le choix part avec la demande, « (Opus 5.5, effort Maximum) », redemander à Haiku, 760 px sans défilement).
   13 textes en 24 langues.
+
+## Étape 478 — Dessiner à partir d'une image (Chat et mode Image)
+
+Léo (capture) : « Dessine une miniature Roblox pour mon jeu, et voici une image de mon jeu » → « Désolé, je ne peux pas
+générer d'images » ; et « quand je vais sur Image, je ne peux pas ajouter d'image ».
+- **Cause (Chat)** : une image jointe partait au modèle de vision par `describeImage`, SANS aucun outil (étape 91) — il
+  ne pouvait que décrire. Le dessin n'existait que par `converse()` (modèle de conversation, qui ne voit pas l'image).
+- **Cause (mode Image)** : le champ avait `imagesAllowed={false}` (choix de l'étape 200 : « il dessine, il ne lit
+  rien ») — la demande récente de Léo l'emporte (règle de CLAUDE.md), le test qui l'exigeait est mis à jour.
+- **Moteur** : FLUX.2 klein sait partir d'une image — vérifié sur la SOURCE (docs/flux2.md de stable-diffusion.cpp à la
+  version épinglée `master-920-2f88688`) : exemple « edit » avec `-r <image>` et `--sampling-method euler`.
+  `generateImage(…, referenceBase64)` : revérifiée par `referenceImageBytes` (base64 seulement, 20 M caractères au
+  plus, premiers octets d'un JPEG ou d'un PNG — jamais un chemin), posée dans un dossier TEMPORAIRE du système (jamais
+  dans `getDataRoot()`, donc rien à ajouter à OWNED_ENTRIES) et effacée après le dessin, réussi ou non.
+- **Chat** : `answerImageInChat` (vision.ts) donne au modèle de vision UN outil, `generate_image` « à partir de l'image
+  jointe », avec une consigne qui dit qu'il sait dessiner. C'est lui qui voit l'image et lit la demande, dans n'importe
+  laquelle des 24 langues : aucune liste de mots (règle « détecter un patron, pas un mot-clé »). L'outil n'est proposé
+  que si ce PC dessine (`imageDrawingAvailable`), si le tour y a droit (téléphone/duel : `allowedTools`) ET si Ollama
+  dit que le modèle sait appeler un outil (`modelCanCallTools`, `capabilities` de `/api/show`) — sinon Ollama refuserait
+  toute la demande ; un appel inventé sans outil proposé est ignoré. Dessin : description du modèle (anglais), traduite
+  au besoin (`toEnglishPrompt`, comme le mode Image), l'image jointe en image de départ, affiché sous la réponse comme
+  à l'étape 173. « Arrêter » interrompt aussi la lecture de l'image (signal transmis).
+- **Mode Image** : le « + » du champ joint une image de départ (sélecteur natif, collage, glisser), elle part avec la
+  demande ; une image seule sans demande → « Dis-moi ce que tu veux dessiner à partir de cette image. » ; un échec
+  rend la demande ET l'image. 3 textes en 24 langues.
+- Tests (mordent : sans l'effacement, sans l'image transmise au dessin, sans la vérification de la capacité outils) :
+  test-image-generation.mjs (`-r` + euler, octets exacts, JPEG/PNG, hors des données de Léo, effacée même après un
+  échec, chemin/adresse/faux contenu refusés avant tout lancement), test-vision-draw.mjs (nouveau), 
+  test-chat-session-restore.mjs (image + dessin → dessin à partir de l'image ; PC sans dessin ou téléphone : pas
+  d'outil), test-image-panel-ui.mjs (« + », image jointe envoyée en JPEG, image seule refusée, image rendue après
+  échec), test-engine-step-language.mjs (faux pont : `os`).
+- **Vérifié avec un vrai Ollama 0.40.16** (archive officielle, sha256 vérifié, processeur seul, port 11478) et le plus
+  petit modèle de vision de Jaris, qwen3-vl:2b (`capabilities` : vision, tools) — consignes et outil EXACTS de
+  vision.ts : « Dessine une miniature Roblox… » → generate_image ; « Fais-moi une affiche… » → generate_image ;
+  « Il y a quoi ? » → description, sans outil ; « Combien d'argent ? » → réponse, sans outil (4/4). Le dessin lui-même
+  (sd-cli `-r` sous Windows) n'est vérifié qu'en lecture de la doc et par test : pas de Windows ici.

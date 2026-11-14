@@ -2588,7 +2588,7 @@ app.whenReady().then(async () => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.imageStudioLog, message)
     })
   )
-  ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string): Promise<GeneratedImageSummary> => {
+  ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string, reference?: unknown): Promise<GeneratedImageSummary> => {
     imageStudioAbort?.abort()
     // Nouvelle demande : la mémoire automatique ne doit pas occuper Ollama (ni la carte graphique) devant le dessin.
     cancelMemoryExtraction()
@@ -2602,7 +2602,9 @@ app.whenReady().then(async () => {
         },
         controller.signal,
         // Étape 292 : « un chat » tapé ici était dessiné comme « a chat » (une conversation).
-        toEnglishPrompt
+        toEnglishPrompt,
+        // Étape 478 : l'image de départ, revérifiée par generateImage (base64 JPEG ou PNG seulement).
+        reference === undefined || reference === null ? undefined : (reference as string)
       )
       return { fileName: image.fileName, label: imageLabelFromFileName(image.fileName), timestamp: Date.now() }
     } finally {

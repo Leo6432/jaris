@@ -13,6 +13,7 @@ import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
 import { t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
+import type { ImageAttachment } from '@/lib/imageAttachment'
 
 /** Nombre d'images montrées en vignettes sur l'accueil du mode Image (chacune voyage en entier par l'IPC). */
 const GALLERY_SIZE = 8
@@ -27,6 +28,8 @@ export default function ImagePanel(): JSX.Element {
   const [status, setStatus] = useState<ImageStudioStatus | null>(null)
   const [installing, setInstalling] = useState(false)
   const [prompt, setPrompt] = useState('')
+  // Étape 478 (Léo : « quand je vais sur Image, je ne peux pas ajouter d'image ») : l'image de départ du dessin.
+  const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const [generating, setGenerating] = useState(false)
   useReportActivity('image', generating ? 'thinking' : null)
   const [logLine, setLogLine] = useState<string | null>(null)
@@ -142,24 +145,32 @@ export default function ImagePanel(): JSX.Element {
 
   const generate = async (): Promise<void> => {
     const text = prompt.trim()
-    if (!text || generating) return
+    if (generating) return
+    // Une image seule ne dit pas quoi dessiner : on le demande, l'image reste jointe.
+    if (!text) {
+      if (attachment) setError(t('image.needPromptWithImage'))
+      return
+    }
     clearFeedback()
     // Comme ChatGPT : le champ se vide dès l'envoi, la demande est rappelée au-dessus de l'image en cours.
+    const reference = attachment
     setPendingPrompt(text)
     setPrompt('')
+    setAttachment(null)
     setSelected(null)
     setGenerating(true)
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
-      const image = await window.jaris.generateStudioImage(text)
+      const image = await window.jaris.generateStudioImage(text, reference?.base64)
       // La fin se voit : l'image prend la place du cadre d'attente (plus de bandeau « Terminé en… »), et un bip.
       setSelected(image)
       void playSoundCueIfEnabled('success')
       void refreshImages()
     } catch (err) {
-      // Rien n'est perdu : la demande revient dans le champ, prête à être relancée ou corrigée.
+      // Rien n'est perdu : la demande (et son image de départ) revient dans le champ, prête à être relancée.
       setPrompt(text)
+      setAttachment(reference)
       if (stoppedRef.current) {
         setStoppedAfterMs(Date.now() - startedAt)
       } else {
@@ -352,10 +363,9 @@ export default function ImagePanel(): JSX.Element {
           busyLabel={t('image.busy')}
           busy={generating}
           onStop={stop}
-          attachment={null}
-          onAttachmentChange={() => {}}
+          attachment={attachment}
+          onAttachmentChange={setAttachment}
           onError={setError}
-          imagesAllowed={false}
           rows={2}
           inline
         />

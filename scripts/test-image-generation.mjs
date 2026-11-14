@@ -96,6 +96,8 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
       proc.stderr = new EventEmitter()
       proc.kill = () => killed.push('kill')
       proc.spawnArgs = { exe, args, options }
+      // Étape 478 : l'image de départ telle que sd-cli la lit au lancement (le fichier est effacé après).
+      proc.reference = args.includes('-r') ? { path: args[args.indexOf('-r') + 1], bytes: readFileSync(args[args.indexOf('-r') + 1]) } : null
       loaded.lastSpawn = proc
       loaded.backends = [...(loaded.backends ?? []), args[args.indexOf('--backend') + 1]]
       // Étape 345 : carte qui s'arrête net au décodage (0xC0000409) tant que le décodeur est sur elle.
@@ -538,5 +540,47 @@ test('sans traduction demandée (l’outil du Chat écrit déjà en anglais), ri
   assert.deepEqual(t.events, ['unload', 'spawn'])
   const { args } = t.gen.lastSpawn.spawnArgs
   assert.equal(args[args.indexOf('-p') + 1], 'a ginger cat on a blue sofa')
+  t.cleanup()
+})
+
+// Étape 478 (Léo : « Dessine une miniature Roblox pour mon jeu, et voici une image de mon jeu » ; « sur Image, je ne peux
+// pas ajouter d'image ») : dessiner à partir d'une image, comme l'exemple « edit » de FLUX.2 klein (docs/flux2.md).
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
+
+test('étape 478 : l’image de départ part à sd-cli par -r (avec euler, comme la doc), puis est effacée', async () => {
+  const t = await installed()
+  const image = await t.gen.generateImage('a Roblox game thumbnail', () => {}, undefined, undefined, JPEG.toString('base64'))
+  assert.ok(existsSync(image.path))
+  const { args } = t.gen.lastSpawn.spawnArgs
+  const { reference } = t.gen.lastSpawn
+  assert.ok(reference, '-r présent')
+  assert.deepEqual(reference.bytes, JPEG, 'les octets exacts de l’image jointe')
+  assert.match(reference.path, /reference\.jpg$/)
+  assert.equal(args[args.indexOf('--sampling-method') + 1], 'euler')
+  assert.ok(!reference.path.startsWith(t.dataRoot), 'jamais dans les données de Léo (Déplacer ne la connaît pas)')
+  assert.equal(existsSync(reference.path), false, 'effacée après le dessin')
+  // Un PNG aussi ; sans image de départ, rien ne change.
+  await t.gen.generateImage('a cat', () => {}, undefined, undefined, PNG.toString('base64'))
+  assert.match(t.gen.lastSpawn.reference.path, /reference\.png$/)
+  await t.gen.generateImage('a cat', () => {})
+  assert.equal(t.gen.lastSpawn.spawnArgs.args.includes('-r'), false)
+  assert.equal(t.gen.lastSpawn.spawnArgs.args.includes('--sampling-method'), false)
+  t.cleanup()
+})
+
+test('étape 478 : l’image de départ est effacée même quand le dessin échoue', async () => {
+  const t = await installed({ engineExitCode: 1, engineOutput: ['ggml_vulkan: Device memory allocation failed', 'ErrorOutOfDeviceMemory'] })
+  await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, JPEG.toString('base64')))
+  assert.equal(existsSync(t.gen.lastSpawn.reference.path), false)
+  t.cleanup()
+})
+
+test('étape 478 : une image de départ qui n’en est pas une est refusée AVANT tout lancement (jamais un chemin)', async () => {
+  const t = await installed()
+  for (const bad of ['C:\\Users\\leo\\secret.png', 'file:///etc/passwd', Buffer.from('pas une image').toString('base64'), 42, '']) {
+    await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, bad), /n'est pas une image JPEG ou PNG/, String(bad))
+  }
+  assert.equal(t.gen.lastSpawn, undefined, 'sd-cli jamais lancé')
   t.cleanup()
 })

@@ -1,14 +1,15 @@
 import { randomUUID } from 'crypto'
 import { config } from '../config'
 import { converse, type ConverseRestrictions } from './assistant'
-import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
+import { answerImageInChat } from './vision'
 import { appendConversationEntry, getActiveConversationId, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getModelGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
-import { readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
+import { generateImage, imageDrawingAvailable, readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
+import { toEnglishPrompt } from './promptTranslator'
 import type { ChatMessage, SoundCue, WebActivity } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 
@@ -168,15 +169,27 @@ class ChatSession {
    * l'image) : une question de suivi ("et la couleur du bouton ?") garde donc le contexte, sans jamais faire
    * grossir conversation-history.json avec des mégaoctets d'image en base64.
    */
-  private async answerAboutImage(prompt: string, imageBase64: string, onLog: (message: string) => void): Promise<string> {
+  private async answerAboutImage(
+    prompt: string,
+    imageBase64: string,
+    onLog: (message: string) => void,
+    onImage: (image: GeneratedImage) => void,
+    signal: AbortSignal,
+    restrictions?: ConverseRestrictions
+  ): Promise<string> {
     const profile = await getProfile()
     onLog(t('chat.readingImage'))
-    return describeImage(
-      imageBase64,
-      prompt || "Décris cette image.",
-      profile?.visionModel ?? config.ollama.visionModel,
-      IMAGE_CHAT_SYSTEM_PROMPT
-    )
+    // Étape 478 : le modèle de vision peut aussi décider de DESSINER à partir de l'image jointe — si ce PC dessine, et
+    // si ce tour a le droit de dessiner (le téléphone et le Duel limitent leurs outils).
+    const allowed = !restrictions || restrictions.allowedTools.has('generate_image')
+    const canDraw = allowed && (await imageDrawingAvailable().catch(() => false))
+    const answer = await answerImageInChat(imageBase64, prompt || 'Décris cette image.', profile?.visionModel ?? config.ollama.visionModel, canDraw, signal)
+    if (answer.kind === 'text') return answer.text
+    onLog(t('chat.drawingFromImage'))
+    // L'image jointe sert de modèle au dessin (FLUX.2 klein, `-r`). Même traduction que le mode Image (au cas où la
+    // description ne serait pas en anglais).
+    onImage(await generateImage(answer.prompt, onLog, signal, toEnglishPrompt, imageBase64))
+    return t('reply.imageDone')
   }
 
   async send(
@@ -298,7 +311,16 @@ class ChatSession {
       // un échange dit à voix haute juste avant est donc déjà visible ici.
       const history = await getSessionHistory()
       reply = imageBase64
-        ? await this.answerAboutImage(prompt, imageBase64, onLog)
+        ? await this.answerAboutImage(
+            prompt,
+            imageBase64,
+            onLog,
+            (image) => {
+              generated = image
+            },
+            controller.signal,
+            restrictions
+          )
         : await converse(
             prompt,
             profile?.name ?? null,

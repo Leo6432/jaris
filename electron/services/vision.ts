@@ -2,7 +2,7 @@ import { desktopCapturer, screen, type NativeImage } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { getModelGpuStatus, pickSafeVisionModel } from './hardwareScan'
-import { autoContextFor, chatWithOllama, listInstalledModels } from './ollama'
+import { autoContextFor, chatWithOllama, listInstalledModels, modelCanCallTools, type OllamaTool } from './ollama'
 import { replyLanguageName, replyLanguageRule, t } from '../../shared/i18n'
 
 const VISION_SYSTEM_PROMPT =
@@ -179,6 +179,86 @@ export async function describeImage(
   const content = message.content?.trim()
   if (!content) throw new Error(t('vision.empty', { model }))
   return content
+}
+
+/**
+ * Étape 478 (Léo : « Dessine une miniature Roblox pour mon jeu, et voici une image de mon jeu » → « Désolé, je ne peux
+ * pas générer d'images ») : une image jointe au Chat partait au modèle de vision SANS outil, qui ne pouvait que la
+ * décrire. Il reçoit désormais l'outil de dessin : c'est lui qui voit l'image et lit la demande, quelle qu'en soit la
+ * langue (aucune liste de mots à deviner). L'image jointe sert alors de modèle au dessin (FLUX.2 klein, `-r`).
+ */
+export const DRAW_FROM_IMAGE_TOOL: OllamaTool = {
+  type: 'function',
+  function: {
+    name: 'generate_image',
+    description:
+      "Dessine une NOUVELLE image en partant de l'image jointe, qui sert de modèle (personnages, décor, couleurs, style). " +
+      "N'appelle cet outil que si l'utilisateur demande de CRÉER une image (dessine, génère, fais une miniature, une " +
+      "affiche, une version…), jamais pour décrire l'image ou répondre à une question sur elle.",
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description:
+            "Ce qu'il faut dessiner, EN ANGLAIS : le résultat voulu (ex. une miniature de jeu), ce qu'il faut garder de " +
+            'l\'image jointe et ce qui change (ex: "a Roblox game thumbnail of this colorful island city, big bold title, ' +
+            'dynamic angle, vibrant colors").'
+        }
+      },
+      required: ['prompt']
+    }
+  }
+}
+
+const DRAW_FROM_IMAGE_NOTE =
+  " Si l'utilisateur te demande de CRÉER une image à partir de celle-ci ou inspirée d'elle (dessiner, générer, faire " +
+  "une miniature, une affiche, une autre version…), appelle l'outil generate_image : tu sais dessiner, l'image jointe " +
+  "sera donnée au dessinateur comme modèle. Ne dis jamais que tu ne peux pas créer d'image."
+
+export type ImageChatAnswer = { kind: 'text'; text: string } | { kind: 'draw'; prompt: string }
+
+/**
+ * Réponse à une image jointe au Chat : du texte, ou la demande de dessin que le modèle de vision a décidée. `canDraw` :
+ * ce PC sait dessiner (sinon, comme avant, aucun outil proposé). Un modèle de vision qui ne sait pas appeler d'outil
+ * (Ollama le dit) répond comme avant, sans outil — lui proposer un outil ferait échouer la demande.
+ */
+export async function answerImageInChat(
+  imageBase64: string,
+  question: string,
+  visionModel: string,
+  canDraw: boolean,
+  signal?: AbortSignal
+): Promise<ImageChatAnswer> {
+  let model = visionModel
+  try {
+    const [live, installedModels] = await Promise.all([getModelGpuStatus(), listInstalledModels()])
+    if (live.freeVramGb !== null) model = pickSafeVisionModel(live.freeVramGb, installedModels, visionModel)
+  } catch {
+    // Pas grave si le check échoue : on garde le modèle normalement configuré.
+  }
+  const offerDrawing = canDraw && (await modelCanCallTools(model).catch(() => null)) === true
+  const message = await chatWithOllama(
+    [
+      { role: 'system', content: localizeReplyLanguage(IMAGE_CHAT_SYSTEM_PROMPT + (offerDrawing ? DRAW_FROM_IMAGE_NOTE : '')) + replyLanguageRule() },
+      { role: 'user', content: question, images: [imageBase64] }
+    ],
+    offerDrawing ? [DRAW_FROM_IMAGE_TOOL] : undefined,
+    model,
+    false,
+    signal,
+    await sharedNumCtx(model)
+  )
+  const call = message.tool_calls?.find((c) => c.function.name === 'generate_image')
+  if (offerDrawing && call) {
+    const asked = call.function.arguments?.prompt
+    // Sans description utilisable, la demande de Léo elle-même (traduite plus loin, comme dans le mode Image).
+    const prompt = typeof asked === 'string' && asked.trim() ? asked.trim() : question
+    return { kind: 'draw', prompt }
+  }
+  const content = message.content?.trim()
+  if (!content) throw new Error(t('vision.empty', { model }))
+  return { kind: 'text', text: content }
 }
 
 /**

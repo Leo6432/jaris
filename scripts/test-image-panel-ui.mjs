@@ -45,8 +45,8 @@ window.jaris = {
     return new Promise((resolve) => { window.__finishInstall = () => { window.__status = { ...window.__status, installed: true }; resolve() } })
   },
   onImageStudioLog: (cb) => { window.__log = cb; return () => {} },
-  generateStudioImage: (prompt) => {
-    window.__calls.push(['generate', prompt])
+  generateStudioImage: (prompt, reference) => {
+    window.__calls.push(reference === undefined ? ['generate', prompt] : ['generate', prompt, reference])
     return new Promise((resolve, reject) => {
       window.__finishGen = () => {
         const image = { fileName: '2026-09-28T18-00-00-un-phare.png', label: 'Un phare', timestamp: Date.now() }
@@ -65,7 +65,9 @@ window.jaris = {
   deleteGeneratedImage: async (fileName) => { window.__calls.push(['delete', fileName]); window.__images = window.__images.filter((i) => i.fileName !== fileName) },
   openGeneratedImages: async (fileName) => { window.__calls.push(['open', fileName]) },
   saveGeneratedImage: async (dataUrl) => { window.__calls.push(['save', dataUrl.slice(0, 22)]); return { saved: true } },
-  getProfile: async () => null
+  getProfile: async () => null,
+  // Étape 478 : l'image de départ, par le sélecteur NATIF (via le main), comme dans le Chat.
+  pickImageFile: async () => window.__picked ?? null
 }
 
 createRoot(document.getElementById('root')).render(<ImagePanel />)
@@ -115,7 +117,8 @@ test('accueil : les dernières images en vignettes, la liste à gauche, le champ
     assert.match(await page.textContent('.workspace__rail'), /Un chat sur la lune.*Une forêt/s)
     const composer = await page.$eval('.image-panel > .composer', (el) => el === el.parentElement.lastElementChild)
     assert.equal(composer, true, 'le champ est le dernier élément, en bas')
-    assert.equal(await page.locator('.composer__plus').count(), 0, 'pas de « + » : le mode Image dessine, il ne lit rien')
+    // Étape 478 (Léo : « sur Image, je ne peux pas ajouter d'image ») : le « + » joint une image de départ.
+    assert.equal(await page.locator('.composer__plus').count(), 1, '« + » : joindre une image de départ')
   })
 })
 
@@ -294,4 +297,35 @@ test('galerie d’images illisible : le vrai message s’affiche au lieu d’une
     await page.waitForSelector('.composer')
     await page.waitForFunction(() => /Le dossier des images est inaccessible\./.test(document.querySelector('.image-panel')?.textContent ?? ''))
   }, 'window.__listFails = true')
+})
+
+// Étape 478 (Léo : « quand je vais sur Image, je ne peux pas ajouter d'image »).
+const PNG_8x6 = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAGUlEQVR4nGP4z8Dwn4GBgQEJMDIwMDAwAAAx8QIBnH7xwQAAAABJRU5ErkJggg=='
+test('étape 478 : une image de départ se joint (menu « + »), part avec la demande, et revient si le dessin échoue', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.composer__input')
+    await page.evaluate((b64) => (window.__picked = { name: 'mon-jeu.png', type: 'image/png', base64: b64 }), PNG_8x6)
+    await page.click('.composer__plus')
+    await page.click('.composer__menu-item:has-text("Joindre une image")')
+    await page.waitForSelector('.composer__attachment img')
+    assert.equal(await page.textContent('.composer__attachment-name'), 'mon-jeu.png')
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/image-1-image-jointe.png` })
+    // Une image seule ne dit pas quoi dessiner : on le demande, l'image reste jointe, rien ne part.
+    await page.click('.composer__send')
+    await page.waitForSelector('.code-panel__error')
+    assert.match(await page.textContent('.code-panel__error'), /Dis-moi ce que tu veux dessiner à partir de cette image/)
+    assert.equal((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'generate'), false)
+    assert.equal(await page.locator('.composer__attachment img').count(), 1)
+    // Avec la demande : l'image part avec elle (JPEG en base64, sans en-tête data:).
+    await page.fill('.composer__input', 'une miniature Roblox pour mon jeu')
+    await page.click('.composer__send')
+    const call = (await page.evaluate(() => window.__calls)).find((c) => Array.isArray(c) && c[0] === 'generate')
+    assert.equal(call[1], 'une miniature Roblox pour mon jeu')
+    assert.match(call[2], /^\/9j\//, 'l’image de départ, réencodée en JPEG')
+    assert.equal(await page.locator('.composer__attachment').count(), 0, 'le champ se vide dès l’envoi, image comprise')
+    // Un échec : la demande ET l'image reviennent, prêtes à relancer.
+    await page.evaluate(() => window.__failGen('Pas assez de mémoire pour dessiner.'))
+    await page.waitForSelector('.composer__attachment img')
+    assert.equal(await page.inputValue('.composer__input'), 'une miniature Roblox pour mon jeu')
+  })
 })
