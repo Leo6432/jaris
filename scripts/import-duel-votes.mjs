@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url'
 import { loadTsModule } from './load-ts-module.mjs'
 
 const { parseDuelVotes } = loadTsModule('shared/duel.ts')
-const KEPT = ['id', 'category', 'at', 'sessionId', 'modelA', 'modelB', 'outcome']
+// Étape 489 : `judge` (le modèle Claude qui a voté, absent pour un vote humain) est gardé, pour pouvoir toujours
+// séparer les votes de Claude de ceux de Léo.
+const KEPT = ['id', 'category', 'at', 'sessionId', 'modelA', 'modelB', 'outcome', 'judge']
 export const DEFAULT_SHARED = fileURLToPath(new URL('./shared-duel-votes.json', import.meta.url))
 
 /** Fusionne l'export dans le fichier partagé. Renvoie le nombre de votes ajoutés et le total. */
@@ -20,7 +22,10 @@ export function importDuelVotes(exportText, sharedPath = DEFAULT_SHARED) {
   const current = existsSync(sharedPath) ? parseDuelVotes(JSON.parse(readFileSync(sharedPath, 'utf8'))) ?? [] : []
   const known = new Set(current.map((v) => v.id))
   const added = incoming.filter((v) => !known.has(v.id) && known.add(v.id))
-  const all = [...current.map((v) => Object.fromEntries(KEPT.map((k) => [k, v[k]]))), ...added].sort((a, b) => a.at - b.at)
+  // Un vote déjà partagé, importé avant l'étape 489 sans sa marque `judge`, la retrouve.
+  const judgeOf = new Map(incoming.filter((v) => v.judge).map((v) => [v.id, v.judge]))
+  const kept = current.map((v) => Object.fromEntries(KEPT.map((k) => [k, k === 'judge' ? (v.judge ?? judgeOf.get(v.id)) : v[k]])))
+  const all = [...kept, ...added].sort((a, b) => a.at - b.at)
   writeFileSync(sharedPath, JSON.stringify(all, null, 2) + '\n')
   return { added: added.length, total: all.length }
 }

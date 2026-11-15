@@ -12347,3 +12347,23 @@ ses votes « comptent tout de suite » ou « à vérifier d'abord » (comme l'é
   bilan/erreur/sans clé/pas de cadre vide, historique marqué). Mordent : sans le contrôle « déjà voté », sans `judge`,
   sans le passage des refus, sans l'arrêt — chacun fait échouer un test.
 - **Non vérifié avec la vraie clé de Léo** (aucune ici) : le coût réel d'une série de 49 duels dépend du modèle choisi.
+
+## Étape 489 — v0.69.1 : votes du 15/11 livrés, dont les 49 premiers votes de Claude
+
+- Votes : `node scripts/import-duel-votes.mjs jaris-votes-2026-11-15.json` (export de Jaris 0.69.0, 145 votes dont 71
+  déjà connus) → 74 ajoutés, 163 au total : 49 Vision votés par Claude (`claude-opus-5-5`, bouton de l'étape 488 ;
+  aucun côté vide, 20 A / 28 B / 1 égalité — pas de penchant net pour un côté), 13 Vision, 10 Code et 1 Conversation
+  (égalité) votés par Léo.
+- `import-duel-votes.mjs` garde maintenant `judge` (le modèle Claude qui a voté ; absent pour un vote humain), et le
+  rend aux votes déjà partagés sans lui (les 5 votes Conversation de Sonnet 5.5 de l'étape 399 l'ont retrouvé) : on peut
+  toujours recompter sans les votes de Claude. Test : test-shared-duel-votes.mjs (marque gardée, retrouvée, jamais sur
+  un vote humain) — mord sans `judge` dans KEPT et sans le rattrapage.
+- Classements : Vision, gemma4:31b (8-1-1) et muse-glimmer:30b (10-2-0) devant gemma4:26b (8-3-1) ; Code,
+  gemma4:e4b (7-0) puis gemma4:31b, qwen3.6:35b-a3b ; Conversation, qwen3.5:27b (3-0-1).
+- Choix d'une installation neuve, avant/après, sur 24 machines types (carte 0 à 32 Go × RAM 16/32/64 Go), 27 changements :
+  Vision gemma4:26b → muse-glimmer:30b presque partout (12-16 Go avec 16 Go de RAM : qwen3-vl:8b → gemma4:12b) ;
+  8 Go de carte : Rapide/Moyen qwen3.5:4b → K2 Horizon 3.7B (et Élevé avec 16 Go de RAM) ; Code des petites machines
+  qwen3:1.7b → qwen3.5:4b (6 Go) / qwen3-vl:4b (8 Go/16 Go). **À noter** : le changement Rapide/Moyen vient d'UN seul
+  vote (égalité de K2 Horizon 3.7B contre qwen3.5:27b, le premier du classement) — c'est la règle Arena voulue (étape
+  358), mais fragile tant que les votes Conversation restent si peu nombreux (9). Sur le PC de Léo, rien ne bascule
+  tout seul : un modèle en service n'est remplacé qu'avec au moins 5 duels et plus de 95 % de chances (étape 360).
