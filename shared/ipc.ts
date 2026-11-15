@@ -4,7 +4,7 @@ import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
-import type { DuelAction, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelTurn, DuelVoteSide } from './duel'
+import type { DuelAction, DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelTurn, DuelVoteSide } from './duel'
 import type { RemoteMachineSettings } from './machine'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
@@ -1197,6 +1197,21 @@ export interface DuelSessionView {
     stopped: boolean
     error: string | null
   } | null
+  /**
+   * Étape 488 : Claude vote tout seul sur les duels prêts de la file. `current` = le duel chez lui maintenant ; `left` =
+   * duels prêts qu'il n'a pas encore vus (une fois fini : ceux qui restent à voter) ; `skipped` = laissés à Léo.
+   */
+  autoVote?: {
+    model: DuelAdviceModel
+    effort: DuelAdviceEffort
+    current: number | null
+    voted: number
+    skipped: number
+    left: number
+    running: boolean
+    stopping: boolean
+    error: string | null
+  } | null
   error: string | null
 }
 
@@ -1283,6 +1298,8 @@ export interface DuelHistoryEntry {
   modelB: string | null
   /** Les deux réponses, ou `null` pour un duel voté avec une version qui ne les gardait pas. */
   sides: { a: DuelVoteSide; b: DuelVoteSide } | null
+  /** Étape 488 : voté par Claude (identifiant du modèle), pas par Léo. Absent = Léo a voté. */
+  judge?: string
 }
 
 export const IPC_CHANNELS = {
@@ -1543,6 +1560,8 @@ export const IPC_CHANNELS = {
   duelVisionSamples: 'jaris:duel-vision-samples',
   /** Étape 476 : l'avis de Claude (clé API de Léo) avant que Léo vote — étape 480 : pour toutes les catégories. */
   duelAdvice: 'jaris:duel-advice',
+  duelAutoVote: 'jaris:duel-auto-vote',
+  duelAutoVoteStop: 'jaris:duel-auto-vote-stop',
   duelRunB: 'jaris:duel-run-b',
   /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */
   duelFollowUp: 'jaris:duel-follow-up',

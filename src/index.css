@@ -9877,6 +9877,50 @@ ul.reply-list--nested {
   color: var(--hud-text);
 }
 
+/* Étape 488 : Claude vote tout seul sur les duels prêts de la liste (même carte que l'état de la série). */
+.duel-autovote {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: var(--jv-bubble);
+}
+
+.duel-autovote__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.duel-autovote .duel-home__note,
+.duel-autovote .duel-advice__hint {
+  margin: 0;
+  text-align: left;
+}
+
+.duel-autovote .duel-advice__controls {
+  justify-content: flex-start;
+}
+
+.duel-autovote__status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.duel-autovote__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--hud-text);
+}
+
 /* Étape 388 : reprendre une série sur une nouvelle machine, et confirmer avant d'effacer des duels pas votés. */
 .duel-move,
 .duel-end-confirm {

@@ -84,6 +84,8 @@ import {
   abortDuel,
   askDuel,
   adviseDuel,
+  startDuelAutoVote,
+  stopDuelAutoVote,
   askDuelImage,
   closeDuel,
   deleteDuelModels,
@@ -1922,6 +1924,8 @@ app.whenReady().then(async () => {
     return askDuelImage(image)
   })
   ipcMain.handle(IPC_CHANNELS.duelAdvice, (_event, model: unknown, effort: unknown) => adviseDuel(model, effort))
+  ipcMain.handle(IPC_CHANNELS.duelAutoVote, (_event, model: unknown, effort: unknown) => startDuelAutoVote(model, effort))
+  ipcMain.handle(IPC_CHANNELS.duelAutoVoteStop, () => stopDuelAutoVote())
   // Étape 476 : les images proposées du Duel Vision (voir readVisionSamples).
   ipcMain.handle(IPC_CHANNELS.duelVisionSamples, (): Promise<PickedImageFile[]> => readVisionSamples())
   ipcMain.handle(IPC_CHANNELS.duelRunB, () => {

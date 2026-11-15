@@ -363,18 +363,102 @@ function useVisionSampleUrls(enabled: boolean): ReadonlyMap<string, string> {
   return urls
 }
 
+/**
+ * Étape 488 (Léo, devant 49 duels à voter : « un bouton Claude avec l'effort et le modèle de notre choix, et Claude
+ * vote tout seul sans nous ») : Claude passe sur chaque duel prêt de la liste et vote à la place de Léo. Ses votes
+ * comptent tout de suite (choix de Léo), marqués « voté par Claude » dans l'historique.
+ */
+function AutoVoteBox({ view, ready, keySaved, onChanged }: { view: DuelSessionView; ready: number; keySaved: boolean; onChanged: (next: DuelSessionView) => void }): JSX.Element | null {
+  const choice = useAdviceChoice()
+  const [pending, setPending] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const state = view.autoVote ?? null
+  const running = Boolean(state?.running)
+  if (!state && ready === 0) return null
+  const start = (): void => {
+    setPending(true)
+    setProblem(null)
+    window.jaris
+      .duelAutoVote(choice.model, choice.effort)
+      .then(onChanged)
+      .catch((err) => setProblem(ipcErrorMessage(err)))
+      .finally(() => setPending(false))
+  }
+  const stop = (): void => {
+    setPending(true)
+    window.jaris
+      .duelAutoVoteStop()
+      .then((next) => next && onChanged(next))
+      .catch((err) => setProblem(ipcErrorMessage(err)))
+      .finally(() => setPending(false))
+  }
+  return (
+    <section className="duel-autovote" aria-labelledby="duel-autovote-title">
+      <h2 className="duel-autovote__title" id="duel-autovote-title">
+        {t('duel.autoVote.title')}
+      </h2>
+      {!keySaved ? (
+        <p className="duel-home__note">{t('duel.autoVote.noKey')}</p>
+      ) : running && state ? (
+        <div className="duel-autovote__status" role="status" aria-live="polite">
+          <p className="duel-autovote__line">
+            <span className="duel-side__pulse" aria-hidden="true" />
+            {state.stopping
+              ? t('duel.autoVote.stopping')
+              : state.current !== null
+                ? t('duel.autoVote.running', { number: state.current, model: ADVICE_MODEL_NAME[state.model], effort: t(ADVICE_EFFORT_LABEL[state.effort]) })
+                : t('duel.autoVote.starting')}
+          </p>
+          <p className="duel-home__note">{t('duel.autoVote.progress', { voted: state.voted, left: state.left })}</p>
+          {state.skipped > 0 && <p className="duel-home__note">{t('duel.autoVote.skipped', { count: state.skipped })}</p>}
+          <button type="button" className="duel-btn duel-autovote__stop" onClick={stop} disabled={pending || state.stopping}>
+            {t('duel.autoVote.stop')}
+          </button>
+        </div>
+      ) : (
+        <>
+          {state && (
+            <div role="status">
+              <p className="duel-home__note">
+                {state.left === 0 ? t('duel.autoVote.done', { voted: state.voted }) : t('duel.autoVote.paused', { voted: state.voted, left: state.left })}
+              </p>
+              {state.skipped > 0 && <p className="duel-home__note">{t('duel.autoVote.skipped', { count: state.skipped })}</p>}
+              {state.error && <p className="duel-home__note duel-home__note--warn">{state.error}</p>}
+            </div>
+          )}
+          {ready > 0 && (
+            <>
+              <p className="duel-home__note">{t('duel.autoVote.lead')}</p>
+              <div className="duel-advice__controls">
+                <AdviceChoiceFields choice={choice} disabled={pending} />
+                <button type="button" className="duel-btn duel-advice__ask duel-autovote__start" onClick={start} disabled={pending}>
+                  {t('duel.autoVote.start', { count: ready })}
+                </button>
+              </div>
+              <p className="duel-advice__hint">{t('duel.vision.advice.costHint')}</p>
+            </>
+          )}
+        </>
+      )}
+      {problem && <p className="duel-home__note duel-home__note--warn">{problem}</p>}
+    </section>
+  )
+}
+
 function DuelBatchList({
   batch,
   onOpen,
   onMoved,
   disabled,
-  view
+  view,
+  claudeKeySaved
 }: {
   batch: DuelBatchItemView[]
   onOpen: (number: number) => void
   onMoved: (next: DuelSessionView) => void
   disabled: boolean
   view: DuelSessionView
+  claudeKeySaved: boolean
 }): JSX.Element {
   const done = batch.filter((item) => ['ready', 'voted'].includes(batchStatus(item))).length
   const sampleUrls = useVisionSampleUrls(view.category === 'vision')
@@ -386,6 +470,7 @@ function DuelBatchList({
       </p>
       <SeriesStatus view={view} />
       <SeriesMoveBox view={view} onMoved={onMoved} />
+      <AutoVoteBox view={view} ready={batch.filter((item) => batchStatus(item) === 'ready').length} keySaved={claudeKeySaved} onChanged={onMoved} />
       <p className="duel-home__note">{t('duel.batch.hint')}</p>
       <ol className="duel-batch__list">
         {batch.map((item) => {
@@ -1208,6 +1293,12 @@ function DuelHistory({ onBack }: { onBack: () => void }): JSX.Element {
                   <div className="duel-history__item-head">
                     <p className="duel-history__meta">
                       {formatRecentDate(entry.at, now)} · {t(CATEGORY_LABEL[entry.category])}
+                      {entry.judge && (
+                        <span className="duel-history__by-claude">
+                          {' · '}
+                          {t('duel.history.byClaude', { model: isDuelAdviceModel(entry.judge) ? ADVICE_MODEL_NAME[entry.judge] : 'Claude' })}
+                        </span>
+                      )}
                     </p>
                     <button
                       type="button"
@@ -1366,19 +1457,78 @@ const ADVICE_LEAD: Record<DuelCategory, MessageKey> = {
 const ADVICE_MODEL_SAVED = 'jaris.duel.adviceModel'
 const ADVICE_EFFORT_SAVED = 'jaris.duel.adviceEffort'
 
+/** Étape 477 (Léo : « pouvoir choisir le modèle et l'effort avant de cliquer ») : retenus d'un duel à l'autre. */
+function useAdviceChoice(): { model: DuelAdviceModel; effort: DuelAdviceEffort; setModel: (m: DuelAdviceModel) => void; setEffort: (e: DuelAdviceEffort) => void } {
+  const [model, setModelState] = useState<DuelAdviceModel>(() => {
+    const saved = readSaved(ADVICE_MODEL_SAVED)
+    return isDuelAdviceModel(saved) ? saved : DUEL_ADVICE_DEFAULT.model
+  })
+  const [effort, setEffortState] = useState<DuelAdviceEffort>(() => {
+    const saved = readSaved(ADVICE_EFFORT_SAVED)
+    return isDuelAdviceEffort(saved) ? saved : DUEL_ADVICE_DEFAULT.effort
+  })
+  return {
+    model,
+    effort,
+    setModel: (next) => {
+      setModelState(next)
+      writeSaved(ADVICE_MODEL_SAVED, next)
+    },
+    setEffort: (next) => {
+      setEffortState(next)
+      writeSaved(ADVICE_EFFORT_SAVED, next)
+    }
+  }
+}
+
+/** Les deux listes « Modèle » et « Effort » de Claude, partagées par l'avis (étape 477) et le vote automatique (488). */
+function AdviceChoiceFields({ choice, disabled }: { choice: ReturnType<typeof useAdviceChoice>; disabled: boolean }): JSX.Element {
+  return (
+    <>
+      <label className="duel-advice__field">
+        <span className="duel-advice__label">{t('duel.vision.advice.model')}</span>
+        <select
+          className="duel-advice__select"
+          value={choice.model}
+          disabled={disabled}
+          onChange={(event) => {
+            if (isDuelAdviceModel(event.target.value)) choice.setModel(event.target.value)
+          }}
+        >
+          {DUEL_ADVICE_MODELS.map((option) => (
+            <option key={option} value={option}>
+              {`${ADVICE_MODEL_NAME[option]} — ${t(ADVICE_MODEL_HINT[option])}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="duel-advice__field">
+        <span className="duel-advice__label">{t('duel.vision.advice.effort')}</span>
+        <select
+          className="duel-advice__select"
+          value={choice.effort}
+          disabled={disabled}
+          onChange={(event) => {
+            if (isDuelAdviceEffort(event.target.value)) choice.setEffort(event.target.value)
+          }}
+        >
+          {DUEL_ADVICE_EFFORTS.map((option) => (
+            <option key={option} value={option}>
+              {t(ADVICE_EFFORT_LABEL[option])}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
+  )
+}
+
 function ClaudeAdvice(): JSX.Element {
   const [advice, setAdvice] = useState<(DuelAdvice & { model: DuelAdviceModel; effort: DuelAdviceEffort }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
-  // Étape 477 (Léo : « pouvoir choisir le modèle et l'effort avant de cliquer ») : retenus d'un duel à l'autre.
-  const [model, setModel] = useState<DuelAdviceModel>(() => {
-    const saved = readSaved(ADVICE_MODEL_SAVED)
-    return isDuelAdviceModel(saved) ? saved : DUEL_ADVICE_DEFAULT.model
-  })
-  const [effort, setEffort] = useState<DuelAdviceEffort>(() => {
-    const saved = readSaved(ADVICE_EFFORT_SAVED)
-    return isDuelAdviceEffort(saved) ? saved : DUEL_ADVICE_DEFAULT.effort
-  })
+  const choice = useAdviceChoice()
+  const { model, effort } = choice
   const ask = (): void => {
     setBusy(true)
     setProblem(null)
@@ -1402,44 +1552,7 @@ function ClaudeAdvice(): JSX.Element {
         </p>
       )}
       <div className="duel-advice__controls">
-        <label className="duel-advice__field">
-          <span className="duel-advice__label">{t('duel.vision.advice.model')}</span>
-          <select
-            className="duel-advice__select"
-            value={model}
-            disabled={busy}
-            onChange={(event) => {
-              if (!isDuelAdviceModel(event.target.value)) return
-              setModel(event.target.value)
-              writeSaved(ADVICE_MODEL_SAVED, event.target.value)
-            }}
-          >
-            {DUEL_ADVICE_MODELS.map((option) => (
-              <option key={option} value={option}>
-                {`${ADVICE_MODEL_NAME[option]} — ${t(ADVICE_MODEL_HINT[option])}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="duel-advice__field">
-          <span className="duel-advice__label">{t('duel.vision.advice.effort')}</span>
-          <select
-            className="duel-advice__select"
-            value={effort}
-            disabled={busy}
-            onChange={(event) => {
-              if (!isDuelAdviceEffort(event.target.value)) return
-              setEffort(event.target.value)
-              writeSaved(ADVICE_EFFORT_SAVED, event.target.value)
-            }}
-          >
-            {DUEL_ADVICE_EFFORTS.map((option) => (
-              <option key={option} value={option}>
-                {t(ADVICE_EFFORT_LABEL[option])}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AdviceChoiceFields choice={choice} disabled={busy} />
         <button type="button" className="duel-btn duel-advice__ask" onClick={ask} disabled={busy}>
           {busy ? t('duel.vision.advice.asking') : t('duel.vision.advice.ask')}
         </button>
@@ -2750,7 +2863,7 @@ export default function DuelPanel(): JSX.Element {
         </div>
         {endConfirm}
         <div className="duel__scroll">
-          <DuelBatchList batch={view.batch} onOpen={openBatch} onMoved={setView} disabled={pending !== null} view={view} />
+          <DuelBatchList batch={view.batch} onOpen={openBatch} onMoved={setView} disabled={pending !== null} view={view} claudeKeySaved={Boolean(claudeKey?.saved)} />
         </div>
         {error && <p className="duel__error">{error}</p>}
       </>

@@ -267,8 +267,10 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       JudgeRefusalError,
       JudgeStopError,
       // Étape 480 : l'avis sur les deux applications d'un Duel Code.
-      adviseCodeDuel: async (key, input) => {
+      adviseCodeDuel: async (key, input, signal) => {
         calls.judge.codeAdvice.push({ key, ...JSON.parse(JSON.stringify(input)) })
+        // Étape 488 : le vote automatique fait plusieurs demandes ; chaque test choisit la réponse de la n-ième.
+        if (judge?.codeAdviceImpl) return judge.codeAdviceImpl(calls.judge.codeAdvice.length, signal)
         return { outcome: 'b', reason: 'B a un vrai bouton Recommencer.' }
       },
       adviseVisionDuel: async (key, input) => {
@@ -1271,6 +1273,129 @@ test('étape 381 : 6 demandes d’un coup — au plus 4 générations à la fois
   }
   assert.equal(env.votes.length, 6)
   assert.deepEqual(env.votes.map((v) => v.prompt), prompts)
+})
+
+/** Étape 488 : une file de 4 duels Code, tous finis, prête pour le vote automatique de Claude. */
+async function readyBatch(env, prompts = ['Un compteur', 'Une horloge', 'Un morpion', 'Un pendu']) {
+  await readyCode(env)
+  env.session.startDuelBatch(prompts)
+  await waitFor(() => env.session.getDuelView().batch.every((r) => r.a === 'done' && r.b === 'done'), 'tous les duels finis')
+}
+const autoVoteDone = (env) => env.session.getDuelView()?.autoVote?.running === false
+
+test('étape 488 : « Faire voter Claude » — chaque duel prêt devient un vote marqué Claude, avec le modèle et l’effort choisis', async () => {
+  const env = setup({
+    installed: MODELS,
+    vramGb: 80,
+    judge: {
+      key: 'sk-ant-cle',
+      // Le 2e duel : Claude refuse d'en juger — il reste à Léo, les autres continuent.
+      codeAdviceImpl: (n) => {
+        if (n === 2) throw new JudgeRefusalError()
+        return { outcome: n === 1 ? 'a' : 'tie', reason: `raison ${n}` }
+      }
+    }
+  })
+  await readyBatch(env)
+  for (const [model, effort] of [['gpt-5', 'high'], ['claude-opus-5-5', 'extreme']]) {
+    await assert.rejects(() => env.session.startDuelAutoVote(model, effort), /invalide/i, `${model} / ${effort} refusés`)
+  }
+  assert.equal(env.calls.judge.codeAdvice.length, 0)
+  const started = await env.session.startDuelAutoVote('claude-opus-5-5', 'high')
+  assert.equal(started.autoVote.running, true)
+  await waitFor(() => autoVoteDone(env), 'Claude a fini')
+  const view = env.session.getDuelView()
+  assert.equal(env.calls.judge.codeAdvice.length, 4, 'une demande par duel prêt, jamais deux')
+  for (const sent of env.calls.judge.codeAdvice) {
+    assert.deepEqual([sent.model, sent.effort], ['claude-opus-5-5', 'high'], 'le modèle et l’effort choisis par Léo')
+    for (const name of MODELS) assert.ok(!JSON.stringify(sent).includes(name), `aucun nom de modèle (${name})`)
+  }
+  assert.equal(env.votes.length, 3, 'trois votes comptés tout de suite (Léo : « comptent tout de suite »)')
+  assert.ok(env.votes.every((vote) => vote.judge === 'claude-opus-5-5'), 'chaque vote dit qu’il vient de Claude, et de quel modèle')
+  assert.deepEqual(env.votes.map((vote) => [vote.prompt, vote.outcome]), [['Un compteur', 'a'], ['Un morpion', 'tie'], ['Un pendu', 'tie']])
+  assert.equal(env.reviews.length, 0, 'pas la file « à vérifier » de l’étape 399')
+  assert.deepEqual([view.autoVote.voted, view.autoVote.skipped, view.autoVote.left, view.autoVote.error], [3, 1, 1, null])
+  assert.deepEqual(view.batch.map((r) => Boolean(r.revealed)), [true, false, true, true], 'le duel refusé attend Léo')
+  // Léo vote lui-même le duel laissé : la file se termine comme avant.
+  env.session.openBatchRound(view.batch[1].number)
+  await env.session.voteDuel('b')
+  assert.equal(env.votes.at(-1).judge, undefined, 'le vote de Léo n’est pas marqué Claude')
+  assert.equal(env.session.nextDuel().batch, null, 'tout est voté : fin de la file')
+})
+
+test('étape 488 : « Arrêter » abandonne la réponse en route ; un duel voté entre-temps par Léo n’est pas revoté', async () => {
+  let answer
+  const env = setup({
+    installed: MODELS,
+    vramGb: 80,
+    judge: {
+      key: 'sk-ant-cle',
+      codeAdviceImpl: (n, signal) =>
+        new Promise((resolve, reject) => {
+          if (n === 1) answer = resolve
+          signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+        })
+    }
+  })
+  await readyBatch(env)
+  await env.session.startDuelAutoVote('claude-sonnet-5-5', 'medium')
+  await waitFor(() => env.calls.judge.codeAdvice.length === 1, 'le 1er duel est chez Claude')
+  assert.equal(env.session.getDuelView().autoVote.current, env.session.getDuelView().batch[0].number)
+  // Léo vote lui-même ce duel pendant que Claude réfléchit : la réponse de Claude ne compte pas.
+  env.session.openBatchRound(env.session.getDuelView().batch[0].number)
+  await env.session.voteDuel('b')
+  env.session.nextDuel()
+  answer({ outcome: 'a', reason: 'trop tard' })
+  await waitFor(() => env.calls.judge.codeAdvice.length === 2, 'Claude passe au duel suivant')
+  assert.equal(env.votes.length, 1, 'un seul vote pour ce duel : celui de Léo')
+  const stopped = env.session.stopDuelAutoVote()
+  assert.equal(stopped.autoVote.stopping, true)
+  await waitFor(() => autoVoteDone(env), 'arrêté')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(env.votes.length, 1, 'rien n’est voté après « Arrêter »')
+  assert.equal(env.calls.judge.codeAdvice.length, 2, 'aucune nouvelle demande après « Arrêter »')
+  assert.equal(env.session.getDuelView().autoVote.error, null, 'un arrêt voulu n’est pas une erreur')
+  assert.equal(env.session.getDuelView().autoVote.left, 3, 'les trois autres attendent toujours')
+})
+
+test('étape 488 : une panne d’Anthropic arrête Claude avec un message clair ; les votes déjà faits restent', async () => {
+  const env = setup({
+    installed: MODELS,
+    vramGb: 80,
+    judge: {
+      key: 'sk-ant-cle',
+      codeAdviceImpl: (n) => {
+        if (n === 2) throw new JudgeStopError('network', 'network')
+        return { outcome: 'a', reason: 'ok' }
+      }
+    }
+  })
+  await readyBatch(env)
+  await env.session.startDuelAutoVote('claude-haiku-5-5', 'low')
+  await waitFor(() => autoVoteDone(env), 'arrêté par la panne')
+  const view = env.session.getDuelView()
+  assert.match(view.autoVote.error, /joindre Anthropic/, 'le vrai problème, en mots de Léo')
+  assert.equal(env.votes.length, 1, 'le vote fait avant la panne reste')
+  assert.equal(env.calls.judge.codeAdvice.length, 2, 'pas de nouvelle demande après la panne')
+})
+
+test('étape 488 : sans clé, sans duel prêt, hors d’une file ou pendant le juge automatique — refusé avec une raison', async () => {
+  const noKey = setup({ installed: MODELS, vramGb: 80 })
+  await readyBatch(noKey)
+  await assert.rejects(() => noKey.session.startDuelAutoVote('claude-sonnet-5-5', 'medium'), /Ajoute d'abord ta clé API Claude/)
+  assert.equal(noKey.session.getDuelView().autoVote, null)
+
+  let release
+  const gate = { promise: new Promise((resolve) => (release = resolve)) }
+  const busy = setup({ installed: MODELS, vramGb: 80, generateGate: gate, judge: { key: 'sk-ant-cle' } })
+  await readyCode(busy)
+  busy.session.startDuelBatch(['Un', 'Deux'])
+  await assert.rejects(() => busy.session.startDuelAutoVote('claude-sonnet-5-5', 'medium'), /Aucun duel n'est prêt/)
+  release()
+
+  const single = setup({ installed: MODELS, vramGb: 80, judge: { key: 'sk-ant-cle' } })
+  await readyCode(single)
+  await assert.rejects(() => single.session.startDuelAutoVote('claude-sonnet-5-5', 'medium'), /Aucun duel/)
 })
 
 test('étape 381 : sur une petite carte, un seul modèle à la fois — la file avance quand même jusqu’au bout', async () => {

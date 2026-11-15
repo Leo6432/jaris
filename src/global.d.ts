@@ -241,6 +241,8 @@ declare global {
       duelAskImage: (image: string) => Promise<DuelSessionView>
       duelVisionSamples: () => Promise<PickedImageFile[]>
       duelAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelAdvice>
+      duelAutoVote: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelSessionView>
+      duelAutoVoteStop: () => Promise<DuelSessionView | null>
       duelRunB: () => Promise<DuelSessionView>
       duelFollowUp: (message: string) => Promise<DuelSessionView>
       duelStop: () => Promise<void>

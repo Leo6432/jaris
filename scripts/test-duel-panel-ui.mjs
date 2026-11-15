@@ -159,6 +159,16 @@ window.jaris = {
     const done = side({ status: 'done', text: 'Fini', durationMs: 4000, previewUrl: 'data:text/html,<p>app</p>' })
     return (window.__view = { ...ready({ number, prompt: item.prompt, a: done, b: done, revealed: null, together: false, ...(item.sample ? { sample: item.sample } : {}) }), batch })
   },
+  // Étape 488 : Claude vote tout seul sur les duels prêts de la liste.
+  duelAutoVote: async (model, effort) => {
+    window.__calls.push(['autoVote', model, effort])
+    if (window.__autoVoteError) throw new Error(window.__autoVoteError)
+    return (window.__view = { ...window.__view, autoVote: { model, effort, current: 1, voted: 0, skipped: 0, left: 2, running: true, stopping: false, error: null } })
+  },
+  duelAutoVoteStop: async () => {
+    window.__calls.push('autoVoteStop')
+    return (window.__view = { ...window.__view, autoVote: { ...window.__view.autoVote, stopping: true } })
+  },
   duelBatchClose: async () => {
     window.__calls.push('batchClose')
     const batch = window.__view.batch
@@ -1795,4 +1805,84 @@ test('étape 484 : série Vision — « Série (je vote plus tard) » en Vision,
     },
     `window.__samples = ${JSON.stringify(SAMPLES.slice(0, 2))}; window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: null, series: { perModel: 2, download: null, waiting: null, deleted: 0, active: true }, batch: [{ number: 1, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[0].name)}, a: 'done', b: 'done', revealed: null }, { number: 2, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[1].name)}, a: 'running', b: 'idle', revealed: null }] };`
   )
+})
+
+// Étape 488 (Léo : « un bouton Claude avec l'effort et le modèle de notre choix, et Claude vote tout seul sans nous »).
+const AUTO_VOTE_LIST = (extra = '') =>
+  `window.__samples = ${JSON.stringify(SAMPLES.slice(0, 2))}; window.__category = 'vision'; window.__view = { id: 'session-1', category: 'vision', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: null, series: { perModel: 2, download: null, waiting: null, deleted: 0, active: false }, batch: [{ number: 1, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[0].name)}, a: 'done', b: 'done', revealed: null }, { number: 2, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[1].name)}, a: 'done', b: 'error', revealed: null }, { number: 3, prompt: 'Décris cette image.', sample: ${JSON.stringify(SAMPLES[0].name)}, a: 'done', b: 'done', revealed: { a: 'qwen3-vl:8b', b: 'gemma4:e4b', outcome: 'a', voteId: 'v1' } }] }; ${extra}`
+
+test('étape 488 : « Faire voter Claude » dans la liste — modèle et effort choisis, puis l’avancement et « Arrêter »', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-autovote')
+    const box = page.locator('.duel-autovote')
+    assert.match(await box.textContent(), /Ses votes comptent tout de suite/, 'Léo sait que les votes comptent sans lui')
+    assert.match(await box.textContent(), /payé avec ta clé/, 'et ce que ça coûte')
+    // Le bouton annonce les duels prêts (pas celui déjà voté) ; il est visible sans défiler, au-dessus de la liste.
+    const start = box.locator('.duel-autovote__start')
+    assert.equal(await start.textContent(), 'Faire voter Claude (duels prêts : 2)')
+    const startBox = await start.boundingBox()
+    const listBox = await page.locator('.duel-batch__list').boundingBox()
+    assert.ok(startBox.y + startBox.height <= 860 && startBox.y < listBox.y, 'trouvable sans défiler, avant la liste')
+    await box.locator('select').nth(0).selectOption('claude-opus-5-5')
+    await box.locator('select').nth(1).selectOption('high')
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/autovote-avant.png` })
+    await start.click()
+    await page.waitForSelector('.duel-autovote__stop')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'autoVote'), ['autoVote', 'claude-opus-5-5', 'high'])
+    assert.match(await box.textContent(), /Claude regarde le duel 1 \(Opus 5\.5, effort Élevé\)/)
+    assert.match(await box.textContent(), /Votés par Claude : 0 · restants : 2/)
+    assert.equal(await box.locator('.duel-autovote__start').count(), 0, 'pas de deuxième lancement pendant qu’il vote')
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/autovote-pendant.png` })
+    await page.click('.duel-autovote__stop')
+    await page.waitForFunction(() => document.querySelector('.duel-autovote')?.textContent.includes('Arrêt en cours'))
+    assert.ok((await page.evaluate(() => window.__calls)).includes('autoVoteStop'))
+  }, AUTO_VOTE_LIST(`window.__claudeKey = { saved: true, last4: 'abcd' }`))
+  // Fenêtre étroite : les deux listes et le bouton passent à la ligne, rien ne déborde.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-autovote__start')
+      const overflow = await page.evaluate(() => {
+        const box = document.querySelector('.duel-autovote').getBoundingClientRect()
+        return [...document.querySelectorAll('.duel-autovote *')].filter((el) => {
+          const r = el.getBoundingClientRect()
+          return r.width > 0 && (r.right > box.right + 0.5 || r.left < box.left - 0.5)
+        }).length
+      })
+      assert.equal(overflow, 0, 'rien ne dépasse du cadre à 760 px')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/autovote-760.png` })
+    },
+    AUTO_VOTE_LIST(`window.__claudeKey = { saved: true, last4: 'abcd' }`),
+    { width: 760, height: 860 }
+  )
+})
+
+test('étape 488 : fini — le bilan et ce qui reste à Léo ; une erreur dit la vraie raison ; sans clé, on sait quoi faire', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-autovote')
+    const text = await page.textContent('.duel-autovote')
+    assert.match(text, /Claude s'est arrêté\. Votés par Claude : 5 · restants : 2/)
+    assert.match(text, /Laissés pour toi .* : 1/)
+    assert.match(text, /Impossible de joindre Anthropic/)
+    assert.equal(await page.locator('.duel-autovote__start').count(), 1, 'on peut relancer pour les duels restants')
+  }, AUTO_VOTE_LIST(`window.__claudeKey = { saved: true, last4: 'abcd' }; window.__view.autoVote = { model: 'claude-sonnet-5-5', effort: 'medium', current: null, voted: 5, skipped: 1, left: 2, running: false, stopping: false, error: 'Impossible de joindre Anthropic (connexion internet ?).' };`))
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-autovote')
+    assert.match(await page.textContent('.duel-autovote'), /enregistre d'abord ta clé API Claude sur l'accueil du Duel/)
+    assert.equal(await page.locator('.duel-autovote__start').count(), 0)
+  }, AUTO_VOTE_LIST())
+  // Rien de prêt et jamais lancé : pas de cadre vide.
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-batch__list')
+    assert.equal(await page.locator('.duel-autovote').count(), 0)
+  }, AUTO_VOTE_LIST(`window.__claudeKey = { saved: true, last4: 'abcd' }; window.__view.batch = window.__view.batch.map((b) => ({ ...b, a: 'running' }));`))
+})
+
+test('étape 488 : l’historique dit quand c’est Claude qui a voté (et avec quel modèle)', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-history-button')
+    await page.click('.duel-history-button')
+    await page.waitForSelector('.duel-history__item')
+    assert.match(await page.textContent('.duel-history__item:nth-child(1) .duel-history__meta'), /voté par Opus 5\.5/)
+    assert.equal(await page.locator('.duel-history__item:nth-child(2) .duel-history__by-claude').count(), 0, 'un vote de Léo n’est pas marqué')
+  }, `${HISTORY}; window.__history[0].judge = 'claude-opus-5-5';`)
 })

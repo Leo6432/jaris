@@ -12318,3 +12318,32 @@ FastWan » sur la machine OVH (4 × V100S), mêmes prompts et mêmes graines, ve
   Un script de mesure VRAM sous plafond 7,5 Go (`mesure-vram.sh`) a été préparé mais pas lancé.
 - Pièges de la machine : après un « shelve », l'« unshelve » est resté longtemps en « Spawning » (attente de cartes
   libres chez OVH) ; `watch` par ssh demande `ssh -t`.
+
+## Étape 488 — « Faire voter Claude » : Claude vote tout seul les duels prêts d'une liste (v0.69.0)
+
+Léo, devant 49 duels Vision « À voter » : « ajoute un bouton Claude avec l'effort et le modèle pour demander à Claude de
+vérifier un par un, avec le modèle et l'effort de notre choix, et Claude vote tout seul sans nous ». Question posée :
+ses votes « comptent tout de suite » ou « à vérifier d'abord » (comme l'étape 399) ? **Léo : comptent tout de suite.**
+(Demande récente qui l'emporte sur le « rien ne compte avant Léo » de l'étape 399, mais seulement pour CE bouton.)
+- Moteur (`duelSession.ts`) : `startDuelAutoVote(model, effort)` (modèle et effort revérifiés, liste `DUEL_ADVICE_*`),
+  `stopDuelAutoVote()`, boucle `runAutoVote` côté main (continue si Léo quitte l'écran). Prend les duels de la file
+  finis des deux côtés et pas votés (`autoVoteCandidates`), y compris ceux qui finissent pendant qu'il tourne ; chacun
+  n'est essayé qu'une fois (`tried`). Le verdict vient de `claudeVerdict` — extrait d'`adviseDuel`, donc EXACTEMENT ce
+  que voit « Demander à Claude » pour chaque catégorie (étapes 476 à 480), jamais les noms ; le vote passe par
+  `recordVote` — extrait de `voteDuel`, même chemin que le vote de Léo — avec `judge: <modèle Claude>`.
+- Laissés à Léo (compte « skipped ») : refus de Claude pour CE duel, panne d'un outil de Jaris (`trouble`). Panne
+  d'Anthropic (clé, limite, réseau, réponse illisible) : arrêt, avec le message de l'avis (24 langues), les votes déjà
+  faits restent. « Arrêter » coupe la demande en route (signal transmis à `duelJudge`), rien n'est voté après ; un duel
+  que Léo vote lui-même pendant que Claude réfléchit n'est jamais revoté. Fin de session / fermeture : arrêt aussi.
+- Écran (`DuelPanel.tsx`) : cadre « Faire voter Claude » dans la liste des duels (série ou file), sous l'état de la
+  série : ce qui part chez Anthropic et que les votes comptent sans lui, mêmes listes Modèle/Effort que l'avis (extraites
+  en `useAdviceChoice` + `AdviceChoiceFields`, réglage commun retenu), bouton « Faire voter Claude (duels prêts : N) » ;
+  pendant : « Claude regarde le duel N (modèle, effort)… », votés/restants, laissés, « Arrêter » ; après : bilan et
+  erreur réelle, relançable. Sans clé : où l'enregistrer. Rien de prêt et jamais lancé : pas de cadre. Historique :
+  « · voté par Opus 5.5 » sur les votes de Claude (`DuelHistoryEntry.judge`). Textes sans pluriel (forme « … : N »).
+- Tests : test-duel-session.mjs (4 : votes marqués avec modèle/effort, refus laissé à Léo puis fin de file normale,
+  « Arrêter » + vote de Léo pendant la réflexion, panne réseau, refus sans clé / rien de prêt / hors file) ;
+  test-duel-panel-ui.mjs (3 : choix envoyés, avancement, Arrêter, trouvable sans défiler, 760 px sans débordement,
+  bilan/erreur/sans clé/pas de cadre vide, historique marqué). Mordent : sans le contrôle « déjà voté », sans `judge`,
+  sans le passage des refus, sans l'arrêt — chacun fait échouer un test.
+- **Non vérifié avec la vraie clé de Léo** (aucune ici) : le coût réel d'une série de 49 duels dépend du modèle choisi.

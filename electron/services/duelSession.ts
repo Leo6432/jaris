@@ -82,6 +82,8 @@ import {
   pairKey,
   rankDuels,
   selectDuelModels,
+  type DuelAdviceEffort,
+  type DuelAdviceModel,
   type DuelCategory,
   type DuelOutcome,
   type DuelSide,
@@ -235,6 +237,8 @@ interface Session {
   series: SeriesState | null
   /** Étape 399 : Claude écrit les demandes et vote (`null` = c'est Léo qui joue). */
   judge: JudgeState | null
+  /** Étape 488 : Claude vote tout seul sur les duels prêts de la file (`null` = jamais lancé dans cette session). */
+  autoVote: AutoVoteState | null
   history: DuelSummary['rounds']
   error: string | null
 }
@@ -279,6 +283,26 @@ interface SeriesState {
 }
 
 /** Étape 399 : la suite de duels Conversation jugés par Claude. */
+/**
+ * Étape 488 (Léo, devant 49 duels Vision à voter : « un bouton Claude, avec l'effort et le modèle de notre choix, et
+ * Claude vote tout seul sans nous ») : les duels prêts de la file passent un par un chez Claude, et son verdict devient
+ * directement un vote (marqué `judge`) — Léo a choisi « comptent tout de suite », pas la vérification de l'étape 399.
+ */
+interface AutoVoteState {
+  model: DuelAdviceModel
+  effort: DuelAdviceEffort
+  /** Le duel chez Claude en ce moment (`null` = entre deux, ou fini). */
+  current: number | null
+  voted: number
+  /** Duels laissés à Léo : Claude a refusé d'en juger, ou un outil de Jaris y a échoué. */
+  skipped: number
+  /** Duels déjà essayés (votés ou laissés), pour ne jamais repasser deux fois sur le même. */
+  tried: Set<number>
+  controller: AbortController
+  finished: boolean
+  error: string | null
+}
+
 interface JudgeState {
   perModel: number
   plan: [string, string][]
@@ -434,6 +458,19 @@ export function getDuelView(): DuelSessionView | null {
           finished: session.judge.finished,
           stopped: session.judge.controller.signal.aborted,
           error: session.judge.error
+        }
+      : null,
+    autoVote: session.autoVote
+      ? {
+          model: session.autoVote.model,
+          effort: session.autoVote.effort,
+          current: session.autoVote.current,
+          voted: session.autoVote.voted,
+          skipped: session.autoVote.skipped,
+          left: session.autoVote.finished ? autoVoteCandidates(session).length : autoVoteCandidates(session).filter((r) => !session?.autoVote?.tried.has(r.number)).length,
+          running: !session.autoVote.finished,
+          stopping: !session.autoVote.finished && session.autoVote.controller.signal.aborted,
+          error: session.autoVote.error
         }
       : null,
     error: session.error
@@ -661,6 +698,7 @@ export async function startDuel(
     round: null,
     batch: null,
     series: null,
+    autoVote: null,
     judge: judgePlan
       ? {
           perModel: judgePerModel as number,
@@ -856,26 +894,46 @@ export async function adviseDuel(model: unknown, effort: unknown): Promise<DuelA
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
   const apiKey = await loadClaudeKey()
   if (!apiKey) throw new Error(t('judge.error.noKey'))
-  const { a, b } = round.sides
   try {
+    return await claudeVerdict(current, round, apiKey, model, effort)
+  } catch (err) {
+    throw adviceError(current, err)
+  }
+}
+
+/**
+ * Le verdict de Claude sur UN duel fini (étapes 476 à 480), commun à « Demander à Claude » et au vote automatique de
+ * l'étape 488 : chaque catégorie montre à Claude ce qui compte pour elle, jamais les noms des modèles.
+ */
+async function claudeVerdict(
+  current: Session,
+  round: RoundState,
+  apiKey: string,
+  model: DuelAdviceModel,
+  effort: DuelAdviceEffort,
+  signal?: AbortSignal
+): Promise<DuelAdvice> {
+  const { a, b } = round.sides
+  const prompt = round.prompt ?? ''
+  {
     // Étape 480 (Léo : « le système demander à Claude, à Code aussi, et à Message et à Vocal, à tout ») : chaque
     // catégorie montre à Claude ce qui compte pour elle. Jamais les noms des modèles (A et B seulement).
     const verdict =
       current.category === 'vision'
-        ? await askClaudeVisionAdvice(apiKey, { image: round.image ?? '', a: a.text, b: b.text, model, effort })
+        ? await askClaudeVisionAdvice(apiKey, { image: round.image ?? '', a: a.text, b: b.text, model, effort }, signal)
         : current.category === 'code'
           ? await adviseCodeDuel(apiKey, {
-              prompt: round.prompt,
+              prompt,
               followUps: round.followUps,
               a: { html: a.html, error: a.error },
               b: { html: b.html, error: b.error },
               model,
               effort
-            })
+            }, signal)
           : await judgeDuel(apiKey, {
               // Conversation et Vocal : exactement ce que voit le juge automatique (outils appelés et leurs résultats,
               // pas seulement ce que le modèle affirme), plus les tours où Léo a répondu aux deux modèles.
-              prompt: round.prompt,
+              prompt,
               a: { ...judgedSide(a), earlier: a.earlier.map((turn) => turn.text) },
               b: { ...judgedSide(b), earlier: b.earlier.map((turn) => turn.text) },
               tools: TOOLS.filter((tool) => round.tools?.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description })),
@@ -883,16 +941,18 @@ export async function adviseDuel(model: unknown, effort: unknown): Promise<DuelA
               spoken: current.category === 'voice',
               model,
               effort
-            })
+            }, signal)
     return { outcome: verdict.outcome, reason: verdict.reason }
-  } catch (err) {
-    // Les messages du juge parlent des « votes déjà faits » (duels automatiques) : ici, des mots à cet écran.
-    if (err instanceof JudgeRefusalError) throw new Error(t(current.category === 'vision' ? 'duel.vision.advice.refused' : 'duel.advice.refused'))
-    if (err instanceof JudgeStopError && err.kind === 'rate') throw new Error(t('duel.vision.advice.rate'))
-    if (err instanceof JudgeStopError && err.kind === 'network') throw new Error(t('duel.vision.advice.network'))
-    if (err instanceof JudgeStopError && err.kind === 'unreadable') throw new Error(t('duel.vision.advice.unreadable'))
-    throw err
   }
+}
+
+/** Les messages du juge parlent des « votes déjà faits » (duels automatiques) : ici, des mots à ces écrans. */
+function adviceError(current: Session, err: unknown): unknown {
+  if (err instanceof JudgeRefusalError) return new Error(t(current.category === 'vision' ? 'duel.vision.advice.refused' : 'duel.advice.refused'))
+  if (err instanceof JudgeStopError && err.kind === 'rate') return new Error(t('duel.vision.advice.rate'))
+  if (err instanceof JudgeStopError && err.kind === 'network') return new Error(t('duel.vision.advice.network'))
+  if (err instanceof JudgeStopError && err.kind === 'unreadable') return new Error(t('duel.vision.advice.unreadable'))
+  return err
 }
 
 /**
@@ -1636,6 +1696,7 @@ export async function restoreDuelSeries(): Promise<boolean> {
     batch: rounds,
     series,
     judge: null,
+    autoVote: null,
     history: [],
     error: null
   }
@@ -1935,6 +1996,16 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   // Un outil de Jaris a échoué : ce duel ne dit rien des modèles, il se rejoue ou se passe (retryDuel, skipDuel).
   if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
+  await recordVote(current, round, outcome)
+  return getDuelView() as DuelSessionView
+}
+
+/**
+ * Garde le vote d'un duel fini et révèle les noms — le vote de Léo, ou (étape 488) celui de Claude, marqué `judge`
+ * avec l'identifiant du modèle qui a jugé.
+ */
+async function recordVote(current: Session, round: RoundState, outcome: DuelOutcome, judge?: DuelAdviceModel): Promise<void> {
+  if (round.prompt === null) throw new Error(t('duel.error.noRound'))
   const [modelA, modelB] = round.pair
   const id = randomUUID()
   const keep = async (name: DuelSide): Promise<DuelVoteSide> => {
@@ -1972,9 +2043,10 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
     outcome,
     prompt: round.prompt,
     ...(round.followUps.length ? { followUps: [...round.followUps] } : {}),
-    sides
+    sides,
+    ...(judge ? { judge } : {})
   })
-  if (session !== current) return getDuelView() as DuelSessionView
+  if (session !== current) return
   current.history.push({ prompt: round.prompt, modelA, modelB, outcome })
   const key = pairKey(modelA, modelB)
   current.played.set(key, (current.played.get(key) ?? 0) + 1)
@@ -1983,7 +2055,83 @@ export async function voteDuel(outcome: DuelOutcome): Promise<DuelSessionView> {
   // Étape 382 : un duel voté quitte la série gardée sur le disque (il est maintenant dans les votes).
   if (current.series) persistSeries(current)
   emitNow()
+}
+
+/** Étape 488 : les duels de la file que Claude peut voter — finis des deux côtés et pas encore votés. */
+function autoVoteCandidates(current: Session): RoundState[] {
+  return (current.batch ?? []).filter((round) => !round.revealed && round.prompt !== null && sideFinished(round.sides.a) && sideFinished(round.sides.b))
+}
+
+/**
+ * Étape 488 : Claude vote tout seul, un duel après l'autre, sur les duels prêts de la file. Le modèle et l'effort sont
+ * revérifiés ici (seulement ceux proposés à l'écran). Les duels qui finissent pendant ce temps sont pris aussi.
+ */
+export async function startDuelAutoVote(model: unknown, effort: unknown): Promise<DuelSessionView> {
+  const current = session
+  if (!isDuelAdviceModel(model) || !isDuelAdviceEffort(effort)) throw new Error(t('duel.error.badRequest'))
+  if (!current?.batch) throw new Error(t('duel.error.noRound'))
+  if (current.judge) throw new Error(t('duel.error.notYourTurn'))
+  if (current.autoVote && !current.autoVote.finished) return getDuelView() as DuelSessionView
+  if (!autoVoteCandidates(current).length) throw new Error(t('duel.autoVote.none'))
+  const apiKey = await loadClaudeKey()
+  if (!apiKey) throw new Error(t('judge.error.noKey'))
+  if (session !== current) throw new Error(t('duel.error.noSession'))
+  const state: AutoVoteState = { model, effort, current: null, voted: 0, skipped: 0, tried: new Set(), controller: new AbortController(), finished: false, error: null }
+  current.autoVote = state
+  void runAutoVote(current, state, apiKey)
+  emitNow()
   return getDuelView() as DuelSessionView
+}
+
+/** Étape 488 : « Arrêter » — la réponse en route est abandonnée, rien n'est voté après. */
+export function stopDuelAutoVote(): DuelSessionView | null {
+  const state = session?.autoVote
+  if (state && !state.finished) {
+    state.controller.abort()
+    emitNow()
+  }
+  return getDuelView()
+}
+
+async function runAutoVote(current: Session, state: AutoVoteState, apiKey: string): Promise<void> {
+  const live = (): boolean => session === current && current.autoVote === state && !state.controller.signal.aborted
+  try {
+    while (live()) {
+      const round = autoVoteCandidates(current).find((r) => !state.tried.has(r.number))
+      if (!round) break
+      state.tried.add(round.number)
+      // Un outil de Jaris a échoué : ce duel ne dit rien des modèles — il reste à Léo (rejouer ou passer).
+      if (round.sides.a.trouble || round.sides.b.trouble) {
+        state.skipped += 1
+        continue
+      }
+      state.current = round.number
+      emitNow()
+      let verdict: DuelAdvice
+      try {
+        verdict = await claudeVerdict(current, round, apiKey, state.model, state.effort, state.controller.signal)
+      } catch (err) {
+        if (!live()) break
+        // Claude refuse de juger CE duel : il reste à Léo, les autres continuent.
+        if (err instanceof JudgeRefusalError) {
+          state.skipped += 1
+          continue
+        }
+        throw adviceError(current, err)
+      }
+      // Arrêté pendant que Claude réfléchissait, ou Léo a voté ce duel lui-même entre-temps : rien n'est compté.
+      if (!live() || round.revealed) continue
+      await recordVote(current, round, verdict.outcome, state.model)
+      if (session === current) state.voted += 1
+    }
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : String(err)
+    console.error('[jaris] Duel : vote automatique de Claude arrêté —', err)
+  } finally {
+    state.current = null
+    state.finished = true
+    if (session === current) emitNow()
+  }
 }
 
 /** Après la révélation des noms : le duel suivant (une autre paire). */
@@ -2115,7 +2263,8 @@ export function duelHistory(): DuelHistoryEntry[] {
       outcome: vote.outcome,
       modelA: vote.modelA,
       modelB: vote.modelB,
-      sides: vote.sides ?? null
+      sides: vote.sides ?? null,
+      ...(vote.judge ? { judge: vote.judge } : {})
     }))
 }
 
@@ -2550,6 +2699,7 @@ export async function endDuel(force = false): Promise<DuelSummary> {
   if (unvoted > 0 && !force) throw new Error(t('duel.endConfirm.needed', { count: unvoted }))
   prepareController?.abort()
   current.judge?.controller.abort()
+  current.autoVote?.controller.abort()
   abortRuns()
   // Étape 382 : « Terminer » arrête la série pour de bon — les duels non votés sont abandonnés.
   if (current.series) {
@@ -2662,6 +2812,7 @@ export function closeDuel(): void {
 export function abortDuel(): void {
   prepareController?.abort()
   session?.judge?.controller.abort()
+  session?.autoVote?.controller.abort()
   // Étape 382 : la série s'arrête, mais reste gardée sur le disque — elle reprend au prochain lancement.
   if (session?.series) {
     const current = session
