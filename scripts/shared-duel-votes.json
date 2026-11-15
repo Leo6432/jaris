@@ -851,15 +851,6 @@
     "outcome": "a"
   },
   {
-    "id": "3b61c213-e173-4aa8-b1ff-4f0218ca0893",
-    "category": "vision",
-    "at": 1794685318548,
-    "sessionId": "ef7a807b-e9da-4264-b2aa-23a5c7881467",
-    "modelA": "qwen3.8:27b",
-    "modelB": "gemma4:26b",
-    "outcome": "tie"
-  },
-  {
     "id": "8295ae4f-f375-4bef-a0ca-bccbe24a40c3",
     "category": "vision",
     "at": 1794685330477,

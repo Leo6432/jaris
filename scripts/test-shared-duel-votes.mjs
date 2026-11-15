@@ -33,6 +33,12 @@ test('le fichier livré contient les votes de Léo, sans demande ni réponses, e
     assert.deepEqual(Object.keys(v).sort(), keys)
     if (v.judge) assert.ok(duel.isDuelAdviceModel(v.judge), v.judge)
   }
+  // Étape 490 : aucun vote retiré à la demande de Léo n'est livré.
+  const excluded = JSON.parse(readFileSync(new URL('./excluded-duel-votes.json', import.meta.url), 'utf8'))
+  for (const { id, why } of excluded) {
+    assert.ok(why, 'chaque retrait dit pourquoi')
+    assert.ok(!votes.some((v) => v.id === id), `vote retiré encore livré : ${id}`)
+  }
   const ranking = duel.rankDuels(parsed.filter((v) => v.category === 'code'))
   assert.ok(ranking.has('qwen3.8:27b') && ranking.has('gemma4:26b'))
   assert.match(readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8'), /- shared-duel-votes\.json/)
@@ -86,6 +92,12 @@ test('import : garde les champs du classement, ignore les doublons, refuse un au
     const marked = JSON.parse(readFileSync(shared, 'utf8'))
     assert.deepEqual(marked.map((v) => [v.id, v.judge ?? null]), [['a', 'claude-opus-5-5'], ['b', null], ['c', 'claude-haiku-5-5']])
     assert.ok(!('judge' in marked[1]), 'un vote humain n’a pas de champ judge du tout')
+    // Étape 490 : un vote retiré à la demande de Léo disparaît du fichier partagé et ne revient jamais à l'import.
+    const excluded = join(dir, 'excluded.json')
+    writeFileSync(excluded, JSON.stringify([{ id: 'b', why: 'B n’a rien répondu' }]))
+    assert.deepEqual(importDuelVotes(again, shared, excluded), { added: 0, total: 2 })
+    assert.deepEqual(importDuelVotes(exp, shared, excluded), { added: 0, total: 2 }, 'réimporter l’export qui le contient ne le ramène pas')
+    assert.deepEqual(JSON.parse(readFileSync(shared, 'utf8')).map((v) => v.id), ['a', 'c'])
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

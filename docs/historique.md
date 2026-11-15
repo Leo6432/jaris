@@ -12367,3 +12367,19 @@ ses votes « comptent tout de suite » ou « à vérifier d'abord » (comme l'é
   vote (égalité de K2 Horizon 3.7B contre qwen3.5:27b, le premier du classement) — c'est la règle Arena voulue (étape
   358), mais fragile tant que les votes Conversation restent si peu nombreux (9). Sur le PC de Léo, rien ne bascule
   tout seul : un modèle en service n'est remplacé qu'avec au moins 5 duels et plus de 95 % de chances (étape 360).
+
+## Étape 490 — v0.69.2 : un vote Vision faussé retiré, et il ne reviendra plus
+
+Léo : « et toi tu as revérifié les votes ? ». Contrôles sur les 74 nouveaux votes : aucun gagnant vide ou en erreur,
+aucun doublon de contenu, aucun modèle inconnu, aucun duel d'un modèle contre lui-même. Un seul cas faussé : Duel Vision
+(qwen3.8:27b contre gemma4:26b), B n'a rien décrit (« trop long à répondre » sur la machine) et le vote était une
+égalité — des points pour un modèle qui n'a rien fait. Question à choix : **Léo : le retirer.**
+- `scripts/excluded-duel-votes.json` (identifiant + raison, non livré avec Jaris) : `import-duel-votes.mjs` enlève ces
+  votes du fichier partagé et ne les réimporte jamais. Nécessaire parce que supprimer un duel de l'historique garde son
+  vote dans l'export (étape 398) : sans la liste, il reviendrait au prochain fichier de Léo.
+- 162 votes livrés. Choix des modèles sur les 24 machines types : identiques à l'étape 489 (le vote n'en changeait aucun).
+- Test : test-shared-duel-votes.mjs (le fichier livré ne contient aucun vote retiré, chaque retrait dit pourquoi ;
+  réimporter l'export qui le contient ne le ramène pas). Mord : sans la liste dans `known`, le vote revient.
+- Pourquoi la question de Léo « le fichier est plus léger alors qu'il garde tous les votes ? » : les 71 votes du 14/11
+  sont tous là ; ce sont les 60 applications des duels Code supprimés de l'historique qui ne sont plus dans l'export
+  (807 Ko → 274 Ko d'applications), comme l'annonce la confirmation de « Tout supprimer ».

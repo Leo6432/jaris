@@ -11,16 +11,27 @@ const { parseDuelVotes } = loadTsModule('shared/duel.ts')
 // séparer les votes de Claude de ceux de Léo.
 const KEPT = ['id', 'category', 'at', 'sessionId', 'modelA', 'modelB', 'outcome', 'judge']
 export const DEFAULT_SHARED = fileURLToPath(new URL('./shared-duel-votes.json', import.meta.url))
+/**
+ * Étape 490 : votes retirés à la demande de Léo (identifiant + raison). Supprimer un duel de l'historique de Jaris garde
+ * son vote dans l'export (étape 398) : sans cette liste, le vote retiré reviendrait au prochain import.
+ */
+export const DEFAULT_EXCLUDED = fileURLToPath(new URL('./excluded-duel-votes.json', import.meta.url))
+
+function excludedIds(path) {
+  if (!path || !existsSync(path)) return new Set()
+  return new Set(JSON.parse(readFileSync(path, 'utf8')).map((entry) => entry.id))
+}
 
 /** Fusionne l'export dans le fichier partagé. Renvoie le nombre de votes ajoutés et le total. */
-export function importDuelVotes(exportText, sharedPath = DEFAULT_SHARED) {
+export function importDuelVotes(exportText, sharedPath = DEFAULT_SHARED, excludedPath = DEFAULT_EXCLUDED) {
+  const excluded = excludedIds(excludedPath)
   const data = JSON.parse(exportText)
   if (data?.format !== 'jaris-duel-votes' || !Array.isArray(data.votes)) {
     throw new Error('Ce fichier n’est pas un export de votes de Jaris (format « jaris-duel-votes » attendu).')
   }
   const incoming = (parseDuelVotes(data.votes) ?? []).map((v) => Object.fromEntries(KEPT.map((k) => [k, v[k]])))
-  const current = existsSync(sharedPath) ? parseDuelVotes(JSON.parse(readFileSync(sharedPath, 'utf8'))) ?? [] : []
-  const known = new Set(current.map((v) => v.id))
+  const current = (existsSync(sharedPath) ? parseDuelVotes(JSON.parse(readFileSync(sharedPath, 'utf8'))) ?? [] : []).filter((v) => !excluded.has(v.id))
+  const known = new Set([...current.map((v) => v.id), ...excluded])
   const added = incoming.filter((v) => !known.has(v.id) && known.add(v.id))
   // Un vote déjà partagé, importé avant l'étape 489 sans sa marque `judge`, la retrouve.
   const judgeOf = new Map(incoming.filter((v) => v.judge).map((v) => [v.id, v.judge]))
