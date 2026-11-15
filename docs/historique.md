@@ -12298,3 +12298,23 @@ capture (une phrase sous le tableau) : « améliore le design, et mets-les en de
   ui.mjs (chaque nombre mesuré sous l'en-tête de sa colonne, total sous « Modèle », une seule ligne de total).
 - Vu en passant : « étape 453 : disque de la machine juste » (test-benchmark-cases.mjs) a échoué UNE fois dans une
   suite complète, puis réussi seul 3 fois et dans la suite complète relancée — sensible à la charge de la machine.
+
+## Étape 487 — Essai Kandinsky sur la machine louée : on garde FastWan (vidéo) et klein (image)
+
+Léo : « regarde les nouveaux modèles… existe-t-il mieux que FastWan 2.2 ? », puis « essai de Kandinsky 6 Lite et
+FastWan » sur la machine OVH (4 × V100S), mêmes prompts et mêmes graines, versions compressées que Jaris propose.
+- Recherche (sources primaires : registre Hugging Face, pages Kandinsky Lab, Habr de Sber) : « Kandinsky 6.0 Image Pro »
+  existe (MoE ~6B) mais est FERMÉ (GigaChat seulement, aucun poids publié) ; Kandinsky 6.0 Pro est vidéo seule (29B,
+  80 Go). Comparés : FastWan Q6 (sd.cpp compilé CUDA sm_70, lignes de commande exactes de Jaris) contre Kandinsky 6.0
+  Lite distill (diffusers 0.43.0, 864×480, 121 images, 10 étapes) ; klein Q4_0 contre Kandinsky 5.0 Image Lite sft
+  (1024², 50 étapes, guidance 3,5). Script `essai-ovh.sh` donné à Léo (non versionné : outil ponctuel).
+- Temps mesurés (V100S, FastWan/klein chargement compris) : vidéo FastWan 196 s / 202 s, Kandinsky 6 Lite 309 s / 303 s
+  (+ son) ; image klein 25 s / 16 s, Kandinsky 5 Image 574 s / 556 s.
+- Piège V100 : Kandinsky en bf16 → « CUDA out of memory, 263 GiB » (l'attention retombe sur le calcul naïf, pas de
+  noyau bf16 sur sm_70) ; le script repassait tout seul en float16, qui a marché.
+- Décision de Léo : images « pas vraiment meilleures » → klein reste ; vidéo : tenté par Kandinsky, puis « on laisse
+  comme ça » après le rappel des coûts (Qwen2.5-VL 7B de 16,6 Go comme lecteur de texte, ~27 Go au total, PyTorch
+  CUDA seulement — les cartes AMD perdraient la vidéo, nouveau moteur Python à embarquer). Rien ne change dans Jaris.
+  Un script de mesure VRAM sous plafond 7,5 Go (`mesure-vram.sh`) a été préparé mais pas lancé.
+- Pièges de la machine : après un « shelve », l'« unshelve » est resté longtemps en « Spawning » (attente de cartes
+  libres chez OVH) ; `watch` par ssh demande `ssh -t`.
