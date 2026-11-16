@@ -12420,3 +12420,10 @@ PWA »), identité : `Moulard.Jaris`, `CN=32D80499-7B84-467E-9549-326C1D710140`,
   reorganization-ui (bouton Windows au lieu de l'interrupteur, pas de bouton de mise à jour). Chacun mord.
 - **Non vérifié ici** (pas de Windows) : l'installation et le lancement réels — c'est le test de la CI qui le dira ;
   l'acceptation par le Store (certification de Microsoft).
+- Piège : en cassant exprès le test de la racine Store (vérifier qu'il mord), le code d'avant a calculé une racine
+  « D:\WindowsApps\…\Jaris-data » — un chemin Windows, donc RELATIF sous Linux — et l'a créée dans le dépôt ; elle est
+  partie avec la v0.70.0 et la CI a échoué dès la récupération du code (nom impossible sous Windows). Retirée au commit
+  suivant (même version, aucune Release n'avait été créée). Après chaque test de mutation : `git status` avant de commiter.
+- Fiche Store : `docs/microsoft-store.md` (textes FR/EN, IA générative déclarée, dépendances annoncées en tête de la
+  description comme l'exige la règle 10.2.4, notes de certification) et `docs/confidentialite.md` (règle 10.5.1),
+  pages GitHub publiques ; signalement des contenus par les « Issues » du dépôt (règle 11.16).
