@@ -1510,5 +1510,315 @@
     "modelA": "qwen3.5:2b",
     "modelB": "qwen3.6:27b",
     "outcome": "b"
+  },
+  {
+    "id": "3314c580-43fe-47ec-8c9d-3bfaddd11cec",
+    "category": "vision",
+    "at": 1794852658025,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "efcd99a3-10a1-47cc-bd65-cbcec514afeb",
+    "category": "vision",
+    "at": 1794852661105,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "qwen3.8:27b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "c5badffa-2ee5-40f2-96f9-fdf83a0aa20b",
+    "category": "vision",
+    "at": 1794852666597,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "7e732213-c64a-45bd-a30e-4d03afe0dd9e",
+    "category": "vision",
+    "at": 1794852670841,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "gemma4:26b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "4b78c2be-2e32-4cb8-b54a-0c0c146f04d2",
+    "category": "vision",
+    "at": 1794852676026,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:4b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "5829be24-c3dd-496b-bdd2-117f549b7dfe",
+    "category": "vision",
+    "at": 1794852678601,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "d14e98c8-e306-4007-ae9c-5feff50afd24",
+    "category": "vision",
+    "at": 1794852680987,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3-vl:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "2613b103-9aa3-4c90-ace1-a03ceb1f4826",
+    "category": "vision",
+    "at": 1794852684276,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "50c78f5f-767c-4e8e-ae0d-64f92f3aeb20",
+    "category": "vision",
+    "at": 1794852689158,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "42699771-86a8-4cee-9fc0-428eb2113975",
+    "category": "vision",
+    "at": 1794852693762,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.5:4b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "513dbbb0-f650-43e6-88e9-b9ba65ed0865",
+    "category": "vision",
+    "at": 1794852697214,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "gemma4:26b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "5caccb91-bfe9-4e9f-90c8-4aa65132b124",
+    "category": "vision",
+    "at": 1794852704284,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.5:4b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "57f1ba2c-1740-4bba-b1bb-fb1ba9492612",
+    "category": "vision",
+    "at": 1794852709360,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.5:4b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "0f9d0d2a-549e-401d-9105-8103029430a9",
+    "category": "vision",
+    "at": 1794852712243,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.5:4b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "19fb31e9-4f35-4b0e-8bd5-62ba7cf3c552",
+    "category": "vision",
+    "at": 1794852714814,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "qwen3.5:4b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "c82ec765-370d-4614-86b8-673e6b3cfe88",
+    "category": "vision",
+    "at": 1794852718639,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "29011c62-40ca-4cda-bdfe-68bcc3f56332",
+    "category": "vision",
+    "at": 1794852724946,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "ee478170-14e1-44bb-b36e-1e7e5e2796cf",
+    "category": "vision",
+    "at": 1794852727686,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "2c2d65e3-de34-4a04-8801-13f5cd60b6f0",
+    "category": "vision",
+    "at": 1794852732073,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3-vl:2b",
+    "modelB": "gemma4:26b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "cc213bf8-71e6-478d-9af9-da511c37e90a",
+    "category": "vision",
+    "at": 1794852736478,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "muse-glimmer:30b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "7b04f366-9939-4256-9361-1b3dc91d85aa",
+    "category": "vision",
+    "at": 1794852742326,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3-vl:2b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "2ee5efe2-1cdd-4578-8697-4a1d1015c5d1",
+    "category": "vision",
+    "at": 1794852749145,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "muse-glimmer:30b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "1fc3a803-5ab5-45d5-b747-7d205c4e5f4e",
+    "category": "vision",
+    "at": 1794852756342,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "481dc150-f081-4f9b-bacd-37a062392b10",
+    "category": "vision",
+    "at": 1794852761069,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "muse-glimmer:30b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "bd63e25c-3678-4b67-b5cc-4a534fd6f654",
+    "category": "vision",
+    "at": 1794852769383,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "muse-glimmer:30b",
+    "modelB": "gemma4:26b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "08cd60d5-105e-418f-b03c-d3c33b43480e",
+    "category": "vision",
+    "at": 1794852773490,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "muse-glimmer:30b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "b0cef6a1-0b10-49fa-8a90-4a687965ad9e",
+    "category": "vision",
+    "at": 1794852778954,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "qwen3.8:27b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "ba3929be-55bf-4698-a657-9a5adfa6cfe0",
+    "category": "vision",
+    "at": 1794852785740,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "gemma4:26b",
+    "outcome": "a",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "ff288c7f-9e31-4324-9973-f791478c0fdc",
+    "category": "vision",
+    "at": 1794852787702,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "qwen3.8:27b",
+    "modelB": "gemma4:26b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "7f72e06c-1470-47ba-abc5-93645353033d",
+    "category": "vision",
+    "at": 1794852792265,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "ornith-1.5:35b",
+    "modelB": "gemma4:26b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
+  },
+  {
+    "id": "951da7aa-d09c-4df4-b539-aa8a2a71cd1b",
+    "category": "vision",
+    "at": 1794852796889,
+    "sessionId": "8ef1c60e-df20-443f-b955-5f4ac4555fc4",
+    "modelA": "gemma4:26b",
+    "modelB": "ornith-1.5:35b",
+    "outcome": "b",
+    "judge": "claude-opus-5-5"
   }
 ]

@@ -12427,3 +12427,14 @@ PWA »), identité : `Moulard.Jaris`, `CN=32D80499-7B84-467E-9549-326C1D710140`,
 - Fiche Store : `docs/microsoft-store.md` (textes FR/EN, IA générative déclarée, dépendances annoncées en tête de la
   description comme l'exige la règle 10.2.4, notes de certification) et `docs/confidentialite.md` (règle 10.5.1),
   pages GitHub publiques ; signalement des contenus par les « Issues » du dépôt (règle 11.16).
+
+## Étape 492 — v0.70.1 : votes du 16/11 livrés (31 votes Vision de Claude)
+
+- `node scripts/import-duel-votes.mjs jaris-votes-2026-11-16.json` (export de Jaris 0.69.2, 176 votes) → 31 ajoutés,
+  tous Vision votés par Claude (`claude-opus-5-5`, 18 A / 13 B), 193 au total. Contrôles comme à l'étape 490 : aucun
+  gagnant vide ou en erreur, aucune égalité avec un côté vide, aucun doublon, aucun modèle inconnu, le vote retiré à
+  l'étape 490 n'est pas revenu. 18 votes partagés ne sont plus dans cet export (anciens exports, ou duels supprimés
+  de ce PC) : l'import n'enlève jamais rien, ils restent livrés.
+- Classement Vision (105 votes) : gemma4:31b (8-1-1), muse-glimmer:30b (15-5-0), qwen3.8:27b (14-5-0), gemma4:26b.
+- Choix d'une installation neuve sur les 24 machines types : 3 changements, tous sur 32 Go de carte (Vision
+  muse-glimmer:30b → gemma4:31b). Machine de Léo (8 Go/32 Go) : rien ne change.
