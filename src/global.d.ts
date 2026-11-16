@@ -242,6 +242,9 @@ declare global {
       duelVisionSamples: () => Promise<PickedImageFile[]>
       duelAdvice: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelAdvice>
       duelAutoVote: (model: DuelAdviceModel, effort: DuelAdviceEffort) => Promise<DuelSessionView>
+      /** Étape 491 : version Microsoft Store. Absent dans les faux ponts des tests = version habituelle. */
+      storeBuild?: boolean
+      openStartupSettings: () => Promise<void>
       duelAutoVoteStop: () => Promise<DuelSessionView | null>
       duelRunB: () => Promise<DuelSessionView>
       duelFollowUp: (message: string) => Promise<DuelSessionView>

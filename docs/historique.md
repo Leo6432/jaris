@@ -12383,3 +12383,40 @@ aucun doublon de contenu, aucun modèle inconnu, aucun duel d'un modèle contre 
 - Pourquoi la question de Léo « le fichier est plus léger alors qu'il garde tous les votes ? » : les 71 votes du 14/11
   sont tous là ; ce sont les 60 applications des duels Code supprimés de l'historique qui ne sont plus dans l'export
   (807 Ko → 274 Ko d'applications), comme l'annonce la confirmation de « Tout supprimer ».
+
+## Étape 491 — v0.70.0 : version Microsoft Store (paquet MSIX)
+
+Léo : « on va publier sur Microsoft Store ». Sources primaires lues (Microsoft Learn) : un installeur EXE/MSI doit être
+signé, avec tous ses fichiers PE, par un certificat d'une autorité du Trusted Root Program (règle 10.2.9) — payant
+(150-300 €/an), Azure Artifact Signing étant réservé aux particuliers des États-Unis et du Canada ; un MSIX est signé
+GRATUITEMENT par le Store. Question à choix : **Léo : MSIX.** Produit recréé dans l'Espace partenaires (type « MSIX ou
+PWA »), identité : `Moulard.Jaris`, `CN=32D80499-7B84-467E-9549-326C1D710140`, `Moulard`, famille
+`Moulard.Jaris_5g9va5hqem6jc`, Store ID 9MW4KQRBLSPD.
+- Empaquetage : `electron-builder.yml` → cible `appx` en plus de `nsis` (`Jaris-Store-X.Y.Z.msix`, non signé : le Store
+  signe), manifeste `installer/AppxManifest.xml` (modèle d'electron-builder + tâche de démarrage `JarisAtLogin` +
+  alias `jaris.exe`), fiches fr-FR/en-US seulement (chaque langue déclarée demande une fiche ; Jaris garde ses 24
+  langues), logos `build/appx/` faits par `scripts/build-icon.mjs` depuis le vrai logo (sinon ceux d'exemple).
+- Ce qui change dans un paquet (doc « How packaged desktop apps run ») et comment Jaris s'y plie :
+  - AppData : tout nouveau fichier d'un paquet y est rangé à part, invisible de l'Explorateur → « Ouvrir le dossier »
+    (images, vidéos, applications, mémoire, journal) montrerait un dossier vide. La version Store range donc ses données
+    dans `%USERPROFILE%\Jaris` (`storeRootFor`, storageRoot.ts ; jamais Documents, souvent synchronisé par OneDrive),
+    jamais à côté du programme (WindowsApps, lecture seule). Un repère d'un Jaris déjà installé est repris tel quel.
+    Écarté : la capacité `unvirtualizedResources` (+ desktop6) — Microsoft la réserve « à certains jeux ».
+  - HKCU : écritures rangées à part → la clé Run ne lancerait jamais Jaris. Le manifeste déclare une tâche de
+    démarrage (désactivée par défaut) ; Options → Général montre alors « Ouvrir les réglages de Windows »
+    (`ms-settings:startupapps`, adresse fixe côté main) au lieu d'un interrupteur qui ne pourrait pas lire son état.
+  - Mises à jour : par le Store. `checkForUpdate`/`updateApp` ne font rien dans la version Store, Options le dit
+    (« Cette version vient du Microsoft Store… »), sans bouton. La mise à jour habituelle prend toujours le `.exe` de la
+    Release, qui porte maintenant aussi le `.msix`.
+  - Barre des tâches : pas d'appId à nous ni de commande de relance vers WindowsApps (chemin changé à chaque mise à
+    jour) dans la version Store.
+  - Détection : `process.windowsStore` (Électron), exposé à l'écran par le préchargement (`storeBuild`).
+- CI (build-installer.yml) : le `.msix` est signé avec un certificat jetable au nom de l'éditeur, INSTALLÉ, lancé
+  (`shell:AppsFolder\…!Jaris`), doit tourner après 20 s et avoir créé `%USERPROFILE%\Jaris` ; le nom de famille calculé
+  par Windows doit être celui de l'Espace partenaires (vérifie l'éditeur recopié d'une capture). Joint aux Releases.
+- Tests : test-data-location (racine Store, données d'avant reprises, installeur habituel inchangé), test-launch-at-
+  startup (aucune clé Run en version Store, tâche de démarrage dans le manifeste, canal d'ouverture fixe), test-app-
+  updater (aucun appel GitHub ni installeur en version Store ; .exe choisi malgré le .msix), test-options-
+  reorganization-ui (bouton Windows au lieu de l'interrupteur, pas de bouton de mise à jour). Chacun mord.
+- **Non vérifié ici** (pas de Windows) : l'installation et le lancement réels — c'est le test de la CI qui le dira ;
+  l'acceptation par le Store (certification de Microsoft).

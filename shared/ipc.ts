@@ -593,6 +593,8 @@ export interface LaunchAtStartupStatus {
   enabled: boolean
   /** Entrée présente mais désactivée dans les applications de démarrage de Windows : Jaris ne se lancera pas. */
   blockedByWindows: boolean
+  /** Étape 491 : version Microsoft Store — le démarrage se règle dans Paramètres de Windows (état illisible ici). */
+  store?: boolean
 }
 
 export interface AppVersionStatus {
@@ -1561,6 +1563,7 @@ export const IPC_CHANNELS = {
   /** Étape 476 : l'avis de Claude (clé API de Léo) avant que Léo vote — étape 480 : pour toutes les catégories. */
   duelAdvice: 'jaris:duel-advice',
   duelAutoVote: 'jaris:duel-auto-vote',
+  openStartupSettings: 'jaris:open-startup-settings',
   duelAutoVoteStop: 'jaris:duel-auto-vote-stop',
   duelRunB: 'jaris:duel-run-b',
   /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */

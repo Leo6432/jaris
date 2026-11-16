@@ -92,10 +92,44 @@ export function logoPath() {
   return join(root, 'assets', 'jaris-logo.png')
 }
 
+/**
+ * Étape 491 : les logos du paquet Microsoft Store (build/appx/, lus par electron-builder). Sans eux, le Store
+ * afficherait les logos d'exemple d'electron-builder. Mêmes noms et tailles que ceux attendus par le manifeste.
+ */
+export const APPX_LOGOS = [
+  { name: 'StoreLogo.png', width: 50, height: 50 },
+  { name: 'Square44x44Logo.png', width: 44, height: 44 },
+  { name: 'Square150x150Logo.png', width: 150, height: 150 },
+  { name: 'Wide310x150Logo.png', width: 310, height: 150 }
+]
+
+export async function buildAppxLogos(logoPath, frame) {
+  const square = await sharp(logoPath)
+    .extract({ left: frame.left, top: frame.top, width: frame.width, height: frame.height })
+    .png()
+    .toBuffer()
+  const logos = []
+  for (const { name, width, height } of APPX_LOGOS) {
+    const side = Math.min(width, height)
+    const logo = await sharp(square).resize(side, side, { kernel: 'lanczos3' }).png().toBuffer()
+    // Logo carré au centre ; le reste transparent (le Store peint la couleur du thème derrière).
+    const png = await sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      .composite([{ input: logo, left: Math.round((width - side) / 2), top: Math.round((height - side) / 2) }])
+      .png({ compressionLevel: 9 })
+      .toBuffer()
+    logos.push({ name, png })
+  }
+  return logos
+}
+
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   const ico = await buildIco(logoPath(), readIconFrame())
   const output = join(root, 'build', 'icon.ico')
   mkdirSync(dirname(output), { recursive: true })
   writeFileSync(output, ico)
   console.log(`build/icon.ico : ${ICON_SIZES.length} tailles (${ICON_SIZES.join(', ')} px), ${ico.length} octets.`)
+  const appxDir = join(root, 'build', 'appx')
+  mkdirSync(appxDir, { recursive: true })
+  for (const { name, png } of await buildAppxLogos(logoPath(), readIconFrame())) writeFileSync(join(appxDir, name), png)
+  console.log(`build/appx : ${APPX_LOGOS.map((l) => l.name).join(', ')}.`)
 }

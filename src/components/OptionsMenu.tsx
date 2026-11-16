@@ -1223,6 +1223,14 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
             </SettingGroup>
 
             <SettingGroup title={t('options.startup.group')}>
+              {launchAtStartup?.store ? (
+                // Étape 491 : version Microsoft Store — Windows seul règle le démarrage (voir launchAtStartup.ts).
+                <SettingRow label={t('options.startup.label')} description={t('options.startup.store')}>
+                  <button className="options-menu__action" onClick={() => void window.jaris.openStartupSettings()}>
+                    {t('options.startup.openSettings')}
+                  </button>
+                </SettingRow>
+              ) : (
               <SettingRow
                 label={t('options.startup.label')}
                 description={
@@ -1248,6 +1256,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                   }}
                 />
               </SettingRow>
+              )}
             </SettingGroup>
 
             <SettingGroup title={t('options.update.group')}>
@@ -1256,13 +1265,16 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 description={
                   <>
                     {t('options.update.installed')} <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
-                    {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
+                    {window.jaris.storeBuild ? <> — {t('options.update.store')}</> : updateCheckMessage ? <> — {updateCheckMessage}</> : null}
                   </>
                 }
               >
-                <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-                  {checkingUpdate ? t('options.update.checking') : t('options.update.check')}
-                </button>
+                {/* Étape 491 : la version Microsoft Store est mise à jour par le Store, pas de bouton ici. */}
+                {!window.jaris.storeBuild && (
+                  <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+                    {checkingUpdate ? t('options.update.checking') : t('options.update.check')}
+                  </button>
+                )}
               </SettingRow>
 
               {appVersionStatus?.outdated && (

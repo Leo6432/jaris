@@ -82,6 +82,8 @@ export function checkAppFreshness(): Promise<void> {
  * d'entreprise, GitHub injoignable...) plutôt qu'un silence qui ressemble à un bug côté Jaris.
  */
 export async function checkForUpdate(): Promise<{ status: AppVersionStatus | null; error: string | null }> {
+  // Étape 491 : la version Microsoft Store est mise à jour par le Store, jamais par son propre installeur.
+  if (process.windowsStore === true) return { status: null, error: null }
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
@@ -136,6 +138,7 @@ export async function updateApp(
   // dependencyServices pour Ollama depuis l'étape 112) : ce module ne décrit que son propre avancement.
   onProgress?: (progress: Omit<UpdateProgress, 'target'>) => void
 ): Promise<{ success: boolean; message: string }> {
+  if (process.windowsStore === true) return { success: false, message: t('options.update.store') }
   if (!cachedStatus?.outdated) {
     return { success: false, message: t('upd.none') }
   }

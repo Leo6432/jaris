@@ -51,8 +51,8 @@ function transpile(path) {
  * Charge storageRoot.ts (qui s'exécute à son chargement, comme au vrai démarrage) puis dataLocation.ts, avec
  * un `app` simulé qui retient les appels à setPath.
  */
-function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux', dataModules = {}, storageModules = {} } = {}) {
-  const paths = { userData: defaultUserData, exe }
+function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux', windowsStore, home = '/home/inexistant', dataModules = {}, storageModules = {} } = {}) {
+  const paths = { userData: defaultUserData, exe, home }
   const setPathCalls = []
   const app = {
     isPackaged,
@@ -62,7 +62,7 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
       paths[name] = value
     }
   }
-  const fakeProcess = { platform, env: { SystemDrive: 'C:' } }
+  const fakeProcess = { platform, env: { SystemDrive: 'C:' }, ...(windowsStore !== undefined ? { windowsStore } : {}) }
   const load = (path, modules) => {
     const exports = {}
     vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(path)} })`)(
@@ -119,6 +119,31 @@ test('installé sur D : le dossier de Jaris se met À CÔTÉ du programme (jamai
   assert.equal(storageRoot.autoRootForInstall('C:\\Users\\leo\\AppData\\Local\\Programs\\jaris\\Jaris.exe', 'C:'), null)
   assert.equal(storageRoot.autoRootForInstall('c:\\Jaris\\Jaris.exe', 'C:'), null, 'la casse de la lettre ne compte pas')
   rmSync(root, { recursive: true, force: true })
+})
+
+test('étape 491 : version Microsoft Store — données dans le dossier de l’utilisateur (visible de l’Explorateur), jamais à côté du programme', () => {
+  const { userData, root } = setupUserData()
+  fillUserData(userData)
+  const home = join(root, 'Users', 'leo')
+  mkdirSync(home, { recursive: true })
+  // Installé par le Store sur D : sans la règle, le dossier irait À CÔTÉ du programme, dans WindowsApps (lecture seule).
+  const { storageRoot, dataLocation, setPathCalls } = loadStorage(userData, { isPackaged: true, platform: 'win32', windowsStore: true, home, exe: 'D:\\WindowsApps\\Moulard.Jaris_0.69.3.0_x64__5g9va5hqem6jc\\app\\Jaris.exe' })
+  const expected = join(home, 'Jaris')
+  assert.equal(storageRoot.getStorageRoot(), expected)
+  assert.ok(existsSync(expected), 'créé à la première ouverture')
+  assert.equal(dataLocation.getDataRoot(), join(expected, 'jaris-data'))
+  assert.deepEqual(setPathCalls, [['userData', join(expected, 'electron')]])
+  // Un Jaris déjà utilisé avant (même AppData) : ses données suivent, rien n'est perdu.
+  assert.equal(readFileSync(join(expected, 'jaris-data', 'profile.json'), 'utf8'), '{"name":"Léo"}')
+  // Le repère est écrit : au démarrage suivant, c'est lui qui donne l'emplacement.
+  const again = loadStorage(userData, { isPackaged: true, platform: 'win32', windowsStore: true, home })
+  assert.equal(again.storageRoot.getStorageRoot(), expected)
+  // L'installeur habituel (pas le Store) sur C : rien ne change, emplacement par défaut.
+  const { userData: otherData, root: otherRoot } = setupUserData()
+  const classic = loadStorage(otherData, { isPackaged: true, platform: 'win32', home, exe: 'C:\\Users\\leo\\AppData\\Local\\Programs\\jaris\\Jaris.exe' })
+  assert.equal(classic.storageRoot.getStorageRoot(), null)
+  rmSync(root, { recursive: true, force: true })
+  rmSync(otherRoot, { recursive: true, force: true })
 })
 
 test('sans repère : tout reste à l’emplacement par défaut, et le dossier de Chromium n’est pas redirigé', () => {

@@ -327,6 +327,9 @@ const api = {
   setShownEmotion: (emotion: string): void => ipcRenderer.send(IPC_CHANNELS.setShownEmotion, emotion),
   getWindowChrome: (): Promise<WindowChrome> => invoke(IPC_CHANNELS.getWindowChrome),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => invoke(IPC_CHANNELS.getLaunchAtStartup),
+  // Étape 491 : version Microsoft Store (paquet MSIX) — mises à jour par le Store, démarrage réglé dans Windows.
+  storeBuild: process.windowsStore === true,
+  openStartupSettings: (): Promise<void> => invoke(IPC_CHANNELS.openStartupSettings),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
     invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),
   getWidgetMode: (): Promise<WidgetMode> => invoke(IPC_CHANNELS.getWidgetMode),

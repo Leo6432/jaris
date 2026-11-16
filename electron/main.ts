@@ -193,7 +193,8 @@ import {
   getLaunchAtStartup,
   LOGIN_REVEAL_GRACE_MS,
   setLaunchAtStartup,
-  wasLaunchedAtLogin
+  wasLaunchedAtLogin,
+  STORE_STARTUP_SETTINGS_URL
 } from './services/launchAtStartup'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import { isPermissionAllowed } from './services/permissions'
@@ -321,7 +322,9 @@ const TASKBAR_APP_ID = 'com.jaris.assistant'
 let taskbarIcons: Record<OrbEmotion, string> | null = null
 let iconEmotion: OrbEmotion = 'idle'
 function applyTaskbarIcon(win: BrowserWindow, emotion: OrbEmotion): void {
-  if (process.platform !== 'win32' || !taskbarIcons || win.isDestroyed()) return
+  // Étape 491 : la version Store garde l'identité de son paquet (son épingle, sa vignette) ; un appId à nous et une
+  // commande de relance vers l'exécutable de WindowsApps (dont le chemin change à chaque mise à jour) la casseraient.
+  if (process.platform !== 'win32' || process.windowsStore === true || !taskbarIcons || win.isDestroyed()) return
   try {
     win.setAppDetails({
       appId: TASKBAR_APP_ID,
@@ -2069,9 +2072,11 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.openChatWidgetForDrop, () => {
     if (displayedWidgetMode === 'chat-idle') openChatWidgetBar()
   })
-  ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform))
+  ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform, process.windowsStore === true))
+  // Étape 491 : une adresse fixe, jamais une valeur venue de l'écran.
+  ipcMain.handle(IPC_CHANNELS.openStartupSettings, () => shell.openExternal(STORE_STARTUP_SETTINGS_URL))
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
-    setLaunchAtStartup(app, process.platform, enabled)
+    setLaunchAtStartup(app, process.platform, enabled, process.windowsStore === true)
   )
   // Étape 394 : l'icône de la barre des tâches et celle près de l'horloge prennent la couleur de ce que fait Jaris.
   // Seule la grande fenêtre l'envoie (elle seule connaît Chat, Code, Image, Vidéo et Duel, en plus de la voix).

@@ -64,8 +64,33 @@ extraResources:
     to: build/icon.ico
 
 win:
-  target: nsis
+  # Étape 491 : en plus de l'installeur habituel, le paquet MSIX du Microsoft Store (Léo a choisi le MSIX : le Store le
+  # signe gratuitement, alors qu'un installeur .exe demanderait un certificat payant).
+  target:
+    - nsis
+    - appx
   icon: build/icon.ico
+
+# Étape 491 : version Microsoft Store. Identité donnée par l'Espace partenaires (Jaris → Identité du produit) : elle doit
+# correspondre EXACTEMENT, sinon le Store refuse le paquet. Le paquet n'est pas signé ici : le Store le signe après
+# validation. Logos : build/appx/ (scripts/build-icon.mjs) ; manifeste : installer/AppxManifest.xml.
+appx:
+  identityName: Moulard.Jaris
+  publisher: CN=32D80499-7B84-467E-9549-326C1D710140
+  publisherDisplayName: Moulard
+  applicationId: Jaris
+  displayName: Jaris
+  backgroundColor: transparent
+  # Seulement les langues des fiches du Store remplies par Léo (chaque langue déclarée en demande une) ; Jaris lui-même
+  # garde ses 24 langues.
+  languages:
+    - fr-FR
+    - en-US
+  # Windows 10 2004 au minimum : après 1903, les écritures d'un paquet dans AppData sont fusionnées, pas copiées.
+  minVersion: 10.0.19041.0
+  maxVersionTested: 10.0.26100.0
+  customManifestPath: installer/AppxManifest.xml
+  artifactName: Jaris-Store-${version}.msix
 
 nsis:
   # Étape 142, Léo : "pouvoir choisir le dossier où mettre Jaris quand tu l'installes la première fois". Un

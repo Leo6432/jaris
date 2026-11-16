@@ -256,6 +256,18 @@ interface StorageMarker {
  * Windows : `D:\Jaris\Jaris.exe` -> `D:\Jaris-data`. `null` si le programme est sur le disque système.
  * Pur (chemins Windows explicites) pour être testé sans Windows.
  */
+/**
+ * Étape 491 : la version Microsoft Store (paquet MSIX) ne laisse pas ses données dans AppData. Windows y range tout
+ * nouveau fichier d'un paquet dans un dossier privé, invisible de l'Explorateur : « Ouvrir le dossier » des images,
+ * des vidéos ou des applications montrerait un dossier vide. Ses données vont donc dans %USERPROFILE%\Jaris — jamais
+ * dans Documents, souvent synchronisé par OneDrive alors que les modèles pèsent des dizaines de Go.
+ */
+export const STORE_ROOT_NAME = 'Jaris'
+
+export function storeRootFor(home: string): string {
+  return join(home, STORE_ROOT_NAME)
+}
+
 export function autoRootForInstall(exePath: string, systemDrive: string): string | null {
   const drive = win32.parse(exePath).root.slice(0, 2).toUpperCase()
   if (!/^[A-Z]:$/.test(drive) || drive === systemDrive.slice(0, 2).toUpperCase()) return null
@@ -788,7 +800,8 @@ function bootstrap(): string | null {
   let root = readMarkedRoot(DEFAULT_USER_DATA)
   let isNewAutoRoot = false
   if (!root && process.platform === 'win32' && app.isPackaged) {
-    root = autoRootForInstall(app.getPath('exe'), process.env.SystemDrive ?? 'C:')
+    // Version Store : jamais à côté du programme (dossier WindowsApps, en lecture seule), voir storeRootFor.
+    root = process.windowsStore === true ? storeRootFor(app.getPath('home')) : autoRootForInstall(app.getPath('exe'), process.env.SystemDrive ?? 'C:')
     isNewAutoRoot = root !== null
   }
   if (!root) return null

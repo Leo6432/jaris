@@ -29,7 +29,16 @@ function isSupported(api: LoginItemApi, platform: string): boolean {
   return platform === 'win32' && api.isPackaged
 }
 
-export function getLaunchAtStartup(api: LoginItemApi, platform: string): LaunchAtStartupStatus {
+/**
+ * Étape 491 : dans la version Microsoft Store, la clé Run ne sert à rien (Windows range les écritures d'un paquet dans
+ * HKCU à part, invisibles de l'ouverture de session). Le manifeste déclare une tâche de démarrage
+ * (installer/AppxManifest.xml) : Jaris apparaît dans Paramètres → Applications → Démarrage, où Léo l'active. Électron
+ * ne sait ni lire ni changer cette tâche : l'écran propose d'ouvrir cette page de Windows au lieu d'un interrupteur.
+ */
+export const STORE_STARTUP_SETTINGS_URL = 'ms-settings:startupapps'
+
+export function getLaunchAtStartup(api: LoginItemApi, platform: string, store = false): LaunchAtStartupStatus {
+  if (store) return { supported: true, enabled: false, blockedByWindows: false, store: true }
   if (!isSupported(api, platform)) return { supported: false, enabled: false, blockedByWindows: false }
   const settings = api.getLoginItemSettings({ args: [LOGIN_LAUNCH_ARG] })
   return {
@@ -41,8 +50,8 @@ export function getLaunchAtStartup(api: LoginItemApi, platform: string): LaunchA
   }
 }
 
-export function setLaunchAtStartup(api: LoginItemApi, platform: string, enabled: boolean): LaunchAtStartupStatus {
-  if (!isSupported(api, platform)) return getLaunchAtStartup(api, platform)
+export function setLaunchAtStartup(api: LoginItemApi, platform: string, enabled: boolean, store = false): LaunchAtStartupStatus {
+  if (store || !isSupported(api, platform)) return getLaunchAtStartup(api, platform, store)
   api.setLoginItemSettings({ openAtLogin: enabled, args: [LOGIN_LAUNCH_ARG] })
   // Relu plutôt que supposé : c'est l'état réellement enregistré par Windows qui s'affiche.
   return getLaunchAtStartup(api, platform)

@@ -177,3 +177,62 @@ test('un installeur incomplet ne ferme PAS Jaris et ne se lance jamais', async (
 })
 
 test.after(() => rmSync(fakeTmp, { recursive: true, force: true }))
+
+test('étape 491 : version Microsoft Store — aucune recherche ni installation par Jaris, le Store s’en charge', async () => {
+  reset()
+  const realFetch = globalThis.fetch
+  let fetched = 0
+  globalThis.fetch = (...args) => {
+    fetched += 1
+    return realFetch(...args)
+  }
+  process.windowsStore = true
+  try {
+    assert.deepEqual(await checkForUpdate(), { status: null, error: null })
+    assert.equal(fetched, 0, 'aucun appel à GitHub')
+    const result = await updateApp()
+    assert.equal(result.success, false)
+    assert.match(result.message, /Microsoft Store/)
+    assert.equal(spawned.length, 0, 'aucun installeur lancé')
+    assert.equal(electronApp.quitCalls, 0)
+  } finally {
+    delete process.windowsStore
+    globalThis.fetch = realFetch
+  }
+})
+
+test('étape 491 : la Release porte aussi le paquet du Store — la mise à jour habituelle prend toujours le .exe', async () => {
+  reset()
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (url) =>
+    String(url).includes('api.github.com')
+      ? Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              tag_name: 'v0.9.0',
+              assets: [
+                { name: 'Jaris-Store-0.9.0.msix', browser_download_url: 'https://exemple/Jaris-Store-0.9.0.msix' },
+                { name: 'Jaris-Setup-0.9.0.exe', browser_download_url: ASSET_URL }
+              ]
+            })
+        })
+      : realFetch(url)
+  try {
+    const { status } = await checkForUpdate()
+    assert.equal(status.outdated, true)
+    installerChunks = [Buffer.from('MZ installeur')]
+    const urls = []
+    const before = globalThis.fetch
+    globalThis.fetch = (url) => {
+      urls.push(String(url))
+      return before(url)
+    }
+    await updateApp(() => {})
+    assert.ok(urls.includes(ASSET_URL), 'l’installeur .exe est téléchargé')
+    assert.ok(!urls.some((u) => u.endsWith('.msix')), 'jamais le paquet du Store')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})

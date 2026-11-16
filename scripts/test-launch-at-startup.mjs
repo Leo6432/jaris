@@ -105,6 +105,18 @@ test('main.ts : la perte de focus juste après l’apparition ne replie pas la f
 })
 
 test('main.ts : l’interrupteur passe par l’état réel de Windows (canaux get/set branchés)', () => {
-  assert.match(mainSource, /IPC_CHANNELS\.getLaunchAtStartup, \(\) => getLaunchAtStartup\(app, process\.platform\)/)
-  assert.match(mainSource, /IPC_CHANNELS\.setLaunchAtStartup,[\s\S]{0,80}setLaunchAtStartup\(app, process\.platform, enabled\)/)
+  assert.match(mainSource, /IPC_CHANNELS\.getLaunchAtStartup, \(\) => getLaunchAtStartup\(app, process\.platform, process\.windowsStore === true\)/)
+  assert.match(mainSource, /IPC_CHANNELS\.setLaunchAtStartup,[\s\S]{0,80}setLaunchAtStartup\(app, process\.platform, enabled, process\.windowsStore === true\)/)
+  // Étape 491 : l'adresse ouverte est fixe, jamais une valeur venue de l'écran.
+  assert.match(mainSource, /IPC_CHANNELS\.openStartupSettings, \(\) => shell\.openExternal\(STORE_STARTUP_SETTINGS_URL\)\)/)
+})
+
+test('étape 491 : version Microsoft Store — jamais de clé Run (inutile dans un paquet), la page Démarrage de Windows à la place', () => {
+  const app = fakeApp()
+  assert.deepEqual(service.getLaunchAtStartup(app, 'win32', true), { supported: true, enabled: false, blockedByWindows: false, store: true })
+  assert.deepEqual(service.setLaunchAtStartup(app, 'win32', true, true), { supported: true, enabled: false, blockedByWindows: false, store: true })
+  assert.equal(app.calls.length, 0, 'aucune entrée Run posée par la version Store')
+  assert.equal(service.STORE_STARTUP_SETTINGS_URL, 'ms-settings:startupapps')
+  const manifest = readFileSync(join(projectRoot, 'installer/AppxManifest.xml'), 'utf8')
+  assert.match(manifest, /<desktop:Extension Category="windows\.startupTask"[^>]*>\s*<desktop:StartupTask TaskId="JarisAtLogin" Enabled="false"/, 'Jaris doit apparaître dans la page Démarrage de Windows')
 })

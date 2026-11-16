@@ -74,7 +74,15 @@ const overrides = {
   getAppVersionStatus: async () => ({ current: '0.13.0', latest: '0.13.0', outdated: false }),
   getAppVersion: async () => '0.13.0',
   // Étape 165 : imite l'entrée de démarrage de Windows, relue après chaque bascule.
-  getLaunchAtStartup: async () => ({ supported: true, enabled: Boolean(window.__launchAtStartup), blockedByWindows: false }),
+  getLaunchAtStartup: async () =>
+    window.__store ? { supported: true, enabled: false, blockedByWindows: false, store: true } : { supported: true, enabled: Boolean(window.__launchAtStartup), blockedByWindows: false },
+  // Étape 491 : version Microsoft Store (lu une fois par l'écran, comme le vrai pont).
+  get storeBuild() {
+    return Boolean(window.__store)
+  },
+  openStartupSettings: async () => {
+    window.__startupSettingsOpened = (window.__startupSettingsOpened ?? 0) + 1
+  },
   // Étape 245 : retient chaque ouverture du journal des demandes (false = ouvrir, true = montrer le fichier).
   openRequestJournal: async (reveal) => {
     window.__journalOpens = [...(window.__journalOpens ?? []), reveal]
@@ -309,6 +317,26 @@ test('Général : l’interrupteur « Ouvrir Jaris au démarrage de Windows » s
     await toggle.click()
     await page.waitForFunction(() => window.__launchAtStartup === false)
     assert.equal(await toggle.getAttribute('aria-checked'), 'false')
+  })
+})
+
+test('étape 491 : version Microsoft Store — démarrage réglé dans Windows (bouton), mises à jour laissées au Store', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Général")')
+    const open = page.getByRole('button', { name: 'Ouvrir les réglages de Windows' })
+    await open.waitFor()
+    assert.equal(await page.getByRole('switch', { name: 'Ouvrir Jaris au démarrage de Windows' }).count(), 0, 'pas d’interrupteur qui mentirait')
+    assert.match(await page.textContent('.options-page__content'), /Paramètres → Applications → Démarrage/)
+    await open.click()
+    await page.waitForFunction(() => window.__startupSettingsOpened === 1)
+    assert.match(await page.textContent('.options-page__content'), /Cette version vient du Microsoft Store : c'est lui qui installe les mises à jour\./)
+    assert.equal(await page.getByRole('button', { name: 'Rechercher une mise à jour' }).count(), 0, 'pas de mise à jour par Jaris')
+  }, 'window.__store = true')
+  // La version habituelle garde son bouton.
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Général")')
+    await page.getByRole('switch', { name: 'Ouvrir Jaris au démarrage de Windows' }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Ouvrir les réglages de Windows' }).count(), 0)
   })
 })
 

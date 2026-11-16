@@ -27,7 +27,7 @@ const files = (dir) =>
  */
 const { fr } = loadTsModule('shared/i18n/fr.ts')
 const { LANGUAGES } = loadTsModule('shared/i18n/languages.ts')
-const WINDOWS_SETTINGS_KEYS = new Set(['options.startup.blocked', 'options.micTest.silent'])
+const WINDOWS_SETTINGS_KEYS = new Set(['options.startup.blocked', 'options.micTest.silent', 'options.startup.store'])
 const catalogs = [
   ['fr', fr],
   ...LANGUAGES.filter((l) => l.code !== 'fr').map((l) => [l.code, JSON.parse(readFileSync(join(root, `shared/i18n/locales/${l.code}.json`), 'utf8'))])
