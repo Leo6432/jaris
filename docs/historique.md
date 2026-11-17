@@ -12438,3 +12438,25 @@ PWA »), identité : `Moulard.Jaris`, `CN=32D80499-7B84-467E-9549-326C1D710140`,
 - Classement Vision (105 votes) : gemma4:31b (8-1-1), muse-glimmer:30b (15-5-0), qwen3.8:27b (14-5-0), gemma4:26b.
 - Choix d'une installation neuve sur les 24 machines types : 3 changements, tous sur 32 Go de carte (Vision
   muse-glimmer:30b → gemma4:31b). Machine de Léo (8 Go/32 Go) : rien ne change.
+
+## Étape 493 — Jaris soumis au Microsoft Store (certification en cours)
+
+Soumission 1 envoyée le 17/11 depuis l'Espace partenaires, guidée écran par écran (Léo, captures) :
+- Packages : `Jaris-Store-0.70.1.msix` validé (identité `Moulard.Jaris`), Windows 10/11 Desktop seulement.
+- Tarification : gratuit (EUR 0), tous les marchés, public, sortie dès la certification.
+- Propriétés : Productivité ; confidentialité = `docs/confidentialite.md` (lien GitHub, branche de travail) ; site
+  `https://jaris-ia.vercel.app/` ; support = le Discord de Léo (invitation qui n'expire pas) ; IA générative déclarée ;
+  configuration : clavier + souris (minimum), micro (recommandé), 16 Go de RAM minimum / 20 Go recommandés (maximum
+  proposé), 6 Go de mémoire vidéo recommandés (maximum proposé), carte NVIDIA 8 Go recommandée.
+- Âge (IARC) : « autres applications », contenu en ligne Oui, navigateur/recherche Web Oui, le reste Non →
+  3+/PEGI 3, « Internet illimité ».
+- Fiche : anglais seulement (choix de Léo : le français retiré) ; textes de `docs/microsoft-store.md` ; 3 captures en
+  anglais faites ici (vraie fenêtre de Jaris dans Chromium, catalogue anglais, données d'exemple « Sam » : Voice, Chat,
+  Duel — Image et Code écartés, vides sans carte graphique) ; logos 9:16, 1:1, 300×300 et image 16:9 faits depuis
+  `assets/jaris-logo.png`.
+- Options : justification de `runFullTrust` (capacité restreinte, avertissement normal pour une appli de bureau) et notes
+  pour les testeurs (aucun compte, téléchargements du premier lancement, mises à jour par le Store).
+- Piège : une page de fiche rechargée avant « Enregistrer » perd ses champs texte (pas les images) — enregistrer
+  après chaque section.
+- Nouvelle règle (CLAUDE.md/AGENTS.md) : ne jamais renommer `docs/confidentialite.md` ni supprimer la branche de
+  travail, la fiche du Store pointe dessus.

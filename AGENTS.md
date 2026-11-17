@@ -158,6 +158,10 @@ python scripts/test-wake-confirmation.py   # mot d'activation
 **Travail avec Léo**
 - Ne jamais dire « terminé » avant la Release publiée. Ne jamais lui demander de relancer un long test sans
   avoir calculé ce que ça changerait.
+- Microsoft Store (étape 491) : la fiche publiée pointe vers `docs/confidentialite.md` SUR la branche de travail
+  (`github.com/Leo6432/jaris/blob/claude/jaris-local-ai-assistant-a2drk4/…`) — ne jamais renommer ni supprimer ce
+  fichier ni cette branche. Chaque nouvelle version Store = déposer `Jaris-Store-X.Y.Z.msix` de la Release
+  (guide : `docs/microsoft-store.md`).
 - Pour une demande simple, répondre directement, sans lancer plusieurs agents (coût). Garder agents et relecture
   adverse pour ce qui touche aux données ou à l'architecture.
 - Une demande explicite récente de Léo l'emporte sur un choix noté dans l'historique : l'écrire dans l'historique.
