@@ -275,6 +275,15 @@ export function autoRootForInstall(exePath: string, systemDrive: string): string
   return win32.join(win32.dirname(installDir), AUTO_ROOT_NAME)
 }
 
+/**
+ * Étape 496 : la racine enregistrée a disparu, mais son disque (lettre Windows) est bien là — le dossier a été effacé,
+ * ce n'est pas un disque débranché. Faux pour un chemin sans lettre de lecteur (réseau) : prudence de l'étape 346.
+ */
+export function markedRootDeleted(root: string, exists: (path: string) => boolean): boolean {
+  const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(root)?.[1]
+  return !!drive && exists(`${drive}\\`) && !exists(root)
+}
+
 /** Lit la racine enregistrée (nouveau repère, sinon ancien repère des données). `null` si jamais déplacé. */
 export function readMarkedRoot(userData: string): string | null {
   try {
@@ -798,6 +807,11 @@ export function carryChromiumKeySync(sources: (string | null)[], electronDir: st
  */
 function bootstrap(): string | null {
   let root = readMarkedRoot(DEFAULT_USER_DATA)
+  // Étape 496 (Léo : ancien Jaris désinstallé et son dossier D:\Jaris effacé, puis la version Store installée) : le
+  // repère laissé dans AppData désignait un dossier EFFACÉ sur un disque bien branché, et Jaris croyait le disque D:
+  // débranché. Seul un disque absent garde la règle de l'étape 346 (ne rien recréer, le dire) ; un dossier effacé
+  // sur un disque présent est oublié, et Jaris repart comme sur une machine neuve. Rien n'est effacé.
+  if (root && !existsSync(root) && markedRootDeleted(root, existsSync)) root = null
   let isNewAutoRoot = false
   if (!root && process.platform === 'win32' && app.isPackaged) {
     // Version Store : jamais à côté du programme (dossier WindowsApps, en lecture seule), voir storeRootFor.

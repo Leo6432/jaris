@@ -248,3 +248,34 @@ test('la voix de Jaris (Supertonic) est déplacée elle aussi, et le dossier sui
   const source = readFileSync(new URL('../electron/services/modelsLocation.ts', import.meta.url), 'utf8')
   assert.match(source, /join\(profile, '\.cache', 'supertonic3'\)/)
 })
+
+// Étape 496 (Léo : ancien Jaris désinstallé, son dossier D:\Jaris effacé, puis la version Store) : les jonctions de
+// l'ancien Jaris pointaient vers des dossiers effacés sur un disque BRANCHÉ et faisaient tout échouer.
+test('étape 496 : seules les jonctions mortes sur un disque présent sont retirées', async () => {
+  const { root, env } = setupFakeHome()
+  const { symlinkSync } = await import('node:fs')
+  try {
+    const ml = loadModelsLocation(env)
+    const at = (name) => join(root, name)
+    const live = at('vivant')
+    mkdirSync(live)
+    // Sous Linux, une cible « D:\… » est enregistrée telle quelle : readlink la rend comme Windows le ferait.
+    const kind = process.platform === 'win32' ? 'junction' : undefined
+    symlinkSync('D:\\Jaris\\python-runtime', at('morte'), kind)
+    symlinkSync('E:\\Jaris\\huggingface-cache', at('debranchee'), kind)
+    symlinkSync(live, at('valide'), kind)
+    mkdirSync(at('normal'))
+    // Lecteurs simulés : D: branché (dossier effacé), E: débranché — quel que soit le vrai PC de la CI.
+    const disks = new Set(['C:\\', 'D:\\'])
+    const exists = (p) => (/^(?:\\\\\?\\)?[A-Za-z]:/.test(p) ? disks.has(p) : existsSync(p))
+    const list = ['morte', 'debranchee', 'valide', 'normal', 'absent'].map((name) => ({ label: name, link: at(name), subdir: name }))
+    const dropped = await ml.dropDeadJunctions(list, exists)
+    assert.deepEqual(dropped, [at('morte')])
+    assert.throws(() => lstatSync(at('morte')), /ENOENT/, 'la jonction morte est retirée')
+    assert.match(readlinkSync(at('debranchee')), /E:\\Jaris\\huggingface-cache/, 'disque débranché : jamais touchée (étape 346)')
+    assert.ok(lstatSync(at('valide')).isSymbolicLink())
+    assert.ok(existsSync(at('normal')) && existsSync(live), 'rien d’autre n’est touché')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

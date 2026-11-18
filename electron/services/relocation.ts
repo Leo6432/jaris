@@ -16,6 +16,7 @@ import {
   switchAll,
   undoSwitches,
   currentRealDir,
+  dropDeadJunctions,
   type CommittedMove
 } from './modelsLocation'
 import { DATA_SUBDIR, DOWNLOADS_SUBDIR, getStorageRoot } from './storageRoot'
@@ -254,8 +255,11 @@ let reconciling: Promise<void> | null = null
 export function reconcileStorage(log: (message: string) => void, stopOllama: () => Promise<void>): Promise<void> {
   if (reconciling) return reconciling
   reconciling = (async () => {
+    if (process.platform !== 'win32') return
+    // Étape 496 : jonctions mortes laissées par un ancien Jaris (dossier effacé, disque présent), avec ou sans racine.
+    await dropDeadJunctions().catch(() => [])
     const root = getStorageRoot()
-    if (!root || process.platform !== 'win32') return
+    if (!root) return
     const plans = await planMoves(root)
     if (!plans.length) return
     const needed = await bytesToCopy(plans)

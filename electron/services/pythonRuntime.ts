@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readdirSync } from 'fs'
-import { mkdir, readdir, readFile, readlink, rm, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, readlink, rm, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
@@ -184,12 +184,21 @@ async function installDependencies(python: string, onProgress: InstallProgress):
 /**
  * Étape 346 : un dossier qui est une jonction vers un disque débranché (données rangées sur D:, disque externe) faisait
  * échouer l'installation avec « ENOENT » — incompréhensible. La phrase dit quel disque rebrancher.
+ *
+ * Étape 496 (Léo, version Store après avoir désinstallé l'ancien Jaris et effacé D:\Jaris) : le disque D: était BIEN
+ * là, seul le dossier avait été effacé ; la jonction restée dans AppData bloquait toute l'installation (« disque D:
+ * débranché »). Disque présent + dossier absent = jonction morte : elle est retirée (seulement elle, il n'y a plus
+ * rien derrière) et l'installation repart dans un dossier normal. Un disque vraiment absent reste signalé.
  */
 async function assertJunctionTargetPresent(link: string): Promise<void> {
   const target = await readlink(link).catch(() => null)
   if (!target || existsSync(target)) return
-  const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(target)?.[1] ?? target
-  throw new Error(t('storage.diskMissing', { drive }))
+  const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(target)?.[1] ?? null
+  if (drive && existsSync(`${drive}\\`)) {
+    await unlink(link)
+    return
+  }
+  throw new Error(t('storage.diskMissing', { drive: drive ?? target }))
 }
 
 /**

@@ -67,23 +67,23 @@ Répondre honnêtement ; points propres à Jaris :
 
 ### English (en-US)
 
-**Description**
+**Description** (texte réellement en ligne, recopié par Léo le 18/11/2026)
 
-> On first launch, Jaris downloads and installs its own local AI engine (Ollama), Python and the models suited to your
-> PC: make sure you have disk space and an Internet connection.
+> On first launch, Jaris downloads and installs its own local AI engine (Ollama), Python and the AI models suited to
+> your PC: make sure you have free disk space and an Internet connection.
 >
-> Jaris is a voice AI assistant that runs entirely on your computer. Say “Jaris” and talk: it answers out loud,
+> Jaris is a voice AI assistant that runs entirely on your computer. Say "Jaris" and talk: it answers out loud,
 > searches the Web, opens your apps, looks at your screen when you ask, remembers what you tell it and reminds you of
 > what matters. Your conversations stay on your PC.
 >
-> - Voice, Chat with multiple conversations, and access from your phone.
-> - Code: build an app from one sentence, or work on a GitHub repository.
-> - Image (Z-Image-Turbo) and video (FastWan 2.2), created on your PC.
-> - Duels: compare models blind and Jaris picks the best ones for your machine.
-> - 24 languages.
+> - Voice, Chat with multiple conversations, and access from your phone
+> - Code: build an app from one sentence, or work on a GitHub repository
+> - Image and video creation, right on your PC
+> - Duels: compare AI models blind, and Jaris picks the best ones for your machine
+> - 24 languages
 >
-> Jaris uses live generative AI: its answers, images and videos may be wrong or inappropriate. To report content:
-> https://github.com/Leo6432/jaris/issues
+> Jaris uses live generative AI: its answers, images and videos may be wrong or inappropriate. To report content or
+> get help: https://discord.gg/dVAQV7eJtr
 
 **Features**
 - 100% local voice assistant: “Jaris” wake word, natural voice

@@ -19,6 +19,7 @@ test('un échec d’Ollama conserve sa vraie raison dans le message final du pre
       installOllamaSilently: async (onProgress) => { onProgress(reason); return false }
     }
     if (id === './pythonRuntime') return { isPythonRuntimeReady: async () => true }
+    if (id === './modelsLocation') return { dropDeadJunctions: async () => [] }
     throw new Error(`Module inattendu : ${id}`)
   })
 
@@ -29,4 +30,26 @@ test('un échec d’Ollama conserve sa vraie raison dans le message final du pre
   assert.match(failure.message, /code 5/)
   assert.match(failure.message, /JarisOllamaSetup\.log/)
   assert.doesNotMatch(failure.message, /installer depuis ollama\.com/)
+})
+
+// Étape 496 (Léo, version Store : l'ancien Jaris avait laissé des jonctions vers D:\Jaris, effacé) : les jonctions
+// mortes sont retirées AVANT d'installer Ollama et Python, sinon les deux échouaient (« disque D: débranché »).
+test('étape 496 : sous Windows, les jonctions mortes sont retirées avant toute installation', async () => {
+  const source = readFileSync(new URL('../electron/services/firstRunSetup.ts', import.meta.url), 'utf8')
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+  const exports = {}
+  const order = []
+  vm.runInThisContext(`(function(exports, module, require, process) { ${compiled} })`)(exports, { exports }, (id) => {
+    if (id in I18N_MODULES) return I18N_MODULES[id]
+    if (id === './dependencyServices') return {
+      isOllamaInstalled: async () => { order.push('lecture'); return false },
+      installOllamaSilently: async () => { order.push('ollama'); return true }
+    }
+    if (id === './pythonRuntime') return { isPythonRuntimeReady: async () => true }
+    if (id === './modelsLocation') return { dropDeadJunctions: async () => { order.push('nettoyage'); return [] } }
+    throw new Error(`Module inattendu : ${id}`)
+  }, { platform: 'win32' })
+  await exports.runFirstRunSetup(() => {})
+  assert.equal(order[0], 'nettoyage')
+  assert.ok(order.includes('ollama'))
 })

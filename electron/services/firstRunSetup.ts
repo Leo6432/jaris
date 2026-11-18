@@ -1,5 +1,6 @@
 import { installOllamaSilently, isOllamaInstalled } from './dependencyServices'
 import { installPythonRuntime, isPythonRuntimeReady } from './pythonRuntime'
+import { dropDeadJunctions } from './modelsLocation'
 import type { RuntimeSetupProgress, RuntimeSetupStatus } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 
@@ -34,6 +35,8 @@ export async function getRuntimeSetupStatus(): Promise<RuntimeSetupStatus> {
  * revient dans le statut final, jamais un simple "erreur".
  */
 export async function runFirstRunSetup(onProgress: (progress: RuntimeSetupProgress) => void): Promise<RuntimeSetupStatus> {
+  // Étape 496 : jonctions mortes d'un ancien Jaris (dossier effacé sur un disque présent) retirées avant d'installer.
+  if (process.platform === 'win32') await dropDeadJunctions().catch(() => [])
   const status = await getRuntimeSetupStatus()
 
   if (!status.ollamaReady) {

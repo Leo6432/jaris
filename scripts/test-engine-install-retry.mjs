@@ -92,6 +92,57 @@ test('un téléchargement de modèle interrompu n’est pas effacé au démarrag
   assert.equal(env.PATH, 'x')
 })
 
+// Étape 496 (Léo, version Store : « disque D: débranché » alors que D: était là, seul D:\Jaris avait été effacé) :
+// une jonction morte sur un disque présent est retirée, et l'installation repart. Lecteurs Windows simulés.
+test('étape 496 : jonction vers un dossier effacé sur un disque présent → retirée, l’installation repart ; disque absent → bloqué', async () => {
+  for (const driveHere of [true, false]) {
+    const base = mkdtempSync(join(tmpdir(), 'jaris-dead-link-'))
+    const link = join(base, 'ollama-engine')
+    const unlinked = []
+    const realFs = nodeRequire('fs')
+    const realPromises = nodeRequire('fs/promises')
+    const fake = loadTsModule('electron/services/ollamaEngine.ts', {
+      crypto: nodeRequire('crypto'),
+      child_process: nodeRequire('child_process'),
+      fs: { ...realFs, existsSync: (p) => (p === 'D:\\' ? driveHere : p === 'D:\\Jaris\\ollama-engine' ? false : realFs.existsSync(p)) },
+      'fs/promises': {
+        ...realPromises,
+        readlink: async (p) => (p === link && !unlinked.length ? 'D:\\Jaris\\ollama-engine' : realPromises.readlink(p)),
+        unlink: async (p) => {
+          unlinked.push(p)
+        }
+      },
+      os: nodeRequire('os'),
+      path: nodeRequire('path'),
+      './download': { downloadToFile: async () => undefined },
+      './ollamaModelsVariable': { countOllamaModels: async () => 0 }
+    })
+    try {
+      if (driveHere) {
+        assert.equal(await fake.engineRoot(link), await realpath(link), 'un vrai dossier, prêt pour l’installation')
+        assert.deepEqual(unlinked, [link], 'seule la jonction morte est retirée')
+      } else {
+        await assert.rejects(fake.engineRoot(link), /disque où sont rangées tes données \(D:\) est débranché/)
+        assert.deepEqual(unlinked, [], 'disque débranché : rien n’est touché')
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  }
+})
+
+test('étape 496 : Python applique exactement la même règle que le moteur d’Ollama', async () => {
+  const { readFileSync } = await import('node:fs')
+  const body = (file) => {
+    // La CI Windows extrait le dépôt en CRLF : fins de ligne ramenées à \n avant de découper.
+    const source = readFileSync(new URL(`../electron/services/${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+    const start = source.indexOf('async function assertJunctionTargetPresent')
+    return source.slice(start, source.indexOf('\n}\n', start))
+  }
+  assert.ok(body('ollamaEngine.ts').includes('unlink(link)'))
+  assert.equal(body('pythonRuntime.ts'), body('ollamaEngine.ts'))
+})
+
 test('dossier du moteur relié à un disque débranché : une phrase qui dit quoi rebrancher, jamais « ENOENT »', async () => {
   const { symlinkSync } = await import('node:fs')
   const base = mkdtempSync(join(tmpdir(), 'jaris-link-'))

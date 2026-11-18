@@ -151,17 +151,36 @@ jobs:
           # (Jaris installé sur D: ici), que la version Store relirait — elle reprend en effet les données d'un Jaris
           # déjà installé, ce qui est voulu chez Léo mais masquerait ici l'emplacement propre à la version Store.
           Remove-Item "$env:APPDATA\Jaris" -Recurse -Force -ErrorAction SilentlyContinue
+          # Étape 496 : le cas de Léo — un ancien Jaris désinstallé dont le dossier D:\… a été effacé, mais qui a laissé
+          # son repère dans AppData et une jonction vers ce dossier. La version Store annonçait « disque D: débranché ».
+          New-Item -ItemType Directory -Force "$env:APPDATA\Jaris" | Out-Null
+          Set-Content -Path "$env:APPDATA\Jaris\storage-location.json" -Value '{"root":"D:\\Jaris-efface"}' -Encoding utf8
+          $deadLink = "$env:LOCALAPPDATA\Jaris\python-runtime"
+          if (Test-Path $deadLink) { cmd /c rmdir /s /q "$deadLink" }
+          New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\Jaris", 'D:\Jaris-efface\python-runtime' | Out-Null
+          cmd /c mklink /J "$deadLink" 'D:\Jaris-efface\python-runtime'
+          if ($LASTEXITCODE) { throw "Jonction de test impossible" }
+          Remove-Item 'D:\Jaris-efface' -Recurse -Force
           Add-AppxPackage -Path $copy
           $pkg = Get-AppxPackage -Name Moulard.Jaris
           if (-not $pkg) { throw "Le paquet ne s'est pas installé" }
           if ($pkg.PackageFamilyName -ne 'Moulard.Jaris_5g9va5hqem6jc') { throw "Identité différente de l'Espace partenaires : $($pkg.PackageFamilyName)" }
+          # Étape 496 : l'icône sans fond (barre des tâches) est dans le paquet ET indexée (resources.pri), sinon Windows
+          # l'ignore et peint sa couleur d'accent derrière le logo.
+          if (-not (Test-Path "$($pkg.InstallLocation)\assets\Square44x44Logo.targetsize-48_altform-unplated.png")) { throw "Icône sans fond absente du paquet" }
+          if (-not (Test-Path "$($pkg.InstallLocation)\resources.pri")) { throw "resources.pri absent : les icônes sans fond ne seraient pas trouvées par Windows" }
           Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!Jaris"
           Start-Sleep -Seconds 20
           $proc = Get-Process -Name Jaris -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*WindowsApps*' }
           if (-not $proc) { throw "La version Store de Jaris ne tourne pas 20 s après son lancement : plantage au démarrage." }
           # La version Store range ses données hors d'AppData (sinon l'Explorateur ne les verrait pas) : preuve
           # que Jaris s'est reconnu comme version Store.
-          if (-not (Test-Path "$env:USERPROFILE\Jaris")) { throw "Dossier $env:USERPROFILE\Jaris absent : Jaris ne s'est pas reconnu comme version Store." }
+          if (-not (Test-Path "$env:USERPROFILE\Jaris")) { throw "Dossier $env:USERPROFILE\Jaris absent : Jaris ne s'est pas reconnu comme version Store (ou a cru le disque D: débranché à cause de l'ancien repère)." }
+          # Étape 496 : la jonction morte de l'ancien Jaris a été retirée au démarrage (sinon Python et Ollama échouent).
+          # (Une NOUVELLE jonction, vers le dossier de la version Store, peut avoir pris sa place : elle est vivante.)
+          $left = Get-Item $deadLink -Force -ErrorAction SilentlyContinue
+          $leftTarget = if ($left -and $left.LinkType) { $left.Target | Select-Object -First 1 } else { $null }
+          if ($leftTarget -and -not (Test-Path $leftTarget)) { throw "La jonction morte $deadLink (vers D:\Jaris-efface, effacé) est toujours là : l'installation de Python échouerait." }
           Write-Host "Version Store installée ($($pkg.PackageFullName)), lancée, toujours en marche après 20 s."
           $proc | Stop-Process -Force
           Start-Sleep -Seconds 2

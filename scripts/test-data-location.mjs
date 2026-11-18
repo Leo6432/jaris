@@ -146,6 +146,38 @@ test('étape 491 : version Microsoft Store — données dans le dossier de l’u
   rmSync(otherRoot, { recursive: true, force: true })
 })
 
+// Étape 496 (Léo : ancien Jaris désinstallé, son dossier D:\Jaris effacé, puis la version Store) : le repère resté dans
+// AppData désignait un dossier effacé sur un disque BRANCHÉ, et Jaris annonçait « disque D: débranché ».
+test('étape 496 : dossier effacé sur un disque présent ≠ disque débranché (seul le second bloque)', () => {
+  const { markedRootDeleted } = loadStorage(setupUserData().userData).storageRoot
+  const disks = new Set(['C:\\', 'D:\\'])
+  assert.equal(markedRootDeleted('D:\\Jaris', (p) => disks.has(p)), true, 'D: branché, D:\\Jaris effacé')
+  assert.equal(markedRootDeleted('E:\\Jaris', (p) => disks.has(p)), false, 'E: débranché')
+  assert.equal(markedRootDeleted('D:\\Jaris', (p) => disks.has(p) || p === 'D:\\Jaris'), false, 'dossier présent')
+  assert.equal(markedRootDeleted('\\\\?\\D:\\Jaris', (p) => disks.has(p)), true, 'chemin long Windows')
+  assert.equal(markedRootDeleted('\\\\serveur\\partage\\Jaris', () => true), false, 'réseau : prudence (étape 346)')
+})
+
+test('étape 496 : version Store, ancien repère vers un dossier effacé sur D: → données dans le dossier de l’utilisateur', () => {
+  for (const [driveHere, expectMissing] of [[true, null], [false, 'D:\\Jaris']]) {
+    const { userData, root } = setupUserData()
+    writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: 'D:\\Jaris' }))
+    const home = join(root, 'Users', 'minar')
+    mkdirSync(home, { recursive: true })
+    const realFs = nodeRequire('node:fs')
+    const fs = { ...realFs, existsSync: (p) => (p === 'D:\\' ? driveHere : realFs.existsSync(p)) }
+    const { storageRoot, dataLocation } = loadStorage(userData, { isPackaged: true, platform: 'win32', windowsStore: true, home, storageModules: { fs } })
+    if (driveHere) {
+      assert.equal(storageRoot.getStorageRoot(), join(home, 'Jaris'), 'repart comme sur une machine neuve')
+      assert.equal(dataLocation.getDataRoot(), join(home, 'Jaris', 'jaris-data'))
+    } else {
+      assert.equal(storageRoot.getStorageRoot(), null, 'disque vraiment absent : rien de recréé ailleurs')
+    }
+    assert.equal(storageRoot.getMissingStorageRoot(), expectMissing)
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('sans repère : tout reste à l’emplacement par défaut, et le dossier de Chromium n’est pas redirigé', () => {
   const { userData, root } = setupUserData()
   const { storageRoot, dataLocation, setPathCalls } = loadStorage(userData)

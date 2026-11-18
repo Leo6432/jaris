@@ -100,7 +100,14 @@ export const APPX_LOGOS = [
   { name: 'StoreLogo.png', width: 50, height: 50 },
   { name: 'Square44x44Logo.png', width: 44, height: 44 },
   { name: 'Square150x150Logo.png', width: 150, height: 150 },
-  { name: 'Wide310x150Logo.png', width: 310, height: 150 }
+  { name: 'Wide310x150Logo.png', width: 310, height: 150 },
+  // Étape 496 (Léo, version Store : « en bas le logo est bizarre », un carré violet) : sans version « unplated »,
+  // Windows peint la couleur d'accent derrière l'icône de la barre des tâches et du menu Démarrer. Ces fichiers
+  // (tailles cibles de la documentation « App icon construction » de Microsoft) lui disent de l'afficher sans fond ;
+  // « lightunplated » pour le thème clair. electron-builder les indexe (makepri) dès qu'un nom porte « targetsize- ».
+  ...[16, 24, 32, 48, 256].flatMap((size) =>
+    ['unplated', 'lightunplated'].map((form) => ({ name: `Square44x44Logo.targetsize-${size}_altform-${form}.png`, width: size, height: size }))
+  )
 ]
 
 export async function buildAppxLogos(logoPath, frame) {

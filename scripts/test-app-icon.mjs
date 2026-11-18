@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'fs'
 import { createRequire } from 'module'
-import { ICON_SIZES, buildIco, logoPath, readIconFrame } from './build-icon.mjs'
+import { APPX_LOGOS, ICON_SIZES, buildAppxLogos, buildIco, logoPath, readIconFrame } from './build-icon.mjs'
 
 const require = createRequire(import.meta.url)
 const root = new URL('..', import.meta.url)
@@ -75,4 +75,23 @@ test('les fenêtres utilisent ce .ico sous Windows, et l’installeur l’embarq
   assert.match(builder, /icon: build\/icon\.ico/)
   const pkg = JSON.parse(read('package.json').toString('utf8'))
   assert.match(pkg.scripts.dist, /^node scripts\/build-icon\.mjs && /, 'icône fabriquée avant chaque installeur')
+})
+
+// Étape 496 (Léo, version Store : « en bas le logo est bizarre », un carré violet) : sans version « unplated », Windows
+// peint sa couleur d'accent derrière l'icône de la barre des tâches.
+test('version Store : l’icône de la barre des tâches existe sans fond (unplated), aux tailles cibles de Windows', async () => {
+  const sharp = require('sharp')
+  const logos = await buildAppxLogos(logoPath(), readIconFrame())
+  for (const size of [16, 24, 32, 48, 256]) {
+    for (const form of ['unplated', 'lightunplated']) {
+      const name = `Square44x44Logo.targetsize-${size}_altform-${form}.png`
+      const logo = logos.find((l) => l.name === name)
+      assert.ok(logo, `${name} manquant`)
+      const meta = await sharp(logo.png).metadata()
+      assert.deepEqual([meta.width, meta.height, meta.channels], [size, size, 4], name)
+    }
+  }
+  // Le nom porte « targetsize- » : electron-builder indexe alors les icônes (makepri), sinon Windows les ignore.
+  assert.ok(APPX_LOGOS.some((l) => l.name.includes('.targetsize-')))
+  assert.ok(APPX_LOGOS.some((l) => l.name === 'Square44x44Logo.png'), 'l’icône de base reste')
 })

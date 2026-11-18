@@ -70,6 +70,32 @@ export async function currentRealDir(link: string): Promise<string | null> {
   }
 }
 
+/**
+ * Étape 496 (Léo : ancien Jaris désinstallé, son dossier D:\Jaris effacé, puis la version Store) : les jonctions
+ * posées par l'ancien Jaris (Python, moteur d'Ollama, voix, dessin…) pointaient vers des dossiers effacés, sur un
+ * disque BIEN branché ; tout ce qui passait par elles échouait (« disque D: débranché », ENOENT). Une jonction dont le
+ * disque est présent mais la cible absente est morte : elle est retirée (rien derrière), son logiciel se réinstalle
+ * dans un dossier normal. Un disque absent (débranché) n'est jamais touché : l'étape 346 le signale.
+ * Appelé au démarrage (reconcileStorage) et avant l'installation du premier lancement (runFirstRunSetup).
+ */
+export async function dropDeadJunctions(list: Brick[] = bricks(), exists: (path: string) => boolean = existsSync): Promise<string[]> {
+  const dropped: string[] = []
+  for (const brick of list) {
+    if (!(await isLink(brick.link))) continue
+    const target = await readlink(brick.link).catch(() => null)
+    if (!target || exists(target)) continue
+    const drive = /^(?:\\\\\?\\)?([A-Za-z]:)/.exec(target)?.[1]
+    if (!drive || !exists(`${drive}\\`)) continue
+    try {
+      await unlink(brick.link)
+      dropped.push(brick.link)
+    } catch {
+      // Refusé (droits, fichier ouvert) : la règle de l'étape 346 dira quoi faire au prochain usage.
+    }
+  }
+  return dropped
+}
+
 async function isLink(path: string): Promise<boolean> {
   try {
     return (await lstat(path)).isSymbolicLink()

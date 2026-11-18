@@ -12512,3 +12512,33 @@ attention hybride Differential-TPA + Mamba-3, Apache 2.0, 32 000 jetons de conte
 - Défaut corrigé au passage : la ligne de futur modèle avait 10 cases pour 11 colonnes depuis l'ajout du Duel Vision
   (étape 475) — invisible tant que la liste était vide. Test (mord) : autant de cases que l'en-tête.
 - À faire quand il sera sur Ollama : relever sa taille, vérifier l'architecture prise en charge, puis le test de Jaris.
+
+## Étape 496 — v0.71.2 : version Store bloquée par les restes d'un ancien Jaris ; icône de la barre des tâches
+
+Jaris est en ligne sur le Microsoft Store (soumission 1 certifiée le 18/11 ; soumission 2 = v0.71.1, Z-Image). Léo a
+désinstallé l'ancien Jaris (installeur, données sur D:), effacé `D:\Jaris`, puis installé la version Store : écran
+d'installation « Ollama n'a pas pu s'installer. Le disque où sont rangées tes données (D:) est débranché… » (idem
+Python), puis « Jaris n'arrive pas à joindre Ollama (127.0.0.1:11434) ». Et l'icône de la barre des tâches sur un
+carré violet.
+- **Cause (lue dans le code, puis confirmée par la capture de Léo)** : une appli du Store LIT l'AppData réel. Elle
+  a donc repris (1) le repère `%APPDATA%\Jaris\storage-location.json` de l'ancien Jaris, qui désignait le dossier
+  effacé — pris pour un disque débranché (étape 346), d'où aucun `C:\Users\…\Jaris` ; (2) les jonctions de l'ancien
+  Jaris (`%LOCALAPPDATA%\Jaris\python-runtime`, `ollama-engine`…) vers ce dossier effacé, qui faisaient échouer
+  les deux installations. La CI ne le voyait pas : elle effaçait le repère avant d'installer la version Store.
+- **Règle** : disque présent + dossier absent = dossier EFFACÉ, pas débranché. Repère oublié (`markedRootDeleted`,
+  storageRoot.ts : Jaris repart comme sur une machine neuve) ; jonction morte retirée (`dropDeadJunctions`,
+  modelsLocation.ts, au démarrage dans reconcileStorage et avant l'installation du premier lancement ; même règle
+  dans ollamaEngine.ts et pythonRuntime.ts). Un disque vraiment absent garde l'étape 346 ; un chemin réseau aussi.
+  Rien n'est jamais effacé d'autre que la jonction morte elle-même.
+- **CI** : reproduit le cas de Léo avant d'installer la version Store (repère vers `D:\Jaris-efface` + jonction morte
+  `python-runtime`, puis dossier effacé) et vérifie que la version Store range ses données dans le profil et que la
+  jonction morte n'est plus là.
+- **Icône** : sans version « unplated », Windows peint sa couleur d'accent derrière l'icône d'une appli empaquetée.
+  `build-icon.mjs` produit `Square44x44Logo.targetsize-{16,24,32,48,256}_altform-{unplated,lightunplated}.png` ;
+  electron-builder les indexe (makepri) ; la CI vérifie le fichier et `resources.pri` dans le paquet installé.
+  Non vérifiable ici : le rendu réel dans la barre des tâches (pas de Windows).
+- Fiche du Store : `docs/microsoft-store.md` recopie maintenant la description anglaise réellement en ligne (elle ne
+  cite pas klein : rien à corriger à la soumission 2).
+- Tests (mordent) : test-data-location.mjs (dossier effacé ≠ disque débranché, version Store), test-engine-install-retry.mjs
+  (jonction morte retirée / disque absent bloqué ; Python = même règle), test-models-location.mjs (seules les jonctions
+  mortes sur un disque présent), test-first-run-setup.mjs (nettoyage avant l'installation), test-app-icon.mjs.
