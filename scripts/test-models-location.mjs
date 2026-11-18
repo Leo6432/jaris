@@ -267,7 +267,8 @@ test('étape 496 : seules les jonctions mortes sur un disque présent sont retir
     mkdirSync(at('normal'))
     // Lecteurs simulés : D: branché (dossier effacé), E: débranché — quel que soit le vrai PC de la CI.
     const disks = new Set(['C:\\', 'D:\\'])
-    const exists = (p) => (/^(?:\\\\\?\\)?[A-Za-z]:/.test(p) ? disks.has(p) : existsSync(p))
+    // Racines de lecteurs simulées ; tout autre chemin (le dossier « vivant », sur le vrai disque) lu pour de vrai.
+    const exists = (p) => (/^(?:\\\\\?\\)?[A-Za-z]:\\?$/.test(p) ? disks.has(p) : /^(?:\\\\\?\\)?[DE]:\\Jaris/.test(p) ? false : existsSync(p))
     const list = ['morte', 'debranchee', 'valide', 'normal', 'absent'].map((name) => ({ label: name, link: at(name), subdir: name }))
     const dropped = await ml.dropDeadJunctions(list, exists)
     assert.deepEqual(dropped, [at('morte')])

@@ -12542,3 +12542,8 @@ carré violet.
 - Tests (mordent) : test-data-location.mjs (dossier effacé ≠ disque débranché, version Store), test-engine-install-retry.mjs
   (jonction morte retirée / disque absent bloqué ; Python = même règle), test-models-location.mjs (seules les jonctions
   mortes sur un disque présent), test-first-run-setup.mjs (nettoyage avant l'installation), test-app-icon.mjs.
+- Premier envoi refusé par la CI Windows (aucune Release créée, même numéro gardé) : deux anciens tests simulaient un
+  « disque débranché » avec un dossier absent sur C: — sous Windows, C: est présent, c'est donc désormais un dossier
+  effacé. Ils utilisent maintenant une lettre de lecteur absente de la machine ; et le nouveau test des jonctions
+  simulait mal les lecteurs sur la CI (le dossier « vivant », sur C:, passait pour mort). Leçon : une règle qui
+  dépend des lecteurs présents se teste avec des lecteurs SIMULÉS, jamais avec ceux de la machine de test.

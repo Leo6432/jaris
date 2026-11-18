@@ -148,7 +148,10 @@ test('dossier du moteur relié à un disque débranché : une phrase qui dit quo
   const base = mkdtempSync(join(tmpdir(), 'jaris-link-'))
   try {
     const link = join(base, 'ollama-engine')
-    const gone = join(base, 'disque-externe', 'Jaris-data', 'ollama-engine')
+    // Étape 496 : sous Windows (CI), un dossier absent sur un disque PRÉSENT compte comme effacé (jonction retirée) ;
+    // le disque débranché se simule avec une lettre de lecteur qui n'existe pas sur la machine.
+    const absentDrive = process.platform === 'win32' ? 'QRSTUVWXYZ'.split('').find((l) => !existsSync(`${l}:\\`)) : null
+    const gone = absentDrive ? `${absentDrive}:\\Jaris-data\\ollama-engine` : join(base, 'disque-externe', 'Jaris-data', 'ollama-engine')
     symlinkSync(gone, link, process.platform === 'win32' ? 'junction' : 'dir')
     await assert.rejects(engine.engineRoot(link), (err) => {
       assert.match(err.message, /débranché/)

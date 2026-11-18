@@ -225,7 +225,10 @@ test('ancien repère (étape 121) : repris tel quel, converti, rien n’est perd
 test('un dossier disparu (disque débranché) n’est JAMAIS recréé vide : Jaris repart sur l’emplacement par défaut', () => {
   const { userData, root } = setupUserData()
   writeFileSync(join(userData, 'profile.json'), '{"name":"Léo"}')
-  const gone = join(root, 'E', 'Jaris-data')
+  // Étape 496 : sous Windows (CI), un dossier absent sur un disque PRÉSENT compte comme effacé ; le disque débranché
+  // se simule donc avec une lettre de lecteur qui n'existe pas sur la machine.
+  const absentDrive = process.platform === 'win32' ? 'QRSTUVWXYZ'.split('').find((l) => !existsSync(`${l}:\\`)) : null
+  const gone = absentDrive ? `${absentDrive}:\\Jaris-data` : join(root, 'E', 'Jaris-data')
   writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: gone }))
 
   const { storageRoot, dataLocation, setPathCalls } = loadStorage(userData)
