@@ -571,6 +571,11 @@ test('étape 331 : la version compressée s’affiche en entier sous chaque nom,
     }))
     assert.ok(rows.length > 20, `toutes les lignes attendues : ${rows.length}`)
     for (const row of rows) {
+      // Étape 495 : un futur modèle pas encore sur Ollama n'a pas de version compressée (rien à afficher).
+      if (row.title === 'Olala mini 7A1B') {
+        assert.equal(row.badge, undefined)
+        continue
+      }
       assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0|Q2_0)$/, `${row.title} : version absente`)
       assert.ok(row.inside, `${row.title} : version coupée ou cachée`)
       assert.equal(row.border, 'solid', `${row.title} : badge non habillé par le CSS`)
@@ -880,6 +885,30 @@ test('« Tous les modèles » : un futur modèle reste en bas, rayé, « Futur m
     const titles = await page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
     assert.deepEqual(titles, ['exemple-futur:8b'])
     assert.equal(await page.$('.options-page--models .options-menu__model-search-empty'), null)
+  })
+})
+
+// Étape 495 (Léo : « mets-le dans futur modèle », Olala mini d'OVHcloud, pas encore sur Ollama) : taille inconnue = « — »,
+// jamais un chiffre deviné ; et la ligne rayée a autant de cases que l'en-tête (il en manquait une depuis le Duel Vision).
+test('« Tous les modèles » : Olala mini en futur modèle, sans taille inventée, aligné sur les colonnes', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+    const row = await page.$$eval('.options-page--models tbody tr.options-menu__model-row--future', (rows) => {
+      const tr = rows.find((r) => r.querySelector('.options-menu__model-name')?.title === 'Olala mini 7A1B')
+      return tr && {
+        cells: tr.children.length,
+        header: document.querySelectorAll('.options-page--models thead th').length,
+        size: tr.children[1].textContent.trim(),
+        quant: tr.querySelector('.options-menu__quant') !== null,
+        badge: tr.querySelector('.options-menu__future-badge')?.textContent
+      }
+    })
+    assert.ok(row, 'Olala mini 7A1B doit être dans les futurs modèles')
+    assert.equal(row.cells, row.header, `${row.cells} cases pour ${row.header} colonnes`)
+    assert.equal(row.size, '—')
+    assert.equal(row.quant, false, 'aucune version compressée tant qu’il n’est pas sur Ollama')
+    assert.equal(row.badge, 'Futur modèle')
   })
 })
 

@@ -12498,3 +12498,17 @@ Z-Image-Turbo ne sachant pas modifier une image donnée (Z-Image-Edit n'est pas 
   trop lourd, meilleur installé par défaut, état par niveau, effacement de klein après réussite seulement, poids
   annoncés), test-image-panel-ui.mjs (niveau avant installation, envoyé avec la demande, téléchargement depuis le
   bouton, choix gardé ignoré s'il n'est plus possible, 760 px) ; faux ponts mis à jour dans 6 autres tests d'écran.
+
+## Étape 495 — v0.71.1 : Olala mini 7A1B (OVHcloud) en « Futur modèle »
+
+Léo : « Olala mini est bien ou pas ? » puis « mets-le dans futur modèle dans le tableau ». Communiqué officiel
+d'OVHcloud (17/11/2026, présentation le 19/11) : 7 milliards de paramètres dont 1 actif (256 experts par couche),
+attention hybride Differential-TPA + Mamba-3, Apache 2.0, 32 000 jetons de contexte, 160 jetons/s sur RTX A4500,
+50 sur processeur ; poids promis sur Hugging Face, AUCUN score publié, rien sur l'appel d'outils. Pas sur ollama.com
+(404 vérifié) ni sur Hugging Face pour l'instant.
+- `shared/futureModels.ts` : ligne « Futur modèle » (rayée, en bas de « Tous les modèles », jamais choisie). Taille et
+  version compressée inconnues tant qu'il n'est pas dans le registre d'Ollama : `null`, affichées « — » / rien —
+  jamais un chiffre deviné (règle : taille lue dans le registre).
+- Défaut corrigé au passage : la ligne de futur modèle avait 10 cases pour 11 colonnes depuis l'ajout du Duel Vision
+  (étape 475) — invisible tant que la liste était vide. Test (mord) : autant de cases que l'en-tête.
+- À faire quand il sera sur Ollama : relever sa taille, vérifier l'architecture prise en charge, puis le test de Jaris.

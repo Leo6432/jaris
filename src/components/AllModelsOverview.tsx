@@ -440,14 +440,18 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                               <tr key={entry.model} className="options-menu__model-row--future" title={t('models.future.title')}>
                                 <td className="options-menu__model-name" title={entry.model}>
                                   {formatModelName(entry.model, { quant: false })}
-                                  <span className="options-menu__quant" title={t('models.quant.title')}>
-                                    {entry.quantization}
-                                  </span>
+                                  {entry.quantization && (
+                                    <span className="options-menu__quant" title={t('models.quant.title')}>
+                                      {entry.quantization}
+                                    </span>
+                                  )}
                                   <span className="options-menu__model-meta">
                                     <span className="options-menu__future-badge">{t('models.future')}</span>
                                   </span>
                                 </td>
-                                <td className="options-menu__col-num">{t('unit.gb', { value: formatDecimal(entry.vramGb) })}</td>
+                                <td className="options-menu__col-num">
+                                  {entry.vramGb === null ? '—' : t('unit.gb', { value: formatDecimal(entry.vramGb) })}
+                                </td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>
@@ -458,6 +462,8 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>
+                                {/* Quatre duels (Conversation, Code, Vocal, Vision — étape 475) et la vitesse : une case chacun. */}
+                                <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
