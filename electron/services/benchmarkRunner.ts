@@ -120,13 +120,13 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
   // « Image » d'Options → Modèles). Un échec ne fait jamais échouer le reste de la configuration.
   const imagePick = pickImageModel(picked.vramGb, detectRamGb())
   let image: CapacityScanResult['image'] = imagePick
-  if (imagePick.model) {
+  if (imagePick.quality) {
     try {
-      await installImageModel(onLine)
+      await installImageModel(imagePick.quality, onLine)
       image = { ...imagePick, installed: true }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      onLine(t('bench.imageFailed', { model: imagePick.model, error: message }))
+      onLine(t('bench.imageFailed', { model: imagePick.model ?? '', error: message }))
       image = { ...imagePick, installed: false, error: message }
     }
   } else {

@@ -28,7 +28,12 @@ import ImagePanel from './src/components/ImagePanel'
 // Un vrai petit PNG (1x1), pour que <img> ait quelque chose à afficher.
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqPn/HwAFAAJ/wlZ9CwAAAABJRU5ErkJggg=='
 window.__calls = []
-window.__status = window.__status || { supported: true, capable: true, reason: null, installed: true, downloadLabel: '5,1 Go' }
+// Étape 494 : les niveaux de Z-Image que la machine fait tourner (ici une carte 8 Go : Q4 téléchargé, Q6 pas encore).
+window.__status = window.__status || { supported: true, capable: true, reason: null, installed: true, qualities: [
+  { id: 'q2', label: 'Q2', installed: false, downloadLabel: '2,4 Go' },
+  { id: 'q4', label: 'Q4', installed: true, downloadLabel: '0 o' },
+  { id: 'q6', label: 'Q6', installed: false, downloadLabel: '4,9 Go' }
+] }
 window.__images = window.__images || [
   { fileName: '2026-09-28T17-22-15-un-chat-sur-la-lune.png', label: 'Un chat sur la lune', timestamp: Date.now() - 60000 },
   { fileName: '2026-09-27T10-00-00-une-foret.png', label: 'Une forêt', timestamp: Date.now() - 86400000 }
@@ -40,13 +45,19 @@ window.jaris = {
     if (window.__statusFails) throw new Error("Error invoking remote method 'jaris:get-image-studio-status': Error: Le dossier du moteur d'images est verrouillé.")
     return window.__status
   },
-  installImageStudio: () => {
-    window.__calls.push('install')
-    return new Promise((resolve) => { window.__finishInstall = () => { window.__status = { ...window.__status, installed: true }; resolve() } })
+  installImageStudio: (quality) => {
+    window.__calls.push(['install', quality])
+    return new Promise((resolve) => {
+      window.__finishInstall = () => {
+        window.__status = { ...window.__status, installed: true, qualities: window.__status.qualities.map((q) => (q.id === quality ? { ...q, installed: true } : q)) }
+        resolve()
+      }
+    })
   },
   onImageStudioLog: (cb) => { window.__log = cb; return () => {} },
-  generateStudioImage: (prompt, reference) => {
-    window.__calls.push(reference === undefined ? ['generate', prompt] : ['generate', prompt, reference])
+  generateStudioImage: (prompt, quality) => {
+    window.__calls.push(['generate', prompt])
+    window.__quality = quality
     return new Promise((resolve, reject) => {
       window.__finishGen = () => {
         const image = { fileName: '2026-09-28T18-00-00-un-phare.png', label: 'Un phare', timestamp: Date.now() }
@@ -65,9 +76,7 @@ window.jaris = {
   deleteGeneratedImage: async (fileName) => { window.__calls.push(['delete', fileName]); window.__images = window.__images.filter((i) => i.fileName !== fileName) },
   openGeneratedImages: async (fileName) => { window.__calls.push(['open', fileName]) },
   saveGeneratedImage: async (dataUrl) => { window.__calls.push(['save', dataUrl.slice(0, 22)]); return { saved: true } },
-  getProfile: async () => null,
-  // Étape 478 : l'image de départ, par le sélecteur NATIF (via le main), comme dans le Chat.
-  pickImageFile: async () => window.__picked ?? null
+  getProfile: async () => null
 }
 
 createRoot(document.getElementById('root')).render(<ImagePanel />)
@@ -108,6 +117,7 @@ async function withPage(run, init = '') {
 }
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
+const FAKE_STORAGE = "window.__store = {}; Object.defineProperty(window, 'localStorage', { value: { getItem: (k) => (k in window.__store ? window.__store[k] : null), setItem: (k, v) => { window.__store[k] = String(v) } } });"
 
 test('accueil : les dernières images en vignettes, la liste à gauche, le champ en bas', options, async () => {
   await withPage(async (page) => {
@@ -117,8 +127,7 @@ test('accueil : les dernières images en vignettes, la liste à gauche, le champ
     assert.match(await page.textContent('.workspace__rail'), /Un chat sur la lune.*Une forêt/s)
     const composer = await page.$eval('.image-panel > .composer', (el) => el === el.parentElement.lastElementChild)
     assert.equal(composer, true, 'le champ est le dernier élément, en bas')
-    // Étape 478 (Léo : « sur Image, je ne peux pas ajouter d'image ») : le « + » joint une image de départ.
-    assert.equal(await page.locator('.composer__plus').count(), 1, '« + » : joindre une image de départ')
+    assert.equal(await page.locator('.composer__plus').count(), 0, 'pas de « + » : le mode Image dessine, il ne lit rien')
   })
 })
 
@@ -249,17 +258,93 @@ test('ouvrir une image : Enregistrer (habillé par le CSS) et Ouvrir le dossier 
   })
 })
 
-test('modèle de dessin absent : l’écran le dit, avec sa taille, et n’installe rien sans clic', options, async () => {
+const NOTHING_INSTALLED =
+  "window.__status = { supported: true, capable: true, reason: null, installed: false, qualities: [{ id: 'q2', label: 'Q2', installed: false, downloadLabel: '5,3 Go' }, { id: 'q4', label: 'Q4', installed: false, downloadLabel: '6,6 Go' }, { id: 'q6', label: 'Q6', installed: false, downloadLabel: '8 Go' }] }"
+
+test('modèle de dessin absent : on choisit le niveau AVANT de télécharger, la taille suit, rien sans clic (étape 494)', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.image-install__card')
-    assert.match(await page.textContent('.image-install__card'), /5,1 Go à télécharger/)
+    // Par défaut le plus fidèle que la machine fait tourner (ici Q6).
+    assert.match(await page.textContent('.image-install__card'), /8 Go à télécharger/)
+    assert.match(await page.textContent('.image-install__button'), /Installer la qualité Q6/)
     assert.deepEqual(await page.evaluate(() => window.__calls), [])
+    await page.click('.image-install__card .quality-picker .effort-picker__trigger')
+    assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 3, 'Q2, Q4, Q6 : les niveaux de cette machine')
+    assert.equal(await page.getAttribute('.effort-picker__panel', 'aria-label'), "Qualité de l'image", 'pas « Qualité de la vidéo »')
+    assert.equal(await page.locator('.quality-picker__download').count(), 0, 'l’écran d’installation a déjà son bouton')
+    await page.click('.quality-picker .effort-picker__step >> nth=1')
+    assert.match(await page.textContent('.image-install__card'), /6,6 Go à télécharger/)
     await page.click('.image-install__button')
-    await page.evaluate(() => window.__log('Téléchargement de le modèle de dessin (FLUX.2 klein) : 40 %'))
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'install'), ['install', 'q4'])
+    await page.evaluate(() => window.__log('Téléchargement de le modèle de dessin (Z-Image-Turbo) : 40 %'))
     await page.waitForFunction(() => /40 %/.test(document.body.textContent))
     await page.evaluate(() => window.__finishInstall())
     await page.waitForSelector('.image-panel > .composer')
-  }, "window.__status = { supported: true, capable: true, reason: null, installed: false, downloadLabel: '5,1 Go' }")
+  }, NOTHING_INSTALLED)
+})
+
+test('niveau (étape 494) : le plus fidèle déjà téléchargé par défaut, envoyé avec la demande', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.quality-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.quality-picker .effort-picker__trigger'), /Q4/, 'Q6 n’est pas téléchargé : Q4 par défaut')
+    await page.fill('.composer__input', 'un phare')
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__quality !== undefined)
+    assert.equal(await page.evaluate(() => window.__quality), 'q4')
+  })
+})
+
+test('niveau : un niveau absent se télécharge depuis son bouton ; sans lui, aucun dessin n’est lancé', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.quality-picker .effort-picker__trigger')
+    await page.click('.quality-picker .effort-picker__trigger')
+    assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 3)
+    assert.equal(await page.locator('.quality-picker__download').count(), 0, 'Q4 est déjà là')
+    await page.click('.quality-picker .effort-picker__step >> nth=2')
+    assert.match(await page.textContent('.quality-picker .effort-picker__current'), /Qualité Q6/)
+    assert.match(await page.textContent('.quality-picker__download'), /Télécharger \(4,9 Go\)/)
+
+    await page.keyboard.press('Escape')
+    await page.fill('.composer__input', 'la mer')
+    await page.click('.composer__send')
+    await page.waitForSelector('.code-panel__error')
+    assert.match(await page.textContent('.code-panel__error'), /qualité Q6 n'est pas encore téléchargée/)
+    assert.equal((await page.evaluate(() => window.__calls)).some((c) => c[0] === 'generate'), false)
+
+    await page.click('.quality-picker .effort-picker__trigger')
+    await page.click('.quality-picker__download')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'install'), ['install', 'q6'])
+    await page.waitForFunction(() => /Téléchargement de la qualité Q6/.test(document.querySelector('.media-pending')?.textContent ?? ''))
+    assert.equal(await page.locator('.image-panel__recent').count(), 0, 'pendant le téléchargement, l’attente seule au centre')
+    await page.evaluate(() => window.__finishInstall())
+    await page.waitForFunction(() => !document.querySelector('.media-pending'))
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__quality !== undefined)
+    assert.equal(await page.evaluate(() => window.__quality), 'q6')
+    assert.equal(await page.evaluate(() => window.__store['jaris.imageQuality']), 'q6', 'retrouvé à la prochaine ouverture')
+  }, FAKE_STORAGE)
+})
+
+test('niveau : un choix gardé que la machine ne propose plus est ignoré', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.quality-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.quality-picker .effort-picker__trigger'), /Q4/)
+  }, FAKE_STORAGE + "window.__store['jaris.imageQuality'] = 'q8'")
+})
+
+test('niveau : le champ et son bouton tiennent dans une fenêtre de 760 px, sans débordement', options, async () => {
+  await withPage(async (page) => {
+    await page.setViewportSize({ width: 760, height: 700 })
+    await page.waitForSelector('.quality-picker .effort-picker__trigger')
+    const box = await page.evaluate(() => {
+      const composer = document.querySelector('.image-panel > .composer').getBoundingClientRect()
+      const trigger = document.querySelector('.quality-picker .effort-picker__trigger').getBoundingClientRect()
+      return { overflow: document.documentElement.scrollWidth - innerWidth, inside: trigger.left >= composer.left && trigger.right <= composer.right, height: trigger.height }
+    })
+    assert.ok(box.overflow <= 0, `la page déborde de ${box.overflow}px`)
+    assert.ok(box.inside, 'le bouton de niveau sort du champ')
+    assert.ok(box.height > 0)
+  })
 })
 
 test('PC pas assez puissant : la raison, et aucun bouton d’installation', options, async () => {
@@ -267,7 +352,7 @@ test('PC pas assez puissant : la raison, et aucun bouton d’installation', opti
     await page.waitForSelector('.image-install__card')
     assert.match(await page.textContent('.image-install__card'), /pas assez de puissance.*carte graphique trop petite/)
     assert.equal(await page.locator('.image-install__button').count(), 0)
-  }, "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (4 Go de VRAM, il en faut 6 ou plus)', installed: false, downloadLabel: '5,1 Go' }")
+  }, "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (3 Go de VRAM, il en faut 4 ou plus)', installed: false, qualities: [] }")
 })
 
 // Étape 354 (design) : depuis l'étape 282 (.code-panel { padding: 0 } pour le mode Code), le champ de saisie des
@@ -297,35 +382,4 @@ test('galerie d’images illisible : le vrai message s’affiche au lieu d’une
     await page.waitForSelector('.composer')
     await page.waitForFunction(() => /Le dossier des images est inaccessible\./.test(document.querySelector('.image-panel')?.textContent ?? ''))
   }, 'window.__listFails = true')
-})
-
-// Étape 478 (Léo : « quand je vais sur Image, je ne peux pas ajouter d'image »).
-const PNG_8x6 = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAGUlEQVR4nGP4z8Dwn4GBgQEJMDIwMDAwAAAx8QIBnH7xwQAAAABJRU5ErkJggg=='
-test('étape 478 : une image de départ se joint (menu « + »), part avec la demande, et revient si le dessin échoue', options, async () => {
-  await withPage(async (page) => {
-    await page.waitForSelector('.composer__input')
-    await page.evaluate((b64) => (window.__picked = { name: 'mon-jeu.png', type: 'image/png', base64: b64 }), PNG_8x6)
-    await page.click('.composer__plus')
-    await page.click('.composer__menu-item:has-text("Joindre une image")')
-    await page.waitForSelector('.composer__attachment img')
-    assert.equal(await page.textContent('.composer__attachment-name'), 'mon-jeu.png')
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/image-1-image-jointe.png` })
-    // Une image seule ne dit pas quoi dessiner : on le demande, l'image reste jointe, rien ne part.
-    await page.click('.composer__send')
-    await page.waitForSelector('.code-panel__error')
-    assert.match(await page.textContent('.code-panel__error'), /Dis-moi ce que tu veux dessiner à partir de cette image/)
-    assert.equal((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'generate'), false)
-    assert.equal(await page.locator('.composer__attachment img').count(), 1)
-    // Avec la demande : l'image part avec elle (JPEG en base64, sans en-tête data:).
-    await page.fill('.composer__input', 'une miniature Roblox pour mon jeu')
-    await page.click('.composer__send')
-    const call = (await page.evaluate(() => window.__calls)).find((c) => Array.isArray(c) && c[0] === 'generate')
-    assert.equal(call[1], 'une miniature Roblox pour mon jeu')
-    assert.match(call[2], /^\/9j\//, 'l’image de départ, réencodée en JPEG')
-    assert.equal(await page.locator('.composer__attachment').count(), 0, 'le champ se vide dès l’envoi, image comprise')
-    // Un échec : la demande ET l'image reviennent, prêtes à relancer.
-    await page.evaluate(() => window.__failGen('Pas assez de mémoire pour dessiner.'))
-    await page.waitForSelector('.composer__attachment img')
-    assert.equal(await page.inputValue('.composer__input'), 'une miniature Roblox pour mon jeu')
-  })
 })

@@ -2,7 +2,7 @@ import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerSaveBlo
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getMissingStorageRoot } from './services/storageRoot'
-import { pickImageModel } from '../shared/imageModel'
+import { isImageQuality, pickImageModel } from '../shared/imageModel'
 import { PILOT_MODEL, PILOT_MODEL_LABEL, pickPilotModel } from '../shared/pilotModel'
 import {
   deleteGeneratedImage,
@@ -12,7 +12,8 @@ import {
   getImageStudioStatus,
   imageEngineRoot,
   installImageModel,
-  isImageModelInstalled,
+  isImageQualityInstalled,
+  machineBestImageQuality,
   listGeneratedImages,
   readGeneratedImageDataUrl,
   ENGINE_EXIT_WAIT_MS,
@@ -2296,7 +2297,7 @@ app.whenReady().then(async () => {
     return {
       ...picks,
       pilot: pilot.model ? { ...pilot, installed: pilotInstalled } : pilot,
-      image: image.model ? { ...image, installed: await isImageModelInstalled() } : image,
+      image: image.quality ? { ...image, installed: await isImageQualityInstalled(image.quality) } : image,
       video: video.quality ? { ...video, installed: await isVideoQualityInstalled(video.quality) } : video
     }
   }))
@@ -2598,12 +2599,14 @@ app.whenReady().then(async () => {
   // Mode Image (étape 200, remplace le Montage) : le moteur de dessin de l'étape 173 a sa propre page. Seuls des
   // NOMS de fichiers PNG voyagent entre l'écran et ici, revérifiés à chaque fois (generatedImagePath).
   ipcMain.handle(IPC_CHANNELS.getImageStudioStatus, (): Promise<ImageStudioStatus> => getImageStudioStatus())
-  ipcMain.handle(IPC_CHANNELS.installImageStudio, (event) =>
-    installImageModel((message) => {
+  // Étape 494 : le niveau vient de l'écran — ramené au meilleur de la machine s'il n'en est pas un, puis revérifié
+  // pour la machine par installImageModel/generateImage (jamais cru sur parole).
+  ipcMain.handle(IPC_CHANNELS.installImageStudio, async (event, quality?: unknown) =>
+    installImageModel(isImageQuality(quality) ? quality : (await machineBestImageQuality()), (message) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.imageStudioLog, message)
     })
   )
-  ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string, reference?: unknown): Promise<GeneratedImageSummary> => {
+  ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string, quality?: unknown): Promise<GeneratedImageSummary> => {
     imageStudioAbort?.abort()
     // Nouvelle demande : la mémoire automatique ne doit pas occuper Ollama (ni la carte graphique) devant le dessin.
     cancelMemoryExtraction()
@@ -2618,8 +2621,7 @@ app.whenReady().then(async () => {
         controller.signal,
         // Étape 292 : « un chat » tapé ici était dessiné comme « a chat » (une conversation).
         toEnglishPrompt,
-        // Étape 478 : l'image de départ, revérifiée par generateImage (base64 JPEG ou PNG seulement).
-        reference === undefined || reference === null ? undefined : (reference as string)
+        isImageQuality(quality) ? quality : undefined
       )
       return { fileName: image.fileName, label: imageLabelFromFileName(image.fileName), timestamp: Date.now() }
     } finally {

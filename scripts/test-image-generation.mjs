@@ -14,7 +14,8 @@ import { systemPromptModule } from './load-system-prompt.mjs'
 import { withI18n } from './i18n-test-module.mjs'
 
 /**
- * Génération d'images en local (étape 173 : stable-diffusion.cpp + FLUX.2 klein 4B).
+ * Génération d'images en local (étape 173 : stable-diffusion.cpp + FLUX.2 klein 4B ; étape 494 : Z-Image-Turbo, en
+ * niveaux Q2…Q8 selon la carte graphique).
  *
  * Pas de Windows ni de carte graphique ici : sd-cli.exe, tar.exe et les téléchargements sont simulés. Ce qui
  * est vérifié pour de vrai : la ligne de commande (tableau d'arguments, jamais un shell), la lecture de
@@ -45,19 +46,27 @@ const imageModel = loadPure('shared/imageModel.ts')
 // Étape 200 : le mode Image lit le nom et la date des images (module pur, chargé tel quel).
 const imageGallery = loadPure('shared/imageGallery.ts')
 
-/** Lignes réelles de sd-cli (génération FLUX.2 klein sur ce conteneur), barres de progression comprises. */
+/**
+ * Lignes réelles de sd-cli (étape 494 : Z-Image-Turbo Q4_0, 512 px, 8 étapes, version épinglée compilée sur ce
+ * conteneur — un vrai chat roux sur un canapé bleu), barres de progression comprises.
+ */
 const REAL_OUTPUT = [
-  '[INFO   ] image.cpp:524  - get_learned_condition completed, taking 17.34s',
-  '  |#######################                           | 67/149 - 3.31GB/s',
-  '  |##################################################| 149/149 - 830.58MB/s',
-  '  |============>                                     | 1/4 - 82.29s/it',
-  '  |=========================>                        | 2/4 - 79.24s/it',
-  '  |=====================================>            | 3/4 - 79.37s/it',
-  '  |==================================================| 4/4 - 79.10s/it',
-  // Étape 344 : le décodage par tuiles (sur le processeur) a son propre compteur, à ne pas prendre pour le dessin.
-  '  |=>                                                | 1/49 - 10.38s/it',
-  '  |==>                                               | 2/49 - 5.55s/it',
-  '  |==================================================| 49/49 - 5.58s/it',
+  '[INFO   ] image.cpp:524  - get_learned_condition completed, taking 1.29s',
+  '  |#                                                 | 1/138 - 0.00MB/s',
+  '  |##################################################| 138/138 - 472.50MB/s',
+  '  |======>                                           | 1/8 - 82.83s/it',
+  '  |============>                                     | 2/8 - 87.05s/it',
+  '  |==================>                               | 3/8 - 93.72s/it',
+  '  |=========================>                        | 4/8 - 93.98s/it',
+  '  |===============================>                  | 5/8 - 86.27s/it',
+  '  |=====================================>            | 6/8 - 85.99s/it',
+  '  |===========================================>      | 7/8 - 86.32s/it',
+  '  |==================================================| 8/8 - 83.29s/it',
+  '[INFO   ] image.cpp:894  - sampling completed, taking 699.45s',
+  // Le décodage par tuiles a son propre compteur (9 tuiles en 512 px), à ne pas prendre pour le dessin.
+  '  |=====>                                            | 1/9 - 4.31s/it',
+  '  |===========>                                      | 2/9 - 3.78s/it',
+  '  |==================================================| 9/9 - 3.69s/it',
   "[INFO   ] main.cpp:497  - save result image 0 to 'out.png' (success)"
 ]
 
@@ -96,8 +105,6 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
       proc.stderr = new EventEmitter()
       proc.kill = () => killed.push('kill')
       proc.spawnArgs = { exe, args, options }
-      // Étape 478 : l'image de départ telle que sd-cli la lit au lancement (le fichier est effacé après).
-      proc.reference = args.includes('-r') ? { path: args[args.indexOf('-r') + 1], bytes: readFileSync(args[args.indexOf('-r') + 1]) } : null
       loaded.lastSpawn = proc
       loaded.backends = [...(loaded.backends ?? []), args[args.indexOf('--backend') + 1]]
       // Étape 345 : carte qui s'arrête net au décodage (0xC0000409) tant que le décodeur est sur elle.
@@ -153,8 +160,8 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
   const engineContent = 'moteur'
   contents.set(loaded.SD_ENGINE.url, engineContent)
   Object.assign(loaded.SD_ENGINE, { bytes: engineContent.length, sha256: sha(engineContent) })
-  for (const file of loaded.IMAGE_MODEL_FILES) {
-    const content = `poids ${file.role}`
+  for (const file of [...Object.values(loaded.IMAGE_QUALITY_FILES), ...loaded.IMAGE_SHARED_FILES]) {
+    const content = `poids ${file.fileName}`
     contents.set(file.url, content)
     Object.assign(file, { bytes: content.length, sha256: sha(content) })
   }
@@ -162,17 +169,18 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
 }
 
 /** Étape 175 : le modèle s'installe comme les autres (runQuickSetup), puis on dessine. */
-async function installed(opts) {
+async function installed(opts, quality = 'q6') {
   const t = loadGenerator(opts)
-  await t.gen.installImageModel()
+  await t.gen.installImageModel(quality)
   return t
 }
 
 test('installation (page Modèles) : le moteur + les trois fichiers, rien d’autre', async () => {
   const t = loadGenerator()
   const logs = []
-  await t.gen.installImageModel((m) => logs.push(m))
-  assert.equal(t.downloads.length, 4, 'le moteur + les trois fichiers du modèle')
+  await t.gen.installImageModel('q6', (m) => logs.push(m))
+  assert.equal(t.downloads.length, 4, 'le moteur + les trois fichiers du niveau')
+  assert.ok(t.downloads.some((u) => u.endsWith('z_image_turbo-Q6_K.gguf')), 'le dessinateur du niveau demandé')
   assert.deepEqual(t.events, ['extract'], 'installer ne dessine rien et ne touche pas à Ollama')
   assert.ok(logs.some((l) => /Téléchargement de .* : 100 %/.test(l)), 'avancement visible pendant l’installation')
   t.cleanup()
@@ -199,7 +207,10 @@ test('dessin : la carte graphique est libérée AVANT de lancer sd-cli, l’imag
   assert.equal(dirname(image.path), join(t.dataRoot, 'generated-images'), 'rangé avec les données de Léo')
   assert.match(image.fileName, /^\d{4}-\d{2}-\d{2}T[\d-]+-a-ginger-cat-on-a-blue-sofa\.png$/)
   // Avancement lu sur la vraie sortie : les étapes de dessin, jamais les compteurs du chargement des poids.
-  assert.deepEqual(logs.filter((l) => l.startsWith('Dessin')), ['Dessin : 1/4', 'Dessin : 2/4', 'Dessin : 3/4', 'Dessin : 4/4'])
+  assert.deepEqual(
+    logs.filter((l) => l.startsWith('Dessin')),
+    Array.from({ length: 8 }, (_, i) => `Dessin : ${i + 1}/8`)
+  )
   assert.ok(logs.some((l) => l.includes('Carte graphique libérée')))
   t.cleanup()
 })
@@ -207,12 +218,12 @@ test('dessin : la carte graphique est libérée AVANT de lancer sd-cli, l’imag
 test('réinstaller un modèle déjà présent ne retélécharge rien', async () => {
   const t = await installed()
   const before = t.downloads.length
-  await t.gen.installImageModel()
+  await t.gen.installImageModel('q6')
   assert.equal(t.downloads.length, before)
   t.cleanup()
 })
 
-test('la description passe en UN argument (jamais un shell), avec la commande documentée pour FLUX.2 klein', async () => {
+test('la description passe en UN argument (jamais un shell), avec la commande documentée pour Z-Image-Turbo', async () => {
   const t = await installed()
   const piege = 'cat" & shutdown -s -t 0 & echo "'
   await t.gen.generateImage(piege)
@@ -225,7 +236,11 @@ test('la description passe en UN argument (jamais un shell), avec la commande do
     assert.ok(args.includes(flag), `${flag} manquant`)
   }
   assert.equal(args[args.indexOf('--cfg-scale') + 1], '1.0')
-  assert.equal(args[args.indexOf('--steps') + 1], '4')
+  assert.equal(args[args.indexOf('--steps') + 1], '8')
+  assert.match(args[args.indexOf('--diffusion-model') + 1], /z_image_turbo-Q6_K\.gguf$/)
+  assert.match(args[args.indexOf('--vae') + 1], /z-image-vae\.safetensors$/)
+  assert.match(args[args.indexOf('--llm') + 1], /Qwen3-4B-Q4_K_M\.gguf$/)
+  assert.ok(!args.includes('-r'), 'étape 494 : plus d’image de départ (propre à klein)')
   // Étape 343 : sur la carte, la table de vocabulaire du lecteur faisait planter le moteur (0xC0000409).
   // Étape 345 : le décodeur, lui, essaie d'abord la carte (bien plus rapide quand elle y arrive).
   assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu', 'lecteur sur le processeur, décodeur sur la carte')
@@ -269,7 +284,7 @@ test('étape 345 : un nouveau moteur réessaie la carte (le défaut a peut-être
   assert.equal(await t.gen.decodeOnCpuRemembered(), true)
   // Nouvelle version du moteur : le dossier bin est remplacé, le souvenir part avec lui.
   t.gen.SD_ENGINE.tag = 'master-999-nouveau'
-  await t.gen.installImageModel()
+  await t.gen.installImageModel('q6')
   assert.equal(await t.gen.decodeOnCpuRemembered(), false)
   t.cleanup()
 })
@@ -283,7 +298,7 @@ test('les chevrons sont retirés : sd.cpp lirait <lora:…> comme un fichier à 
 
 test('un fichier dont l’empreinte ne correspond pas est effacé et refusé, sd-cli n’est jamais lancé', async () => {
   const t = loadGenerator({ corruptFile: 'Qwen3-4B' })
-  await assert.rejects(t.gen.installImageModel(), /ne correspond pas à l'original/)
+  await assert.rejects(t.gen.installImageModel('q6'), /ne correspond pas à l'original/)
   assert.equal(await t.gen.isImageModelInstalled(), false)
   await assert.rejects(t.gen.generateImage('cat'), /pas encore installé/)
   assert.ok(!t.events.includes('spawn'))
@@ -398,11 +413,15 @@ test('les révisions figées pointent vers des fichiers sous licence libre, tail
   const t = loadGenerator()
   const source = readFileSync(join(projectRoot, 'electron/services/imageGenerator.ts'), 'utf8')
   assert.equal(t.gen.SD_ENGINE.url, 'https://github.com/leejet/stable-diffusion.cpp/releases/download/master-920-2f88688/sd-master-2f88688-bin-win-vulkan-x64.zip')
-  for (const repo of ['leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9', 'black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc2', 'unsloth/Qwen3-4B-GGUF/resolve/22c9fc8']) {
+  for (const repo of ['leejet/Z-Image-Turbo-GGUF/resolve/c61c0e4', 'Tongyi-MAI/Z-Image-Turbo/resolve/f332072', 'unsloth/Qwen3-4B-GGUF/resolve/22c9fc8']) {
     assert.ok(source.includes(repo), `${repo} : révision figée attendue (jamais « main »)`)
   }
   assert.ok(!/\/resolve\/main\//.test(source))
-  assert.equal((source.match(/sha256: '[0-9a-f]{64}'/g) ?? []).length, 4)
+  // Le moteur, six niveaux du dessinateur, le décodeur et le lecteur.
+  assert.equal((source.match(/sha256: '[0-9a-f]{64}'/g) ?? []).length, 9)
+  for (const [id, file] of Object.entries(t.gen.IMAGE_QUALITY_FILES)) {
+    assert.ok(file.url.endsWith(file.fileName), `${id} : le fichier téléchargé porte le nom de celui publié`)
+  }
   t.cleanup()
 })
 
@@ -468,21 +487,105 @@ test('les copies du test des modèles (outils + consignes) connaissent generate_
 
 // --- Étape 174 : le modèle d'image seulement si la machine a la puissance ---
 
-test('un seul modèle d’image, ou aucun si la machine n’a pas la puissance', () => {
-  const { pickImageModel, IMAGE_MODEL } = imageModel
-  assert.equal(IMAGE_MODEL, 'FLUX.2 klein 4B')
-  assert.equal(pickImageModel(8, 32).model, 'FLUX.2 klein 4B')
-  assert.equal(pickImageModel(5.8, 15.8).model, 'FLUX.2 klein 4B', 'une carte « 6 Go » et un PC « 16 Go » tels que lus par Windows')
-  for (const [vram, ram, why] of [[null, 32, /aucune carte graphique/], [4, 32, /trop petite \(4 Go/], [12, 8, /pas assez de RAM \(8 Go/]]) {
+test('étape 494 : les niveaux proposés suivent la carte graphique (tailles de cartes telles que Windows les lit)', () => {
+  const { availableImageQualities, pickImageModel, IMAGE_MODEL } = imageModel
+  assert.equal(IMAGE_MODEL, 'Z-Image-Turbo')
+  for (const [vram, expected] of [
+    [3.9, ['q2']],
+    [4.8, ['q2', 'q3']],
+    [5.8, ['q2', 'q3', 'q4']],
+    [7.9, ['q2', 'q3', 'q4', 'q5', 'q6']],
+    [10, ['q2', 'q3', 'q4', 'q5', 'q6', 'q8']],
+    [24, ['q2', 'q3', 'q4', 'q5', 'q6', 'q8']]
+  ]) {
+    assert.deepEqual([...availableImageQualities(vram, 32).qualities], expected, `carte ${vram} Go`)
+  }
+  assert.equal(pickImageModel(7.9, 15.8).model, 'Z-Image-Turbo Q6', 'une carte « 8 Go » et un PC « 16 Go » tels que lus par Windows')
+  assert.equal(pickImageModel(7.9, 15.8).quality, 'q6')
+  assert.equal(pickImageModel(12, 32).model, 'Z-Image-Turbo Q8')
+  for (const [vram, ram, why] of [[null, 32, /aucune carte graphique/], [3, 32, /trop petite \(3 Go/], [12, 8, /pas assez de RAM \(8 Go/]]) {
     const pick = pickImageModel(vram, ram)
     assert.equal(pick.model, null)
+    assert.equal(pick.quality, null)
     assert.match(pick.reason, why)
   }
 })
 
-test('pas assez de puissance : refus lisible AVANT tout téléchargement (5 Go jamais perdus)', async () => {
-  const t = loadGenerator({ vramGb: 4 })
+test('étape 494 : le poids annoncé de chaque niveau (Options → Modèles) correspond aux vrais fichiers', () => {
+  const t = loadGenerator()
+  // Tailles figées dans imageGenerator.ts (lues sur le disque : loadGenerator les remplace pour simuler les téléchargements).
+  const source = readFileSync(join(projectRoot, 'electron/services/imageGenerator.ts'), 'utf8')
+  const bytesOf = (name) => Number(source.match(new RegExp(`fileName: '${name.replace(/\./g, '\\.')}'[^}]*?bytes: ([\\d_]+)`))[1].replaceAll('_', ''))
+  const engine = Number(source.match(/bytes: ([\d_]+),\s*sha256: '63e8/)[1].replaceAll('_', ''))
+  const shared = bytesOf('z-image-vae.safetensors') + bytesOf('Qwen3-4B-Q4_K_M.gguf')
+  for (const level of imageModel.IMAGE_QUALITIES) {
+    const total = engine + shared + bytesOf(t.gen.IMAGE_QUALITY_FILES[level.id].fileName)
+    assert.equal(level.downloadGb, Math.round(total / 1e9), `${level.label} : ${total} octets`)
+  }
+  t.cleanup()
+})
+
+test('étape 494 : un niveau trop lourd pour la machine est refusé AVANT tout téléchargement, avec ce qu’il demande', async () => {
+  const t = loadGenerator({ vramGb: 7.9 })
+  await assert.rejects(t.gen.installImageModel('q8'), /La qualité Q8 demande une carte graphique de 10 Go et 16 Go de RAM/)
+  assert.equal(t.downloads.length, 0)
+  await t.gen.installImageModel('q6')
+  await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, 'q8'), /La qualité Q8 demande/)
+  assert.ok(!t.events.includes('spawn'))
+  t.cleanup()
+})
+
+test('étape 494 : le niveau choisi dessine ; sans choix (Chat, voix, Duel), le plus fidèle déjà installé', async () => {
+  const t = await installed({ vramGb: 7.9 }, 'q2')
+  await t.gen.installImageModel('q4')
+  const model = () => t.gen.lastSpawn.spawnArgs.args[t.gen.lastSpawn.spawnArgs.args.indexOf('--diffusion-model') + 1]
+  await t.gen.generateImage('cat', () => {})
+  assert.match(model(), /z_image_turbo-Q4_K\.gguf$/, 'Q6 n’est pas téléchargé : le meilleur installé est Q4')
+  await t.gen.generateImage('cat', () => {}, undefined, undefined, 'q2')
+  assert.match(model(), /z_image_turbo-Q2_K\.gguf$/)
+  await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, 'q6'), /La qualité Q6 du modèle d'image n'est pas encore téléchargée/)
+  assert.equal(await t.gen.isImageQualityInstalled('q6'), false)
+  assert.equal(await t.gen.imageDrawingAvailable(), true)
+  t.cleanup()
+})
+
+test('étape 494 : l’état du mode Image liste les niveaux de la machine, installés ou à télécharger', async () => {
+  const t = await installed({ vramGb: 5.8 }, 'q3')
+  const status = await t.gen.getImageStudioStatus()
+  assert.equal(status.capable, true)
+  assert.equal(status.installed, true)
+  assert.deepEqual(status.qualities.map((q) => [q.id, q.label, q.installed]), [['q2', 'Q2', false], ['q3', 'Q3', true], ['q4', 'Q4', false]])
+  // Il ne reste que le dessinateur à télécharger pour Q4 : le moteur, le décodeur et le lecteur sont déjà là.
+  assert.equal(status.qualities[2].downloadLabel, `${t.gen.IMAGE_QUALITY_FILES.q4.bytes} o`)
+  t.cleanup()
+})
+
+test('étape 494 : une fois Z-Image installé, les fichiers de FLUX.2 klein sont effacés, le lecteur commun reste', async () => {
+  const t = loadGenerator()
+  const models = join(t.env.LOCALAPPDATA, 'Jaris', 'image-generation', 'models')
+  mkdirSync(join(models, 'video'), { recursive: true })
+  for (const name of [...t.gen.LEGACY_IMAGE_FILES, 'video/fastwan.gguf']) writeFileSync(join(models, name), 'ancien')
+  await t.gen.installImageModel('q6')
+  for (const name of t.gen.LEGACY_IMAGE_FILES) assert.equal(existsSync(join(models, name)), false, `${name} aurait dû être effacé`)
+  assert.equal(existsSync(join(models, 'Qwen3-4B-Q4_K_M.gguf')), true)
+  assert.equal(existsSync(join(models, 'video', 'fastwan.gguf')), true, 'la vidéo n’est pas touchée')
+  t.cleanup()
+})
+
+test('étape 494 : un téléchargement raté ne fait jamais perdre klein (rien n’est effacé avant la fin)', async () => {
+  const t = loadGenerator({ corruptFile: 'Qwen3-4B' })
+  const models = join(t.env.LOCALAPPDATA, 'Jaris', 'image-generation', 'models')
+  mkdirSync(models, { recursive: true })
+  for (const name of t.gen.LEGACY_IMAGE_FILES) writeFileSync(join(models, name), 'ancien')
+  await assert.rejects(t.gen.installImageModel('q6'))
+  for (const name of t.gen.LEGACY_IMAGE_FILES) assert.equal(existsSync(join(models, name)), true)
+  t.cleanup()
+})
+
+test('pas assez de puissance : refus lisible AVANT tout téléchargement (plusieurs Go jamais perdus)', async () => {
+  const t = loadGenerator({ vramGb: 3 })
   await assert.rejects(t.gen.generateImage('a cat'), /Ton PC n'a pas assez de puissance pour dessiner des images : carte graphique trop petite/)
+  await assert.rejects(t.gen.installImageModel('q2'), /carte graphique trop petite/)
   assert.equal(t.downloads.length, 0)
   assert.deepEqual(t.events, [])
   // Et le refus ne bloque pas la suite (verrou jamais posé).
@@ -492,7 +595,7 @@ test('pas assez de puissance : refus lisible AVANT tout téléchargement (5 Go j
 test('isImageModelInstalled : vrai seulement avec le moteur ET les trois fichiers à la bonne taille', async () => {
   const t = loadGenerator()
   assert.equal(await t.gen.isImageModelInstalled(), false)
-  await t.gen.installImageModel()
+  await t.gen.installImageModel('q6')
   assert.equal(await t.gen.isImageModelInstalled(), true)
   rmSync(join(t.env.LOCALAPPDATA, 'Jaris', 'image-generation', 'bin', 'sd-cli.exe'))
   assert.equal(await t.gen.isImageModelInstalled(), false, 'moteur absent = pas installé')
@@ -540,47 +643,5 @@ test('sans traduction demandée (l’outil du Chat écrit déjà en anglais), ri
   assert.deepEqual(t.events, ['unload', 'spawn'])
   const { args } = t.gen.lastSpawn.spawnArgs
   assert.equal(args[args.indexOf('-p') + 1], 'a ginger cat on a blue sofa')
-  t.cleanup()
-})
-
-// Étape 478 (Léo : « Dessine une miniature Roblox pour mon jeu, et voici une image de mon jeu » ; « sur Image, je ne peux
-// pas ajouter d'image ») : dessiner à partir d'une image, comme l'exemple « edit » de FLUX.2 klein (docs/flux2.md).
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
-const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
-
-test('étape 478 : l’image de départ part à sd-cli par -r (avec euler, comme la doc), puis est effacée', async () => {
-  const t = await installed()
-  const image = await t.gen.generateImage('a Roblox game thumbnail', () => {}, undefined, undefined, JPEG.toString('base64'))
-  assert.ok(existsSync(image.path))
-  const { args } = t.gen.lastSpawn.spawnArgs
-  const { reference } = t.gen.lastSpawn
-  assert.ok(reference, '-r présent')
-  assert.deepEqual(reference.bytes, JPEG, 'les octets exacts de l’image jointe')
-  assert.match(reference.path, /reference\.jpg$/)
-  assert.equal(args[args.indexOf('--sampling-method') + 1], 'euler')
-  assert.ok(!reference.path.startsWith(t.dataRoot), 'jamais dans les données de Léo (Déplacer ne la connaît pas)')
-  assert.equal(existsSync(reference.path), false, 'effacée après le dessin')
-  // Un PNG aussi ; sans image de départ, rien ne change.
-  await t.gen.generateImage('a cat', () => {}, undefined, undefined, PNG.toString('base64'))
-  assert.match(t.gen.lastSpawn.reference.path, /reference\.png$/)
-  await t.gen.generateImage('a cat', () => {})
-  assert.equal(t.gen.lastSpawn.spawnArgs.args.includes('-r'), false)
-  assert.equal(t.gen.lastSpawn.spawnArgs.args.includes('--sampling-method'), false)
-  t.cleanup()
-})
-
-test('étape 478 : l’image de départ est effacée même quand le dessin échoue', async () => {
-  const t = await installed({ engineExitCode: 1, engineOutput: ['ggml_vulkan: Device memory allocation failed', 'ErrorOutOfDeviceMemory'] })
-  await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, JPEG.toString('base64')))
-  assert.equal(existsSync(t.gen.lastSpawn.reference.path), false)
-  t.cleanup()
-})
-
-test('étape 478 : une image de départ qui n’en est pas une est refusée AVANT tout lancement (jamais un chemin)', async () => {
-  const t = await installed()
-  for (const bad of ['C:\\Users\\leo\\secret.png', 'file:///etc/passwd', Buffer.from('pas une image').toString('base64'), 42, '']) {
-    await assert.rejects(t.gen.generateImage('cat', () => {}, undefined, undefined, bad), /n'est pas une image JPEG ou PNG/, String(bad))
-  }
-  assert.equal(t.gen.lastSpawn, undefined, 'sd-cli jamais lancé')
   t.cleanup()
 })

@@ -121,7 +121,7 @@ const overrides = {
     window.__emitWakeHeard = cb
     return () => {}
   },
-  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: window.__ramGb ?? 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false }, video: window.__videoPick ?? { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false } }),
+  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: window.__ramGb ?? 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'Z-Image-Turbo Q6', quality: 'q6', reason: null, installed: false }, video: window.__videoPick ?? { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
   getUnscoredModels: async () => [{ model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }], estimatedMs: 95 * 60_000 }, { model: 'nemotron-3.5-lightning:30b', needs: [{ test: 'tools', reason: 'redo' }], estimatedMs: 7 * 60_000 }],
   onModelBenchmarkLine: (cb) => {
@@ -946,8 +946,8 @@ async function imageRow(page, pick) {
 test('Modèles : une ligne « Image » avec le seul modèle d’image quand la machine le fait tourner', options, async () => {
   await withOptions(async (page) => {
     const row = await imageRow(page)
-    assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', '—', ''])
-    assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
+    assert.deepEqual(row.cells, ['Image', 'Z-Image-Turbo Q6', '—', '—', '—', ''])
+    assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 8 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
   })
 })
 
@@ -997,8 +997,8 @@ test('Modèles : pas assez de puissance → « Aucun modèle », avec la raison'
 
 test('Modèles : modèle d’image déjà téléchargé → aucune note de téléchargement', options, async () => {
   await withOptions(async (page) => {
-    const row = await imageRow(page, { model: 'FLUX.2 klein 4B', reason: null, installed: true })
-    assert.equal(row.cells[1], 'FLUX.2 klein 4B')
+    const row = await imageRow(page, { model: 'Z-Image-Turbo Q6', reason: null, installed: true })
+    assert.equal(row.cells[1], 'Z-Image-Turbo Q6')
     assert.equal(row.note, null)
   })
 })

@@ -114,8 +114,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     // Étape 175 : le modèle d'image s'installe dans le même passage que les modèles Ollama.
     if (id === './imageGenerator') {
       return {
-        installImageModel: async () => {
-          imageInstalls.push('FLUX.2 klein 4B')
+        installImageModel: async (quality) => {
+          imageInstalls.push(quality)
           if (imageInstallError) throw new Error(imageInstallError)
         }
       }
@@ -323,13 +323,14 @@ const IMAGE_PICKED = { flash: 'a', medium: 'b', large: 'c', visionModel: 'v', co
 test('machine assez puissante : le modèle d’image est installé avec les autres, et annoncé dans le résultat', async () => {
   const t = setup(IMAGE_PICKED, null)
   const result = await t.run()
-  assert.deepEqual(t.imageInstalls, ['FLUX.2 klein 4B'])
-  assert.equal(result.image.model, 'FLUX.2 klein 4B')
+  // Étape 494 : le meilleur niveau de Z-Image que la machine fait tourner.
+  assert.equal(t.imageInstalls.length, 1)
+  assert.equal(result.image.model, `Z-Image-Turbo ${t.imageInstalls[0].toUpperCase()}`)
   assert.equal(result.image.installed, true)
 })
 
 test('pas assez de puissance : rien n’est téléchargé, « aucun modèle » avec la raison', async () => {
-  const t = setup(IMAGE_PICKED, null, new Set(), new Set(), { vramGb: 4 })
+  const t = setup(IMAGE_PICKED, null, new Set(), new Set(), { vramGb: 3 })
   const result = await t.run()
   assert.deepEqual(t.imageInstalls, [])
   assert.equal(result.image.model, null)

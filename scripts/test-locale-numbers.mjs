@@ -49,17 +49,22 @@ test('formatDecimal : une décimale au plus, sans zéro inutile, à la façon de
 })
 
 test('carte graphique trop petite : « 4,8 Go » en français, « 4.8 GB » en anglais (image, vidéo, pilotage)', () => {
-  // nvidia-smi donne la VRAM au dixième près (hardwareScan.ts) : une carte « 5 Go » est lue 4,8.
-  const reasons = () => [imageModel.pickImageModel(4.8, 32).reason, pilotModel.pickPilotModel(4.8).reason, videoModel.availableVideoQualities(4.8, 32).reason]
-  const fr = inLanguage('fr', reasons)
-  const en = inLanguage('en', reasons)
-  for (const reason of fr) {
-    assert.match(reason ?? '', /4,8 Go/, String(reason))
-    assert.doesNotMatch(reason ?? '', /4\.8/, String(reason))
+  // nvidia-smi donne la VRAM au dixième près (hardwareScan.ts) : une carte « 5 Go » est lue 4,8. Étape 494 : le dessin
+  // tourne dès 4 Go (Z-Image Q2) — son message est vérifié avec une carte lue 3,4.
+  const cases = () => [
+    ['3', imageModel.pickImageModel(3.4, 32).reason],
+    ['4', pilotModel.pickPilotModel(4.8).reason],
+    ['4', videoModel.availableVideoQualities(4.8, 32).reason]
+  ]
+  for (const [whole, reason] of inLanguage('fr', cases)) {
+    const tenth = whole === '3' ? '4' : '8'
+    assert.match(reason ?? '', new RegExp(`${whole},${tenth} Go`), String(reason))
+    assert.doesNotMatch(reason ?? '', new RegExp(`${whole}\\.${tenth}`), String(reason))
   }
-  for (const reason of en) {
-    assert.match(reason ?? '', /4\.8 GB/, String(reason))
-    assert.doesNotMatch(reason ?? '', /4,8/, String(reason))
+  for (const [whole, reason] of inLanguage('en', cases)) {
+    const tenth = whole === '3' ? '4' : '8'
+    assert.match(reason ?? '', new RegExp(`${whole}\\.${tenth} GB`), String(reason))
+    assert.doesNotMatch(reason ?? '', new RegExp(`${whole},${tenth}`), String(reason))
   }
 })
 

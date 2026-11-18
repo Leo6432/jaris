@@ -1,5 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { ImageQuality } from '../shared/imageModel'
 import type { DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
@@ -194,9 +195,10 @@ const api = {
   saveGeneratedImage: (dataUrl: string): Promise<SaveImageResult> => invoke(IPC_CHANNELS.saveGeneratedImage, dataUrl),
   // Mode Image (étape 200) : seuls des NOMS de fichiers voyagent, jamais un chemin.
   getImageStudioStatus: (): Promise<ImageStudioStatus> => invoke(IPC_CHANNELS.getImageStudioStatus),
-  installImageStudio: (): Promise<void> => invoke(IPC_CHANNELS.installImageStudio),
+  installImageStudio: (quality: ImageQuality): Promise<void> => invoke(IPC_CHANNELS.installImageStudio, quality),
   onImageStudioLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.imageStudioLog, cb),
-  generateStudioImage: (prompt: string, reference?: string): Promise<GeneratedImageSummary> => invoke(IPC_CHANNELS.generateStudioImage, prompt, reference),
+  generateStudioImage: (prompt: string, quality: ImageQuality): Promise<GeneratedImageSummary> =>
+    invoke(IPC_CHANNELS.generateStudioImage, prompt, quality),
   cancelStudioImage: (): void => ipcRenderer.send(IPC_CHANNELS.cancelStudioImage),
   listGeneratedImages: (): Promise<GeneratedImageSummary[]> => invoke(IPC_CHANNELS.listGeneratedImages),
   readGeneratedImage: (fileName: string): Promise<string | null> => invoke(IPC_CHANNELS.readGeneratedImage, fileName),

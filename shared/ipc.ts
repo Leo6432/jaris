@@ -1,7 +1,7 @@
 import type { LanguageCode, LanguageSetting } from './i18n/languages'
 import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
-import type { ImageModelPick } from './imageModel'
+import type { ImageModelPick, ImageQuality } from './imageModel'
 import type { VideoModelPick } from './videoModel'
 import type { PilotModelPick } from './pilotModel'
 import type { DuelAction, DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelRemoteSettings, DuelToolTrouble, DuelTurn, DuelVoteSide } from './duel'
@@ -430,8 +430,8 @@ export interface MyModelPicks {
    */
   installCheck: { notInstalled: ModelRole[]; otherInstalled: string[] } | null
   /**
-   * Étape 174 : le modèle d'image (un seul, FLUX.2 klein 4B), ou aucun si la machine n'a pas assez de puissance
-   * (pickImageModel, shared/imageModel.ts). Ajouté par le canal IPC (main.ts) à partir du matériel détecté
+   * Étape 174 : le modèle d'image (étape 494 : Z-Image-Turbo, à son meilleur niveau pour cette machine), ou aucun si
+   * la machine n'a pas assez de puissance (pickImageModel, shared/imageModel.ts). Ajouté par le canal IPC (main.ts) à partir du matériel détecté
    * ci-dessus : absent seulement dans les appels internes qui n'en ont pas besoin.
    */
   image?: ImageModelPick
@@ -776,9 +776,19 @@ export interface ImageStudioStatus {
   capable: boolean
   /** Pourquoi elle ne peut pas, en clair, quand `capable` est faux. */
   reason: string | null
-  /** Moteur et modèle de dessin présents sur le disque. */
+  /** Au moins un niveau du modèle de dessin est prêt sur le disque (moteur compris). */
   installed: boolean
-  /** Ce qu'il reste à télécharger, en clair (« 5,1 Go »). */
+  /** Étape 494 : les niveaux que la machine fait tourner, du plus léger au plus fidèle. */
+  qualities: ImageQualityStatus[]
+}
+
+/** Un niveau du modèle de dessin (Q2…Q8) dans le mode Image. */
+export interface ImageQualityStatus {
+  id: ImageQuality
+  label: string
+  /** Téléchargé et prêt. */
+  installed: boolean
+  /** Ce qu'il reste à télécharger pour lui (moteur compris s'il manque), ex. « 6,6 Go ». */
   downloadLabel: string
 }
 

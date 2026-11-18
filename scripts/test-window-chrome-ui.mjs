@@ -54,7 +54,7 @@ const known = {
   loadCodeConversations: () => ({ repos: [], conversations: {} }),
   listGeneratedImages: async () => [],
   listGeneratedVideos: async () => [],
-  getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, downloadLabel: '5 Go' }),
+  getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, qualities: [{ id: 'q4', label: 'Q4', installed: false, downloadLabel: '6,6 Go' }] }),
   getVideoStudioStatus: async () => ({ supported: true, capable: true, reason: null, qualities: [{ id: 'light', label: 'Légère', installed: false, downloadLabel: '12 Go' }] }),
   getConversationHistory: async () => [],
   // Étape 392 : une réponse du Chat qui reste en cours tant que le test ne la libère pas.

@@ -1,8 +1,7 @@
 import { execFile, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { createReadStream, existsSync } from 'fs'
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
@@ -10,7 +9,7 @@ import { unloadOllamaModels } from './ollama'
 import { runWithLocalOllama } from '../config'
 import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
-import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
+import { availableImageQualities, IMAGE_MODEL, IMAGE_QUALITIES, imageQualityLabel, type ImageQuality } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
 import { engineStepLine, imageLabelFromFileName, imageTimestampFromFileName, isGeneratedImageFileName } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
@@ -27,12 +26,14 @@ import { t, type MessageKey } from '../../shared/i18n'
  * - **FLUX.2 [klein] 4B** (licence Apache 2.0, utilisable librement) : 4 étapes de dessin seulement, et avec
  *   `--offload-to-cpu` il tient sur une carte 8 Go. Wan2GP a été écarté pour sa licence (Léo : « il vont
  *   devoir avoir une licence »), Qwen-Image pour une licence réservée à la recherche.
+ * - Étape 494 : **Z-Image-Turbo** (Apache 2.0) remplace klein, en six niveaux de compression selon la carte
+ *   graphique (shared/imageModel.ts). Le dessin à partir d'une image (étape 478, propre à klein) est retiré.
  *
  * Tout est figé : version exacte du programme, révision exacte de chaque fichier de modèle sur Hugging Face,
  * et leur empreinte SHA-256 (lue sur Hugging Face et recalculée ici sur le fichier réellement téléchargé).
  * Un fichier corrompu ou remplacé en ligne est refusé plutôt que lancé.
  *
- * Installation (environ 5 Go) : par installImageModel, avec les autres modèles (runQuickSetup), jamais au dessin.
+ * Installation (5 à 9 Go selon le niveau) : par installImageModel, avec les autres modèles (runQuickSetup), jamais au dessin.
  */
 
 const SD_TAG = 'master-920-2f88688'
@@ -56,22 +57,77 @@ export interface ImageModelFile {
   sha256: string
 }
 
-export const IMAGE_MODEL_FILES: ImageModelFile[] = [
-  {
+/**
+ * Étape 494 : le dessinateur Z-Image-Turbo, un fichier par niveau (shared/imageModel.ts). Publiés par l'auteur de
+ * stable-diffusion.cpp, à la révision figée ; tailles et empreintes lues sur l'API Hugging Face, et celle de Q4_0
+ * recalculée ici sur le fichier réellement téléchargé. Q4 est Q4_K (meilleur que Q4_0 pour 0,2 Go de plus).
+ */
+export const IMAGE_QUALITY_FILES: Record<ImageQuality, ImageModelFile> = {
+  q2: {
     role: 'diffusion',
-    fileName: 'flux-2-klein-4b-Q4_0.gguf',
+    fileName: 'z_image_turbo-Q2_K.gguf',
     label: 'file.image.diffusion',
-    url: 'https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q4_0.gguf',
-    bytes: 2_460_378_560,
-    sha256: 'd1023499ef3f2f82ff7c50e6778495195c1b6cc34835741778868428111f9ff4'
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q2_K.gguf',
+    bytes: 2_592_442_304,
+    sha256: 'a9cf1b0368e24c2f9d542d2951c01f6f7fc85ed8c9ed39b5b37b15375508d58a'
   },
+  q3: {
+    role: 'diffusion',
+    fileName: 'z_image_turbo-Q3_K.gguf',
+    label: 'file.image.diffusion',
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q3_K.gguf',
+    bytes: 3_143_559_104,
+    sha256: '4b44bdaa7814f20d7cf144e3939bd93aa32f50660204dd0c2aea5c5376232980'
+  },
+  q4: {
+    role: 'diffusion',
+    fileName: 'z_image_turbo-Q4_K.gguf',
+    label: 'file.image.diffusion',
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q4_K.gguf',
+    bytes: 3_864_250_304,
+    sha256: '14b375ab4f226bc5378f68f37e899ef3c2242b8541e61e2bc1aff40976086fbd'
+  },
+  q5: {
+    role: 'diffusion',
+    fileName: 'z_image_turbo-Q5_0.gguf',
+    label: 'file.image.diffusion',
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q5_0.gguf',
+    bytes: 4_542_547_904,
+    sha256: '12b4a5c064cf8a0fa45d665c5b399d43effbcbeb37748d028d0d0d0fc34c2255'
+  },
+  q6: {
+    role: 'diffusion',
+    fileName: 'z_image_turbo-Q6_K.gguf',
+    label: 'file.image.diffusion',
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q6_K.gguf',
+    bytes: 5_263_239_104,
+    sha256: '319f627beac8059b7546f36a7b4d5097b7f4ee6a1fc37585d0f75ca1d12d01af'
+  },
+  q8: {
+    role: 'diffusion',
+    fileName: 'z_image_turbo-Q8_0.gguf',
+    label: 'file.image.diffusion',
+    url: 'https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q8_0.gguf',
+    bytes: 6_577_440_704,
+    sha256: 'df1c5baa86d1398c979495a6072dbcee79444fdb884a2445582ba0769c44e9a1'
+  },
+}
+
+/**
+ * Communs à tous les niveaux. Le décodeur est celui du dépôt officiel de Z-Image-Turbo (Apache 2.0, empreinte
+ * recalculée ici). Le lecteur de description est le Qwen3 4B déjà utilisé par FLUX.2 klein : vérifié ici, c'est
+ * EXACTEMENT celui de Z-Image (un même poids comparé octet par octet entre le dossier text_encoder de
+ * Tongyi-MAI/Z-Image-Turbo et Qwen/Qwen3-4B ; celui de Qwen3-4B-Instruct-2507, cité par sd.cpp, est différent) —
+ * déjà sur le disque des PC qui avaient klein.
+ */
+export const IMAGE_SHARED_FILES: ImageModelFile[] = [
   {
     role: 'vae',
-    fileName: 'flux2-vae.safetensors',
+    fileName: 'z-image-vae.safetensors',
     label: 'file.image.vae',
-    url: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc27f91deacad38e78976d1f2b499d76a294/vae/diffusion_pytorch_model.safetensors',
-    bytes: 168_120_878,
-    sha256: 'ca70d2202afe6415bdbcb8793ba8cd99fd159cfe6192381504d6c4d3036e0f04'
+    url: 'https://huggingface.co/Tongyi-MAI/Z-Image-Turbo/resolve/f332072aa78be7aecdf3ee76d5c247082da564a6/vae/diffusion_pytorch_model.safetensors',
+    bytes: 167_666_902,
+    sha256: 'f5b59a26851551b67ae1fe58d32e76486e1e812def4696a4bea97f16604d40a3'
   },
   {
     role: 'llm',
@@ -83,10 +139,22 @@ export const IMAGE_MODEL_FILES: ImageModelFile[] = [
   }
 ]
 
-/** Taille native de FLUX.2 klein. */
+/** Les trois fichiers d'un niveau : son dessinateur, puis le décodeur et le lecteur communs. */
+export function imageFilesFor(quality: ImageQuality): ImageModelFile[] {
+  return [IMAGE_QUALITY_FILES[quality], ...IMAGE_SHARED_FILES]
+}
+
+/**
+ * Étape 494 : les fichiers de FLUX.2 klein (étape 173), remplacé par Z-Image-Turbo. Effacés une fois un niveau de
+ * Z-Image installé (5 Go qui ne serviraient plus) — jamais avant : sans dessinateur de rechange, Léo garderait au
+ * moins l'ancien sur le disque. Le lecteur Qwen3 4B, commun aux deux, reste.
+ */
+export const LEGACY_IMAGE_FILES = ['flux-2-klein-4b-Q4_0.gguf', 'flux2-vae.safetensors']
+
+/** 1024 px : la taille des exemples de Z-Image-Turbo. */
 export const IMAGE_SIZE = 1024
-/** 4 étapes : c'est le réglage prévu pour la version « klein » distillée (docs/flux2.md de sd.cpp). */
-export const IMAGE_STEPS = 4
+/** 8 étapes : le réglage de Z-Image-Turbo distillé (exemple de docs/z_image.md de sd.cpp, version épinglée). */
+export const IMAGE_STEPS = 8
 /** Plus rien sur la sortie de sd-cli pendant ce délai : il est considéré comme bloqué et arrêté. */
 export const ENGINE_STALL_MS = 5 * 60_000
 const MAX_PROMPT_CHARS = 1000
@@ -120,37 +188,15 @@ export interface SdArgsInput {
   seed: number
   /** Décodage de l'image sur le processeur (étape 345 : seulement si la carte graphique y a échoué). */
   decodeOnCpu?: boolean
-  /** Étape 478 : chemin de l'image de départ (dessiner à partir d'une image). */
-  reference?: string
 }
 
-/** Étape 478 : une image de départ de 15 Mo au plus (base64), une vraie image JPEG ou PNG. */
-const REFERENCE_MAX_CHARS = 20_000_000
-
-/**
- * L'image de départ venue de l'écran ou du Chat, revérifiée ici : du base64 seulement (jamais un chemin), une taille
- * bornée, et les premiers octets d'un JPEG ou d'un PNG (ce que sd-cli sait lire). Renvoie les octets, ou lève.
- */
-export function referenceImageBytes(base64: unknown): { bytes: Buffer; extension: 'jpg' | 'png' } {
-  if (typeof base64 !== 'string' || !base64 || base64.length > REFERENCE_MAX_CHARS || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
-    throw new Error(t('image.badReference'))
-  }
-  const bytes = Buffer.from(base64, 'base64')
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { bytes, extension: 'jpg' }
-  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { bytes, extension: 'png' }
-  throw new Error(t('image.badReference'))
-}
-
-/** Ligne de commande de sd-cli pour FLUX.2 klein, telle que documentée par sd.cpp (docs/flux2.md). */
-export function buildSdArgs({ models, prompt, output, seed, decodeOnCpu = false, reference }: SdArgsInput): string[] {
+/** Ligne de commande de sd-cli pour Z-Image-Turbo, telle que documentée par sd.cpp (docs/z_image.md). */
+export function buildSdArgs({ models, prompt, output, seed, decodeOnCpu = false }: SdArgsInput): string[] {
   return [
     '--diffusion-model', models.diffusion,
     '--vae', models.vae,
     '--llm', models.llm,
     '-p', prompt,
-    // Étape 478 : dessiner à partir d'une image — exactement l'exemple « edit » de FLUX.2 klein dans docs/flux2.md de
-    // sd.cpp (version épinglée SD_TAG) : `-r <image>` et l'échantillonneur euler.
-    ...(reference ? ['-r', reference, '--sampling-method', 'euler'] : []),
     '--cfg-scale', '1.0',
     '--steps', String(IMAGE_STEPS),
     '-W', String(IMAGE_SIZE),
@@ -273,9 +319,21 @@ export function engineExe(): string {
   return join(imageEngineRoot(), 'bin', 'sd-cli.exe')
 }
 
-function modelPaths(): Record<ImageModelFile['role'], string> {
-  const dir = join(imageEngineRoot(), 'models')
-  return Object.fromEntries(IMAGE_MODEL_FILES.map((f) => [f.role, join(dir, f.fileName)])) as Record<ImageModelFile['role'], string>
+function modelsDir(): string {
+  return join(imageEngineRoot(), 'models')
+}
+
+function modelPaths(quality: ImageQuality): Record<ImageModelFile['role'], string> {
+  return Object.fromEntries(imageFilesFor(quality).map((f) => [f.role, join(modelsDir(), f.fileName)])) as Record<ImageModelFile['role'], string>
+}
+
+/** Ce qu'il manque sur le disque pour ce niveau (un fichier à la bonne taille a déjà été vérifié par son empreinte). */
+async function missingImageFiles(quality: ImageQuality): Promise<ImageModelFile[]> {
+  const missing: ImageModelFile[] = []
+  for (const file of imageFilesFor(quality)) {
+    if ((await sizeOf(join(modelsDir(), file.fileName))) !== file.bytes) missing.push(file)
+  }
+  return missing
 }
 
 /**
@@ -332,32 +390,72 @@ export async function ensureEngine(onLog: Log): Promise<string> {
   return exe
 }
 
-/** Les trois fichiers du modèle, téléchargés au besoin. Un fichier à la bonne taille a déjà été vérifié. */
-async function ensureModels(onLog: Log): Promise<void> {
-  await mkdir(join(imageEngineRoot(), 'models'), { recursive: true })
-  const paths = modelPaths()
-  const missing = []
-  for (const file of IMAGE_MODEL_FILES) {
-    if ((await sizeOf(paths[file.role])) !== file.bytes) missing.push(file)
-  }
+/** Les trois fichiers d'un niveau, téléchargés au besoin. */
+async function ensureModels(quality: ImageQuality, onLog: Log): Promise<void> {
+  await mkdir(modelsDir(), { recursive: true })
+  const missing = await missingImageFiles(quality)
   if (missing.length) {
     const total = missing.reduce((sum, f) => sum + f.bytes, 0)
-    onLog(t('image.download.size', { model: IMAGE_MODEL, size: formatBytes(total) }))
+    onLog(t('image.download.size', { model: `${IMAGE_MODEL} ${imageQualityLabel(quality)}`, size: formatBytes(total) }))
   }
   for (const file of missing) {
-    await downloadVerified(file.url, paths[file.role], file, file.label, onLog)
+    await downloadVerified(file.url, join(modelsDir(), file.fileName), file, file.label, onLog)
+  }
+  // Étape 494 : un niveau de Z-Image est en place, klein ne servira plus jamais (règle : retirer une fonction, c'est
+  // aussi effacer ce qu'elle a installé). Le lecteur Qwen3 4B, commun aux deux, n'est pas dans cette liste.
+  for (const name of LEGACY_IMAGE_FILES) await rm(join(modelsDir(), name), { force: true }).catch(() => {})
+}
+
+/** Les niveaux que CETTE machine fait tourner (jamais cru sur parole quand il vient de l'écran). */
+async function machineQualities(): Promise<{ qualities: ImageQuality[]; reason: string | null }> {
+  const { vramGb } = await detectGpu()
+  return availableImageQualities(vramGb, detectRamGb())
+}
+
+/** Le niveau le plus fidèle que cette machine fait tourner ; lève (avec la raison) si aucun. */
+export async function machineBestImageQuality(): Promise<ImageQuality> {
+  const { qualities, reason } = await machineQualities()
+  const best = qualities[qualities.length - 1]
+  if (!best) throw new Error(t('image.notCapable', { reason: reason ?? '' }))
+  return best
+}
+
+/** Refuse un niveau trop lourd pour cette machine, avec ce qu'il demande. */
+async function assertQualityFits(quality: ImageQuality): Promise<void> {
+  const { qualities, reason } = await machineQualities()
+  if (!qualities.length) throw new Error(t('image.notCapable', { reason: reason ?? '' }))
+  if (!qualities.includes(quality)) {
+    const level = IMAGE_QUALITIES.find((q) => q.id === quality)
+    throw new Error(t('image.qualityTooHeavy', { quality: imageQualityLabel(quality), vram: level?.vramLabel ?? '', ram: level?.ramLabel ?? '' }))
   }
 }
 
 /**
  * Étape 175, Léo : « il doit pas s'installer au premier dessin mais dans la page modèles comme tous les
- * modèles si pas présent ». Appelé par runQuickSetup (écran d'accueil et « Retester la configuration »), au
- * même moment que les modèles Ollama — jamais par un dessin.
+ * modèles si pas présent ». Appelé par runQuickSetup (écran d'accueil et « Retester la configuration ») avec le
+ * meilleur niveau de la machine, et par le mode Image pour un autre niveau (étape 494) — jamais par un dessin.
  */
-export async function installImageModel(onLog: Log = () => {}): Promise<void> {
+export async function installImageModel(quality: ImageQuality, onLog: Log = () => {}): Promise<void> {
   if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
+  await assertQualityFits(quality)
   await ensureEngine(onLog)
-  await ensureModels(onLog)
+  await ensureModels(quality, onLog)
+}
+
+export async function isImageQualityInstalled(quality: ImageQuality): Promise<boolean> {
+  return (await engineReady()) && (await missingImageFiles(quality)).length === 0
+}
+
+/**
+ * Le niveau d'un dessin sans choix explicite (Chat, voix, téléphone, Duel) : le plus fidèle DÉJÀ installé parmi ceux
+ * que la machine fait tourner. `null` : aucun.
+ */
+export async function bestInstalledImageQuality(): Promise<ImageQuality | null> {
+  const { qualities } = await machineQualities()
+  for (const quality of [...qualities].reverse()) {
+    if (await isImageQualityInstalled(quality)) return quality
+  }
+  return null
 }
 
 function killTree(pid: number | undefined, kill: () => void): void {
@@ -561,37 +659,38 @@ export async function drawingPrompt(text: string, onLog: Log, translate?: Prompt
  */
 export async function imageDrawingAvailable(): Promise<boolean> {
   if (process.platform !== 'win32') return false
-  const { vramGb } = await detectGpu()
-  if (!pickImageModel(vramGb, detectRamGb()).model) return false
-  return isImageModelInstalled()
+  return (await bestInstalledImageQuality()) !== null
 }
 
+/**
+ * `quality` : le niveau choisi dans le mode Image (étape 494) ; absent (Chat, voix, téléphone, Duel) = le plus fidèle
+ * déjà installé. Un niveau venu de l'écran est revérifié pour CETTE machine.
+ */
 export async function generateImage(
   prompt: string,
   onLog: Log = () => {},
   signal?: AbortSignal,
   translate?: PromptTranslate,
-  // Étape 478 : image de départ (base64 JPEG ou PNG), revérifiée par referenceImageBytes.
-  referenceBase64?: string
+  quality?: ImageQuality
 ): Promise<GeneratedImage> {
   if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
   const text = cleanPrompt(prompt)
   if (!text) throw new Error(t('image.noPrompt'))
-  const reference = referenceBase64 === undefined ? null : referenceImageBytes(referenceBase64)
-  // Étape 174 : même décision que la ligne « Image » d'Options → Modèles. Vérifié AVANT tout téléchargement :
-  // 5 Go téléchargés pour une machine qui ne pourra jamais dessiner seraient 5 Go perdus.
-  const { vramGb } = await detectGpu()
-  const pick = pickImageModel(vramGb, detectRamGb())
-  if (!pick.model) throw new Error(t('image.notCapable', { reason: pick.reason ?? '' }))
+  // Étape 174 : même décision que la ligne « Image » d'Options → Modèles.
+  const { qualities, reason } = await machineQualities()
+  if (!qualities.length) throw new Error(t('image.notCapable', { reason: reason ?? '' }))
+  if (quality) await assertQualityFits(quality)
   // Vérifié APRÈS l'attente ci-dessus, juste avant de le poser : deux demandes simultanées ne passent jamais toutes les deux.
   claimEngine('image')
   try {
-    // Étape 175 : un dessin n'installe JAMAIS rien — c'est le rôle d'Options → Modèles, comme pour les autres modèles.
-    if (!(await isImageModelInstalled())) {
-      throw new Error(t('image.notInstalled'))
+    // Étape 175 : un dessin n'installe JAMAIS rien — c'est le rôle d'Options → Modèles et du bouton de niveau.
+    const level = quality ?? (await bestInstalledImageQuality())
+    if (!level) throw new Error(t('image.notInstalled'))
+    if (!(await isImageQualityInstalled(level))) {
+      throw new Error(t('image.qualityNotDownloaded', { quality: imageQualityLabel(level) }))
     }
     const exe = engineExe()
-    const models = modelPaths()
+    const models = modelPaths(level)
     if (signal?.aborted) throw new Error(t('engine.cancelled.image'))
     // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
     const drawn = await drawingPrompt(text, onLog, translate, signal)
@@ -609,50 +708,35 @@ export async function generateImage(
     const output = join(dir, fileName)
     onLog(t('image.preparing'))
     const seed = Math.floor(Math.random() * 2 ** 31)
-    // Étape 478 : l'image de départ, posée dans un dossier temporaire du système (jamais dans les données de Léo) et
-    // effacée après le dessin, réussi ou non.
-    const referenceDir = reference ? await mkdtemp(join(tmpdir(), 'jaris-reference-')) : null
-    try {
-      const referencePath = reference && referenceDir ? join(referenceDir, `reference.${reference.extension}`) : undefined
-      if (reference && referencePath) await writeFile(referencePath, reference.bytes)
-      const draw = async (decodeOnCpu: boolean): Promise<void> => {
-        await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed, decodeOnCpu, reference: referencePath }), onLog, signal)
-        if ((await sizeOf(output)) === null) throw new Error(t('image.noOutput'))
-      }
-      if (await decodeOnCpuRemembered()) {
-        await draw(true)
-        return { path: output, fileName }
-      }
-      try {
-        await draw(false)
-      } catch (err) {
-        // Étape 345 : sur certaines cartes, le moteur Vulkan s'arrête net pendant le décodage (0xC0000409, étape
-        // 344). Une annulation demandée n'est jamais réessayée ; tout autre échec l'est UNE fois, décodeur sur le
-        // processeur. Retenu seulement si ce second essai réussit : une autre panne n'est jamais mise sur la carte.
-        if (signal?.aborted) throw err
-        onLog(t('image.gpuDecodeRetry'))
-        await rm(output, { force: true })
-        await draw(true)
-        await rememberDecodeOnCpu()
-      }
-      return { path: output, fileName }
-    } finally {
-      if (referenceDir) await rm(referenceDir, { recursive: true, force: true })
+    const draw = async (decodeOnCpu: boolean): Promise<void> => {
+      await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed, decodeOnCpu }), onLog, signal)
+      if ((await sizeOf(output)) === null) throw new Error(t('image.noOutput'))
     }
+    if (await decodeOnCpuRemembered()) {
+      await draw(true)
+      return { path: output, fileName }
+    }
+    try {
+      await draw(false)
+    } catch (err) {
+      // Étape 345 : sur certaines cartes, le moteur Vulkan s'arrête net pendant le décodage (0xC0000409, étape
+      // 344). Une annulation demandée n'est jamais réessayée ; tout autre échec l'est UNE fois, décodeur sur le
+      // processeur. Retenu seulement si ce second essai réussit : une autre panne n'est jamais mise sur la carte.
+      if (signal?.aborted) throw err
+      onLog(t('image.gpuDecodeRetry'))
+      await rm(output, { force: true })
+      await draw(true)
+      await rememberDecodeOnCpu()
+    }
+    return { path: output, fileName }
   } finally {
     releaseEngine()
   }
 }
 
-/**
- * Étape 174 : le moteur (bonne version) et les trois fichiers du modèle sont-ils sur le disque ? Un fichier à la
- * bonne taille a déjà été vérifié par son empreinte (downloadVerified ne le renomme qu'après).
- */
+/** Étape 174 : au moins un niveau que la machine fait tourner est prêt (moteur compris). */
 export async function isImageModelInstalled(): Promise<boolean> {
-  if (!(await engineReady())) return false
-  const paths = modelPaths()
-  const sizes = await Promise.all(IMAGE_MODEL_FILES.map((file) => sizeOf(paths[file.role])))
-  return sizes.every((size, i) => size === IMAGE_MODEL_FILES[i].bytes)
+  return (await bestInstalledImageQuality()) !== null
 }
 
 /** Lecture d'une image dessinée pour l'afficher dans le Chat (null si le fichier a été effacé depuis). */
@@ -698,17 +782,26 @@ export async function deleteGeneratedImage(fileName: string): Promise<void> {
   await rm(generatedImagePath(fileName), { force: true })
 }
 
-/** État du mode Image : ce que l'écran doit afficher (dessiner, installer, ou pourquoi c'est impossible). */
+/**
+ * État du mode Image : ce que l'écran doit afficher (dessiner, installer, ou pourquoi c'est impossible). Étape 494 :
+ * chaque niveau que la machine fait tourner, avec ce qu'il reste à télécharger pour lui.
+ */
 export async function getImageStudioStatus(): Promise<ImageStudioStatus> {
-  const total = SD_ENGINE.bytes + IMAGE_MODEL_FILES.reduce((sum, file) => sum + file.bytes, 0)
   const supported = process.platform === 'win32'
-  const { vramGb } = await detectGpu()
-  const pick = pickImageModel(vramGb, detectRamGb())
+  const { qualities: ids, reason } = await machineQualities()
+  const engineMissing = !(await engineReady())
+  const qualities = await Promise.all(
+    ids.map(async (id) => {
+      const missing = await missingImageFiles(id)
+      const bytes = missing.reduce((sum, f) => sum + f.bytes, 0) + (engineMissing ? SD_ENGINE.bytes : 0)
+      return { id, label: imageQualityLabel(id), installed: supported && !engineMissing && missing.length === 0, downloadLabel: formatBytes(bytes) }
+    })
+  )
   return {
     supported,
-    capable: pick.model !== null,
-    reason: pick.reason,
-    installed: supported && (await isImageModelInstalled()),
-    downloadLabel: formatBytes(total)
+    capable: ids.length > 0,
+    reason,
+    installed: qualities.some((q) => q.installed),
+    qualities
   }
 }

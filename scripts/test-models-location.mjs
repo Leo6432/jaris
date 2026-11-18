@@ -99,7 +99,7 @@ function fillEverything({ userProfile, localAppData }) {
     [join(localAppData, 'Jaris', 'python-runtime', 'python.exe')]: 'python',
     [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix',
     [join(userProfile, '.cache', 'supertonic3', 'onnx', 'vector_estimator.onnx')]: 'voix de Jaris',
-    [join(localAppData, 'Jaris', 'image-generation', 'models', 'flux-2-klein-4b-Q4_0.gguf')]: 'modèle de dessin',
+    [join(localAppData, 'Jaris', 'image-generation', 'models', 'z_image_turbo-Q6_K.gguf')]: 'modèle de dessin',
     [join(localAppData, 'Jaris', 'ollama-engine', 'versions', '0.40.5', 'ollama.exe')]: 'Ollama de Jaris'
   }
   for (const [path, content] of Object.entries(files)) {

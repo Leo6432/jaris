@@ -48,7 +48,7 @@ Répondre honnêtement ; points propres à Jaris :
 >
 > - Vocal, Chat avec plusieurs conversations, et accès depuis ton téléphone.
 > - Code : crée une application à partir d'une phrase, ou travaille sur un dépôt GitHub.
-> - Image (FLUX.2 klein) et vidéo (FastWan 2.2), créées sur ton PC.
+> - Image (Z-Image-Turbo) et vidéo (FastWan 2.2), créées sur ton PC.
 > - Duels : compare les modèles à l'aveugle et Jaris choisit les meilleurs pour ta machine.
 > - 24 langues.
 >
@@ -78,7 +78,7 @@ Répondre honnêtement ; points propres à Jaris :
 >
 > - Voice, Chat with multiple conversations, and access from your phone.
 > - Code: build an app from one sentence, or work on a GitHub repository.
-> - Image (FLUX.2 klein) and video (FastWan 2.2), created on your PC.
+> - Image (Z-Image-Turbo) and video (FastWan 2.2), created on your PC.
 > - Duels: compare models blind and Jaris picks the best ones for your machine.
 > - 24 languages.
 >

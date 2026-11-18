@@ -1,5 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { ImageQuality } from '../shared/imageModel'
 import type { DuelAdviceEffort, DuelAdviceModel, DuelCategory, DuelOutcome, DuelSide } from '../shared/duel'
 import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
@@ -162,9 +163,9 @@ declare global {
       pickImageFile: () => Promise<PickedImageFile | null>
       saveGeneratedImage: (dataUrl: string) => Promise<SaveImageResult>
       getImageStudioStatus: () => Promise<ImageStudioStatus>
-      installImageStudio: () => Promise<void>
+      installImageStudio: (quality: ImageQuality) => Promise<void>
       onImageStudioLog: (cb: (message: string) => void) => () => void
-      generateStudioImage: (prompt: string, reference?: string) => Promise<GeneratedImageSummary>
+      generateStudioImage: (prompt: string, quality: ImageQuality) => Promise<GeneratedImageSummary>
       cancelStudioImage: () => void
       listGeneratedImages: () => Promise<GeneratedImageSummary[]>
       readGeneratedImage: (fileName: string) => Promise<string | null>

@@ -12460,3 +12460,41 @@ Soumission 1 envoyée le 17/11 depuis l'Espace partenaires, guidée écran par �
   après chaque section.
 - Nouvelle règle (CLAUDE.md/AGENTS.md) : ne jamais renommer `docs/confidentialite.md` ni supprimer la branche de
   travail, la fiche du Store pointe dessus.
+
+## Étape 494 — v0.71.0 : Z-Image-Turbo remplace FLUX.2 klein, en niveaux Q2 à Q8 ; plus de dessin à partir d'une image
+
+Léo : « tu vas utiliser z image turbo, et tu proposes plusieurs niveaux au niveau du PC, par exemple q2 q3 q4 ». Puis,
+Z-Image-Turbo ne sachant pas modifier une image donnée (Z-Image-Edit n'est pas publié : 401 sur Hugging Face, et
+`z_image.hpp` de sd.cpp n'a aucune image de référence) : choix 3, **retirer** « dessiner à partir d'une image ».
+- **Vérifié sur les sources primaires avant d'écrire** : la version épinglée de sd.cpp (`master-920-2f88688`, 26/09/2026)
+  contient Z-Image (`docs/z_image.md` : 8 étapes, `--cfg-scale 1.0`, décodeur FLUX.1, lecteur Qwen3 4B) ; licence
+  Apache 2.0 (carte du modèle) ; tailles et empreintes des 6 niveaux lues sur l'API Hugging Face
+  (`leejet/Z-Image-Turbo-GGUF`, révision figée). **Le lecteur de description est EXACTEMENT le Qwen3 4B de klein** :
+  un même poids (`model.layers.10.input_layernorm.weight`) comparé octet par octet par requêtes partielles — Z-Image
+  `text_encoder` = `Qwen/Qwen3-4B`, alors que `Qwen3-4B-Instruct-2507`, cité par l'exemple de sd.cpp, est différent.
+  Le fichier déjà sur le disque des PC de klein sert donc tel quel.
+- **Mesuré pour de vrai** (sd.cpp compilé ici à la version épinglée, processeur, mêmes options que Jaris) : dessinateur
+  Q4_0 = 3 513 Mo (= le fichier), calcul en 1024 px = 690 Mo, décodeur par tuiles = 95 + 416 Mo, RAM au plus fort
+  6,5 Go. Et un vrai dessin 512 px / 8 étapes : « a red cat sitting on a blue sofa » → un vrai chat roux sur un canapé
+  bleu (sa sortie sert maintenant de REAL_OUTPUT au test). Non mesurable ici : la vraie carte (Vulkan) et la vitesse.
+- **Niveaux** (`shared/imageModel.ts`, comme la qualité du mode Vidéo) : Q2_K, Q3_K, Q4_K, Q5_0, Q6_K, Q8_0. Seuils de
+  carte = fichier + 0,7 Go de calcul + ~0,3 Go Vulkan + ~0,5 Go pris par Windows : Q2 dès 4 Go, Q3 5 Go, Q4 6 Go,
+  Q5/Q6 8 Go, Q8 10 Go ; 16 Go de RAM pour tous. Le dessin devient donc possible dès une carte de 4 Go (6 avant).
+  Options → Modèles et l'installation de départ prennent le meilleur niveau de la machine (« Z-Image-Turbo Q6 », poids
+  annoncé vérifié par test sur les vrais fichiers) ; le mode Image a le même bouton de niveau que le mode Vidéo
+  (`VideoQualityPicker` rendu générique, nom « Qualité de l'image »), un niveau absent se télécharge depuis ce bouton ;
+  le Chat, la voix, le téléphone et le Duel dessinent avec le plus fidèle déjà installé. Un niveau venu de l'écran
+  est revérifié côté main (trop lourd → refus avant tout téléchargement, avec ce qu'il demande).
+- **Ancien modèle effacé** : `flux-2-klein-4b-Q4_0.gguf` et `flux2-vae.safetensors` sont supprimés à la fin d'une
+  installation réussie de Z-Image — jamais avant (un téléchargement raté ne fait pas perdre klein). Après la mise à
+  jour, un PC qui avait klein doit installer Z-Image (mode Image, ou « Retester la configuration »).
+- **Retrait du dessin à partir d'une image** : annulation de la v0.65.0 (étape 478), fichier par fichier — image de
+  départ (`-r`), « + » du mode Image, outil `generate_image` du modèle de vision dans le Chat, `modelCanCallTools`,
+  3 textes en 24 langues, `test-vision-draw.mjs`. Une image jointe au Chat est de nouveau seulement décrite.
+- Textes : 6 nouveaux en 24 langues (niveau, téléchargement, trop lourd, pas téléchargé), « FLUX.2 klein » →
+  « Z-Image-Turbo » partout. **À faire à la prochaine soumission Store** : la description de la fiche citait FLUX.2
+  klein (`docs/microsoft-store.md` corrigé).
+- Tests (chacun vérifié en réintroduisant le défaut) : test-image-generation.mjs (niveaux par carte, refus d'un niveau
+  trop lourd, meilleur installé par défaut, état par niveau, effacement de klein après réussite seulement, poids
+  annoncés), test-image-panel-ui.mjs (niveau avant installation, envoyé avec la demande, téléchargement depuis le
+  bouton, choix gardé ignoré s'il n'est plus possible, 760 px) ; faux ponts mis à jour dans 6 autres tests d'écran.

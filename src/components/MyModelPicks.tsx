@@ -7,6 +7,7 @@ import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 import { shownSpeed } from '../lib/shownSpeed'
+import { imageDownloadGb } from '../../shared/imageModel'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
@@ -280,7 +281,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   !beforeInstall && picks.image.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: 5 })}</td>
+                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: picks.image.quality ? imageDownloadGb(picks.image.quality) : 5 })}</td>
                     </tr>
                   )
                 )}

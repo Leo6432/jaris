@@ -56,7 +56,6 @@ function loadRunEngine() {
     crypto: nodeRequire('crypto'),
     fs: nodeRequire('fs'),
     'fs/promises': nodeRequire('fs/promises'),
-    os: nodeRequire('os'),
     path: nodeRequire('path'),
     './dataLocation': { getDataRoot: () => projectRoot },
     './download': { downloadToFile: async () => 0 },

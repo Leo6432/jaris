@@ -13,23 +13,36 @@ import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
 import { t } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
-import type { ImageAttachment } from '@/lib/imageAttachment'
+import { readSaved, writeSaved } from '@/lib/savedSetting'
+import { imageQualityLabel, type ImageQuality } from '../../shared/imageModel'
+import VideoQualityPicker from './VideoQualityPicker'
 
 /** Nombre d'images montrées en vignettes sur l'accueil du mode Image (chacune voyage en entier par l'IPC). */
 const GALLERY_SIZE = 8
+const QUALITY_KEY = 'jaris.imageQuality'
+
+/**
+ * Niveau de départ (étape 494, comme la qualité du mode Vidéo) : le dernier choisi si cette machine le propose encore,
+ * sinon le plus fidèle déjà téléchargé, sinon le plus fidèle que la machine peut faire tourner.
+ */
+function initialQuality(status: ImageStudioStatus): ImageQuality | null {
+  const saved = status.qualities.find((q) => q.id === readSaved(QUALITY_KEY))
+  if (saved) return saved.id
+  const installed = status.qualities.filter((q) => q.installed)
+  return (installed[installed.length - 1] ?? status.qualities[status.qualities.length - 1])?.id ?? null
+}
 
 /**
  * Mode Image (étape 200, Léo : « enlève Montage, on le remplace par Image comme ChatGPT »). Même présentation
  * que le Chat et le Code — liste à gauche, image au centre, champ en bas — et, sans image ouverte, les
  * dernières images en vignettes comme la page Images de ChatGPT. Le dessin lui-même est celui de l'étape 173
- * (FLUX.2 klein, en local) : rien n'est envoyé sur internet.
+ * (étape 494 : Z-Image-Turbo, au niveau Q2…Q8 choisi, en local) : rien n'est envoyé sur internet.
  */
 export default function ImagePanel(): JSX.Element {
   const [status, setStatus] = useState<ImageStudioStatus | null>(null)
   const [installing, setInstalling] = useState(false)
+  const [quality, setQuality] = useState<ImageQuality | null>(null)
   const [prompt, setPrompt] = useState('')
-  // Étape 478 (Léo : « quand je vais sur Image, je ne peux pas ajouter d'image ») : l'image de départ du dessin.
-  const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const [generating, setGenerating] = useState(false)
   useReportActivity('image', generating ? 'thinking' : null)
   const [logLine, setLogLine] = useState<string | null>(null)
@@ -58,12 +71,16 @@ export default function ImagePanel(): JSX.Element {
     return list
   }
 
+  const refreshStatus = async (): Promise<ImageStudioStatus> => {
+    const next = await window.jaris.getImageStudioStatus()
+    setStatus(next)
+    setQuality((current) => (current && next.qualities.some((q) => q.id === current) ? current : initialQuality(next)))
+    return next
+  }
+
   const loadStatus = (): void => {
     setStatusError(null)
-    window.jaris
-      .getImageStudioStatus()
-      .then(setStatus)
-      .catch((err: unknown) => setStatusError(ipcErrorMessage(err)))
+    refreshStatus().catch((err: unknown) => setStatusError(ipcErrorMessage(err)))
   }
   // Une galerie illisible le dit (vrai message), au lieu de rester vide en silence.
   const loadImages = (): void => {
@@ -128,13 +145,13 @@ export default function ImagePanel(): JSX.Element {
     setLogLine(null)
   }
 
-  const install = async (): Promise<void> => {
+  const install = async (level: ImageQuality): Promise<void> => {
     setError(null)
     setInstalling(true)
     setLogLine(null)
     try {
-      await window.jaris.installImageStudio()
-      setStatus(await window.jaris.getImageStudioStatus())
+      await window.jaris.installImageStudio(level)
+      await refreshStatus()
       void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -145,32 +162,28 @@ export default function ImagePanel(): JSX.Element {
 
   const generate = async (): Promise<void> => {
     const text = prompt.trim()
-    if (generating) return
-    // Une image seule ne dit pas quoi dessiner : on le demande, l'image reste jointe.
-    if (!text) {
-      if (attachment) setError(t('image.needPromptWithImage'))
+    if (!text || generating || installing || !quality) return
+    clearFeedback()
+    if (!status?.qualities.find((q) => q.id === quality)?.installed) {
+      setError(t('image.qualityMissing', { quality: imageQualityLabel(quality) }))
       return
     }
-    clearFeedback()
     // Comme ChatGPT : le champ se vide dès l'envoi, la demande est rappelée au-dessus de l'image en cours.
-    const reference = attachment
     setPendingPrompt(text)
     setPrompt('')
-    setAttachment(null)
     setSelected(null)
     setGenerating(true)
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
-      const image = await window.jaris.generateStudioImage(text, reference?.base64)
+      const image = await window.jaris.generateStudioImage(text, quality)
       // La fin se voit : l'image prend la place du cadre d'attente (plus de bandeau « Terminé en… »), et un bip.
       setSelected(image)
       void playSoundCueIfEnabled('success')
       void refreshImages()
     } catch (err) {
-      // Rien n'est perdu : la demande (et son image de départ) revient dans le champ, prête à être relancée.
+      // Rien n'est perdu : la demande revient dans le champ, prête à être relancée ou corrigée.
       setPrompt(text)
-      setAttachment(reference)
       if (stoppedRef.current) {
         setStoppedAfterMs(Date.now() - startedAt)
       } else {
@@ -181,6 +194,12 @@ export default function ImagePanel(): JSX.Element {
       setGenerating(false)
       setLogLine(null)
     }
+  }
+
+  const chooseQuality = (value: ImageQuality): void => {
+    setQuality(value)
+    setError(null)
+    writeSaved(QUALITY_KEY, value)
   }
 
   const stop = (): void => {
@@ -240,6 +259,8 @@ export default function ImagePanel(): JSX.Element {
     )
   }
 
+  const current = status.qualities.find((q) => q.id === quality) ?? null
+
   if (!ready) {
     return (
       <div className="image-panel image-install">
@@ -259,9 +280,16 @@ export default function ImagePanel(): JSX.Element {
             </div>
           ) : (
             <>
-              <p className="image-install__lead">{t('image.install.missing', { size: status.downloadLabel })}</p>
-              <button className="image-install__button" onClick={() => void install()}>
-                {t('image.install.button')}
+              <p className="image-install__lead">{t('image.install.missing', { size: current?.downloadLabel ?? '' })}</p>
+              {/* Étape 494 : le niveau se choisit AVANT de télécharger — seuls ceux possibles sur ce PC. */}
+              {current && (
+                <div className="video-install__quality">
+                  <span>{t('video.quality')}</span>
+                  <VideoQualityPicker qualities={status.qualities} value={current.id} onChange={chooseQuality} name={t('image.quality.name')} />
+                </div>
+              )}
+              <button className="image-install__button" onClick={() => current && void install(current.id)}>
+                {t('image.install.button', { quality: current?.label ?? '' })}
               </button>
             </>
           )}
@@ -286,7 +314,7 @@ export default function ImagePanel(): JSX.Element {
       emptyLabel={t('image.listEmpty')}
     >
       <div className="code-panel image-panel">
-        {!selected && !generating && (
+        {!selected && !generating && !installing && (
           <div className="image-panel__home">
             {/* Étape 427 : une seule phrase, comme le Chat ; les créations récentes restent juste en dessous. */}
             <EmptyState minimal title={t('image.empty.title')} />
@@ -350,6 +378,11 @@ export default function ImagePanel(): JSX.Element {
           />
         )}
 
+        {/* Étape 494 : un autre niveau se télécharge depuis son bouton ; l'avancement s'affiche ici. */}
+        {installing && (
+          <MediaPending shape="square" title={t('image.downloadingQuality', { quality: current?.label ?? '' })} detail={logLine ?? t('media.preparingDownload')} />
+        )}
+
         {!generating && stoppedAfterMs !== null && <p className="media-note">{t('image.stoppedAfter', { duration: formatDuration(stoppedAfterMs) })}</p>}
 
         {error && <p className="code-panel__error">{error}</p>}
@@ -361,13 +394,26 @@ export default function ImagePanel(): JSX.Element {
           placeholder={t('image.placeholder')}
           submitLabel={t('image.submit')}
           busyLabel={t('image.busy')}
-          busy={generating}
-          onStop={stop}
-          attachment={attachment}
-          onAttachmentChange={setAttachment}
+          busy={generating || installing}
+          onStop={generating ? stop : undefined}
+          attachment={null}
+          onAttachmentChange={() => {}}
           onError={setError}
+          imagesAllowed={false}
           rows={2}
           inline
+          extraActions={
+            current && (
+              <VideoQualityPicker
+                qualities={status.qualities}
+                value={current.id}
+                onChange={chooseQuality}
+                onDownload={(level) => void install(level)}
+                disabled={generating || installing}
+                name={t('image.quality.name')}
+              />
+            )
+          }
         />
       </div>
     </Workspace>

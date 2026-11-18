@@ -15,7 +15,7 @@ ici, seulement une nouvelle règle générale si elle est vraiment importante.
 
 **Modes (barre d'icônes à gauche)** : Vocal (orbe, mot « Jaris », touche + du pavé, Ctrl+Alt+J), Chat (plusieurs
 conversations, blocs interactifs `jaris-ui`), Code (application HTML générée avec aperçu isolé, ou travail sur un
-dépôt GitHub), Image (FLUX.2 klein), Vidéo (FastWan 2.2), Duel (votes à l'aveugle entre modèles). Plus : Cerveau
+dépôt GitHub), Image (Z-Image-Turbo, niveaux Q2 à Q8 selon la carte), Vidéo (FastWan 2.2), Duel (votes à l'aveugle entre modèles). Plus : Cerveau
 (notes de mémoire), widget flottant (repli de la fenêtre), Options, accès depuis le téléphone.
 **Où c'est dans le code**
 - Main Electron : `electron/main.ts` (fenêtres, widget, IPC, démarrage) ; canaux et types partagés : `shared/ipc.ts`,

@@ -4,7 +4,7 @@ import { getProfile } from './profileStore'
 
 /**
  * Étape 292 (Léo, capture à l'appui : « je lui ai envoyé "chat" comme prompt, voici ce qu'il m'a fait » — le portrait
- * d'un homme souriant derrière un bureau). Le modèle de dessin (FLUX.2 klein) a appris sur des légendes ANGLAISES :
+ * d'un homme souriant derrière un bureau). Le modèle de dessin (FLUX.2 klein à l'époque) a appris sur des légendes ANGLAISES :
  * il a lu « un chat » comme « a chat », une conversation. Le mode Image envoyait la demande telle quelle, alors que
  * l'outil du Chat demande déjà au modèle de conversation d'écrire la description en anglais. Une demande tapée dans
  * le mode Image (ou envoyée depuis le téléphone) est donc d'abord traduite par le modèle rapide, puis dessinée.

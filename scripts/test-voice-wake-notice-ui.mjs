@@ -49,7 +49,7 @@ const known = {
   loadCodeConversations: () => ({ repos: [], conversations: {} }),
   listGeneratedImages: async () => [],
   listGeneratedVideos: async () => [],
-  getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, downloadLabel: '5 Go' }),
+  getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, qualities: [{ id: 'q4', label: 'Q4', installed: false, downloadLabel: '6,6 Go' }] }),
   getVideoStudioStatus: async () => ({ supported: true, capable: true, reason: null, qualities: [] }),
   getConversationHistory: async () => [],
   // Comme main.ts (triggerVisibleWake) : un essai annonce toujours son résultat, raison ou réussite.

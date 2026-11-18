@@ -138,7 +138,7 @@ function loadVideo({ vramGb = 8, ramGb = 32, platform = 'win32', holdEngine = fa
   const engineContent = 'moteur'
   contents.set(image.SD_ENGINE.url, engineContent)
   Object.assign(image.SD_ENGINE, { bytes: engineContent.length, sha256: sha(engineContent) })
-  for (const file of [...image.IMAGE_MODEL_FILES, ...video.VIDEO_MODEL_FILES]) {
+  for (const file of [...Object.values(image.IMAGE_QUALITY_FILES), ...image.IMAGE_SHARED_FILES, ...video.VIDEO_MODEL_FILES]) {
     const content = `poids ${file.role} ${file.fileName}`
     contents.set(file.url, content)
     Object.assign(file, { bytes: content.length, sha256: sha(content) })
@@ -234,7 +234,7 @@ test('installation : le moteur + les trois fichiers de Wan 2.2, vérifiés ; rie
 
 test('le moteur déjà installé pour les images n’est jamais retéléchargé pour la vidéo', async () => {
   const t = loadVideo()
-  await t.image.installImageModel()
+  await t.image.installImageModel('q4')
   const before = t.downloads.length
   await t.video.installVideoModel()
   assert.equal(t.downloads.length - before, 3, 'seulement les trois fichiers vidéo')
@@ -248,7 +248,7 @@ test('état : la taille à télécharger ne compte le moteur que s’il manque, 
   const size = (q) => t.video.videoFilesFor(q).reduce((s, f) => s + f.bytes, 0)
   const label = async (q) => (await t.video.getVideoStudioStatus()).qualities.find((x) => x.id === q).downloadLabel
   assert.equal(await label('q6'), `${size('q6') + t.image.SD_ENGINE.bytes} o`)
-  await t.image.installImageModel()
+  await t.image.installImageModel('q4')
   assert.equal(await label('q6'), `${size('q6')} o`)
   await t.video.installVideoModel('q6')
   const vae = t.video.videoFilesFor('q8').find((f) => f.role === 'vae').bytes
@@ -352,7 +352,7 @@ test('image → vidéo : l’image jointe est passée à sd-cli puis effacée, j
 
 test('une seule chose à la fois sur la carte graphique : image et vidéo partagent le même verrou', async () => {
   const t = await installed({ holdEngine: true })
-  await t.image.installImageModel()
+  await t.image.installImageModel('q4')
   const controller = new AbortController()
   const running = t.video.generateVideo('a cat', () => {}, controller.signal)
   await untilSpawned(t)

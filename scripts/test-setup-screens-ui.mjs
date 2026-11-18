@@ -36,7 +36,7 @@ const MODELS = {
   vision: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M',
   code: 'qwen2.5-coder:14b'
 }
-const SHOWN = ['K2-Horizon-3.7B (Q4_K_M)', 'nemotron-3.5-lightning:30b', 'qwen3.6:35b-a3b', 'GLM-4.6V-Flash (Q4_K_M)', 'qwen2.5-coder:14b', 'FLUX.2 klein 4B', 'FastWan 2.2 TI2V 5B', 'MAI-UI 8B']
+const SHOWN = ['K2-Horizon-3.7B (Q4_K_M)', 'nemotron-3.5-lightning:30b', 'qwen3.6:35b-a3b', 'GLM-4.6V-Flash (Q4_K_M)', 'qwen2.5-coder:14b', 'Z-Image-Turbo Q6', 'FastWan 2.2 TI2V 5B', 'MAI-UI 8B']
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
@@ -53,7 +53,7 @@ const picks = {
   vision: e(models.vision, '30/34', 12, 46),
   code: e(models.code, '5/5', 33.7, 46),
   upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] },
-  image: { model: 'FLUX.2 klein 4B', reason: null },
+  image: { model: 'Z-Image-Turbo Q6', reason: null },
   video: { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null },
   pilot: { model: 'MAI-UI 8B', reason: null }
 }
@@ -232,7 +232,7 @@ for (const colorScheme of ['light', 'dark']) {
           gpuName: 'NVIDIA GeForce RTX 3070', vramGb: 8,
           models: { flash: 'ministral-3:3b', medium: 'granite4.2:8b', large: 'qwen3.8:27b' }, visionModel: 'qwen3.8:27b', codeModel: 'qwen3.8:27b',
           skippedModels: [{ model: 'qwen3.6:35b-a3b', reason: 'trop gros pour ce PC' }],
-          image: { model: 'FLUX.2 klein 4B', reason: null, installed: false, error: 'connexion coupée' },
+          image: { model: 'Z-Image-Turbo Q6', reason: null, installed: false, error: 'connexion coupée' },
           video: { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false },
           pilot: { model: 'MAI-UI 8B', reason: null, installed: true }
         })
@@ -297,7 +297,7 @@ test('« Configuration terminée » : la ligne Vidéo, après Image, avec la mê
       window.__finishSetup({
         gpuName: 'GPU', vramGb: 8,
         models: { flash: 'ministral-3:3b', medium: 'granite4.2:8b', large: 'qwen3.8:27b' }, visionModel: 'qwen3.8:27b', codeModel: 'qwen3.8:27b',
-        image: { model: 'FLUX.2 klein 4B', reason: null, installed: true },
+        image: { model: 'Z-Image-Turbo Q6', reason: null, installed: true },
         video: v,
         pilot: { model: 'MAI-UI 8B', reason: null, installed: true }
       })
