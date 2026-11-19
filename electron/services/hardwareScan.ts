@@ -135,6 +135,11 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
+  // Étape 497 (Léo : « LFM3 1.7B vs LFM2.5 2.6B », puis « s'il est plus fort on le remplace ») : LFM3 1.7B, tag
+  // OFFICIEL d'Ollama (`lfm3:1.7b`, architecture `lfm3` chargée par Ollama 0.40.16, capacités tools + thinking,
+  // 1,10 Go en Q4_K_M lus dans le registre), même licence que LFM2.5 (LFM Open License v1.0). Choisi d'après son score
+  // d'appel d'outils (verified-tool-scores.md, mesuré ici) puis les duels, comme les autres.
+  { model: 'lfm3:1.7b', vramGb: 1.1 },
   { model: 'qwen3.5:0.8b', vramGb: 1.3 },
   // K2 Horizon 0.9B : voir la note de l'étape 312 juste au-dessus de ministral-3:3b.
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
@@ -223,9 +228,10 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // Candidat "réutilisation" : hf.co/bartowski/ai9stars_G9v3-3B-GGUF (voir FLASH_CANDIDATES pour le détail
   // complet de la vérification) — même raisonnement que granite4.2:3b, déjà candidat dans les deux paliers.
   { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
-  // LFM2.5-2.6B et MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
+  // LFM2.5-2.6B, MiniCPM5-2B et LFM3 1.7B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
+  { model: 'lfm3:1.7b', vramGb: 1.1 },
   { model: 'qwen3.5:0.8b', vramGb: 1.3 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
@@ -892,6 +898,7 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5, // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 8.4, // Nanbeige4.1-3B (Reasoning) — 8,40 relevé le 03/10/2026
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4, // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
+  'lfm3:1.7b': 6, // LFM3-1.7B (Reasoning) — 6 relevé le 19/11/2026 (artificialanalysis.ai/models/lfm3-1-7b, sans décimale)
   // Étape 312 : pages Artificial Analysis relues le 14/10/2026. Pas de page pour la 32B (rien d'inventé).
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 3, // K2 Horizon 0.9B
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 15.6, // K2 Horizon 3.7B
@@ -956,7 +963,8 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'qwen3-coder:30b': 222.1,
   'north-mini-code-1.0': 59.0,
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 56.7,
-  'phi4-mini': 45.7
+  'phi4-mini': 45.7,
+  'lfm3:1.7b': 148, // LFM3-1.7B — relevé le 19/11/2026 (artificialanalysis.ai/models/lfm3-1-7b)
 }
 
 /**
@@ -1505,6 +1513,7 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 'Q4_K_M',
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 'Q4_K_M',
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 'Q4_K_M',
+  'lfm3:1.7b': 'Q4_K_M',
   'qwen3.5:0.8b': 'Q8_0',
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 'Q4_K_M'
 }
@@ -1530,6 +1539,8 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
 export const MODEL_MEMORY_16K_GB: Record<string, number> = {
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.7,
   'qwen3.5:0.8b': 2.0,
+  // Étape 497 : mesuré ici avec measure-model-memory.py (1,71 Go).
+  'lfm3:1.7b': 1.7,
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 2.2,
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 2.4,
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 2.9,

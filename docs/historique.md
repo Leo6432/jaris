@@ -12547,3 +12547,29 @@ carré violet.
   effacé. Ils utilisent maintenant une lettre de lecteur absente de la machine ; et le nouveau test des jonctions
   simulait mal les lecteurs sur la CI (le dossier « vivant », sur C:, passait pour mort). Leçon : une règle qui
   dépend des lecteurs présents se teste avec des lecteurs SIMULÉS, jamais avec ceux de la machine de test.
+
+## Étape 497 — LFM3 1.7B ajouté à côté de LFM2.5 ; l'erreur de pip enfin lisible (0.71.3)
+
+Léo : « LFM3 1.7B vs LFM2.5 2.6B », « s'il est plus fort on le remplace », puis « on va garder les 2 quand même »
+(demande la plus récente : les deux restent candidats).
+
+- **LFM3 1.7B** (`lfm3:1.7b`, tag officiel d'Ollama, architecture `lfm3` chargée par Ollama 0.40.16, outils + réflexion,
+  1,10 Go en Q4_K_M lus dans le registre, LFM Open License v1.0 comme LFM2.5) ajouté aux candidats Faible et Moyen
+  (hardwareScan.ts) et au script de test. Mémoire à 16K mesurée ici : 1,71 Go (`measure-model-memory.py`).
+- **Scores Jaris** mesurés le 19/11/2026 dans le conteneur (processeur seul) : questions 75/78, demandes 43/48, code 4/5
+  (LFM2.5 2.6B : 68/78, 43/48, 4/5). Toutes les réponses relues (détail dans verified-tool-scores.md). Mesuré hors du
+  PC de Léo : ajouté à « À remesurer » (le bouton « Tester les modèles » le propose ; ses scores servent en attendant).
+- **Choix sans vote** (grille 0–80 Go × 8–128 Go, Ollama 0.40.16) : LFM3 devient Faible et Moyen sur toute carte de
+  0 à 8 Go (à la place de LFM2.5 jusqu'à 4 Go, de qwen3.5:4b sur 6 et 8 Go — il les bat aux deux épreuves et pèse
+  moins), et Puissant avec 8 ou 16 Go de RAM. Rien ne change au-delà de 8 Go. Avec des votes (cas de Léo), ce sont
+  les duels qui décident ; LFM3 y part de 0 point. Piège : ma première grille passait par `useAaAsDuels` (notes
+  publiées transformées en votes) et ne montrait AUCUN changement — c'est le test sans vote qui l'a révélé.
+- Tests mis à jour : test-hardwarescan-duel/min-ollama/single-pool, test-model-overview-sort (égalité à 1,7 Go avec
+  K2 Horizon 0.9B), test-verified-scores (52 lignes).
+- **Artificial Analysis** : j'avais dit à Léo « pas de score » en lisant la table de Jaris (relevée avant sa sortie) ;
+  le site en donne bien un : intelligence 6 (variante avec réflexion), vitesse 148 tok/s — recopiés (relevé du 19/11).
+  Leçon : « pas dans notre table » ≠ « pas de score » ; vérifier la source avant de répondre.
+- **Python (version Store)** : la capture de Léo montrait « installation des dépendances Python échouée (code 1) »,
+  sans la raison : Jaris jetait la sortie de pip. `run()` garde maintenant les lignes de pip et `pipFailureDetail()`
+  (pythonRuntime.ts) ajoute au message ses lignes « ERROR » (sinon les deux dernières). Cause pas encore connue — pas
+  de correctif deviné : la prochaine capture de Léo donnera la vraie raison. Test (mord) : test-python-download.mjs.

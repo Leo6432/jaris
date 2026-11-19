@@ -183,6 +183,16 @@ ou du texte au lieu d'un outil. Les réponses justes relues (note « Facticesurp
 « Here are my drawings » : generate_image bien appelé avec un chat). Léo : « enlève-le si ça fait moins » : retiré de Jaris
 (étape 473), sa ligne de score aussi.
 
+Étape 497 (Léo : « LFM3 1.7B vs LFM2.5 2.6B », puis « on garde les 2 ») : `lfm3:1.7b` (tag officiel d'Ollama, Q4_K_M,
+digest b36a103fe2f8) mesuré le 19/11/2026 dans le conteneur de Claude (processeur seul, Ollama 0.40.16), pas sur le
+PC de Léo : il est donc aussi dans « À remesurer ». Toutes les réponses relues. Questions 75/78 : ses 3 ratés sont
+« Va sur YouTube et cherche un tuto de guitare » (recherche web au lieu de piloter l'écran) ; les justes vérifiées
+(rappels 20/90 min, clic droit, chat dessiné, « ne l'éteins surtout pas » sans outil). Demandes 43/48 : ratés
+YouTube, prix du gazole (« 1 689 € » au lieu de 1,689 €, deux fois), « spoti fi » non corrigé, adresse mail dictée
+non reconstituée ; justes relues (rappel à 11 h 30 = 90 min à 10 h, demain 8 h = 1 320 min, Clio mise à jour).
+Code 4/5 : le formulaire de contact refuse leo@example.com (« Un email valide n'est pas fourni »). LFM2.5 2.6B :
+68/78, 43/48, 4/5 — les deux restent candidats, les duels les départagent.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -202,6 +212,7 @@ ou du texte au lieu d'un outil. Les réponses justes relues (note « Facticesurp
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 66/78 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 67/78 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 68/78 |
+| lfm3:1.7b | 75/78 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 76/78 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 46/78 |
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 76/78 |
@@ -355,6 +366,7 @@ somme affichée dans une fenêtre d'alerte chez qwen3-vl:2b, « +1 » désactiv�
 | granite4.2:30b | 4/5 |
 | granite4.2:8b | 4/5 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 4/5 |
+| lfm3:1.7b | 4/5 |
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 4/5 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 4/5 |
 | ministral-3:14b | 5/5 |
@@ -452,6 +464,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | muse-glimmer:30b | 43/48 |
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
+| lfm3:1.7b | 43/48 |
 | qwen3.6:35b | 43/48 |
 | qwen3.6:35b-a3b | 43/48 |
 | qwen3.5:4b | 42/48 |
@@ -489,7 +502,8 @@ modèle de cette liste.
 
 Étape 323 : K2 Horizon 3.7B remesuré sur le PC de Léo et retiré de la liste. Questions identiques (76/78),
 demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deux essais d'un petit modèle peut être
-grand, surtout en code. Liste vide pour l'instant : chaque score de ce fichier vient désormais du PC de Léo.
+grand, surtout en code. Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, y est ajouté.
 
 | Modèle | Mesuré où |
 |---|---|
+| lfm3:1.7b | conteneur de Claude, processeur seul (étape 497) |

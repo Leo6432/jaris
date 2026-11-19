@@ -94,7 +94,18 @@ export async function isPythonRuntimeReady(): Promise<boolean> {
 export type InstallProgress = (message: string, percent?: number) => void
 
 /** Lance une commande en relayant sa sortie ligne par ligne, pour que l'utilisateur voie que ça avance. */
-function run(exe: string, args: string[], onProgress: InstallProgress): Promise<number> {
+/**
+ * Étape 497 (Léo, version Store : « installation des dépendances Python échouée (code 1) », sans rien d'autre) : la
+ * vraie raison donnée par pip (ses lignes « ERROR: … ») était perdue — seule la dernière ligne de chaque morceau de
+ * sortie passait à l'écran, puis disparaissait. Les dernières lignes sont gardées pour le message d'échec.
+ */
+export function pipFailureDetail(lines: string[]): string {
+  const meaningful = lines.map((l) => l.trim()).filter(Boolean)
+  const errors = meaningful.filter((l) => /^(ERROR|error)\b|Error:|OSError|denied|refus/i.test(l)).slice(-3)
+  return (errors.length ? errors : meaningful.slice(-2)).join(' / ').slice(0, 600)
+}
+
+function run(exe: string, args: string[], onProgress: InstallProgress, output?: string[]): Promise<number> {
   return new Promise((resolve, reject) => {
     // pip désarchive les grosses roues PyTorch dans le TEMP du processus, même avec --no-cache-dir.
     // Garder ce travail transitoire dans la racine de Jaris évite de saturer C: pendant l'installation.
@@ -103,7 +114,12 @@ function run(exe: string, args: string[], onProgress: InstallProgress): Promise<
     const env = tempDir ? { ...process.env, TEMP: tempDir, TMP: tempDir, TMPDIR: tempDir } : process.env
     const proc = spawn(exe, args, { windowsHide: true, env })
     const relay = (chunk: Buffer): void => {
-      const line = chunk.toString().trim().split('\n').pop()?.trim()
+      const lines = chunk.toString().split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      if (output) {
+        output.push(...lines)
+        if (output.length > 200) output.splice(0, output.length - 200)
+      }
+      const line = lines.pop()
       if (line) onProgress(line)
     }
     proc.stdout?.on('data', relay)
@@ -177,8 +193,13 @@ export const PIP_INSTALL = ['-m', 'pip', 'install', '--no-cache-dir'] as const
  */
 async function installDependencies(python: string, onProgress: InstallProgress): Promise<void> {
   onProgress(t('py.installingDeps'))
-  const code = await run(python, [...PIP_INSTALL, '-r', requirementsPath()], onProgress)
-  if (code !== 0) throw new Error(t('py.depsFailed', { code: String(code) }))
+  const output: string[] = []
+  const code = await run(python, [...PIP_INSTALL, '-r', requirementsPath()], onProgress, output)
+  if (code !== 0) {
+    const failed = t('py.depsFailed', { code: String(code) })
+    const detail = pipFailureDetail(output)
+    throw new Error(detail ? t('common.labelValue', { label: failed, value: detail }) : failed)
+  }
 }
 
 /**

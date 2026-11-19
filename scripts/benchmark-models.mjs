@@ -432,6 +432,8 @@ const MODELS = [
   // (GGUF officiel de Liquid AI). Voir FLASH_CANDIDATES dans hardwareScan.ts.
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M',
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M',
+  // Étape 497 (Léo) : LFM3 1.7B, tag officiel d'Ollama. Voir FLASH_CANDIDATES dans hardwareScan.ts.
+  'lfm3:1.7b',
   // Étape 312 (Léo) : K2 Horizon 0.9B, 3.7B, 7B et 32B, GGUF officiels d'IFM. Exigent Ollama 0.40.4 (voir
   // MIN_OLLAMA_VERSION ci-dessous) ; voir FLASH_CANDIDATES dans hardwareScan.ts.
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',
@@ -590,6 +592,7 @@ const MODEL_SIZE_HINTS = {
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 1.6,
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 2.4,
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 1.7,
+  'lfm3:1.7b': 1.1,
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 0.7,
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 3.2,
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 5.6,

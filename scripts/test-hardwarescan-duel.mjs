@@ -63,7 +63,8 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   assert.deepEqual(JSON.parse(JSON.stringify(empty)), JSON.parse(JSON.stringify(none)))
   // Machine de Léo, avec les vrais scores : ce que Jaris choisit quand personne n'a encore voté (calculé, pas deviné).
   // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go chargé) ne tient plus sur les 7 Go utiles.
-  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:27b' })
+  // Étape 497 : LFM3 1.7B (75/78, 43/48 ; 1,7 Go chargé) dépasse qwen3.5:4b (74/78, 42/48) sur les deux épreuves.
+  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'lfm3:1.7b', medium: 'lfm3:1.7b', large: 'qwen3.5:27b' })
   assert.equal(none.codeModel, 'ornith-1.5:35b')
   // Étape 475 : Vision a ses duels ; sans vote, sa fiabilité au test de vision départage (0 point pour tous).
   assert.equal(none.visionModel, LARGE)

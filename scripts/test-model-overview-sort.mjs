@@ -64,7 +64,9 @@ test('"Tous les modèles" : une seule liste, triée par VRAM croissante, le moin
   // Étape 312 : K2 Horizon 0.9B (0,7 Go) passe devant qwen3.5:0.8b (1 Go).
   // Étape 471 : la colonne montre la mémoire réelle chargée (contexte 16 384) : K2 Horizon 0.9B (1,7 Go) reste devant
   // qwen3.5:0.8b (2,0 Go avec son lecteur d'images et son modèle brouillon).
-  assert.equal(overview.entries[0].model, 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M')
+  // Étape 497 : LFM3 1.7B (1,71 Go mesurés) est à égalité avec elle, en tête.
+  const lightest = overview.entries.filter((e) => e.vramGb === overview.entries[0].vramGb).map((e) => e.model).sort()
+  assert.equal(lightest.join(' + '), 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M + lfm3:1.7b')
   assert.equal(overview.entries[0].vramGb, 1.7)
   assert.equal(overview.entries.find((e) => e.model === 'granite4.2:8b').vramGb, 8.3, 'mémoire chargée, pas la taille du fichier (5,3 Go)')
 })
