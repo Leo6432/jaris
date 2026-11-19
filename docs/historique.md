@@ -12574,7 +12574,7 @@ Léo : « LFM3 1.7B vs LFM2.5 2.6B », « s'il est plus fort on le remplace », 
   (pythonRuntime.ts) ajoute au message ses lignes « ERROR » (sinon les deux dernières). Cause pas encore connue — pas
   de correctif deviné : la prochaine capture de Léo donnera la vraie raison. Test (mord) : test-python-download.mjs.
 
-## Étape 498 — Artificial Analysis retiré de Jaris (notes et vitesses publiées)
+## Étape 498 — Artificial Analysis retiré de Jaris (notes et vitesses publiées) (0.72.0)
 
 Léo : « pourquoi tu sauvegardes les scores d'Artificial Analysis, on les utilise plus », puis « retire tout ; la vitesse
 on va la mesurer sur le PC, mais supprime toutes les vitesses, tous les trucs d'Artificial Analysis, ça sert à rien ».
@@ -12596,3 +12596,4 @@ on va la mesurer sur le PC, mais supprime toutes les vitesses, tous les trucs d'
   dépend. Nouveaux tests (mordent) : aucune note d'Artificial Analysis dans le code ni dans ce que reçoit l'écran ;
   vitesse jamais estimée ; Faible sans mesure = le meilleur des petits (réintroduire `bestNote` le fait échouer).
 - Les commentaires historiques qui citent Artificial Analysis (pourquoi un modèle a été ajouté) sont gardés.
+- Captures de « Mes modèles » montrées à Léo : « oui je valide ».
