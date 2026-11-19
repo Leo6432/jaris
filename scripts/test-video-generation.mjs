@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 /**
  * Mode Vidéo (étape 203 : Wan 2.2 TI2V 5B avec le même moteur que les images, stable-diffusion.cpp).
@@ -44,7 +45,7 @@ function loadWith(relativePath, modules, fakeProcess) {
   vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(relativePath)} })`)(
     module.exports,
     module,
-    withI18n((id) => modules[id] ?? nodeRequire(id)),
+    withI18n((id) => (id === './jarisLocalDir' ? jarisLocalDirFor(fakeProcess) : modules[id] ?? nodeRequire(id))),
     fakeProcess
   )
   return module.exports

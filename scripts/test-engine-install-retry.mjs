@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 /**
  * Étape 346 : un antivirus qui inspecte le nouveau moteur d'Ollama le tient ouvert quelques secondes. Le renommage
@@ -14,6 +15,7 @@ import { loadTsModule } from './load-ts-module.mjs'
 const { createRequire } = await import('node:module')
 const nodeRequire = createRequire(import.meta.url)
 const engine = loadTsModule('electron/services/ollamaEngine.ts', {
+  './jarisLocalDir': jarisLocalDirFor(),
   crypto: nodeRequire('crypto'),
   child_process: nodeRequire('child_process'),
   fs: nodeRequire('fs'),
@@ -102,6 +104,7 @@ test('étape 496 : jonction vers un dossier effacé sur un disque présent → r
     const realFs = nodeRequire('fs')
     const realPromises = nodeRequire('fs/promises')
     const fake = loadTsModule('electron/services/ollamaEngine.ts', {
+  './jarisLocalDir': jarisLocalDirFor(),
       crypto: nodeRequire('crypto'),
       child_process: nodeRequire('child_process'),
       fs: { ...realFs, existsSync: (p) => (p === 'D:\\' ? driveHere : p === 'D:\\Jaris\\ollama-engine' ? false : realFs.existsSync(p)) },

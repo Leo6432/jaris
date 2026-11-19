@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 /**
  * Étape 336 — l'Ollama de Jaris (ollamaEngine.ts) et le bouton d'Options qui l'installe ou le met à jour
@@ -139,7 +140,7 @@ function setupMachine({ latest = '0.40.5', installed = null, broken = [], corrup
     vm.runInThisContext(`(function (exports, module, require, process, setTimeout, clearTimeout, Date, fetch) { ${compile(relativePath)} })`)(
       exports,
       { exports },
-      withI18n(requireShim),
+      withI18n((id) => (id === './jarisLocalDir' ? jarisLocalDirFor(fakeProcess) : requireShim(id))),
       fakeProcess,
       clock.setTimeout,
       clock.clearTimeout,

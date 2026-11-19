@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promis
 import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
+import { jarisLocalDir } from './jarisLocalDir'
 import { unloadOllamaModels } from './ollama'
 import { runWithLocalOllama } from '../config'
 import { detectGpu } from './hardwareScan'
@@ -164,7 +165,8 @@ const MAX_PROMPT_CHARS = 1000
  * modelsLocation.ts pour suivre « Déplacer » (5 Go ne doivent pas rester sur C quand tout le reste est sur D).
  */
 export function imageEngineRoot(): string {
-  return join(process.env.LOCALAPPDATA ?? process.env.APPDATA ?? '', 'Jaris', 'image-generation')
+  // Étape 500 : hors d'AppData dans la version Store (jarisLocalDir.ts).
+  return join(jarisLocalDir(), 'image-generation')
 }
 
 /** Les images dessinées sont des données de Léo : elles suivent ses conversations (OWNED_ENTRIES). */

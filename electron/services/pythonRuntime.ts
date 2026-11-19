@@ -6,6 +6,7 @@ import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { getStorageRoot } from './storageRoot'
+import { jarisLocalDir } from './jarisLocalDir'
 import { describeDownloadFailure, downloadToFile } from './download'
 import { t } from '../../shared/i18n'
 
@@ -23,9 +24,12 @@ import { t } from '../../shared/i18n'
  * ou d'entrer en conflit avec lui.
  */
 
-/** Dossier de travail de Jaris hors du dossier d'installation : survit à une mise à jour de l'application. */
+/**
+ * Dossier de travail de Jaris hors du dossier d'installation : survit à une mise à jour de l'application. Étape 500 :
+ * hors d'AppData dans la version Store (jarisLocalDir.ts), où pip ne pouvait pas renommer ses fichiers.
+ */
 function jarisDataDir(): string {
-  return join(process.env.LOCALAPPDATA ?? process.env.APPDATA ?? '', 'Jaris')
+  return jarisLocalDir()
 }
 
 function runtimeDir(): string {

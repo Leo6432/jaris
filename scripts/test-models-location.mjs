@@ -8,6 +8,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { EventEmitter } from 'node:events'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
 
@@ -37,12 +38,12 @@ const nodeRequire = createRequire(import.meta.url)
  * à 'win32' (sinon `moveModelsLocation` ressort immédiatement, "Windows pour l'instant") et contrôler
  * `process.env.USERPROFILE`/`LOCALAPPDATA` sans toucher au vrai environnement du process de test.
  */
-function loadModelsLocation(env, { failJunctionFor = null } = {}) {
+function loadModelsLocation(env, { failJunctionFor = null, store = false } = {}) {
   const source = ts.transpileModule(readFileSync(new URL('../electron/services/modelsLocation.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
 
-  const fakeProcess = { platform: 'win32', env }
+  const fakeProcess = { platform: 'win32', env, windowsStore: store }
 
   const fakeChildProcess = {
     spawn: (_cmd, args) => {
@@ -75,7 +76,7 @@ function loadModelsLocation(env, { failJunctionFor = null } = {}) {
   vm.runInThisContext(`(function (exports, module, require, process) { ${source} })`)(
     exports,
     { exports },
-    withI18n((name) => modules[name] ?? nodeRequire(name)),
+    withI18n((name) => (name === './jarisLocalDir' ? jarisLocalDirFor(fakeProcess) : modules[name] ?? nodeRequire(name))),
     fakeProcess
   )
   return exports
@@ -110,6 +111,28 @@ function fillEverything({ userProfile, localAppData }) {
 }
 
 const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache', 'image-generation', 'ollama-engine']
+
+// Étape 500 (Léo, version Store : « [WinError 3] … AppData\\Local\\Jaris\\python-runtime\\…\\INSTALLERxxxx.tmp ->
+// INSTALLER ») : dans un paquet du Store, Windows range à part les nouveaux fichiers d'AppData et pip n'y renomme plus
+// ses fichiers. Les moteurs de Jaris (Python, dessin, Ollama de Jaris) vont dans %USERPROFILE%\\.jaris ; l'installeur
+// habituel garde %LOCALAPPDATA%\\Jaris.
+test('version Store : les moteurs de Jaris hors d’AppData (%USERPROFILE%\\.jaris), l’installeur habituel inchangé', () => {
+  const env = { USERPROFILE: '/u/leo', LOCALAPPDATA: '/u/leo/AppData/Local' }
+  const linkOf = (list, subdir) => list.find((b) => b.subdir === subdir).link
+  const store = loadModelsLocation(env, { store: true }).bricks()
+  const usual = loadModelsLocation(env).bricks()
+  for (const subdir of ['python-runtime', 'image-generation', 'ollama-engine']) {
+    assert.equal(linkOf(store, subdir), join('/u/leo', '.jaris', subdir), `Store : ${subdir}`)
+    assert.ok(!linkOf(store, subdir).includes('AppData'), `Store : ${subdir} jamais dans AppData`)
+    assert.equal(linkOf(usual, subdir), join('/u/leo/AppData/Local', 'Jaris', subdir), `installeur habituel : ${subdir}`)
+  }
+  // Python, Ollama de Jaris et dessin lisent le MÊME dossier que « Déplacer » (une seule source : jarisLocalDir.ts).
+  for (const file of ['pythonRuntime.ts', 'ollamaEngine.ts', 'imageGenerator.ts', 'modelsLocation.ts']) {
+    const source = readFileSync(new URL(`../electron/services/${file}`, import.meta.url), 'utf8')
+    assert.match(source, /jarisLocalDir\(\)/, `${file} passe par jarisLocalDir()`)
+    assert.doesNotMatch(source, /LOCALAPPDATA[^\n]*'Jaris'/, `${file} ne recalcule plus %LOCALAPPDATA%\\Jaris lui-même`)
+  }
+})
 
 test('tout part : modèles ET programme Ollama, données d’Ollama, Python et voix — accessibles au même chemin qu’avant', async () => {
   const home = setupFakeHome()

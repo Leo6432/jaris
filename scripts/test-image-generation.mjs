@@ -12,6 +12,7 @@ import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 import { withI18n } from './i18n-test-module.mjs'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 /**
  * Génération d'images en local (étape 173 : stable-diffusion.cpp + FLUX.2 klein 4B ; étape 494 : Z-Image-Turbo, en
@@ -151,7 +152,7 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
   vm.runInThisContext(`(function (exports, module, require, process) { ${transpile('electron/services/imageGenerator.ts')} })`)(
     module.exports,
     module,
-    withI18n((id) => modules[id] ?? nodeRequire(id)),
+    withI18n((id) => (id === './jarisLocalDir' ? jarisLocalDirFor(fakeProcess) : modules[id] ?? nodeRequire(id))),
     fakeProcess
   )
   const loaded = module.exports

@@ -176,12 +176,54 @@ jobs:
           # La version Store range ses données hors d'AppData (sinon l'Explorateur ne les verrait pas) : preuve
           # que Jaris s'est reconnu comme version Store.
           if (-not (Test-Path "$env:USERPROFILE\Jaris")) { throw "Dossier $env:USERPROFILE\Jaris absent : Jaris ne s'est pas reconnu comme version Store (ou a cru le disque D: débranché à cause de l'ancien repère)." }
-          # Étape 496 : la jonction morte de l'ancien Jaris a été retirée au démarrage (sinon Python et Ollama échouent).
-          # (Une NOUVELLE jonction, vers le dossier de la version Store, peut avoir pris sa place : elle est vivante.)
-          $left = Get-Item $deadLink -Force -ErrorAction SilentlyContinue
-          $leftTarget = if ($left -and $left.LinkType) { $left.Target | Select-Object -First 1 } else { $null }
-          if ($leftTarget -and -not (Test-Path $leftTarget)) { throw "La jonction morte $deadLink (vers D:\Jaris-efface, effacé) est toujours là : l'installation de Python échouerait." }
+          # Étape 500 : la jonction morte de l'ancien Jaris (étape 496) ne gêne plus la version Store, qui installe ses
+          # moteurs dans %USERPROFILE%\.jaris et n'utilise plus %LOCALAPPDATA%\Jaris (jarisLocalDir.ts).
           Write-Host "Version Store installée ($($pkg.PackageFullName)), lancée, toujours en marche après 20 s."
+          # Étape 500 : dans le paquet, pip échouait chez Léo dans AppData (« [WinError 3] … INSTALLERxxxx.tmp ->
+          # INSTALLER », Windows range à part les nouveaux fichiers d'AppData). Les moteurs de la version Store vont donc
+          # dans %USERPROFILE%\.jaris. Preuve ici, DANS le contexte du paquet (Invoke-CommandInDesktopPackage) : un
+          # environnement Python et un `pip install` dans AppData (informatif : montre le défaut), puis au nouvel
+          # emplacement (doit réussir).
+          $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+          $probeOut = "$env:RUNNER_TEMP\pip-probe"
+          New-Item -ItemType Directory -Force $probeOut | Out-Null
+          $probe = "$env:RUNNER_TEMP\pip-probe.cmd"
+          Set-Content -Path $probe -Encoding ascii -Value @(
+            '@echo off',
+            "set OUT=$probeOut",
+            'call :probe "%LOCALAPPDATA%\JarisProbe" old',
+            'call :probe "%USERPROFILE%\.jaris-probe" new',
+            'echo done> "%OUT%\done.txt"',
+            'exit /b 0',
+            ':probe',
+            'set NAME=%~2',
+            "`"$python`" -m venv `"%~1\venv`" > `"%OUT%\%NAME%.log`" 2>&1",
+            '"%~1\venv\Scripts\python.exe" -m pip install --no-cache-dir flatbuffers==25.12.19 >> "%OUT%\%NAME%.log" 2>&1',
+            '> "%OUT%\%NAME%.code" echo %ERRORLEVEL%',
+            'exit /b 0'
+          )
+          $ran = $false
+          if ($python) {
+            try {
+              Invoke-CommandInDesktopPackage -PackageFamilyName $pkg.PackageFamilyName -AppId Jaris -Command 'cmd.exe' -Args "/c `"$probe`"" -PreventBreakaway
+              $ran = $true
+            } catch {
+              Write-Warning "Invoke-CommandInDesktopPackage indisponible ici : $($_.Exception.Message)"
+            }
+          } else { Write-Warning 'Python absent de la machine de la CI : essai de pip dans le paquet sauté.' }
+          if ($ran) {
+            $deadline = (Get-Date).AddMinutes(5)
+            while (-not (Test-Path "$probeOut\done.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
+            foreach ($name in 'old', 'new') {
+              Write-Host "--- pip dans le paquet : $name ---"
+              Get-Content "$probeOut\$name.log" -ErrorAction SilentlyContinue | Select-Object -Last 6 | ForEach-Object { Write-Host $_ }
+            }
+            if (-not (Test-Path "$probeOut\done.txt")) { throw "L'essai de pip dans le paquet n'a pas fini en 5 minutes." }
+            $old = (Get-Content "$probeOut\old.code" -ErrorAction SilentlyContinue | Select-Object -First 1)
+            $new = (Get-Content "$probeOut\new.code" -ErrorAction SilentlyContinue | Select-Object -First 1)
+            Write-Host "pip dans AppData (ancien emplacement) : code $old ; dans %USERPROFILE%\.jaris (nouveau) : code $new"
+            if ("$new".Trim() -ne '0') { throw "pip échoue aussi hors d'AppData dans le paquet (code $new) : le correctif de l'étape 500 ne suffit pas." }
+          }
           $proc | Stop-Process -Force
           Start-Sleep -Seconds 2
           Remove-AppxPackage -Package $pkg.PackageFullName

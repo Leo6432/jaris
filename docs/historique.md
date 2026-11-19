@@ -12605,3 +12605,24 @@ faut qu'on garde seulement les éléments visibles dans le tableau ». La derni�
 `INTELLIGENCE_MMLU_PRO`, champ `intelligence` jamais affiché), ne servait qu'à départager deux modèles à note et scores
 égaux : retirée. À égalité, le plus gros (colonne VRAM) l'emporte. Grille des machines sans vote (0–80 Go × 8–128 Go) :
 aucun choix ne change. Ce qui décide maintenant : scores des tests de Jaris, duels, vitesse mesurée sur le PC, mémoire.
+
+## Étape 500 — Version Store : les moteurs de Jaris hors d'AppData (pip échouait) (0.72.2)
+
+Capture de Léo (version Store, après l'étape 497 qui affiche la vraie raison de pip) : « ERROR: Could not install
+packages due to an OSError: [WinError 3] Le chemin d'accès spécifié est introuvable: '…\AppData\Local\Jaris\python-
+runtime\python\Lib\site-packages\flatbuffers-25.12.19.dist-info\INSTALLER91qogle4.tmp' -> '…\INSTALLER' ». Question :
+« c'est parce que j'avais des anciens fichiers ou c'est pour tout le monde ? » — pour tout le monde : dans un paquet du
+Store, Windows range à part tout NOUVEAU fichier d'AppData (doc Microsoft « How packaged desktop apps run », relue :
+« written to a private per-user, per-app location; but merged at runtime to appear in the real AppData location »), et
+le renommage de pip échoue dans cette vue fusionnée. L'étape 491 avait sorti les DONNÉES d'AppData, pas les moteurs.
+- `jarisLocalDir.ts` (nouveau, seule source) : `%USERPROFILE%\.jaris` dans la version Store, `%LOCALAPPDATA%\Jaris`
+  sinon. Utilisé par pythonRuntime.ts, ollamaEngine.ts (`engineLink`), imageGenerator.ts (`imageEngineRoot`) et les
+  briques de « Déplacer » (modelsLocation.ts). Le dossier temporaire de pip suit (il est dans python-runtime).
+- Version Store déjà installée : l'Ollama de Jaris, extrait dans l'AppData privé du paquet, est retéléchargé une fois au
+  nouvel emplacement ; l'ancienne copie privée part avec la désinstallation du paquet (Windows la nettoie).
+- CI : la jonction morte de l'étape 496 n'est plus vérifiée pour la version Store (elle n'utilise plus ce chemin). Nouvel
+  essai DANS le contexte du paquet (`Invoke-CommandInDesktopPackage`) : un environnement Python + `pip install
+  flatbuffers==25.12.19` dans AppData (informatif) et dans `%USERPROFILE%\.jaris-probe` (doit réussir).
+- Test (mord) : test-models-location.mjs (Store : moteurs dans `.jaris`, jamais AppData ; installeur habituel inchangé ;
+  les quatre modules passent par `jarisLocalDir()`). Faux ponts mis à jour (`scripts/jaris-local-dir-fake.mjs`).
+- Non vérifié ici : le vrai premier lancement de la version Store chez Léo.

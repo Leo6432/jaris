@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
 const formatBytesModule = loadTsModule('shared/formatBytes.ts')
@@ -59,7 +60,7 @@ function setup({ onSwitch = null, onCleaning = null, dataModules = {} } = {}) {
       exports,
       { exports },
       // Étape 293 : relocation.ts écrit les tailles avec le VRAI formatBytes partagé (unités traduites).
-      withI18n((name) => modules[name] ?? (name === '../../shared/formatBytes' ? formatBytesModule : nodeRequire(name))),
+      withI18n((name) => (name === './jarisLocalDir' ? jarisLocalDirFor(fakeProcess) : modules[name] ?? (name === '../../shared/formatBytes' ? formatBytesModule : nodeRequire(name)))),
       fakeProcess
     )
     return exports

@@ -6,6 +6,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { downloadToFile, type DownloadProgress } from './download'
 import { countOllamaModels } from './ollamaModelsVariable'
+import { jarisLocalDir } from './jarisLocalDir'
 import { t } from '../../shared/i18n'
 
 /**
@@ -47,8 +48,8 @@ export interface InstalledEngine {
 
 /** L'emplacement habituel, remplacé par une jonction vers le dossier de Jaris (brique « Déplacer », modelsLocation.ts). */
 export function engineLink(): string {
-  const local = process.env.LOCALAPPDATA ?? process.env.APPDATA ?? homedir()
-  return join(local, 'Jaris', 'ollama-engine')
+  // Étape 500 : hors d'AppData dans la version Store (jarisLocalDir.ts).
+  return join(jarisLocalDir(), 'ollama-engine')
 }
 
 /**

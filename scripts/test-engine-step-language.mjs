@@ -8,6 +8,7 @@ import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
 import { i18nModule } from './i18n-test-module.mjs'
 import { loadPhoneModules } from './phone-test-loader.mjs'
+import { jarisLocalDirFor } from './jaris-local-dir-fake.mjs'
 
 /**
  * L'avancement d'un dessin vu depuis le téléphone, dans TOUTES les langues. Jusqu'à la version 0.34.31, la ligne du
@@ -52,6 +53,7 @@ function loadRunEngine() {
     }
   }
   const generator = loadTsModule('electron/services/imageGenerator.ts', {
+    './jarisLocalDir': jarisLocalDirFor(),
     child_process: fakeChildProcess,
     crypto: nodeRequire('crypto'),
     fs: nodeRequire('fs'),
