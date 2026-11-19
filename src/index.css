@@ -1439,10 +1439,8 @@ body.body--splash {
   overflow-wrap: anywhere;
 }
 
-/* Intelligence Index du modèle retenu (étape 130) — volontairement plus terne que le badge de fiabilité
-   juste à droite : comme la vitesse à sa gauche depuis l'étape 131, c'est un chiffre de CONTEXTE publié par
-   Artificial Analysis (à quel point ce modèle est réputé bon/rapide en général), jamais une mesure faite sur
-   la machine de l'utilisateur — seule la fiabilité d'appel d'outils l'est. */
+/* Points de duel et vitesse du modèle retenu — volontairement plus ternes que le badge de fiabilité juste à droite.
+   Étape 498 : plus de chiffres d'Artificial Analysis (Intelligence, Omniscience) ; la vitesse est mesurée sur ce PC. */
 /* Étape 138 : sous la ligne d'un rôle, le meilleur modèle quand ce n'est pas celui utilisé (et pourquoi).
    Retour à la ligne autorisé, contrairement aux cellules de scores : c'est une phrase, pas un chiffre. */
 .capacity-scan__tier-upgrade td {
@@ -1454,7 +1452,6 @@ body.body--splash {
 }
 
 .capacity-scan__tier-intelligence,
-.capacity-scan__tier-omniscience,
 .capacity-scan__tier-speed {
   padding-right: 10px !important;
   color: var(--hud-text-faint);

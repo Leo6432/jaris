@@ -627,19 +627,13 @@ function unavailableText(option: DuelModelOption): string {
   }
 }
 
-/** Étape 414 : « 42 tok/s », « ≈ » devant une vitesse estimée (modèle jamais lancé sur ce PC), comme « Tous les modèles ». */
+/** Étape 414 : « 42 tok/s », mesurée sur ce PC (étape 498 : plus de vitesse publiée ni estimée), comme « Tous les modèles ». */
 function formatSpeed(option: DuelModelOption): string {
-  return option.speed == null ? '—' : `${option.speedKind === 'estimated' ? '≈ ' : ''}${formatDecimal(Math.round(option.speed))} tok/s`
-}
-
-const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
-  measured: 'speed.kind.measured',
-  estimated: 'speed.kind.estimated',
-  published: 'speed.kind.published'
+  return option.speed == null ? '—' : `${formatDecimal(Math.round(option.speed))} tok/s`
 }
 
 function speedTitle(option: DuelModelOption): string | undefined {
-  return option.speedKind ? t(SPEED_KIND_LABELS[option.speedKind]) : undefined
+  return option.speedKind ? t('speed.kind.measured') : undefined
 }
 
 /**

@@ -2,7 +2,6 @@ import { Fragment, useState } from 'react'
 import type { ModelOverviewEntry, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
-import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
@@ -37,20 +36,10 @@ const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: Mes
   { key: 'code', label: 'app.mode.code' }
 ]
 
-/**
- * Étape 367 : vitesse sur CE PC (mesurée à chaque réponse ; « ≈ » si elle est estimée pour un modèle jamais lancé ici),
- * sinon la vitesse publiée par Artificial Analysis tant que rien n'a été mesuré.
- */
+/** Étape 367 : vitesse mesurée sur CE PC à chaque réponse ; « — » tant qu'elle n'a pas été mesurée (étape 498). */
 function formatSpeed(entry: ModelOverviewEntry): string {
   const speed = shownSpeed(entry)
-  if (speed.value === null) return '—'
-  return `${speed.kind === 'estimated' ? '≈ ' : ''}${formatDecimal(speed.value)} tok/s`
-}
-
-const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
-  measured: 'speed.kind.measured',
-  estimated: 'speed.kind.estimated',
-  published: 'speed.kind.published'
+  return speed.value === null ? '—' : `${formatDecimal(speed.value)} tok/s`
 }
 
 /** Points de duel façon Arena (étape 358) : « 0 », « +120 », « -45 ». */
@@ -59,41 +48,14 @@ function formatDuelPoints(points: number): string {
   return `${rounded > 0 ? '+' : ''}${formatDecimal(rounded === 0 ? 0 : rounded)}`
 }
 
-/** Libellé collé à la valeur : ce tableau n'a pas d'en-tête, un nombre nu serait incompréhensible (étape 130). */
-function formatIntelligence(entry: ModelOverviewEntry): string {
-  return entry.artificialAnalysisIndex === null ? '—' : t('picks.intelligence', { value: formatIntelligenceIndex(entry.artificialAnalysisIndex) })
-}
-
-/** « Terminal-Bench 79,8 % » : part des 89 tâches de code réussies (étape 329). */
-function formatTerminalBench(value: number): string {
-  return t('picks.terminalBench', { value: formatPercent(value / 100) })
-}
-
 /**
- * Étape 329, Léo : « il y a pas écrit le score Terminal-Bench ». Chaque rôle affiche la mesure qui compte VRAIMENT
- * pour lui (étape 328) : Terminal-Bench pour Code — l'intelligence générale n'y compte plus, l'afficher à sa place
- * montrait un chiffre sans effet et cachait le bon —, l'intelligence pour les autres rôles.
+ * La mesure qui décide pour ce rôle : les points de duel (étape 355). Étape 498 : plus aucune note d'Artificial Analysis
+ * (Intelligence, Terminal-Bench, Omniscience) — « — » quand le calcul de la note n'est pas fourni (écran d'installation).
  */
-function formatMeasure(entry: ModelOverviewEntry, role: string): { text: string; empty: boolean; title: string } {
-  // Étape 355 : un modèle passé en duel est noté par les votes de Léo, plus par Artificial Analysis — c'est ce
-  // chiffre-là qui décide, c'est donc lui qui s'affiche (leçon de l'étape 329).
+function formatMeasure(entry: ModelOverviewEntry): { text: string; empty: boolean; title: string } {
   const base = entry.note?.base
-  if (base?.kind === 'duel') {
-    return { text: t('picks.duel', { value: formatDuelPoints(base.points ?? 0) }), empty: false, title: t('picks.duel.title', { count: base.duels ?? 0 }) }
-  }
-  if (role === 'code') {
-    const value = entry.terminalBench ?? null
-    return { text: value === null ? '—' : formatTerminalBench(value), empty: value === null, title: t('picks.terminalBench.title') }
-  }
-  return { text: formatIntelligence(entry), empty: entry.artificialAnalysisIndex === null, title: 'Artificial Analysis Intelligence Index v4.3.2' }
-}
-
-/** « Omniscience -10 » : ne compte que pour Faible, Moyen et Élevé, affiché seulement là (étape 329). */
-function formatOmniscience(entry: ModelOverviewEntry, role: string): string | null {
-  const value = entry.omniscience ?? null
-  // Noté par les duels, Omniscience ne compte plus pour ce modèle (étape 355) : rien à afficher.
-  if (!CONVERSATION_ROLES.has(role) || value === null || entry.note?.base?.kind === 'duel') return null
-  return t('picks.omniscience', { value: formatDecimal(value) })
+  if (!base) return { text: '—', empty: true, title: '' }
+  return { text: t('picks.duel', { value: formatDuelPoints(base.points ?? 0) }), empty: false, title: t('picks.duel.title', { count: base.duels ?? 0 }) }
 }
 
 /**
@@ -105,20 +67,9 @@ export function formatNoteCalc(entry: ModelOverviewEntry): string | null {
   const note = entry.note
   if (!note) return null
   if (note.toolsShare === null) return t('picks.calc.untested')
-  if (note.total === null || note.base === null) return t('picks.calc.unpublished')
+  if (note.total === null || note.base === null) return null
   const base = note.base
-  const parts = [
-    base.kind === 'duel'
-      ? t('picks.calc.duel', { points: formatDuelPoints(base.points ?? 0), value: formatDecimal(base.value, 2), count: base.duels ?? 0 })
-      : base.kind === 'terminalBench'
-        ? base.value > (entry.terminalBench ?? 0)
-          ? t('picks.calc.floor', { value: formatTerminalBench(base.value) })
-          : formatTerminalBench(base.value)
-        : t('picks.intelligence', { value: formatIntelligenceIndex(base.value) })
-  ]
-  if (note.omniscienceShare !== null && entry.omniscience != null) {
-    parts.push(t('picks.calc.omniscience', { percent: formatPercent(note.omniscienceShare), value: formatDecimal(entry.omniscience) }))
-  }
+  const parts = [t('picks.calc.duel', { points: formatDuelPoints(base.points ?? 0), value: formatDecimal(base.value, 2), count: base.duels ?? 0 })]
   parts.push(
     t('picks.calc.tools', {
       percent: formatPercent(note.toolsShare),
@@ -148,7 +99,7 @@ export function formatHardware(picks: MyModelPicksData): string {
 /**
  * Étape 137, Léo : "a la place de plalier 1 2 3 on vas faire un palier personnaliser a chacun, il ya plus de
  * palier jaris regarde la vram les apelle outils Intelligence (Artificial Analysis) et choisit le meilleur
- * model pour rapide etc...". Remplace HardwareTierPreview (une dizaine de paliers de comparaison reliés par
+ * model pour rapide etc..." (Artificial Analysis retiré depuis, étape 498 : ce sont les duels qui décident). Remplace HardwareTierPreview (une dizaine de paliers de comparaison reliés par
  * des flèches, la machine repérée parmi eux) par UNE seule carte : le matériel détecté et, pour chaque rôle, le
  * modèle que Jaris a choisi pour lui — dans l'ordre fiabilité d'appel d'outils, puis Intelligence Artificial
  * Analysis, puis taille (pickBestFrom, hardwareScan.ts). Partagée entre l'écran d'accueil (CapacityScan.tsx)
@@ -196,8 +147,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
             {rows.map(({ id, key, label, entry, voice }) => {
               const upgrade = voice ? undefined : picks.upgrades[key]
               const missing = voice ? false : check?.notInstalled.includes(key) ?? false
-              const measure = formatMeasure(entry, key)
-              const omniscience = formatOmniscience(entry, key)
+              const measure = formatMeasure(entry)
               const calc = showCalc ? formatNoteCalc(entry) : null
               return (
                 <Fragment key={id}>
@@ -210,19 +160,12 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                         deux lignes par rôle (il n'y a plus de colonne pour lui donner un sens, voir index.css). */}
                     <td
                       className={`capacity-scan__tier-speed${shownSpeed(entry).value === null ? EMPTY : ''}`}
-                      title={(() => {
-                        const kind = shownSpeed(entry).kind
-                        return kind ? `${t('picks.speed.title')} — ${t(SPEED_KIND_LABELS[kind])}` : t('picks.speed.title')
-                      })()}
+                      title={shownSpeed(entry).kind ? `${t('picks.speed.title')} — ${t('speed.kind.measured')}` : t('picks.speed.title')}
                     >
                       {formatSpeed(entry)}
                     </td>
                     <td className={`capacity-scan__tier-intelligence${measure.empty ? EMPTY : ''}`} title={measure.title}>
                       {measure.text}
-                    </td>
-                    {/* Étape 329 : « n'invente pas » (AA-Omniscience), qui pèse sur Faible, Moyen et Élevé. */}
-                    <td className={`capacity-scan__tier-omniscience${omniscience === null ? EMPTY : ''}`} title={t('picks.omniscience.title')}>
-                      {omniscience ?? '—'}
                     </td>
                     {/* Étape 243, Léo : « il y a seulement les questions visibles et pas le score de demandes ». Les
                         demandes comptent pour Faible, Moyen et Élevé seulement : elles ne s'affichent que là. */}
@@ -234,7 +177,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   {calc && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-calc">
                       <td />
-                      <td colSpan={5}>{calc}</td>
+                      <td colSpan={4}>{calc}</td>
                     </tr>
                   )}
                   {/* Étape 138 : la ligne ci-dessus est le modèle RÉELLEMENT utilisé. Quand le meilleur choix
@@ -243,13 +186,13 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   {missing && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={5}>{t('picks.notInstalled')}</td>
+                      <td colSpan={4}>{t('picks.notInstalled')}</td>
                     </tr>
                   )}
                   {upgrade && (
                     <tr className="capacity-scan__tier-upgrade">
                       <td />
-                      <td colSpan={5}>
+                      <td colSpan={4}>
                         {upgrade.blockedReason
                           ? t('picks.upgrade.blocked', { model: formatModelName(upgrade.model), reason: upgrade.blockedReason })
                           : t('picks.upgrade.available', { model: formatModelName(upgrade.model) })}
@@ -269,19 +212,18 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   <td className="capacity-scan__tier-model">{picks.image.model ?? t('picks.noModel')}</td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
-                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.image.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={5}>{t('picks.image.notCapable', { reason: picks.image.reason ?? '' })}</td>
+                    <td colSpan={4}>{t('picks.image.notCapable', { reason: picks.image.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.image.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: picks.image.quality ? imageDownloadGb(picks.image.quality) : 5 })}</td>
+                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: picks.image.quality ? imageDownloadGb(picks.image.quality) : 5 })}</td>
                     </tr>
                   )
                 )}
@@ -297,19 +239,18 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   </td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
-                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.video.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={5}>{t('picks.video.notCapable', { reason: picks.video.reason ?? '' })}</td>
+                    <td colSpan={4}>{t('picks.video.notCapable', { reason: picks.video.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.video.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={5}>{t('picks.video.notInstalled')}</td>
+                      <td colSpan={4}>{t('picks.video.notInstalled')}</td>
                     </tr>
                   )
                 )}
@@ -324,19 +265,18 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : t('picks.noModel')}</td>
                   <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
                   <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
-                  <td className={`capacity-scan__tier-omniscience${EMPTY}`}>—</td>
                   <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.pilot.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={5}>{t('picks.pilot.notCapable', { reason: picks.pilot.reason ?? '' })}</td>
+                    <td colSpan={4}>{t('picks.pilot.notCapable', { reason: picks.pilot.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.pilot.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={5}>{t('picks.notInstalled.size', { gb: 6 })}</td>
+                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: 6 })}</td>
                     </tr>
                   )
                 )}

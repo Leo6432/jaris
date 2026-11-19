@@ -93,10 +93,12 @@ test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gem
 
 // Départage par l'intelligence À FIABILITÉ ÉGALE (scores d'outils simulés identiques). Avec les vrais scores,
 // qwen3.5:9b (16/17) et qwen3.5:4b (15/17) ne sont pas à égalité : voir l'étape 222 dans CLAUDE.md.
-test('étape 220 : à fiabilité égale, qwen3.5:4b (13,1) bat qwen3.5:9b (11,2), même s’il est plus petit', async () => {
+// Étape 498 : l'Intelligence Index d'Artificial Analysis (13,1 contre 11,2, qui donnait qwen3.5:4b) est retiré de
+// Jaris ; à fiabilité égale, MMLU-Pro départage : 82,5 pour qwen3.5:9b contre 79,1.
+test('étape 498 : à fiabilité égale, MMLU-Pro départage (qwen3.5:9b, 82,5) — plus Artificial Analysis', async () => {
   const md = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
-  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: md, vramMib: 8 * 1024 })
-  assert.equal((await pickBestModelsFromBenchmark()).models.medium, 'qwen3.5:4b')
+  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: md, vramMib: 12 * 1024 })
+  assert.equal((await pickBestModelsFromBenchmark()).models.medium, 'qwen3.5:9b')
 })
 
 test('ce qui est affiché (getMyModelPicks) est exactement ce qui est téléchargé (pickBestModelsFromBenchmark)', async () => {

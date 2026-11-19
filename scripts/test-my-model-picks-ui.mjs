@@ -32,19 +32,25 @@ import { setLanguage } from './shared/i18n'
 // Langue de l'écran (français par défaut) : les libellés des rôles n'ont pas la même longueur partout.
 if (window.__lang) setLanguage(window.__lang.code, window.__lang.messages)
 
-const e = (model, tool, ai, aiSpeed, demands = null) => ({
+// Étape 498 : plus aucune note d'Artificial Analysis ; la vitesse est celle mesurée sur ce PC (« — » sans mesure).
+const e = (model, tool, speed, demands = null) => ({
   model, vramGb: 8, usedIn: [],
-  toolCalling: tool, demands, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: aiSpeed
+  toolCalling: tool, demands, intelligence: null, localSpeed: speed, localSpeedKind: speed === null ? null : 'measured'
 })
+// La note d'un rôle (noteBreakdown, hardwareScan.ts) : la force des duels × chaque part.
+const note = (points, duels, tools, chain, demands, estimated) => {
+  const value = Math.pow(10, points / 400)
+  return { base: { kind: 'duel', value, duels, points }, toolsShare: tools, chain, demandsShare: demands, demandsEstimated: estimated, total: tools === null ? null : value * tools * (demands ?? 1) }
+}
 
 const picks = {
   gpuName: 'NVIDIA GeForce RTX 3070', vramGb: window.__vramGb ?? 8, ramGb: 32,
-  flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '62/78', 10.8, null, '26/48'),
-  medium: e('qwen3.5:4b', '74/78', 13.1, 17.7, '38/48'),
-  large: e('qwen3.8:27b', '77/78', 33.7, 46, '45/48'),
-  vision: e('qwen3-vl:4b', '30/34', 7, 109, '40/48'),
-  // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
-  code: e('qwen2.5-coder:14b', '5/5', null, null),
+  flash: { ...e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '62/78', null, '26/48'), note: note(0, 0, Math.pow(62 / 78, 5), 5, 26 / 48, false) },
+  medium: { ...e('qwen3.5:4b', '74/78', 17.7, '38/48'), note: note(120, 14, Math.pow(74 / 78, 5), 5, 38 / 48, false) },
+  large: { ...e('qwen3.8:27b', '77/78', 46, '45/48'), note: note(85, 9, Math.pow(77 / 78, 5), 5, 45 / 48, false) },
+  vision: { ...e('qwen3-vl:4b', '30/34', 109), note: note(-40, 5, 30 / 34, 1, null, false) },
+  // Ni vitesse mesurée ni calcul de note : « — », jamais un chiffre inventé.
+  code: e('qwen2.5-coder:14b', '5/5', null),
   // Étape 138 : Médium a un meilleur choix pas encore installé (il suffit de retester), Vision un meilleur
   // choix BLOQUÉ au téléchargement.
   upgrades: {
@@ -54,22 +60,15 @@ const picks = {
   installCheck: '__installCheck' in window ? window.__installCheck : { notInstalled: [], otherInstalled: [] },
   pilot: window.__pilot
 }
-// Étape 329, Léo : « il y a pas écrit le score Terminal-Bench, et ça utilise combien de pourcentage ». Chaque rôle
-// avec les mesures qui comptent pour lui et le calcul de sa note (noteBreakdown, hardwareScan.ts) — valeurs réelles
-// de la machine de Léo (8 Go de VRAM, 32 Go de RAM) pour Faible, Élevé et Code.
-const note = (base, omni, tools, chain, demands, estimated, total) => ({ base, omniscienceShare: omni, toolsShare: tools, chain, demandsShare: demands, demandsEstimated: estimated, total })
+// Étape 329, Léo : « ça utilise combien de pourcentage ». Chaque rôle avec le calcul de sa note, facteur par facteur.
 if (window.__scenario === 'calc') {
-  const q = Math.pow(77 / 78, 5)
-  const k = Math.pow(76 / 78, 5)
-  picks.flash = { ...e('granite4.2:8b', '78/78', 11.1, 62, '47/48'), omniscience: -17.2, terminalBench: 18.4, note: note({ kind: 'intelligence', value: 11.1 }, 0.414, 1, 5, 47 / 48, false, 11.1 * 0.414 * (47 / 48)) }
+  picks.flash = { ...e('granite4.2:8b', '78/78', 62, '47/48'), note: note(0, 0, 1, 5, 47 / 48, false) }
   // Pas encore passé aux demandes complètes : la part est estimée sur les questions, et l'écran le dit.
-  picks.medium = { ...e('hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', '76/78', 20.6, null, null), omniscience: -16.6, terminalBench: 44.2, note: note({ kind: 'intelligence', value: 20.6 }, 0.417, k, 5, 76 / 78, true, 20.6 * 0.417 * k * (76 / 78)) }
-  picks.large = { ...e('qwen3.8:27b', '77/78', 33.7, 46, '47/48'), omniscience: -10, terminalBench: 79.8, note: note({ kind: 'intelligence', value: 33.7 }, 0.45, q, 5, 47 / 48, false, 33.7 * 0.45 * q * (47 / 48)) }
+  picks.medium = { ...e('hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', '76/78', null, null), note: note(120, 14, Math.pow(76 / 78, 5), 5, 76 / 78, true) }
+  picks.large = { ...e('qwen3.8:27b', '77/78', 46, '47/48'), note: note(400, 30, Math.pow(77 / 78, 5), 5, 47 / 48, false) }
   // Jamais testé : pas de note, jamais un zéro.
-  picks.vision = { ...e('qwen3-vl:4b', null, 7, 109), omniscience: -68.4, terminalBench: null, note: note({ kind: 'intelligence', value: 7 }, null, null, 1, null, false, null) }
-  picks.code = window.__codeFloor
-    ? { ...e('qwen3.5:0.8b', '3/5', 6, null), omniscience: -54.5, terminalBench: 0, note: note({ kind: 'terminalBench', value: 100 / 89 }, null, Math.pow(0.6, 5), 5, null, false, (100 / 89) * Math.pow(0.6, 5)) }
-    : { ...e('qwen3.8:27b', '77/78', 33.7, 46), omniscience: -10, terminalBench: 79.8, note: note({ kind: 'terminalBench', value: 79.8 }, null, q, 5, null, false, 79.8 * q) }
+  picks.vision = { ...e('qwen3-vl:4b', null, 109), note: note(0, 0, null, 1, null, false) }
+  picks.code = { ...e('qwen3.8:27b', '77/78', 46), note: note(-100, 6, Math.pow(77 / 78, 5), 5, null, false) }
   picks.upgrades = {}
 }
 window.__deleted = []
@@ -109,7 +108,7 @@ async function withPreview(run, width = 760, installCheck = undefined, pilot = u
       (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`) +
       (lang === 'fr' ? '' : `<script>window.__lang = ${JSON.stringify({ code: lang, messages }).replace(/</g, '\\u003c')}</script>`) +
       (vramGb === undefined ? '' : `<script>window.__vramGb = ${JSON.stringify(vramGb)}</script>`) +
-      (scenario === undefined ? '' : `<script>window.__scenario = 'calc'; window.__codeFloor = ${scenario === 'floor'}</script>`)
+      (scenario === undefined ? '' : `<script>window.__scenario = 'calc'</script>`)
     await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
@@ -131,31 +130,34 @@ test("une seule carte pour la machine détectée, sans aucun \"Palier N\"", opti
   })
 })
 
-test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec libellé, "—" si non publié)', options, async () => {
+test('chaque rôle affiche son modèle, sa vitesse mesurée et ses points de duel ("—" sans mesure)', options, async () => {
   await withPreview(async (page) => {
     const rows = await page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) =>
       trs.map((tr) => [...tr.querySelectorAll('td')].slice(0, 4).map((td) => td.textContent?.trim()))
     )
     assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
-      ['Faible', 'G9v3-3B', '—', 'Intelligence 10,8'],
-      ['Moyen', 'qwen3.5:4b', '17,7 tok/s', 'Intelligence 13,1'],
-      ['Élevé', 'qwen3.8:27b', '46 tok/s', 'Intelligence 33,7'],
-      ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Intelligence 7,0'],
+      ['Faible', 'G9v3-3B', '—', 'Duels 0'],
+      ['Moyen', 'qwen3.5:4b', '17,7 tok/s', 'Duels +120'],
+      ['Élevé', 'qwen3.8:27b', '46 tok/s', 'Duels +85'],
+      ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Duels -40'],
       ['Code', 'qwen2.5-coder:14b', '—', '—']
     ])
+    // Étape 498 : plus aucune note d'Artificial Analysis (Intelligence, Omniscience, Terminal-Bench), ni sa colonne.
+    const text = await page.$eval('.capacity-scan__tiers', (el) => el.textContent ?? '')
+    assert.doesNotMatch(text, /Intelligence|Omniscience|Terminal-Bench|Artificial Analysis|≈/)
+    assert.equal(await page.$$eval('.capacity-scan__tier-omniscience', (els) => els.length), 0)
   })
 })
 
-// Jusqu'à la version 0.34.31, l'Intelligence s'écrivait à la française dans toutes les langues (locale figée
-// 'fr-FR' : « Intelligence 13,1 » en anglais) et une VRAM avec décimale gardait le point de JavaScript (« 7.8 Go »
-// en français). Les deux suivent maintenant la langue de Jaris.
-test('les nombres suivent la langue : « 13.1 » et « 7.8 GB » en anglais, « 7,8 Go » en français', options, async () => {
-  const intelligence = (page) =>
-    page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => trs.map((tr) => tr.querySelectorAll('td')[3]?.textContent?.trim()))
+// Jusqu'à la version 0.34.31, les nombres s'écrivaient à la française dans toutes les langues (locale figée 'fr-FR')
+// et une VRAM avec décimale gardait le point de JavaScript (« 7.8 Go » en français). Ils suivent la langue de Jaris.
+test('les nombres suivent la langue : « 17.7 » et « 7.8 GB » en anglais, « 7,8 Go » en français', options, async () => {
+  const speeds = (page) =>
+    page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => trs.map((tr) => tr.querySelectorAll('td')[2]?.textContent?.trim()))
   const hardware = (page) => page.$eval('.capacity-scan__tier-hardware', (el) => el.textContent?.trim())
   await withPreview(
     async (page) => {
-      assert.deepEqual(JSON.parse(JSON.stringify(await intelligence(page))), ['Intelligence 10.8', 'Intelligence 13.1', 'Intelligence 33.7', 'Intelligence 7.0', '—'])
+      assert.deepEqual(JSON.parse(JSON.stringify(await speeds(page))), ['—', '17.7 tok/s', '46 tok/s', '109 tok/s', '—'])
       assert.equal(await hardware(page), 'NVIDIA GeForce RTX 3070 · 7.8 GB of VRAM · 32 GB of RAM')
     },
     760,
@@ -176,12 +178,14 @@ test('les nombres suivent la langue : « 13.1 » et « 7.8 GB » en anglais, « 
   )
 })
 
-// Étape 367 : la vitesse est désormais celle mesurée sur CE PC ; la légende le dit, et dit ce que veut dire « ≈ ».
+// Étape 367 : la vitesse est celle mesurée sur CE PC ; la légende le dit. Étape 498 : plus de « ≈ » (vitesse estimée à
+// partir d'une vitesse publiée) ni d'Artificial Analysis pour Vision, qui suit ses propres duels.
 test('la légende dit que la vitesse est mesurée sur ce PC', options, async () => {
   await withPreview(async (page) => {
     const legend = await page.$eval('.capacity-scan__tier-legend', (el) => el.textContent ?? '')
-    assert.match(legend, /Vitesse : mesurée sur ton PC/)
-    assert.match(legend, /≈ : estimée/)
+    assert.match(legend, /Vitesse : mesurée sur ton PC à chaque réponse\.$/)
+    assert.match(legend, /Vision prend la meilleure note parmi ceux qui lisent les images \(ses propres duels\)/)
+    assert.doesNotMatch(legend, /≈|Artificial Analysis/)
   })
 })
 
@@ -339,18 +343,18 @@ for (const [lang, longest] of [['de', 'Bildschirmsteuerung'], ['hu', 'Képernyő
 }
 
 // Relecteurs : sur deux lignes par rôle, un « — » n'est plus sous un titre de colonne et ne veut plus rien dire
-// (« – —  Code 5/5 »). Une vitesse ou une intelligence non publiée disparaît ; les vraies valeurs restent.
-test('carte sur deux lignes par rôle : aucun « — » orphelin, les valeurs publiées restent', options, async () => {
+// (« – —  Code 5/5 »). Une vitesse pas encore mesurée disparaît ; les vraies valeurs restent.
+test('carte sur deux lignes par rôle : aucun « — » orphelin, les vraies valeurs restent', options, async () => {
   for (const width of [760, 560]) {
     await withPreview(async (page) => {
       const visible = await page.$$eval('.capacity-scan__tier-table td', (tds) =>
         tds.filter((td) => td.getClientRects().length > 0).map((td) => td.textContent.trim())
       )
       assert.ok(!visible.includes('—'), `à ${width} px, un « — » seul reste visible : ${JSON.stringify(visible)}`)
-      for (const value of ['Intelligence 10,8', '17,7 tok/s', 'Intelligence 13,1', '109 tok/s', 'Intelligence 7,0']) {
+      for (const value of ['Duels 0', '17,7 tok/s', 'Duels +120', '109 tok/s', 'Duels -40']) {
         assert.ok(visible.includes(value), `à ${width} px, « ${value} » a disparu`)
       }
-      // Code : ni vitesse ni intelligence publiées, mais son score reste.
+      // Code : ni vitesse mesurée ni note, mais son score reste.
       const code = await page.$$eval('.capacity-scan__tier-table tr', (trs) =>
         trs
           .filter((tr) => tr.querySelector('.capacity-scan__tier-slot')?.textContent === 'Code')
@@ -361,33 +365,12 @@ test('carte sur deux lignes par rôle : aucun « — » orphelin, les valeurs pu
   }
 })
 
-// Étape 329, Léo : « il y a pas écrit le score Terminal-Bench, et ça utilise combien de pourcentage, Artificial
-// Analysis combien, appel d'outils… ». Chaque rôle affiche la mesure qui compte pour LUI, et « Voir le calcul »
-// détaille sa note facteur par facteur.
+// Étape 329, Léo : « ça utilise combien de pourcentage, appel d'outils… » : « Voir le calcul » détaille la note de
+// chaque rôle facteur par facteur. Étape 498 : la mesure de départ est toujours la force des duels (plus d'Intelligence,
+// d'Omniscience ni de Terminal-Bench d'Artificial Analysis).
 const spaces = (text) => text.replace(/[\u00a0\u202f]/g, ' ')
-const roleCells = (page) =>
-  page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => trs.slice(0, 5).map((tr) => [...tr.querySelectorAll('td')].slice(3, 5).map((td) => td.textContent?.trim())))
 const calcLines = (page) => page.$$eval('.capacity-scan__tier-calc', (trs) => trs.map((tr) => tr.textContent?.trim() ?? ''))
 const calcButton = (page) => page.$eval('.capacity-scan__calc-toggle', (el) => ({ text: el.textContent?.trim(), expanded: el.getAttribute('aria-expanded'), cursor: getComputedStyle(el).cursor }))
-
-test('Code affiche Terminal-Bench (pas l’intelligence, qui ne compte plus pour lui) ; Faible, Moyen, Élevé leur Omniscience', options, async () => {
-  await withPreview(
-    async (page) => {
-      assert.deepEqual(JSON.parse(JSON.stringify((await roleCells(page)).map((row) => row.map(spaces)))), [
-        ['Intelligence 11,1', 'Omniscience -17,2'],
-        ['Intelligence 20,6', 'Omniscience -16,6'],
-        ['Intelligence 33,7', 'Omniscience -10'],
-        // Vision et Code : l'Omniscience ne compte pas dans leur note, jamais affichée.
-        ['Intelligence 7,0', '—'],
-        ['Terminal-Bench 79,8 %', '—']
-      ])
-      const titles = await page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) => [trs[4].querySelectorAll('td')[3].title, trs[0].querySelectorAll('td')[4].title])
-      assert.match(titles[0], /Terminal-Bench 2\.1/, 'l’infobulle dit ce que mesure Terminal-Bench')
-      assert.match(titles[1], /AA-Omniscience/, 'l’infobulle dit ce que mesure l’Omniscience')
-    },
-    760, undefined, undefined, 'fr', undefined, 'calc'
-  )
-})
 
 test('« Voir le calcul » : caché par défaut, puis la note de chaque rôle facteur par facteur, en pourcentages', options, async () => {
   await withPreview(
@@ -396,11 +379,11 @@ test('« Voir le calcul » : caché par défaut, puis la note de chaque rôle fa
       assert.deepEqual(await calcButton(page), { text: 'Voir le calcul des notes', expanded: 'false', cursor: 'pointer' })
       await page.click('.capacity-scan__calc-toggle')
       assert.deepEqual((await calcLines(page)).map(spaces), [
-        'Note 4,5 = Intelligence 11,1 × 41,4 % (Omniscience -17,2) × 100 % (Questions 78/78) × 97,9 % (Demandes 47/48)',
-        'Note 7,4 = Intelligence 20,6 × 41,7 % (Omniscience -16,6) × 87,8 % (Questions 76/78) × 97,4 % (Demandes : pas encore testé, estimé sur les questions)',
-        'Note 13,9 = Intelligence 33,7 × 45 % (Omniscience -10) × 93,8 % (Questions 77/78) × 97,9 % (Demandes 47/48)',
+        'Note 1,0 = Duels 0 pts = ×1,00 (votes : 0) × 100 % (Questions 78/78) × 97,9 % (Demandes 47/48)',
+        'Note 1,7 = Duels +120 pts = ×2,00 (votes : 14) × 87,8 % (Questions 76/78) × 97,4 % (Demandes : pas encore testé, estimé sur les questions)',
+        'Note 9,2 = Duels +400 pts = ×10,00 (votes : 30) × 93,8 % (Questions 77/78) × 97,9 % (Demandes 47/48)',
         "Pas de note : ce modèle n'a pas encore été testé par Jaris.",
-        'Note 74,8 = Terminal-Bench 79,8 % × 93,8 % (Questions 77/78)'
+        'Note 0,5 = Duels -100 pts = ×0,56 (votes : 6) × 93,8 % (Questions 77/78)'
       ])
       // Chaque calcul est juste sous la ligne de SON rôle.
       const under = await page.$$eval('.capacity-scan__tier-calc', (trs) => trs.map((tr) => tr.previousElementSibling?.querySelector('.capacity-scan__tier-slot')?.textContent))
@@ -418,23 +401,11 @@ test('« Voir le calcul » : caché par défaut, puis la note de chaque rôle fa
   )
 })
 
-test('Terminal-Bench sous le plancher d’une tâche sur 89 : le calcul le dit au lieu d’un chiffre qui ne colle pas', options, async () => {
-  await withPreview(
-    async (page) => {
-      await page.click('.capacity-scan__calc-toggle')
-      const lines = (await calcLines(page)).map(spaces)
-      assert.equal(lines[4], 'Note 0,1 = Terminal-Bench 1,1 % (minimum : 1 tâche sur 89) × 7,8 % (Code 3/5)')
-      assert.equal(spaces((await roleCells(page))[4][0]), 'Terminal-Bench 0 %', 'la mesure publiée reste affichée telle quelle')
-    },
-    760, undefined, undefined, 'fr', undefined, 'floor'
-  )
-})
-
 test('le calcul suit la langue (« 45% », « Score ») et ne déborde jamais, même à 420 px', options, async () => {
   await withPreview(
     async (page) => {
       await page.click('.capacity-scan__calc-toggle')
-      assert.equal((await calcLines(page))[2], 'Score 13.9 = Intelligence 33.7 × 45% (Omniscience -10) × 93.8% (Questions 77/78) × 97.9% (Requests 47/48)')
+      assert.equal((await calcLines(page))[2], 'Score 9.2 = Duels +400 pts = ×10.00 (votes: 30) × 93.8% (Questions 77/78) × 97.9% (Requests 47/48)')
     },
     760, undefined, undefined, 'en', undefined, 'calc'
   )

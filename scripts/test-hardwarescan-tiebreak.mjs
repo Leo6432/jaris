@@ -10,9 +10,8 @@ import { withI18n } from './i18n-test-module.mjs'
 /**
  * Reproduit la question de Léo ("pourquoi on regarde pas les vrais benchmarks pour départager les 6/6 ?") :
  * quand deux candidats du palier Puissant sont tous les deux à "6/6" (verified-tool-scores.md), l'ancien
- * comportement départageait par MMLU-Pro puis par VRAM. Vérifie que pickBestFrom utilise maintenant
- * l'Intelligence Index officiel quand les deux modèles exacts sont couverts, puis seulement MMLU-Pro et la
- * VRAM comme replis. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources.
+ * comportement départageait par MMLU-Pro puis par VRAM. L'Intelligence Index d'Artificial Analysis est passé devant un
+ * temps, puis a été retiré (étape 498) : MMLU-Pro, puis la VRAM. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources.
  */
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
@@ -59,97 +58,41 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   return exports
 }
 
-test('à 6/6 égalité, départage d’abord par l’Intelligence Index officiel', async () => {
+test('à 6/6 égalité, départage par MMLU-Pro quand les deux modèles en ont un', async () => {
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:27b | 6/6 |', '| qwen3.8:27b | 6/6 |'].join(
       '\n'
     )
   })
   const result = await pickBestModelsFromBenchmark()
-  // Artificial Analysis note qwen3.8:27b à 34 contre 23 pour qwen3.5:27b. Ce signal demandé par Léo passe
-  // maintenant avant leurs anciens chiffres MMLU-Pro, qui donnaient l'ordre inverse.
-  assert.equal(result.models.large, 'qwen3.8:27b')
+  // Étape 498 : l'Intelligence Index d'Artificial Analysis (qui donnait qwen3.8:27b) est retiré de Jaris ; MMLU-Pro,
+  // le repli d'avant, tranche : 86,1 pour qwen3.5:27b contre 84,3.
+  assert.equal(result.models.large, 'qwen3.5:27b')
 })
 
-test('à fiabilité ET force EXACTEMENT égales, repli sur l’Intelligence Index, puis MMLU-Pro, puis la VRAM', async () => {
-  // Étape 328 : le rôle Code se départage par Terminal-Bench 2.1. granite4.2:3b et gpt-oss:20b y ont EXACTEMENT
-  // le même score (13,9, à la 15e décimale près dans les données d'Artificial Analysis) et le même 3/3 : ni la fiabilité ni la force ne
-  // départagent, le repli suivant (l'Intelligence Index, 9,1 contre 9,0) tranche.
+test('à fiabilité ET force EXACTEMENT égales, sans MMLU-Pro des deux côtés : le plus gros', async () => {
+  // granite4.2:3b et gpt-oss:20b, même 3/3 en code et aucun duel : seule la taille départage (étape 125).
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: ['## Code', '| Modèle | Fiabilité |', '| --- | --- |', '| granite4.2:3b | 3/3 |', '| gpt-oss:20b | 3/3 |'].join('\n')
   })
   const result = await pickBestModelsFromBenchmark()
-  assert.equal(result.codeModel, 'granite4.2:3b')
+  assert.equal(result.codeModel, 'gpt-oss:20b')
 })
 
-test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 220 : relevés à une décimale, variante raisonnement)', async () => {
+// Étape 498 (Léo : « supprime toutes les vitesses, tous les trucs d'Artificial Analysis, ça sert à rien ») : plus aucune
+// note publiée par Artificial Analysis n'est gardée ni montrée — ni Intelligence Index, ni vitesse, ni Omniscience, ni
+// Terminal-Bench. La vitesse affichée est celle mesurée sur le PC (aucune ici : `null`).
+test('aucune note d’Artificial Analysis : ni dans le code, ni dans ce que l’écran reçoit', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex]))
-  // Relevés le 02/10/2026 sur les données brutes des fiches (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX) ;
-  // mistral-small3.2:24b et granite4.2:30b relus le 18/10/2026 (réévalués par Artificial Analysis).
-  const expected = {
-    'qwen3.5:0.8b': 6.1,
-    'qwen3.5:2b': 6.9,
-    'qwen3.5:4b': 13.1,
-    'qwen3.5:9b': 11.2,
-    'qwen3.5:27b': 22.9,
-    'qwen3.5:35b': 19.3,
-    'qwen3.6:27b': 21.4,
-    'qwen3.6:35b': 18.2,
-    'qwen3.6:35b-a3b': 18.2,
-    'qwen3.8:27b': 33.7,
-    'gpt-oss:20b': 9.0,
-    'gemma4:12b': 14.2,
-    'gemma4:26b': 16.7,
-    'gemma4:31b': 14.7,
-    'gemma4:e4b': 8.9,
-    'ministral-3:14b': 6.0,
-    'ministral-3:3b': 4.8,
-    'granite4.1:3b': 5.9,
-    'granite4.2:3b': 9.1,
-    'ministral-3:8b': 5.5,
-    'granite4.2:8b': 11.1,
-    'granite4.1:8b': 6.6,
-    'mistral-small3.2:24b': 7.0,
-    'granite4.2:30b': 12.7,
-    'qwen3:1.7b': 5.2,
-    'glm-4.7-flash:q4_K_M': 14.9,
-    'nemotron-3.5-lightning:30b': 12.9,
-    'qwen3-vl:8b': 8.2,
-    'qwen3-vl:4b': 7.0,
-    'qwen3-coder:30b': 9.6,
-    'north-mini-code-1.0': 9.9,
-    'qwen2.5-coder:32b': 6.7,
-    'devstral-small-2:24b': 7.5,
-    'qwen2.5-coder:7b': 5.8,
-    'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8,
-    'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1,
-    'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5,
-    'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 8.4,
-    'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4
+  assert.ok(overview.entries.length > 30)
+  for (const entry of overview.entries) {
+    for (const key of ['artificialAnalysisIndex', 'artificialAnalysisSpeed', 'omniscience', 'terminalBench']) {
+      assert.equal(key in entry, false, `${entry.model} : ${key}`)
+    }
+    assert.equal(entry.localSpeed, null, `${entry.model} : aucune vitesse sans mesure sur ce PC`)
   }
-
-  for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
-  // Modèle réellement absent d'Artificial Analysis (vérifié : aucune fiche à ce nom) — jamais de chiffre
-  // inventé pour combler le vide.
-  assert.equal(byModel.get('qwen2.5-coder:14b'), null, 'un modèle exact absent d’Artificial Analysis doit rester sans score')
-})
-
-test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absente quand non mesurée', async () => {
-  const { getModelOverview } = setup()
-  const overview = await getModelOverview()
-  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
-  // Étape 348 : relues le 23/10/2026, avec la décimale du site (étape 340 : qwen3.5:27b à 76,3, signalé par Léo).
-  assert.equal(byModel.get('ministral-3:3b'), 206.8)
-  assert.equal(byModel.get('granite4.2:3b'), 109.6)
-  assert.equal(byModel.get('qwen3.5:27b'), 78)
-  assert.equal(byModel.get('gemma4:26b'), 79, 'de nouveau publiée')
-  assert.equal(byModel.get('qwen3-vl:8b'), null, 'plus publiée : retirée')
-  // Étape 220 : plus de vitesse publiée pour Devstral Small 2 (N/A) — retirée plutôt que gardée périmée.
-  assert.equal(byModel.get('devstral-small-2:24b'), null)
-  // qwen3.5:0.8b a un Intelligence Index connu (6) mais Artificial Analysis affiche "N/A" pour sa vitesse.
-  assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
+  assert.doesNotMatch(source, /ARTIFICIAL_ANALYSIS_/, 'tables d’Artificial Analysis retirées')
 })
 
 // Étape 136, Léo : "Rajoute les 2 model". Une autre IA avait retiré G9v3-3B et GLM-4.6V-Flash (et

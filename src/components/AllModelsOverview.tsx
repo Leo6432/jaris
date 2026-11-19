@@ -11,11 +11,6 @@ import { DUEL_RELIABLE_COUNT, duelConfidence } from '../../shared/duel'
 import { shownSpeed } from '../lib/shownSpeed'
 import { ipcErrorMessage } from '@/lib/ipcError'
 
-const SPEED_KIND_LABELS: Record<'measured' | 'estimated' | 'published', MessageKey> = {
-  measured: 'speed.kind.measured',
-  estimated: 'speed.kind.estimated',
-  published: 'speed.kind.published'
-}
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
@@ -69,7 +64,7 @@ const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash
  * comptent dans le choix depuis l'étape 328 ont leur colonne — Omniscience (« n'invente pas », Faible/Moyen/Élevé)
  * et Terminal-Bench 2.1 (Code) —, triables comme les autres, du meilleur au moins bon au premier clic.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'vision' | 'code' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'duelVision' | 'artificialAnalysisSpeed'
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'vision' | 'code' | 'duelConversation' | 'duelCode' | 'duelVoice' | 'duelVision' | 'localSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -84,7 +79,7 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   duelCode: 'desc',
   duelVoice: 'desc',
   duelVision: 'desc',
-  artificialAnalysisSpeed: 'desc'
+  localSpeed: 'desc'
 }
 
 const SORT_LABELS: Record<SortKey, MessageKey> = {
@@ -97,7 +92,7 @@ const SORT_LABELS: Record<SortKey, MessageKey> = {
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
   duelVision: 'models.sort.duelVision',
-  artificialAnalysisSpeed: 'models.sort.speed'
+  localSpeed: 'models.sort.speed'
 }
 
 /** Libellés COURTS pour la barre "Trier par" (étape 129) : les titres de colonne complets ci-dessus
@@ -112,10 +107,10 @@ const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
   duelCode: 'models.sort.duelCode',
   duelVoice: 'models.sort.duelVoice',
   duelVision: 'models.sort.duelVision',
-  artificialAnalysisSpeed: 'models.chip.speed'
+  localSpeed: 'models.chip.speed'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'vision', 'code', 'duelConversation', 'duelCode', 'duelVoice', 'duelVision', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'vision', 'code', 'duelConversation', 'duelCode', 'duelVoice', 'duelVision', 'localSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -129,16 +124,12 @@ function toolScoreValue(toolCalling: string | null): number | null {
   return Number.isFinite(total) && total > 0 ? correct / total : correct
 }
 
-/**
- * Étape 367 : vitesse sur CE PC. « ≈ » devant une vitesse estimée (modèle jamais lancé ici) ; l'infobulle dit d'où
- * vient le chiffre (mesurée sur ton PC, estimée, ou publiée tant que rien n'a été mesuré).
- */
+/** Étape 367 : vitesse mesurée sur CE PC (étape 498 : plus de vitesse publiée ni estimée) ; « — » sans mesure. */
 function SpeedCell({ entry }: { entry: ModelOverviewEntry }) {
   const speed = shownSpeed(entry)
   if (speed.value === null) return <td className="options-menu__col-num">—</td>
   return (
-    <td className="options-menu__col-num" title={speed.kind ? t(SPEED_KIND_LABELS[speed.kind]) : undefined}>
-      {speed.kind === 'estimated' ? '≈ ' : ''}
+    <td className="options-menu__col-num" title={t('speed.kind.measured')}>
       {formatDecimal(speed.value)}
     </td>
   )
@@ -175,7 +166,7 @@ function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'code') return toolScoreValue(entry.toolScores?.code ?? null)
   if (key === 'demands') return toolScoreValue(entry.demands ?? null)
   // `?? null` : une mesure absente (y compris d'une réponse plus ancienne sans ce champ) reste toujours en fin de liste.
-  if (key === 'artificialAnalysisSpeed') return shownSpeed(entry).value
+  if (key === 'localSpeed') return shownSpeed(entry).value
   if (key === 'duelConversation') return entry.duels?.conversation?.points ?? null
   if (key === 'duelCode') return entry.duels?.code?.points ?? null
   if (key === 'duelVoice') return entry.duels?.voice?.points ?? null
@@ -394,7 +385,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                 </th>
                               ))}
                               <th className="options-menu__col-num" title={t('models.col.speed.title')}>
-                                <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
+                                <SortButton sortKey="localSpeed" sort={sort} onSort={toggleSort} />
                               </th>
                             </tr>
                           </thead>

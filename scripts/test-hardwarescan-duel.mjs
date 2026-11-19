@@ -64,7 +64,9 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   // Machine de Léo, avec les vrais scores : ce que Jaris choisit quand personne n'a encore voté (calculé, pas deviné).
   // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go chargé) ne tient plus sur les 7 Go utiles.
   // Étape 497 : LFM3 1.7B (75/78, 43/48 ; 1,7 Go chargé) dépasse qwen3.5:4b (74/78, 42/48) sur les deux épreuves.
-  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'lfm3:1.7b', medium: 'lfm3:1.7b', large: 'qwen3.5:27b' })
+  // Étape 498 : à note égale (78/78, 48/48), qwen3.6:27b passe devant qwen3.5:27b — l'Intelligence Index d'Artificial
+  // Analysis ne départage plus (retiré) : MMLU-Pro quand les deux en ont un, sinon le plus gros.
+  assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'lfm3:1.7b', medium: 'lfm3:1.7b', large: 'qwen3.6:27b' })
   assert.equal(none.codeModel, 'ornith-1.5:35b')
   // Étape 475 : Vision a ses duels ; sans vote, sa fiabilité au test de vision départage (0 point pour tous).
   assert.equal(none.visionModel, LARGE)
@@ -162,7 +164,7 @@ test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils m
 test('Code : les votes Code décident du modèle Code, pas des rôles de conversation', async () => {
   const picks = await setup(wins(8, LARGE, 'ornith-1.5:35b', 'code')).pickBestModelsFromBenchmark()
   assert.equal(picks.codeModel, LARGE)
-  assert.equal(picks.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
+  assert.equal(picks.models.large, 'qwen3.6:27b', 'les rôles de conversation ne bougent pas')
 })
 
 // Étape 475 (Léo : « ajoute un Duel Vision ») : les votes Vision décident du modèle Vision, et de lui seul.
@@ -170,7 +172,7 @@ test('étape 475 : les votes Vision choisissent le modèle Vision ; seuls les mo
   const VL = 'qwen3-vl:4b'
   const voted = await setup(wins(8, VL, LARGE, 'vision')).pickBestModelsFromBenchmark()
   assert.equal(voted.visionModel, VL, '8 victoires en Vision : il prend le rôle Vision')
-  assert.equal(voted.models.large, 'qwen3.5:27b', 'les rôles de conversation ne bougent pas')
+  assert.equal(voted.models.large, 'qwen3.6:27b', 'les rôles de conversation ne bougent pas')
   // Des votes d'une AUTRE catégorie ne touchent pas à la Vision.
   assert.equal((await setup(wins(8, VL, LARGE, 'conversation')).pickBestModelsFromBenchmark()).visionModel, LARGE)
   // Le Duel Vision ne met face à face que des modèles qui lisent une image.
@@ -195,7 +197,7 @@ test('le calcul affiché dit d’où vient la note : les duels (points et nombre
   assert.equal(picks.large.note.base.kind, 'duel')
   assert.equal(picks.large.note.base.duels, 8)
   assert.ok(picks.large.note.base.points > 0)
-  assert.equal(picks.large.note.omniscienceShare, null, 'les duels remplacent toute la note de départ, « n’invente pas » compris')
+  assert.equal('omniscienceShare' in picks.large.note, false, 'étape 498 : plus de part « n’invente pas » (Artificial Analysis)')
   // Les rôles de la voix : SES votes (9 duels Vocal), pas les 8 de la Conversation.
   assert.equal(picks.voice.large.model, LARGE)
   assert.deepEqual([picks.voice.large.note.base.kind, picks.voice.large.note.base.duels], ['duel', 9])

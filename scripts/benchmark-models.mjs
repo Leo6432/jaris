@@ -176,8 +176,8 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
  * pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la vitesse). Exclus du
  * téléchargement/test de CE script (voir SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES plus
  * bas) : aucune raison de retélécharger et retester un modèle dont le résultat ne peut pas changer d'une
- * machine à l'autre. Sa vitesse n'est plus estimée par formule depuis la v0.15.42 : l'app affiche celle
- * publiée par Artificial Analysis (voir ARTIFICIAL_ANALYSIS_SPEED, hardwareScan.ts). Trois listes
+ * machine à l'autre. Sa vitesse n'est plus estimée par formule depuis la v0.15.42 : l'app la mesure sur le PC de
+ * chacun (localSpeedOf, hardwareScan.ts ; étape 498 : plus de vitesse publiée). Trois listes
  * séparées par palier (sections "## Conversation/Vision/Code" du fichier), PAS une seule liste par nom de
  * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
  * conversation ne doit jamais faire sauter, à tort, son propre test vision (bug déjà rencontré une fois

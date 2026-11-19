@@ -60,7 +60,7 @@ import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services
 import { addCatalogServer, addMcpServers, cancelMcpSignIn, listMcpServers, mcpToolsFor, signInMcpServer, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
 import { setExtraToolSource } from './services/assistant'
 import { setMcpBrowserOpener, setMcpSecretBox } from './services/mcpAuth'
-import { localToPublishedRatio, resolveSpeed } from '../shared/localSpeed'
+import { resolveSpeed } from '../shared/localSpeed'
 import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind, type StoredThinkChoice } from '../shared/effort'
@@ -286,20 +286,14 @@ setDuelProbability((category, challenger, incumbent) => {
   }
   return switchCache.results.get(key) ?? null
 })
-// Étape 367 : chaque réponse d'Ollama mesure la vitesse du modèle sur ce PC ; Faible et Moyen la préfèrent à la vitesse
-// publiée par Artificial Analysis.
+// Étape 367 : chaque réponse d'Ollama mesure la vitesse du modèle sur ce PC ; c'est la seule vitesse que Faible et
+// Moyen regardent (étape 498 : plus de vitesse publiée).
 setSpeedRecorder((model, tokens, ms) => void recordModelSpeed(model, tokens, ms))
 // Étape 389 : aucune limite d'attente du premier fragment (voir setChatDispatcher). Une heure, pas l'infini : un Ollama
 // distant disparu sans fermer la connexion ne bloque pas une demande pour toujours. Le reste du flux garde la limite
 // d'undici (5 minutes sans le moindre fragment), toujours atteinte par une vraie panne, jamais par un modèle qui écrit.
 setChatDispatcher(new UndiciAgent({ headersTimeout: 60 * 60_000 }))
-let speedRatio: { measured: Record<string, number>; ratio: number | null } | null = null
-setLocalSpeedResolver((model, published) => {
-  const measured = getMeasuredSpeeds()
-  // Même objet tant qu'aucune mesure n'a changé : le rapport mesuré/publié n'est recalculé qu'après une mesure.
-  if (speedRatio?.measured !== measured) speedRatio = { measured, ratio: localToPublishedRatio(measured, published) }
-  return resolveSpeed(model, measured, published, speedRatio.ratio)
-})
+setLocalSpeedResolver((model) => resolveSpeed(model, getMeasuredSpeeds()))
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
 // Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).

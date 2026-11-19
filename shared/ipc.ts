@@ -448,8 +448,7 @@ export interface MyModelPicks {
  * (scripts/verified-tool-scores.md) — du score de fiabilité partagé, valable pour tout le monde puisqu'il ne
  * dépend pas du matériel. `null` si rien de tout ça n'existe pour ce modèle (jamais de chiffre inventé).
  *
- * Plus aucune vitesse LOCALE ici depuis l'étape 131 : les deux écrans qui affichent une vitesse montrent
- * désormais `artificialAnalysisSpeed` (voir plus bas), une mesure publiée identique pour tout le monde.
+ * Vitesse : celle mesurée sur ce PC (`localSpeed`, étape 367 ; étape 498 : plus aucune vitesse publiée).
  */
 export interface ModelOverviewEntry {
   model: string
@@ -475,37 +474,13 @@ export interface ModelOverviewEntry {
   demands?: string | null
   intelligence: number | null
   /**
-   * Intelligence Index publié directement par Artificial Analysis — voir
-   * ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX dans hardwareScan.ts pour la version et la date de vérification.
-   * `null` si le modèle exact n'est pas évalué, jamais un chiffre inventé pour combler le vide.
-   * À fiabilité égale, Jaris l'utilise pour départager deux modèles exacts qui possèdent tous les deux un
-   * score publié ; MMLU-Pro reste le repli quand cette comparaison officielle n'est pas possible.
-   */
-  artificialAnalysisIndex: number | null
-  /**
-   * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle. Mesurée sur LEUR
-   * matériel, identique pour tout le monde : sert à comparer les modèles entre eux, jamais à prédire la
-   * vitesse sur la machine de qui regarde (dit explicitement à l'écran, voir MyModelPicks.tsx).
-   * Voir ARTIFICIAL_ANALYSIS_SPEED dans hardwareScan.ts. `null` si Artificial Analysis n'a pas
-   * encore publié de mesure de vitesse fiable pour ce modèle exact.
-   */
-  artificialAnalysisSpeed: number | null
-  /**
-   * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen.
-   * `localSpeedKind` dit d'où elle vient : `measured` (mesurée ici à la fin de chaque réponse), `estimated` (jamais
-   * lancé ici : vitesse publiée × rapport mesuré/publié des modèles déjà lancés), `published` (aucune mesure sur ce
-   * PC encore). `null` si elle est inconnue. Voir shared/localSpeed.ts.
+   * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen, mesurée à la
+   * fin de chaque réponse (`localSpeedKind` = `measured`). `null` si elle n'a pas encore été mesurée ici. Étape 498 :
+   * plus aucune mesure publiée (Artificial Analysis : intelligence, vitesse, Omniscience, Terminal-Bench) dans Jaris.
+   * Voir shared/localSpeed.ts.
    */
   localSpeed: number | null
-  localSpeedKind: 'measured' | 'estimated' | 'published' | null
-  /**
-   * Étape 329, Léo (« il y a pas écrit le score Terminal-Bench ») : AA-Omniscience publié par Artificial Analysis,
-   * de -100 (invente souvent) à 100 (sait tout), 0 = dit « je ne sais pas » plutôt que d'inventer. Compte dans la
-   * note de Faible, Moyen et Élevé depuis l'étape 328. `null` si rien n'est publié pour ce modèle exact.
-   */
-  omniscience: number | null
-  /** Étape 329 : Terminal-Bench 2.1 (% des 89 tâches de code réussies), la mesure du rôle Code. `null` sans mesure. */
-  terminalBench: number | null
+  localSpeedKind: 'measured' | null
   /** Étape 331 : version compressée téléchargée (« Q4_K_M », « Q8_0 », « MXFP4 »), voir MODEL_QUANTIZATION. */
   quantization?: string | null
   /**
@@ -527,12 +502,10 @@ export interface ModelOverviewEntry {
  */
 export interface ModelNoteBreakdown {
   /**
-   * Mesure de départ : Intelligence Index (Faible, Moyen, Élevé, Vision) ou Terminal-Bench 2.1 (Code) — ou, étape 355,
-   * la force donnée par les votes des duels (`duel`, avec leur nombre), qui remplace Artificial Analysis pour ce modèle.
+   * Mesure de départ : la force donnée par les votes des duels (étape 355, avec leur nombre et leurs points) — la seule
+   * depuis l'étape 498 (Intelligence Index, Terminal-Bench et Omniscience d'Artificial Analysis retirés).
    */
-  base: { kind: 'intelligence' | 'terminalBench' | 'duel'; value: number; duels?: number; points?: number } | null
-  /** Part gardée selon AA-Omniscience : (100 + Omniscience) / 200. Faible, Moyen et Élevé seulement. */
-  omniscienceShare: number | null
+  base: { kind: 'duel'; value: number; duels?: number; points?: number } | null
   /** Part gardée selon le test d'appel d'outils : taux de réussite puissance `chain` (actions d'affilée). */
   toolsShare: number | null
   chain: number
@@ -1052,11 +1025,11 @@ export interface DuelModelOption {
   /** Étape 384 : duels déjà votés dans cette catégorie (rempli par planDuel). */
   duels?: number
   /**
-   * Étape 414 : vitesse de génération sur CE PC en tokens/s (étape 367 : mesurée, estimée ou publiée), `null` si
+   * Étape 414 : vitesse de génération mesurée sur CE PC en tokens/s (étape 498 : plus rien de publié), `null` si
    * inconnue ou si les modèles tournent sur une autre machine (la vitesse de ce PC n'y dirait rien).
    */
   speed?: number | null
-  speedKind?: 'measured' | 'estimated' | 'published' | null
+  speedKind?: 'measured' | null
 }
 
 export interface DuelPlan {

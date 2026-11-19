@@ -1,8 +1,7 @@
 /**
  * Étape 367 (Léo : « un score vitesse avec les tokens par seconde, comme avant avec Artificial Analysis mais avec nos
  * mesures ») : la vitesse d'un modèle mesurée sur CE PC, à la fin de chaque réponse d'Ollama (`eval_count` /
- * `eval_duration`). Elle remplace la vitesse publiée par Artificial Analysis — mesurée chez un fournisseur en ligne, qui
- * change chaque semaine et ne dit rien de la carte de l'utilisateur — dans le choix de Faible et de Moyen.
+ * `eval_duration`). C'est la seule vitesse de Jaris (étape 498) : elle sert au choix de Faible et de Moyen.
  *
  * Module pur : aucun accès au disque ni à Ollama (speedStore.ts garde les mesures, hardwareScan.ts s'en sert).
  */
@@ -16,12 +15,11 @@ export const SPEED_SAMPLES_KEPT = 10
 export type SpeedSamples = Record<string, number[]>
 
 /**
- * Où vient la vitesse affichée et utilisée :
- * - `measured` : mesurée sur ce PC ;
- * - `estimated` : jamais lancé ici, vitesse publiée ramenée à ce PC (voir resolveSpeed) ;
- * - `published` : aucune mesure sur ce PC encore, vitesse publiée telle quelle (comme avant l'étape 367).
+ * Où vient la vitesse affichée et utilisée : `measured`, mesurée sur ce PC. Étape 498 (Léo : « supprime toutes les
+ * vitesses, tous les trucs d'Artificial Analysis, on va les mesurer sur le PC ») : plus de vitesse publiée ni de
+ * vitesse « estimée » à partir d'elle — sans mesure ici, la vitesse est inconnue (`null`).
  */
-export type SpeedKind = 'measured' | 'estimated' | 'published'
+export type SpeedKind = 'measured'
 
 export interface ResolvedSpeed {
   speed: number | null
@@ -77,37 +75,8 @@ export function parseSpeedSamples(value: unknown): SpeedSamples | null {
   return result
 }
 
-/**
- * Rapport entre la vitesse mesurée sur ce PC et la vitesse publiée, pour les modèles qui ont les deux (médiane).
- * `null` sans aucun modèle commun.
- */
-export function localToPublishedRatio(measured: Record<string, number>, published: Record<string, number>): number | null {
-  const ratios = Object.entries(measured)
-    .map(([model, speed]) => (published[model] ? speed / published[model] : null))
-    .filter((r): r is number => r !== null && Number.isFinite(r) && r > 0)
-  return median(ratios)
-}
-
-/**
- * La vitesse d'un modèle pour CE PC :
- * - mesurée ici → cette mesure ;
- * - jamais lancé ici, mais d'autres modèles l'ont été → sa vitesse publiée × le rapport mesuré/publié de ces modèles.
- *   Sans ce rapport, un modèle jamais essayé (200 tok/s publiés, chez un fournisseur en ligne) passerait toujours
- *   devant un modèle mesuré ici (40 tok/s réels) : deux échelles qui ne se comparent pas ;
- * - aucune mesure sur ce PC (premier lancement) → la vitesse publiée, comme avant ;
- * - des mesures, mais aucun modèle commun pour calculer le rapport → inconnue plutôt qu'une échelle mélangée.
- */
-export function resolveSpeed(
-  model: string,
-  measured: Record<string, number>,
-  published: Record<string, number>,
-  ratio: number | null = localToPublishedRatio(measured, published)
-): ResolvedSpeed {
+/** La vitesse d'un modèle pour CE PC : sa mesure ici, sinon inconnue — jamais une vitesse venue d'ailleurs. */
+export function resolveSpeed(model: string, measured: Record<string, number>): ResolvedSpeed {
   const own = measured[speedKey(model)]
-  if (own !== undefined) return { speed: own, kind: 'measured' }
-  const publishedSpeed = published[model] ?? published[speedKey(model)]
-  if (publishedSpeed === undefined) return { speed: null, kind: null }
-  if (!Object.keys(measured).length) return { speed: publishedSpeed, kind: 'published' }
-  if (ratio === null) return { speed: null, kind: null }
-  return { speed: publishedSpeed * ratio, kind: 'estimated' }
+  return own === undefined ? { speed: null, kind: null } : { speed: own, kind: 'measured' }
 }

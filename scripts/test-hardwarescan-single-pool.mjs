@@ -7,7 +7,7 @@ import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
 import { withI18n } from './i18n-test-module.mjs'
-import { EXPOSE_AA_TABLES, useAaAsDuels } from './aa-as-duels.mjs'
+import { useExampleDuels } from './example-duels.mjs'
 
 /**
  * Étape 160, Léo : « que tous les modèles soient au même endroit, pas des modèles code, pas des modèles
@@ -21,7 +21,7 @@ import { EXPOSE_AA_TABLES, useAaAsDuels } from './aa-as-duels.mjs'
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText + EXPOSE_AA_TABLES
+}).outputText
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
 /** Étape 463 : les vrais scores, avec un score de code pour chaque modèle (le test de code est proposé à tous). */
 const SCORES_CODE_FOR_ALL = withCodeForAll(REAL_SCORES)
@@ -48,8 +48,8 @@ function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
   }
   const exports = {}
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
-  // Étape 358 : les exemples réels de ce fichier testent la mécanique du choix avec les anciennes notes publiées.
-  return useAaAsDuels(exports)
+  // Étape 358 : les exemples réels de ce fichier testent la mécanique du choix avec des duels d'exemple (example-duels.mjs).
+  return useExampleDuels(exports)
 }
 
 async function picksFor(vramGb, ramGb) {

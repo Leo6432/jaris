@@ -845,11 +845,11 @@ test('étape 414 : « Les plus rapides » — Jaris prend les N modèles les plu
       models: [
         { model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true, speed: 81.4, speedKind: 'measured' },
         { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true, speed: 42, speedKind: 'measured' },
-        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'estimated' },
-        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'estimated' },
+        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'measured' },
+        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'measured' },
         { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true, speed: 12, speedKind: 'measured' },
         { model: 'phi4-mini', vramGb: 3, reason: null, installed: false, speed: null, speedKind: null },
-        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'estimated' }
+        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'measured' }
       ] }`
   await withPage(async (page) => {
     await page.waitForSelector('.duel-pickmode')
@@ -861,12 +861,12 @@ test('étape 414 : « Les plus rapides » — Jaris prend les N modèles les plu
     const rows = await page.$$eval('.duel-fast__item', (els) => els.map((el) => el.textContent))
     assert.equal(rows.length, 5)
     assert.match(rows[0], /95 tok\/s/)
-    assert.match(rows[0], /≈/, 'une vitesse estimée le dit')
     assert.match(rows[1], /81 tok\/s/)
-    assert.doesNotMatch(rows[1], /≈/)
+    // Étape 498 : plus de vitesse estimée (« ≈ ») à partir d'une vitesse publiée — seulement des mesures de ce PC.
+    assert.ok(!rows.some((r) => r.includes('≈')))
     assert.match(rows[4], /12 tok\/s/)
     assert.ok(!rows.some((r) => /phi4|Phi/i.test(r) || /devstral/i.test(r)))
-    assert.match(await page.getAttribute('.duel-fast__item .duel-pick__speed', 'title'), /Estimée/)
+    assert.match(await page.getAttribute('.duel-fast__item .duel-pick__speed', 'title'), /Mesurée sur ton PC/)
     // Pas de 6 : seulement 5 modèles ont une vitesse connue.
     const six = page.locator('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', { hasText: '6' })
     assert.equal(await six.isDisabled(), true)
@@ -941,11 +941,11 @@ test('étape 414 : « Je choisis » montre aussi la vitesse de chaque modèle su
       models: [
         { model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true, speed: 81.4, speedKind: 'measured' },
         { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true, speed: 42, speedKind: 'measured' },
-        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'estimated' },
-        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'estimated' },
+        { model: 'ministral-3:8b', vramGb: 6, reason: null, installed: false, speed: 95, speedKind: 'measured' },
+        { model: 'gemma4:12b', vramGb: 8, reason: null, installed: false, speed: 30, speedKind: 'measured' },
         { model: 'qwen3.8:27b', vramGb: 17, reason: null, installed: true, speed: 12, speedKind: 'measured' },
         { model: 'phi4-mini', vramGb: 3, reason: null, installed: false, speed: null, speedKind: null },
-        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'estimated' }
+        { model: 'devstral-small-2:24b', vramGb: 15, reason: { kind: 'tooBig', needGb: 15, budgetGb: 7 }, speed: 200, speedKind: 'measured' }
       ] }`
   await withPage(async (page) => {
     await page.waitForSelector('.duel-pickmode')

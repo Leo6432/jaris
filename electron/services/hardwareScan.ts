@@ -93,7 +93,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // granite4.2:3b (déjà candidat Médium, voir MEDIUM_CANDIDATES plus bas) rejoint aussi Rapide — étape 127,
   // proposé par ChatGPT (relayé par Léo, "vas sur le site .../recommend") après avoir ouvert le
   // comparateur interactif, inaccessible depuis cet environnement (voir le commentaire au-dessus de
-  // ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Score Artificial Analysis (9) confirmé plus haut que les 3
+  // la table d'Artificial Analysis, retirée à l'étape 498). Score Artificial Analysis (9) confirmé plus haut que les 3
   // candidats déjà présents ici (qwen3.5:0.8b 6, ministral-3:3b/qwen3:1.7b 5), pour une taille intermédiaire
   // (2,2 Go) entre eux — comme granite4.1:3b/4.2:3b en Médium, rejette `think` (voir le filet "sans think"
   // dans chatWithOllama, ollama.ts). Sa fiabilité d'appel d'outils reste à mesurer localement
@@ -110,7 +110,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // oubli, pas un choix délibéré. Déjà VÉRIFIÉ 6/6 en appel d'outils sur la machine de Léo
   // (verified-tool-scores.md, mesuré le 12/09/2026) — meilleur que TOUS les autres candidats de ce palier à
   // cette taille (granite4.2:3b n'a que 5/6). Score Artificial Analysis Intelligence Index 11, vérifié
-  // directement sur sa fiche (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX plus haut) — le meilleur du palier
+  // directement sur sa fiche (voir la table d'Artificial Analysis, retirée à l'étape 498 plus haut) — le meilleur du palier
   // Rapide, devant granite4.2:3b (9). Poids réel 1,9 Go (scripts/benchmark-models.mjs), plus léger que
   // granite4.2:3b (2,2 Go). Repose sur ce que Jaris fait déjà ailleurs pour des modèles sans tag officiel
   // Ollama (GLM-4.6V-Flash-GGUF, MiniCPM5-1B, LFM2.5-1.2B) : un import `hf.co/<dépôt>` direct depuis
@@ -371,7 +371,7 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:26b', vramGb: 18.7 },
   // Candidat "réutilisation" : qwen3.8:27b (déjà dans LARGE_CANDIDATES, palier Puissant) — étape 127,
   // proposé par ChatGPT (via le comparateur .../models/recommend, inaccessible depuis cet environnement,
-  // voir le commentaire au-dessus de ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Vérifié directement sur sa
+  // voir le commentaire au-dessus de la table d'Artificial Analysis, retirée à l'étape 498). Vérifié directement sur sa
   // fiche ollama.com : "text, image, and video" en entrée, la FAQ confirme explicitement le support de
   // l'analyse d'image. Score Artificial Analysis (34) largement au-dessus de gemma4:31b (15), le meilleur
   // candidat Vision jusqu'ici — et déjà téléchargé pour qui l'a comme modèle Puissant, aucun poids
@@ -515,7 +515,7 @@ const RAPIDE_MIN_SPEED_RATIO = 0.5
  * à 50 % : sur une carte de 24 Go, Médium passait de qwen3.8:27b (intelligence 34, vitesse 46) à qwen3.5:27b (23,
  * 75) — un tiers d'intelligence perdue pour le rôle qui agit. Qu'un même modèle serve Médium et Puissant (ou
  * Rapide et Médium) n'est pas un défaut : c'est le meilleur pour les deux, et rien à recharger en changeant de
- * rôle. Différence avec Rapide, au choix de Léo : un modèle sans vitesse publiée reste candidat.
+ * rôle. Différence avec Rapide, au choix de Léo : un modèle sans vitesse mesurée reste candidat.
  */
 const MEDIUM_MIN_SPEED_RATIO = 0.2
 
@@ -815,273 +815,9 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
 }
 
 /**
- * Artificial Analysis Intelligence Index officiel, relevé directement sur artificialanalysis.ai le
- * 21/09/2026 (méthodologie v4.3.2) — étape 122 : Léo a rempli une bonne partie de ce tableau lui-même
- * (page "Tous les modèles", système d'édition manuelle d'une version précédente), demandant ensuite de
- * finir la recherche pour les modèles restants puis de retirer la possibilité d'éditer — cette table
- * remplace donc à la fois l'ancienne version (15 modèles) et le système d'édition manuelle (revert complet,
- * voir externalScoresStore.ts dans l'historique du dépôt). Pour les familles proposant deux variantes, on
- * reprend la variante Reasoning, celle qui correspond au mode de réflexion employé par Jaris. Absence ici =
- * Artificial Analysis n'a pas publié de score pour ce modèle EXACT (vérifié un par un, jamais un
- * rapprochement approximatif ni un chiffre repris d'un agrégateur tiers).
- *
- * **Correction, étape 125 — Léo : "mais on est d'accord que Qwen3.6 35B A3B c'est qwen3.6 35b ?"** : la
- * version précédente de ce commentaire affirmait que `qwen3.5:35b`/`qwen3.6:35b` (les tags utilisés par
- * Jaris) étaient des variantes DENSES différentes de `qwen3.6:35b-a3b`, sans fiche Artificial Analysis
- * dédiée. C'était FAUX — vérifié cette fois directement sur ollama.com/library/qwen3.6/tags et
- * ollama.com/library/qwen3.5/tags (le digest du fichier, pas juste son nom) : `qwen3.6:35b` et
- * `qwen3.6:35b-a3b` partagent EXACTEMENT le même digest (096fdbd02fe6, 23 Go) — ce sont deux ÉTIQUETTES pour
- * le MÊME fichier, jamais deux modèles différents ; même chose pour `qwen3.5:35b`/`qwen3.5:35b-a3b`
- * (3460ffeede54, 24 Go). Il n'existe donc pas de variante "dense" séparée à ces tailles chez Qwen3.5/3.6 :
- * le tag court (`:35b`) est un simple alias du tag complet (`:35b-a3b`). La fiche Artificial Analysis de la
- * variante A3B s'applique donc bien telle quelle aux deux tags. Leçon retenue : une absence de fiche dédiée
- * pour un NOM ne prouve pas l'absence d'un modèle — toujours vérifier le DIGEST du fichier avant de conclure
- * que deux tags désignent des modèles différents, pas seulement leurs noms.
- *
- * À fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le repli quand cette
- * comparaison officielle n'est pas possible.
- *
- * **Étape 220 (Léo : « on a pris les scores raisonner ou non raisonner ? … regarde bien tous les scores, ils
- * doivent être exacts ») : tableau entièrement revérifié le 02/10/2026** sur les DONNÉES BRUTES des fiches
- * (champ `intelligenceIndex` de l'objet `currentModel` de chaque page, méthodologie v4.3.2), plus jamais sur
- * un résumé automatique de page (qui s'était déjà trompé pour G9v3). Une décimale, comme dans ces données :
- * les arrondis à l'entier faisaient des égalités artificielles. Règle, confirmée par Léo : la variante
- * RAISONNEMENT quand il y en a deux, à son effort le plus élevé publié (Xhigh pour qwen3.8:27b, High pour
- * gpt-oss:20b) ; le commentaire de chaque ligne donne la fiche exacte. Quatre valeurs étaient fausses :
- * qwen3.5:9b (14, ni Reasoning 11,2 ni Non-reasoning 13,3), gemma4:31b (19 au lieu de 14,7), et
- * qwen3-vl:8b/4b (score de la variante Instruct, alors que les tags Ollama `qwen3-vl:8b`/`:4b` sont les
- * variantes THINKING — même digest que `8b-thinking`/`4b-thinking` sur ollama.com/library/qwen3-vl/tags).
- * Conséquence réelle, recalculée avec les VRAIS scores d'outils (étape 222) : aucun choix ne change sur les
- * configurations vérifiées (8/32, 6/16, 12/32, 16/64 Go). La fiabilité d'outils passe AVANT l'intelligence :
- * à 8 Go, Médium reste granite4.2:8b (17/17), et qwen3.5:4b (15/17) comme qwen3.5:9b (16/17) restent derrière.
- * Sans fiche Artificial Analysis : GLM-4.6V-Flash (la fiche « GLM-4.6V » est le modèle 106B, pas lui),
- * qwen3-vl:2b, qwen2.5-coder:14b.
- */
-const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
-  'qwen3.5:0.8b': 6.1, // Qwen3.5 0.8B (Reasoning)
-  'qwen3.5:2b': 6.9, // Qwen3.5 2B (Reasoning)
-  'qwen3.5:4b': 13.1, // Qwen3.5 4B (Reasoning)
-  'qwen3.5:9b': 11.2, // Qwen3.5 9B (Reasoning)
-  'qwen3.5:27b': 22.9, // Qwen3.5 27B (Reasoning)
-  'qwen3.5:35b': 19.3, // Qwen3.5 35B A3B (Reasoning)
-  'qwen3.6:27b': 21.4, // Qwen3.6 27B (Reasoning)
-  'qwen3.6:35b': 18.2, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.6:35b-a3b': 18.2, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.8:27b': 33.7, // Qwen3.8 27B (Xhigh)
-  'muse-glimmer:30b': 17.5, // Muse Glimmer (High), relevé le 19/10/2026
-  'gpt-oss:20b': 9.0, // gpt-oss-20b (High)
-  'gemma4:12b': 14.2, // Gemma 4 12B (Reasoning)
-  'gemma4:26b': 16.7, // Gemma 4 26B A4B (Reasoning)
-  'gemma4:31b': 14.7, // Gemma 4 31B (Reasoning)
-  'gemma4:e4b': 8.9, // Gemma 4 E4B (Reasoning)
-  'ministral-3:14b': 6.0, // Ministral 3 14B
-  'ministral-3:3b': 4.8, // Ministral 3 3B
-  'granite4.1:3b': 5.9, // Granite 4.1 3B
-  'granite4.2:3b': 9.1, // Granite 4.2 3B
-  'ministral-3:8b': 5.5, // Ministral 3 8B
-  'granite4.2:8b': 11.1, // Granite 4.2 8B
-  'granite4.1:8b': 6.6, // Granite 4.1 8B
-  'mistral-small3.2:24b': 7.0, // Mistral Small 3.2 (8,2 jusqu'au 18/10/2026, réévalué par Artificial Analysis)
-  'granite4.2:30b': 12.7, // Granite 4.2 30B (14,8 jusqu'au 18/10/2026, réévalué par Artificial Analysis)
-  'qwen3:1.7b': 5.2, // Qwen3 1.7B (Reasoning)
-  'glm-4.7-flash:q4_K_M': 14.9, // GLM-4.7-Flash (Reasoning)
-  'nemotron-3.5-lightning:30b': 12.9, // Nemotron 3.5 Lightning
-  'qwen3-vl:8b': 8.2, // Qwen3 VL 8B (Reasoning)
-  'qwen3-vl:4b': 7.0, // Qwen3 VL 4B (Reasoning)
-  'qwen3-coder:30b': 9.6, // Qwen3 Coder 30B A3B Instruct
-  'north-mini-code-1.0': 9.9, // North Mini Code
-  'qwen2.5-coder:32b': 6.7, // Qwen2.5 Coder Instruct 32B
-  'devstral-small-2:24b': 7.5, // Devstral Small 2
-  'qwen2.5-coder:7b': 5.8, // Qwen2.5 Coder Instruct 7B
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8, // G9v3-3B
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1, // Ling 3.0 Tiny
-  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5, // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
-  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 8.4, // Nanbeige4.1-3B (Reasoning) — 8,40 relevé le 03/10/2026
-  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4, // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
-  'lfm3:1.7b': 6, // LFM3-1.7B (Reasoning) — 6 relevé le 19/11/2026 (artificialanalysis.ai/models/lfm3-1-7b, sans décimale)
-  // Étape 312 : pages Artificial Analysis relues le 14/10/2026. Pas de page pour la 32B (rien d'inventé).
-  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 3, // K2 Horizon 0.9B
-  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 15.6, // K2 Horizon 3.7B
-  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 20.6, // K2 Horizon 7B
-  // Étape 316 : page relue le 15/10/2026. Valeur marquée « estimée » par Artificial Analysis eux-mêmes.
-  'phi4-mini': 6.3 // Phi-4 Mini Instruct
-}
-
-/**
- * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle — relevée en même temps
- * que ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX ci-dessus, le 21/09/2026, avec la même discipline (jamais un
- * chiffre estimé ou repris d'un agrégateur tiers). Mesure Artificial Analysis, indépendante du matériel de
- * qui regarde : depuis l'étape 131, c'est la SEULE vitesse affichée (l'estimation par formule pour la machine
- * de l'utilisateur, et la table de bande passante GPU qu'elle exigeait, ont été retirées avec elle — voir
- * MyModelPicks.tsx pour le pourquoi). Absence ici = Artificial Analysis
- * publie l'Intelligence Index de ce modèle mais pas encore de mesure de vitesse fiable ("N/A" sur sa fiche).
- *
- * Étape 220 : relevée le 02/10/2026 en même temps que l'Intelligence Index ci-dessus, sur la phrase de la fiche
- * du modèle lui-même (« X generates output at N tokens per second »). Ces vitesses bougent avec les
- * fournisseurs : ministral-3:14b était à 87, il est à 65. mistral-small3.2:24b, devstral-2:123b,
- * devstral-small-2:24b et gemma4:26b n'ont plus de vitesse publiée (N/A) : retirées. Les chiffres présents
- * sur leur page appartiennent aux modèles cités en comparaison, pas à eux.
- *
- * Étape 340 (Léo : « qwen3.5:27b tu as mis 75 mais sur le site ça met 76.3 ») : tableau entier relu le
- * 21/10/2026 sur les fiches, phrase « X generates output at N tokens per second » ET champ
- * `timescaleData.medianOutputSpeed` de l'objet du modèle (identiques à la décimale près). Une décimale désormais,
- * comme le site. Ces vitesses changent souvent, et parfois beaucoup, quand le fournisseur mesuré change :
- * granite4.2:3b est passé de 221 à 51,7 tokens/s. gemma4:26b (63,8) et mistral-small3.2:24b (32,9) ont de nouveau
- * une vitesse publiée ; qwen3-vl:8b n'en a plus (retirée).
- *
- * Étape 348 (Léo : « revérifie tout et fais-moi un tableau avant/après ») : les quatre tables d'Artificial Analysis
- * relues le 23/10/2026 sur la page de chaque modèle (objet du modèle : `intelligenceIndex`, `omniscience`,
- * `terminalBench21`, `timescaleData.medianOutputSpeed`, plus la phrase de vitesse). Intelligence, Omniscience et
- * Terminal-Bench : identiques partout, K2 Horizon compris. Vitesses : 26 sur 27 ont bougé, parfois du simple au
- * double (granite4.2:8b 47,1 → 97,3 ; gpt-oss:20b 235,4 → 156,1). Conséquence calculée sur 16 types de PC : sur une
- * carte de 8 Go, Faible passe de qwen3.5:9b à granite4.2:8b ; sur 24 Go, Moyen passe de qwen3.6:27b à qwen3.8:27b.
- */
-const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
-  'qwen3.5:4b': 16.4,
-  'qwen3.5:9b': 58.8,
-  'qwen3.5:27b': 78.0,
-  'qwen3.5:35b': 146.1,
-  'qwen3.6:27b': 57.0,
-  'qwen3.6:35b': 136.4,
-  'qwen3.6:35b-a3b': 136.4,
-  'qwen3.8:27b': 45.2,
-  'muse-glimmer:30b': 124.1,
-  'gpt-oss:20b': 156.1,
-  'gemma4:12b': 119.8,
-  'gemma4:26b': 79.0,
-  'gemma4:31b': 35.9,
-  'gemma4:e4b': 38.5,
-  'ministral-3:14b': 83.1,
-  'ministral-3:3b': 206.8,
-  'granite4.2:3b': 109.6,
-  'ministral-3:8b': 113.8,
-  'granite4.2:8b': 97.3,
-  'granite4.2:30b': 98.9,
-  'mistral-small3.2:24b': 41.9,
-  'glm-4.7-flash:q4_K_M': 88.2,
-  'nemotron-3.5-lightning:30b': 287.3,
-  'qwen3-coder:30b': 222.1,
-  'north-mini-code-1.0': 59.0,
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 56.7,
-  'phi4-mini': 45.7,
-  'lfm3:1.7b': 148, // LFM3-1.7B — relevé le 19/11/2026 (artificialanalysis.ai/models/lfm3-1-7b)
-}
-
-/**
- * Étape 328 (Léo, « fait solution 1 et 2 ») : deux mesures d'Artificial Analysis en plus de l'Intelligence Index,
- * relevées le 18/10/2026 sur les DONNÉES BRUTES des fiches (champs `omniscience` et `terminalBench21` de l'objet
- * du modèle de chaque page, même variante que l'Intelligence Index ci-dessus). Absence = rien de publié pour ce
- * modèle exact, jamais un chiffre deviné.
- *
- * AA-Omniscience Index (« n'invente pas »), de -100 à 100 : +1 par bonne réponse, -1 par réponse inventée, 0 quand
- * le modèle dit qu'il ne sait pas. Il combine donc les bonnes réponses ET les inventions : un modèle qui refuse tout
- * fait 0, mieux qu'un modèle qui invente souvent, moins bien qu'un modèle qui sait. Le taux d'invention seul
- * (« hallucination rate ») aurait fait passer pour excellent un modèle qui ne répond jamais (G9v3-3B : 6,5 % de
- * bonnes réponses). À la voix, l'utilisateur ne voit aucune source : un modèle qui invente est le pire défaut.
- */
-const ARTIFICIAL_ANALYSIS_OMNISCIENCE: Record<string, number> = {
-  'qwen3.5:0.8b': -54.5, // Qwen3.5 0.8B (Reasoning)
-  'qwen3.5:2b': -60.2, // Qwen3.5 2B (Reasoning)
-  'qwen3.5:4b': -58.4, // Qwen3.5 4B (Reasoning)
-  'qwen3.5:9b': -53.5, // Qwen3.5 9B (Reasoning)
-  'qwen3.5:27b': -44.0, // Qwen3.5 27B (Reasoning)
-  'qwen3.5:35b': -48.1, // Qwen3.5 35B A3B (Reasoning)
-  'qwen3.6:27b': -20.0, // Qwen3.6 27B (Reasoning)
-  'qwen3.6:35b': -22.2, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.6:35b-a3b': -22.2, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.8:27b': -10.0, // Qwen3.8 27B (Xhigh)
-  'muse-glimmer:30b': -32.9, // Muse Glimmer (High)
-  'gpt-oss:20b': -63.0, // gpt-oss-20b (High) — -63,1 jusqu'au 21/10/2026
-  'gemma4:12b': -52.7, // Gemma 4 12B (Reasoning)
-  'gemma4:26b': -50.8, // Gemma 4 26B A4B (Reasoning)
-  'gemma4:31b': -47.9, // Gemma 4 31B (Reasoning)
-  'gemma4:e4b': -19.7, // Gemma 4 E4B (Reasoning)
-  'ministral-3:14b': -66.4, // Ministral 3 14B
-  'ministral-3:3b': -64.0, // Ministral 3 3B
-  'granite4.1:3b': -77.0, // Granite 4.1 3B
-  'granite4.2:3b': -14.7, // Granite 4.2 3B
-  'ministral-3:8b': -69.0, // Ministral 3 8B
-  'granite4.2:8b': -17.2, // Granite 4.2 8B
-  'granite4.1:8b': -64.1, // Granite 4.1 8B
-  'mistral-small3.2:24b': -50.6, // Mistral Small 3.2
-  'granite4.2:30b': -12.9, // Granite 4.2 30B
-  'qwen3:1.7b': -77.5, // Qwen3 1.7B (Reasoning)
-  'glm-4.7-flash:q4_K_M': -62.6, // GLM-4.7-Flash (Reasoning)
-  'nemotron-3.5-lightning:30b': -17.7, // Nemotron 3.5 Lightning
-  'qwen3-vl:8b': -52.3, // Qwen3 VL 8B (Reasoning)
-  'qwen3-vl:4b': -68.4, // Qwen3 VL 4B (Reasoning)
-  'qwen3-coder:30b': -50.7, // Qwen3 Coder 30B A3B Instruct
-  'north-mini-code-1.0': -48.6, // North Mini Code
-  'devstral-small-2:24b': -57.7, // Devstral Small 2
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': -4.4, // G9v3-3B
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': -19.4, // Ling 3.0 Tiny
-  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': -11.7, // MiniCPM5-2B
-  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': -42.5, // Nanbeige4.1-3B
-  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': -10.9, // LFM2.5-2.6B — -11,0 jusqu'au 21/10/2026
-  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': -72.8, // K2 Horizon 0.9B
-  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': -28.6, // K2 Horizon 3.7B
-  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': -16.6, // K2 Horizon 7B
-  'phi4-mini': -61.1 // Phi-4 Mini Instruct
-}
-
-/**
- * Terminal-Bench 2.1 mesuré par Artificial Analysis (% de tâches réussies), pour le rôle Code. Artificial Analysis
- * ne publie plus de « Coding Index » par modèle (sa page redirige vers les agents de code) ; ses deux évaluations
- * de code restantes sont Terminal-Bench 2.1 et SciCode, mais SciCode manque pour une quinzaine des petits modèles
- * de Jaris (qwen3.5 0.8b à 4b, gemma4:12b, K2 Horizon…) : une moyenne qui mélange « deux mesures » et « une seule »
- * ne serait pas comparable d'un modèle à l'autre. Terminal-Bench 2.1 seul, même protocole pour tous : écrire du
- * code, l'exécuter, corriger, dans un vrai terminal — ce que fait l'agent de dépôt GitHub de Jaris.
- *
- * Étape 330 (Léo : « je veux seulement que tous les modèles aient le même score ») : JAMAIS de Terminal-Bench 2.0,
- * même quand le créateur le publie (Qwen annonce 41,6 % pour qwen3.5:27b et 40,5 % pour qwen3.5:35b) — c'est une
- * autre version du test. Seule exception à « mesuré par Artificial Analysis » : K2-Horizon-32B, qui n'a pas de
- * fiche chez eux ; son 62,6 % vient de la fiche officielle d'IFM (huggingface.co/IFM/K2-Horizon-32B, lue le
- * 19/10/2026), en Terminal-Bench 2.1 avec le même outil qu'Artificial Analysis (terminus-2, 3 essais). Un chiffre
- * annoncé par le créateur peut s'écarter de leur mesure (K2 Horizon 7B : 39,1 % annoncé, 44,2 % mesuré).
- */
-const ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21: Record<string, number> = {
-  'qwen3.5:0.8b': 0.0, // Qwen3.5 0.8B (Reasoning)
-  'qwen3.5:2b': 3.0, // Qwen3.5 2B (Reasoning)
-  'qwen3.5:4b': 25.8, // Qwen3.5 4B (Reasoning)
-  'qwen3.5:9b': 29.2, // Qwen3.5 9B (Reasoning)
-  'qwen3.6:27b': 60.7, // Qwen3.6 27B (Reasoning)
-  'qwen3.6:35b': 44.9, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.6:35b-a3b': 44.9, // Qwen3.6 35B A3B (Reasoning)
-  'qwen3.8:27b': 79.8, // Qwen3.8 27B (Xhigh)
-  'muse-glimmer:30b': 51.7, // Muse Glimmer (High)
-  'gpt-oss:20b': 13.9, // gpt-oss-20b (High)
-  'gemma4:12b': 27.3, // Gemma 4 12B (Reasoning)
-  'gemma4:26b': 39.0, // Gemma 4 26B A4B (Reasoning)
-  'gemma4:31b': 43.4, // Gemma 4 31B (Reasoning)
-  'gemma4:e4b': 1.9, // Gemma 4 E4B (Reasoning)
-  'ministral-3:14b': 9.7, // Ministral 3 14B
-  'ministral-3:3b': 0.0, // Ministral 3 3B
-  'granite4.1:3b': 1.1, // Granite 4.1 3B
-  'granite4.2:3b': 13.9, // Granite 4.2 3B
-  'ministral-3:8b': 4.1, // Ministral 3 8B
-  'granite4.2:8b': 18.4, // Granite 4.2 8B
-  'granite4.1:8b': 3.4, // Granite 4.1 8B
-  'mistral-small3.2:24b': 5.6, // Mistral Small 3.2
-  'granite4.2:30b': 26.6, // Granite 4.2 30B
-  'nemotron-3.5-lightning:30b': 24.3, // Nemotron 3.5 Lightning
-  'north-mini-code-1.0': 35.6, // North Mini Code
-  'devstral-small-2:24b': 29.6, // Devstral Small 2
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 6.0, // G9v3-3B
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 27.7, // Ling 3.0 Tiny
-  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 8.6, // MiniCPM5-2B
-  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 1.1, // Nanbeige4.1-3B
-  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 4.5, // LFM2.5-2.6B
-  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 1.1, // K2 Horizon 0.9B
-  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 28.1, // K2 Horizon 3.7B
-  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 44.2, // K2 Horizon 7B
-  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 62.6, // K2 Horizon 32B — annoncé par IFM, voir ci-dessus
-  'phi4-mini': 0.4 // Phi-4 Mini Instruct
-}
-
-/**
  * Résultat connu d'un modèle pour un rôle. Depuis l'étape 166, il vient uniquement de
  * scripts/verified-tool-scores.md (l'analyse locale a été retirée) : `speedTokPerSec` reste donc toujours
- * `null` — la vitesse affichée est celle publiée par Artificial Analysis.
+ * `null` — la vitesse affichée est celle mesurée sur ce PC (localSpeedOf).
  */
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
@@ -1098,7 +834,7 @@ export type VerifiedTier = 'conversation' | 'vision' | 'code' | 'scenarios'
 /**
  * Relit scripts/verified-tool-scores.md (commité dans le dépôt, voir son en-tête pour le pourquoi) : scores
  * de fiabilité vérifiés une fois par Léo sur sa machine, valables pour tout le monde — jamais de vitesse
- * dedans (l'app affiche la vitesse publiée par Artificial Analysis, voir ARTIFICIAL_ANALYSIS_SPEED). Trois
+ * dedans (la vitesse est mesurée sur le PC de chacun, voir localSpeedOf). Trois
  * tableaux séparés par palier (sections "## Conversation/Vision/Code"), PAS une seule map globale par nom de
  * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
  * conversation ne doit jamais être confondu avec, ni écraser, un score vision pour le même nom de modèle
@@ -1339,16 +1075,6 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
 export const TOOL_CHAIN_LENGTH = 5
 
 /**
- * Force d'un modèle pour Vision (étape 328) : l'Intelligence Index d'Artificial Analysis, multiplié ensuite par sa
- * fiabilité aux tests de Jaris (noteOf). `null` quand rien n'est publié : le modèle passe après ceux qui sont mesurés.
- * Faible, Moyen, Élevé et Code ne regardent plus Artificial Analysis depuis l'étape 358 : leur force vient des duels
- * (duelStrength), 0 point pour tous au départ, comme sur Arena.
- */
-export function intelligenceStrength(model: string): number | null {
-  return ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
-}
-
-/**
  * Étape 355 (Duel, Léo : « on vote, à la place d'Artificial Analysis ») : la force que les votes donnent à chaque
  * modèle d'une catégorie, branchée par main.ts (votes lus par duelStore.ts, classement de shared/duel.ts) — par une
  * fonction plutôt qu'un import, pour que ce module reste sans dépendance de plus (il est chargé par de nombreux tests).
@@ -1381,19 +1107,18 @@ export function setDuelProbability(fn: DuelProbability | null): void {
 
 /**
  * Étape 367 : la vitesse d'un modèle sur CE PC (mesurée à chaque réponse, speedStore.ts ; règles dans
- * shared/localSpeed.ts), branchée par main.ts — un import ici obligerait chaque test de ce module à la fournir. Sans
- * elle, la vitesse publiée par Artificial Analysis, comme avant.
+ * shared/localSpeed.ts), branchée par main.ts — un import ici obligerait chaque test de ce module à la fournir.
+ * Étape 498 (Léo : « supprime toutes les vitesses, tous les trucs d'Artificial Analysis, on va les mesurer sur le PC ») :
+ * plus aucune vitesse publiée. Sans mesure sur ce PC, la vitesse est inconnue.
  */
-export type LocalSpeedResolver = (model: string, published: Readonly<Record<string, number>>) => ResolvedSpeed
+export type LocalSpeedResolver = (model: string) => ResolvedSpeed
 let localSpeedResolver: LocalSpeedResolver | null = null
 export function setLocalSpeedResolver(resolver: LocalSpeedResolver | null): void {
   localSpeedResolver = resolver
 }
 
 export function localSpeedOf(model: string): ResolvedSpeed {
-  if (localSpeedResolver) return localSpeedResolver(model, ARTIFICIAL_ANALYSIS_SPEED)
-  const published = ARTIFICIAL_ANALYSIS_SPEED[model]
-  return published === undefined ? { speed: null, kind: null } : { speed: published, kind: 'published' }
+  return localSpeedResolver ? localSpeedResolver(model) : { speed: null, kind: null }
 }
 
 /** La vitesse utilisée pour choisir les modèles, `undefined` si elle est inconnue (même convention qu'avant). */
@@ -1461,7 +1186,7 @@ const VISION_CHAIN_LENGTH = 1
  * configuration d'Ollama ; pour un import hf.co/, le tag, et pour G9v3-3B sans tag, le fichier par défaut
  * reconnu à sa taille exacte : ai9stars_G9v3-3B-Q4_K_M.gguf). Q4_K_M partout sauf qwen3.5:0.8b et qwen3.5:2b
  * (Q8_0, plus proches de l'original) et gpt-oss:20b (MXFP4, le format 4 bits dans lequel OpenAI l'a publié).
- * Les scores d'Artificial Analysis sont mesurés sur la version d'origine, pas sur celle-ci. Affichage seulement.
+ * Affichage seulement.
  */
 export const MODEL_QUANTIZATION: Record<string, string> = {
   'nemotron-3.5-lightning:30b': 'Q4_K_M',
@@ -1597,20 +1322,10 @@ export function memoryNeedGb(candidate: { model: string; vramGb: number }): numb
   return MODEL_MEMORY_16K_GB[candidate.model] ?? candidate.vramGb
 }
 
-/** Mesures publiées par Artificial Analysis pour un modèle, telles qu'affichées (jamais devinées : `null` sans mesure). */
-function publishedScores(model: string): Pick<ModelOverviewEntry, 'artificialAnalysisIndex' | 'artificialAnalysisSpeed' | 'localSpeed' | 'localSpeedKind' | 'omniscience' | 'terminalBench' | 'quantization' | 'duels'> {
-  return {
-    quantization: MODEL_QUANTIZATION[model] ?? null,
-    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
-    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null,
-    ...(() => {
-      const local = localSpeedOf(model)
-      return { localSpeed: local.speed, localSpeedKind: local.kind }
-    })(),
-    omniscience: ARTIFICIAL_ANALYSIS_OMNISCIENCE[model] ?? null,
-    terminalBench: ARTIFICIAL_ANALYSIS_TERMINAL_BENCH_21[model] ?? null,
-    duels: duelPointsOf(model)
-  }
+/** Ce que l'écran affiche d'un modèle en plus de ses scores : compression, vitesse mesurée sur ce PC, points de duel. */
+function shownMeasures(model: string): Pick<ModelOverviewEntry, 'localSpeed' | 'localSpeedKind' | 'quantization' | 'duels'> {
+  const local = localSpeedOf(model)
+  return { quantization: MODEL_QUANTIZATION[model] ?? null, localSpeed: local.speed, localSpeedKind: local.kind, duels: duelPointsOf(model) }
 }
 
 /**
@@ -1679,8 +1394,6 @@ export function noteBreakdown(
   const demands = role === 'conversation' ? demandsFactor(demandScore, toolCalling) : null
   return {
     base,
-    // Les duels remplacent TOUTE la note de départ, « n'invente pas » compris : pas de seconde part à afficher.
-    omniscienceShare: null,
     toolsShare: rate >= 0 ? Math.pow(rate, chain) : null,
     chain,
     demandsShare: demands?.value ?? null,
@@ -1931,7 +1644,7 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
       },
       demands: currentDemandScore(verifiedToolScores, c.model),
       intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
-      ...publishedScores(c.model)
+      ...shownMeasures(c.model)
     }))
 
   // Étape 486 : chaque duel compte dans le total de ses DEUX modèles — la somme divisée par deux est le nombre de duels.
@@ -2029,7 +1742,7 @@ function computeModelPicks(
     toolCalling: result?.toolCalling ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-    ...publishedScores(model)
+    ...shownMeasures(model)
   })
 
   /**
@@ -2039,14 +1752,11 @@ function computeModelPicks(
   type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number; strength: number | null }
 
   /**
-   * Le plus intelligent d'abord, à fiabilité égale : Intelligence Index d'Artificial Analysis quand les DEUX
-   * modèles en ont un, sinon MMLU-Pro, sinon le plus gros (inchangé depuis l'étape 125). Une absence de score
-   * ne vaut jamais zéro.
+   * Le plus intelligent d'abord, à fiabilité égale : MMLU-Pro quand les DEUX modèles en ont un, sinon le plus gros
+   * (étape 125). Une absence de score ne vaut jamais zéro. Étape 498 : l'Intelligence Index d'Artificial Analysis,
+   * premier critère avant, est retiré de Jaris.
    */
   const smartestFirst = (a: Scored, b: Scored): number => {
-    const aIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[a.model]
-    const bIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[b.model]
-    if (aIndex !== undefined && bIndex !== undefined && aIndex !== bIndex) return bIndex - aIndex
     const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
     const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
     if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
@@ -2054,9 +1764,9 @@ function computeModelPicks(
   }
 
   /**
-   * Le plus rapide d'abord : vitesse publiée par Artificial Analysis — le repère comparatif choisi par Léo à
-   * l'étape 131 —, un modèle sans vitesse publiée passant après ceux qui en ont une ; entre deux modèles sans
-   * vitesse publiée, le plus léger (moins de mémoire à lire par mot écrit).
+   * Le plus rapide d'abord : vitesse mesurée sur ce PC (étape 498 : plus de vitesse publiée), un modèle sans mesure
+   * passant après ceux qui en ont une ; entre deux modèles sans mesure, le plus léger (moins de mémoire à lire par mot
+   * écrit).
    */
   const fastestFirst = (a: Scored, b: Scored): number => {
     const aSpeed = speedFor(a.model)
@@ -2071,10 +1781,13 @@ function computeModelPicks(
    * Rôle Rapide (étape 161, Léo : « il ne faut pas le plus rapide sans regarder l'intelligence, par exemple
    * un modèle qui a 5 points d'intelligence en plus mais ne perd que 3 points de vitesse »). Parmi les modèles
    * qui restent au moins à RAPIDE_MIN_SPEED_RATIO de la vitesse du plus rapide, le plus INTELLIGENT (à
-   * intelligence égale, le plus rapide). Un modèle sans vitesse publiée ne peut pas prouver qu'il est rapide :
-   * écarté tant qu'au moins un modèle en a une ; si aucun n'en a, la meilleure note parmi ceux qui tiennent,
-   * comme pour Médium (étape 318 : avant, le plus léger des plus fiables aux 78 questions, sans regarder les
-   * demandes complètes — K2 Horizon 0.9B, 0/48, sur une carte de 2 Go).
+   * intelligence égale, le plus rapide). Un modèle sans vitesse mesurée ne peut pas prouver qu'il est rapide :
+   * écarté tant qu'au moins un modèle en a une ; si aucun des plus fiables n'en a, la meilleure note parmi ceux qui
+   * tiennent, comme pour Médium (étape 318).
+   * Étape 498 (plus de vitesse publiée) : si AUCUN modèle n'a encore été mesuré sur ce PC (premier lancement), la
+   * légèreté est le seul repère de vitesse — la meilleure note parmi les « petits » (bestOfLightest : jusqu'à deux fois
+   * le poids du plus léger qui tient), et non la meilleure note de tous, qui aurait donné à Faible le même gros modèle
+   * que Moyen.
    */
   const fastEnoughThenSmartest = (scored: Scored[], chain: number): Scored[] => {
     // Le plancher de vitesse se calcule sur les modèles les plus fiables (sans quoi un petit modèle très rapide
@@ -2082,6 +1795,7 @@ function computeModelPicks(
     // le passent, par note (intelligence × fiabilité).
     const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
     const reference = scored.filter((c) => parseToolScore(c.result.toolCalling) === top)
+    if (scored.every((c) => speedFor(c.model) === undefined)) return bestOfLightest(scored, chain)
     const speeds = reference.map((c) => speedFor(c.model)).filter((v): v is number => v !== undefined)
     if (!speeds.length) return bestNote(scored, chain)
     const floor = Math.max(...speeds) * RAPIDE_MIN_SPEED_RATIO
@@ -2092,7 +1806,7 @@ function computeModelPicks(
 
   /**
    * Médium : le plus intelligent parmi ceux qui gardent au moins MEDIUM_MIN_SPEED_RATIO de la vitesse du plus
-   * rapide (plancher calculé comme pour Rapide). Un modèle sans vitesse publiée n'est PAS écarté. Si le plancher
+   * rapide (plancher calculé comme pour Rapide). Un modèle sans vitesse mesurée n'est PAS écarté. Si le plancher
    * écartait tout le monde, on retombe sur le classement sans vitesse plutôt que sur rien.
    */
   const notTooSlowThenSmartest = (scored: Scored[], chain: number): Scored[] => {
@@ -2187,7 +1901,8 @@ function computeModelPicks(
     rank: (scored: Scored[], chain: number) => Scored[],
     chain: number = TOOL_CHAIN_LENGTH,
     withDemands = false,
-    strengthOf: (model: string) => number | null = intelligenceStrength,
+    // Étape 498 : la force vient toujours des duels (duelStrength) ; plus aucune note publiée par défaut.
+    strengthOf: (model: string) => number | null = () => null,
     incumbent?: { model: string | undefined; category: DuelCategory }
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
@@ -2605,6 +2320,6 @@ function entryForModel(
     toolCalling: tiers.map((t) => verifiedToolScores[t].get(model)).find(Boolean) ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-    ...publishedScores(model)
+    ...shownMeasures(model)
   }
 }

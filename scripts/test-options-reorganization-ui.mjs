@@ -975,7 +975,7 @@ async function imageRow(page, pick) {
 test('Modèles : une ligne « Image » avec le seul modèle d’image quand la machine le fait tourner', options, async () => {
   await withOptions(async (page) => {
     const row = await imageRow(page)
-    assert.deepEqual(row.cells, ['Image', 'Z-Image-Turbo Q6', '—', '—', '—', ''])
+    assert.deepEqual(row.cells, ['Image', 'Z-Image-Turbo Q6', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 8 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
   })
 })
@@ -1000,7 +1000,7 @@ async function videoRow(page, pick, ramGb) {
 test('Modèles : une ligne « Vidéo » avec le modèle vidéo et sa meilleure qualité, et la RAM arrondie', options, async () => {
   await withOptions(async (page) => {
     const row = await videoRow(page, null, 63.161624908447266)
-    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B', '—', '—', '—', ''])
+    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.")
     assert.ok(row.afterImage, 'la ligne Vidéo suit la ligne Image')
     assert.match(row.hardware, /63 Go de RAM/)

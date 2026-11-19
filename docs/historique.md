@@ -12573,3 +12573,26 @@ Léo : « LFM3 1.7B vs LFM2.5 2.6B », « s'il est plus fort on le remplace », 
   sans la raison : Jaris jetait la sortie de pip. `run()` garde maintenant les lignes de pip et `pipFailureDetail()`
   (pythonRuntime.ts) ajoute au message ses lignes « ERROR » (sinon les deux dernières). Cause pas encore connue — pas
   de correctif deviné : la prochaine capture de Léo donnera la vraie raison. Test (mord) : test-python-download.mjs.
+
+## Étape 498 — Artificial Analysis retiré de Jaris (notes et vitesses publiées)
+
+Léo : « pourquoi tu sauvegardes les scores d'Artificial Analysis, on les utilise plus », puis « retire tout ; la vitesse
+on va la mesurer sur le PC, mais supprime toutes les vitesses, tous les trucs d'Artificial Analysis, ça sert à rien ».
+
+- **Retiré** : les quatre tables (Intelligence Index, vitesse, Omniscience, Terminal-Bench 2.1) de hardwareScan.ts,
+  `intelligenceStrength`, les champs `artificialAnalysisIndex/Speed`, `omniscience`, `terminalBench` (ipc.ts) et
+  `omniscienceShare` (calcul de la note), la vitesse « publiée » et « estimée » (localSpeed.ts : `resolveSpeed` = la
+  mesure de ce PC ou rien ; `localToPublishedRatio` supprimé), `formatIntelligenceIndex.ts`, la colonne Omniscience de
+  « Mes modèles », les « ≈ » (Mes modèles, Tous les modèles, Duels) et 10 textes devenus morts (24 langues). Légende et
+  infobulle de compression réécrites (Vision suit ses propres duels ; plus d'Artificial Analysis).
+- **Choix** : la force vient déjà des duels (étapes 355/358/475) ; ce qu'Artificial Analysis faisait encore :
+  (1) départager deux modèles à note égale → maintenant MMLU-Pro, sinon le plus gros (sans vote : Élevé qwen3.5:27b →
+  qwen3.6:27b) ; (2) la vitesse de Faible et Moyen → seulement la vitesse mesurée sur ce PC. Nouveau : si AUCUN modèle
+  n'a encore de vitesse mesurée (premier lancement), Faible prend la meilleure note parmi les « petits »
+  (bestOfLightest), sinon il aurait eu le même gros modèle que Moyen. Duels « Les plus rapides » : seulement des modèles
+  déjà mesurés sur ce PC.
+- Tests : les tests de MÉCANIQUE qui utilisaient les notes publiées comme faux votes (`aa-as-duels.mjs`) utilisent
+  `example-duels.mjs` — les mêmes forces et vitesses, FIGÉES comme données d'exemple, aucune donnée de Jaris n'en
+  dépend. Nouveaux tests (mordent) : aucune note d'Artificial Analysis dans le code ni dans ce que reçoit l'écran ;
+  vitesse jamais estimée ; Faible sans mesure = le meilleur des petits (réintroduire `bestNote` le fait échouer).
+- Les commentaires historiques qui citent Artificial Analysis (pourquoi un modèle a été ajouté) sont gardés.

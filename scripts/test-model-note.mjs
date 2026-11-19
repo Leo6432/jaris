@@ -47,23 +47,23 @@ function setup({ vramMib, ramGb = 32 } = {}) {
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message} : ${actual} au lieu de ${expected}`)
 const ROLES = ['flash', 'medium', 'large', 'vision', 'code']
 /** Le produit des parts affichées, tel que l'écran l'écrit (« Note = base × parts »). */
-const product = (note) => note.base.value * (note.omniscienceShare ?? 1) * note.toolsShare * (note.demandsShare ?? 1)
+const product = (note) => note.base.value * note.toolsShare * (note.demandsShare ?? 1)
 
 test('machine de Léo (8 Go, 32 Go) : chaque mesure du calcul vient de la bonne source, et le produit fait la note', async () => {
   // Étape 358 : sans vote de duel, Faible, Moyen, Élevé et Code partent tous de 0 point (force 1) — plus
   // d'Artificial Analysis ni de Terminal-Bench ; seule la fiabilité les sépare. Vision aussi depuis l'étape 475 (Duel Vision).
   const picks = await setup({ vramMib: 8 * 1024 }).getMyModelPicks(null)
   const large = picks.large
-  assert.equal(large.model, 'qwen3.5:27b')
+  // Étape 498 : à note égale, qwen3.6:27b (plus gros) passe devant qwen3.5:27b — plus d'Intelligence Index pour départager.
+  assert.equal(large.model, 'qwen3.6:27b')
   assert.deepEqual(JSON.parse(JSON.stringify(large.note.base)), { kind: 'duel', value: 1, duels: 0, points: 0 })
-  assert.equal(large.note.omniscienceShare, null, 'les duels remplacent toute la note de départ')
+  assert.equal('omniscienceShare' in large.note, false, 'étape 498 : plus de part « n’invente pas »')
   close(large.note.toolsShare, Math.pow(78 / 78, 5), 'Élevé : 78/78, sur 5 actions de suite')
   assert.equal(large.note.demandsEstimated, false)
 
   // Code : 0 point aussi, et le score de code (ou de conversation) — jamais les demandes.
   const code = picks.code
   assert.deepEqual([code.note.base.kind, code.note.base.value], ['duel', 1])
-  assert.equal(code.note.omniscienceShare, null)
   assert.equal(code.note.demandsShare, null)
 
   // Vision : étape 475, les duels Vision (0 point sans vote), une seule lecture par demande (chaîne de 1).
@@ -117,19 +117,12 @@ test('une seule formule : la note du choix (noteOf) et celle du calcul affiché 
   assert.equal((file.match(/Math\.pow\(Math\.max\(0, parseToolScore\(/g) ?? []).length, 1, 'la formule n’est écrite qu’une fois')
 })
 
-test('« Tous les modèles » : Omniscience et Terminal-Bench publiés pour chaque modèle qui en a, `null` sinon', async () => {
+test('étape 498 : « Tous les modèles » ne montre plus ni Omniscience ni Terminal-Bench (Artificial Analysis retiré)', async () => {
   const overview = await setup({ vramMib: 8 * 1024 }).getModelOverview()
-  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry]))
-  assert.equal(byModel.get('qwen3.8:27b').omniscience, -10)
-  assert.equal(byModel.get('qwen3.8:27b').terminalBench, 79.8)
-  assert.equal(byModel.get('ministral-3:3b').terminalBench, 0, 'un 0 % publié reste 0, pas null')
-  assert.equal(byModel.get('qwen2.5-coder:14b').omniscience, null)
-  assert.equal(byModel.get('qwen2.5-coder:14b').terminalBench, null)
-  // Étape 330 : K2-Horizon-32B en Terminal-Bench 2.1 (fiche d'IFM) ; jamais un chiffre de Terminal-Bench 2.0, même
-  // publié par le créateur (Qwen : 41,6 % pour qwen3.5:27b, 40,5 % pour qwen3.5:35b) — une autre version du test.
-  assert.equal(byModel.get('hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M').terminalBench, 62.6)
-  assert.equal(byModel.get('qwen3.5:27b').terminalBench, null)
-  assert.equal(byModel.get('qwen3.5:35b').terminalBench, null)
+  for (const entry of overview.entries) {
+    assert.equal('omniscience' in entry, false, entry.model)
+    assert.equal('terminalBench' in entry, false, entry.model)
+  }
 })
 
 test('étape 331 : chaque modèle de Jaris a sa version compressée, et « Tous les modèles » l\'affiche', async () => {

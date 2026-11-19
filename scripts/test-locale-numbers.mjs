@@ -25,19 +25,11 @@ function inLanguage(code, run) {
   }
 }
 
-const { formatIntelligenceIndex } = loadTsModule('src/lib/formatIntelligenceIndex.ts')
 const imageModel = loadTsModule('shared/imageModel.ts')
 const pilotModel = loadTsModule('shared/pilotModel.ts')
 const videoModel = loadTsModule('shared/videoModel.ts')
 const { formatBytes } = loadTsModule('shared/formatBytes.ts')
 const { imageLabelFromFileName } = loadTsModule('shared/imageGallery.ts')
-
-test('Intelligence Index : « 13,1 » en français et en allemand, « 13.1 » en anglais', () => {
-  assert.equal(inLanguage('fr', () => formatIntelligenceIndex(13.1)), '13,1')
-  assert.equal(inLanguage('de', () => formatIntelligenceIndex(13.1)), '13,1')
-  assert.equal(inLanguage('en', () => formatIntelligenceIndex(13.1)), '13.1')
-  assert.equal(inLanguage('en', () => formatIntelligenceIndex(7)), '7.0', 'toujours une décimale, comme les données du site')
-})
 
 test('formatDecimal : une décimale au plus, sans zéro inutile, à la façon de la langue', () => {
   const { formatDecimal } = i18nModule
@@ -91,7 +83,6 @@ function codeOf(file) {
 test('aucun format de nombre figé en français ni de toFixed dans ce qui est affiché', () => {
   // Les fichiers corrigés : un retour de 'fr-FR' ou de toFixed() ici réintroduirait le défaut.
   for (const file of [
-    'src/lib/formatIntelligenceIndex.ts',
     'shared/formatBytes.ts',
     'shared/imageModel.ts',
     'shared/pilotModel.ts',
