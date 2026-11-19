@@ -472,7 +472,6 @@ export interface ModelOverviewEntry {
    * Compte dans le choix de Faible, Moyen et Élevé (étape 241), jamais de Vision ni de Code. `null` sans score.
    */
   demands?: string | null
-  intelligence: number | null
   /**
    * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen, mesurée à la
    * fin de chaque réponse (`localSpeedKind` = `measured`). `null` si elle n'a pas encore été mesurée ici. Étape 498 :

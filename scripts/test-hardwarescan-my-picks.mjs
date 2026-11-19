@@ -94,8 +94,8 @@ test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gem
 // Départage par l'intelligence À FIABILITÉ ÉGALE (scores d'outils simulés identiques). Avec les vrais scores,
 // qwen3.5:9b (16/17) et qwen3.5:4b (15/17) ne sont pas à égalité : voir l'étape 222 dans CLAUDE.md.
 // Étape 498 : l'Intelligence Index d'Artificial Analysis (13,1 contre 11,2, qui donnait qwen3.5:4b) est retiré de
-// Jaris ; à fiabilité égale, MMLU-Pro départage : 82,5 pour qwen3.5:9b contre 79,1.
-test('étape 498 : à fiabilité égale, MMLU-Pro départage (qwen3.5:9b, 82,5) — plus Artificial Analysis', async () => {
+// Jaris ; étape 499 : MMLU-Pro aussi. À fiabilité égale, seule la taille (colonne VRAM) départage : le plus gros.
+test('étape 499 : à fiabilité égale, le plus gros (qwen3.5:9b) — plus aucune note publiée', async () => {
   const md = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
   const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: md, vramMib: 12 * 1024 })
   assert.equal((await pickBestModelsFromBenchmark()).models.medium, 'qwen3.5:9b')

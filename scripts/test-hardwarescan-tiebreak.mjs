@@ -11,7 +11,8 @@ import { withI18n } from './i18n-test-module.mjs'
  * Reproduit la question de Léo ("pourquoi on regarde pas les vrais benchmarks pour départager les 6/6 ?") :
  * quand deux candidats du palier Puissant sont tous les deux à "6/6" (verified-tool-scores.md), l'ancien
  * comportement départageait par MMLU-Pro puis par VRAM. L'Intelligence Index d'Artificial Analysis est passé devant un
- * temps, puis a été retiré (étape 498) : MMLU-Pro, puis la VRAM. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources.
+ * temps, puis a été retiré (étape 498), MMLU-Pro aussi (étape 499, Léo : « il faut qu'on garde seulement les éléments
+ * visibles dans le tableau ») : seule la VRAM départage. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources.
  */
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
@@ -58,19 +59,20 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   return exports
 }
 
-test('à 6/6 égalité, départage par MMLU-Pro quand les deux modèles en ont un', async () => {
+test('à 6/6 égalité, plus aucune note publiée : le plus gros', async () => {
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:27b | 6/6 |', '| qwen3.8:27b | 6/6 |'].join(
       '\n'
     )
   })
   const result = await pickBestModelsFromBenchmark()
-  // Étape 498 : l'Intelligence Index d'Artificial Analysis (qui donnait qwen3.8:27b) est retiré de Jaris ; MMLU-Pro,
-  // le repli d'avant, tranche : 86,1 pour qwen3.5:27b contre 84,3.
-  assert.equal(result.models.large, 'qwen3.5:27b')
+  // Étape 498 : l'Intelligence Index d'Artificial Analysis (qui donnait qwen3.8:27b) est retiré ; étape 499 : MMLU-Pro
+  // (qui donnait qwen3.5:27b) aussi. Le plus gros chargé l'emporte : qwen3.8:27b (19,6 Go contre 19,3).
+  assert.equal(result.models.large, 'qwen3.8:27b')
+  assert.doesNotMatch(source, /MMLU_PRO/, 'plus de table MMLU-Pro')
 })
 
-test('à fiabilité ET force EXACTEMENT égales, sans MMLU-Pro des deux côtés : le plus gros', async () => {
+test('à fiabilité ET force EXACTEMENT égales, en Code aussi : le plus gros', async () => {
   // granite4.2:3b et gpt-oss:20b, même 3/3 en code et aucun duel : seule la taille départage (étape 125).
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: ['## Code', '| Modèle | Fiabilité |', '| --- | --- |', '| granite4.2:3b | 3/3 |', '| gpt-oss:20b | 3/3 |'].join('\n')

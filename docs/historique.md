@@ -12597,3 +12597,11 @@ on va la mesurer sur le PC, mais supprime toutes les vitesses, tous les trucs d'
   vitesse jamais estimée ; Faible sans mesure = le meilleur des petits (réintroduire `bestNote` le fait échouer).
 - Les commentaires historiques qui citent Artificial Analysis (pourquoi un modèle a été ajouté) sont gardés.
 - Captures de « Mes modèles » montrées à Léo : « oui je valide ».
+
+## Étape 499 — MMLU-Pro retiré aussi : seuls les éléments visibles du tableau décident (0.72.1)
+
+Léo, après le retrait d'Artificial Analysis (« il reste que les scores qu'on a mesurés et les duels ? ») : « oui, il
+faut qu'on garde seulement les éléments visibles dans le tableau ». La dernière note publiée, MMLU-Pro (table
+`INTELLIGENCE_MMLU_PRO`, champ `intelligence` jamais affiché), ne servait qu'à départager deux modèles à note et scores
+égaux : retirée. À égalité, le plus gros (colonne VRAM) l'emporte. Grille des machines sans vote (0–80 Go × 8–128 Go) :
+aucun choix ne change. Ce qui décide maintenant : scores des tests de Jaris, duels, vitesse mesurée sur le PC, mémoire.

@@ -65,7 +65,7 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   // Étape 471 : avec la mémoire réelle à 16 384, granite4.2:8b (8,3 Go chargé) ne tient plus sur les 7 Go utiles.
   // Étape 497 : LFM3 1.7B (75/78, 43/48 ; 1,7 Go chargé) dépasse qwen3.5:4b (74/78, 42/48) sur les deux épreuves.
   // Étape 498 : à note égale (78/78, 48/48), qwen3.6:27b passe devant qwen3.5:27b — l'Intelligence Index d'Artificial
-  // Analysis ne départage plus (retiré) : MMLU-Pro quand les deux en ont un, sinon le plus gros.
+  // Analysis ne départage plus (retiré) ; étape 499 : MMLU-Pro non plus — le plus gros.
   assert.deepEqual(JSON.parse(JSON.stringify(none.models)), { flash: 'lfm3:1.7b', medium: 'lfm3:1.7b', large: 'qwen3.6:27b' })
   assert.equal(none.codeModel, 'ornith-1.5:35b')
   // Étape 475 : Vision a ses duels ; sans vote, sa fiabilité au test de vision départage (0 point pour tous).

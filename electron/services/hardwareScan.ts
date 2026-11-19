@@ -249,14 +249,8 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
   // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
   // qwen3.5:27b — gain en code/agentic rapporté par des sources tierces uniquement (pas de chiffre MMLU-Pro
-  // OFFICIEL trouvé à l'époque). Depuis (question de Léo, "pourquoi on regarde pas les vrais benchmarks pour
-  // départager les 6/6 ?") : un score MMLU-Pro de 84.3 a été trouvé via BenchLM.ai — un agrégateur tiers, PAS
-  // la fiche officielle Alibaba, donc à prendre avec la même réserve que les autres chiffres "sources
-  // tierces" de ce fichier. Ajouté à INTELLIGENCE_MMLU_PRO plus bas malgré cette réserve, DÉLIBÉRÉMENT plus
-  // bas que qwen3.5:27b (86.1) et qwen3.5:35b (85.3) déjà en place : ce chiffre ne confirme donc PAS le
-  // "gain" rapporté par les PDF de Léo sur l'axe connaissance générale — seulement sur code/agentic (jamais
-  // confirmé par un vrai chiffre comparatif ici, voir pickBestFrom dans computeModelPicks : le départage
-  // entre candidats à 6/6 utilise maintenant MMLU-Pro quand les deux le connaissent, VRAM sinon).
+  // OFFICIEL trouvé à l'époque). Étape 499 : plus aucune note publiée dans Jaris (MMLU-Pro retiré) — ce sont les
+  // tests de Jaris et les duels qui le placent.
   { model: 'qwen3.8:27b', vramGb: 17.7 },
   // Muse Glimmer (Meta, Apache 2.0, étape 333) : 30 Md de paramètres DENSE + lecteur d'images, vérifié dans le
   // registre d'Ollama (muse-glimmer:30b = :latest, Q4_K_M, 18,2 Go réels : modèle 16,76 + projecteur 1,40 ;
@@ -787,31 +781,6 @@ export function imageReadingModels(): string[] {
 
 export function pickSafeVisionModel(freeVramGb: number, installedModels: string[], fallbackModel: string): string {
   return pickSafeAmong(ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)), freeVramGb, installedModels, fallbackModel)
-}
-
-/**
- * Score MMLU-Pro publié (fiche modèle officielle / éditeur), pour donner une idée de l'"intelligence"
- * générale de chaque candidat dans l'onglet Modèles du menu Options — en complément de la vitesse et de la
- * fiabilité d'appel d'outils, qui vient des scores mesurés par Léo (verified-tool-scores.md, voir
- * parseVerifiedToolScores ci-dessous), pas d'un score publié. Absent = pas de chiffre MMLU-Pro publié trouvé pour ce modèle.
- */
-const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
-  'qwen3.5:0.8b': 29.7,
-  'qwen3.5:2b': 55.3,
-  'qwen3.5:4b': 79.1,
-  'qwen3.5:9b': 82.5,
-  'qwen3.5:27b': 86.1,
-  'qwen3.5:35b': 85.3,
-  // granite4:3b (44.5) retiré : remplacé par granite4.1:3b (voir MEDIUM_CANDIDATES), pas de score MMLU-Pro
-  // publié trouvé pour cette nouvelle version — l'ancien chiffre ne lui est pas forcément applicable.
-  'gemma4:e4b': 69.4,
-  'qwen3.6:35b-a3b': 85.2,
-  // Source : BenchLM.ai (agrégateur tiers, PAS la fiche officielle Alibaba — voir le commentaire sur
-  // qwen3.8:27b dans LARGE_CANDIDATES plus haut pour le contexte complet). Volontairement inférieur à
-  // qwen3.5:27b/qwen3.5:35b ci-dessus : ce chiffre ne confirme PAS un gain de connaissance générale, jamais
-  // à prendre pour argent comptant sans vérification sur une fiche officielle si l'écart avec un autre
-  // chiffre ici devient un jour déterminant pour un choix de modèle.
-  'qwen3.8:27b': 84.3
 }
 
 /**
@@ -1643,7 +1612,6 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
         code: verifiedToolScores.code.get(c.model) ?? null
       },
       demands: currentDemandScore(verifiedToolScores, c.model),
-      intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
       ...shownMeasures(c.model)
     }))
 
@@ -1741,7 +1709,6 @@ function computeModelPicks(
     vramGb: vramGbOfModel,
     toolCalling: result?.toolCalling ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
-    intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     ...shownMeasures(model)
   })
 
@@ -1752,16 +1719,11 @@ function computeModelPicks(
   type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number; strength: number | null }
 
   /**
-   * Le plus intelligent d'abord, à fiabilité égale : MMLU-Pro quand les DEUX modèles en ont un, sinon le plus gros
-   * (étape 125). Une absence de score ne vaut jamais zéro. Étape 498 : l'Intelligence Index d'Artificial Analysis,
-   * premier critère avant, est retiré de Jaris.
+   * À fiabilité et force égales : le plus gros (étape 125). Étape 498 : plus d'Intelligence Index d'Artificial
+   * Analysis ; étape 499 (Léo : « il faut qu'on garde seulement les éléments visibles dans le tableau ») : plus de
+   * MMLU-Pro non plus — la mémoire (colonne VRAM) est la seule chose qui reste pour départager.
    */
-  const smartestFirst = (a: Scored, b: Scored): number => {
-    const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
-    const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
-    if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
-    return b.vramGb - a.vramGb
-  }
+  const smartestFirst = (a: Scored, b: Scored): number => b.vramGb - a.vramGb
 
   /**
    * Le plus rapide d'abord : vitesse mesurée sur ce PC (étape 498 : plus de vitesse publiée), un modèle sans mesure
@@ -1848,8 +1810,7 @@ function computeModelPicks(
 
   /**
    * Médium, Puissant, Vision, Code : la meilleure note parmi TOUS les modèles testés qui tiennent. Sans
-   * intelligence publiée pour personne, retour à l'ancienne règle (la meilleure fiabilité, puis le plus
-   * intelligent selon MMLU-Pro, puis le plus gros).
+   * note pour personne, retour à l'ancienne règle (la meilleure fiabilité, puis le plus gros).
    */
   const bestNote = (scored: Scored[], chain: number): Scored[] => {
     if (scored.every((c) => noteOf(c, chain) === null)) {
@@ -2319,7 +2280,6 @@ function entryForModel(
     vramGb: ALL_MODELS.find((c) => c.model === model)?.vramGb ?? 0,
     toolCalling: tiers.map((t) => verifiedToolScores[t].get(model)).find(Boolean) ?? null,
     demands: currentDemandScore(verifiedToolScores, model),
-    intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     ...shownMeasures(model)
   }
 }
