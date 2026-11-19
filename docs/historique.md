@@ -12628,6 +12628,11 @@ le renommage de pip échoue dans cette vue fusionnée. L'étape 491 avait sorti 
   essai DANS le contexte du paquet (`Invoke-CommandInDesktopPackage`) : un environnement Python + `pip install
   flatbuffers==25.12.19` dans AppData neuf (réussit : code 0), dans un environnement laissé dans le vrai AppData (cas de
   Léo, informatif) et dans `%USERPROFILE%\.jaris-probe` (doit réussir).
+- **Résultat de la CI (commit 20ce7d8)** : les TROIS réussissent (code 0), y compris l'environnement laissé dans le vrai
+  AppData. Le défaut de Léo n'est donc PAS reproduit : cause exacte inconnue (machine de Léo, Windows 11 contre Windows
+  Server de la CI, antivirus, ou une virtualisation qu'`Invoke-CommandInDesktopPackage` n'applique pas exactement comme
+  au lancement par le menu Démarrer). La 0.72.2 le contourne quand même (plus rien dans AppData). À confirmer par une
+  capture de Léo après la mise à jour du Store.
 - Test (mord) : test-models-location.mjs (Store : moteurs dans `.jaris`, jamais AppData ; installeur habituel inchangé ;
   les quatre modules passent par `jarisLocalDir()`). Faux ponts mis à jour (`scripts/jaris-local-dir-fake.mjs`).
 - Non vérifié ici : le vrai premier lancement de la version Store chez Léo.
