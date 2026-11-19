@@ -12,7 +12,8 @@ import { join } from 'path'
  * site-packages\flatbuffers-25.12.19.dist-info\INSTALLER91qogle4.tmp' -> '…\INSTALLER' ») : dans un paquet du Store,
  * Windows range à part tout NOUVEAU fichier écrit dans AppData (« written to a private per-user, per-app location; but
  * merged at runtime to appear in the real AppData location », doc Microsoft « How packaged desktop apps run »), et le
- * renommage de pip échoue dans cette vue fusionnée. Pour tout le monde, pas seulement chez Léo. La version Store installe
+ * renommage de pip a échoué chez Léo dans cette vue fusionnée (sur un PC neuf, la CI le voit réussir : vraisemblablement
+ * le mélange avec les fichiers réels laissés par l'ancien Jaris). La version Store installe
  * donc ses moteurs dans `%USERPROFILE%\.jaris`, un dossier normal hors d'AppData (comme `.ollama` ou `.cache`), où
  * Windows ne redirige rien. Écarté : `unvirtualizedResources` (déjà écarté à l'étape 491, réservé à certains jeux).
  */

@@ -192,6 +192,7 @@ jobs:
             '@echo off',
             "set OUT=$probeOut",
             'call :probe "%LOCALAPPDATA%\JarisProbe" old',
+            'call :pip "%LOCALAPPDATA%\JarisProbeMixed" mixed',
             'call :probe "%USERPROFILE%\.jaris-probe" new',
             'echo done> "%OUT%\done.txt"',
             'exit /b 0',
@@ -200,8 +201,16 @@ jobs:
             "`"$python`" -m venv `"%~1\venv`" > `"%OUT%\%NAME%.log`" 2>&1",
             '"%~1\venv\Scripts\python.exe" -m pip install --no-cache-dir flatbuffers==25.12.19 >> "%OUT%\%NAME%.log" 2>&1',
             '> "%OUT%\%NAME%.code" echo %ERRORLEVEL%',
+            'exit /b 0',
+            ':pip',
+            'set NAME=%~2',
+            '"%~1\venv\Scripts\python.exe" -m pip install --no-cache-dir flatbuffers==25.12.19 > "%OUT%\%NAME%.log" 2>&1',
+            '> "%OUT%\%NAME%.code" echo %ERRORLEVEL%',
             'exit /b 0'
           )
+          # Le cas de Léo : un environnement Python laissé dans le VRAI AppData par l'ancien Jaris (créé ici hors du
+          # paquet), que la version Store complète ensuite — fichiers réels et fichiers rangés à part mélangés.
+          if ($python) { & $python -m venv "$env:LOCALAPPDATA\JarisProbeMixed\venv" }
           $ran = $false
           if ($python) {
             try {
@@ -214,14 +223,15 @@ jobs:
           if ($ran) {
             $deadline = (Get-Date).AddMinutes(5)
             while (-not (Test-Path "$probeOut\done.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
-            foreach ($name in 'old', 'new') {
+            foreach ($name in 'old', 'mixed', 'new') {
               Write-Host "--- pip dans le paquet : $name ---"
               Get-Content "$probeOut\$name.log" -ErrorAction SilentlyContinue | Select-Object -Last 6 | ForEach-Object { Write-Host $_ }
             }
             if (-not (Test-Path "$probeOut\done.txt")) { throw "L'essai de pip dans le paquet n'a pas fini en 5 minutes." }
             $old = (Get-Content "$probeOut\old.code" -ErrorAction SilentlyContinue | Select-Object -First 1)
             $new = (Get-Content "$probeOut\new.code" -ErrorAction SilentlyContinue | Select-Object -First 1)
-            Write-Host "pip dans AppData (ancien emplacement) : code $old ; dans %USERPROFILE%\.jaris (nouveau) : code $new"
+            $mixed = (Get-Content "$probeOut\mixed.code" -ErrorAction SilentlyContinue | Select-Object -First 1)
+            Write-Host "pip dans AppData neuf : code $old ; dans un AppData laissé par l'ancien Jaris : code $mixed ; dans %USERPROFILE%\.jaris (nouveau) : code $new"
             if ("$new".Trim() -ne '0') { throw "pip échoue aussi hors d'AppData dans le paquet (code $new) : le correctif de l'étape 500 ne suffit pas." }
           }
           $proc | Stop-Process -Force
