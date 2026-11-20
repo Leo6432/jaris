@@ -12669,3 +12669,11 @@ nouvelle version dispo… ? » — non : depuis l'étape 491, la version Store n
   Microsoft — d'où « en général dans l'heure qui suit sa validation ».
 - Tests (mordent) : test-app-updater (la version Store annonce, n'installe rien), test-options-reorganization-ui
   (message, bouton qui ouvre le Store, jamais « Mettre à jour »).
+
+## Étape 503 — LFM3 1.7B remesuré sur le PC de Léo : 74/78, 42/48, 4/5
+
+Léo a envoyé l'export de son test (RTX 3070, Ollama 0.40.16, Jaris 0.72.3, 20/11/2026) : questions 74/78, demandes
+42/48, code 4/5 (conteneur : 75/78, 43/48, 4/5). Toutes les réponses relues (détail dans verified-tool-scores.md) ;
+scores recopiés, LFM3 retiré de « À remesurer » (liste vide). Grille sans vote (Ollama 0.40.16) : sur les cartes de 6 et
+8 Go, Moyen (et Élevé avec 8 ou 16 Go de RAM) passe de LFM3 à qwen3.5:4b — égalité exacte des deux scores, le plus gros
+l'emporte (étape 499) ; Faible reste LFM3. Rien d'autre ne change.
