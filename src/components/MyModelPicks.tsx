@@ -111,17 +111,14 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [showCalc, setShowCalc] = useState(false)
   const check = beforeInstall ? undefined : picks.installCheck
-  // Étape 355 : quand les duels Vocal mènent à d'autres modèles que ceux du Chat, la voix a ses propres lignes,
-  // juste après Faible, Moyen et Élevé.
-  const rows: { id: string; key: (typeof ROLES)[number]['key']; label: string; entry: ModelOverviewEntry; voice: boolean }[] = []
-  for (const { key, label } of ROLES) {
-    rows.push({ id: key, key, label: t(label), entry: picks[key], voice: false })
-    if (key === 'large' && picks.voice) {
-      for (const role of ['flash', 'medium', 'large'] as const) {
-        rows.push({ id: `voice-${role}`, key: role, label: t('role.voice', { role: t(`role.${role}`) }), entry: picks.voice[role], voice: true })
-      }
-    }
-  }
+  // Étape 504 : plus de lignes propres à la voix — elle utilise les modèles du Chat (Vocal fusionné dans la Discussion).
+  const rows: { id: string; key: (typeof ROLES)[number]['key']; label: string; entry: ModelOverviewEntry; voice: boolean }[] = ROLES.map(({ key, label }) => ({
+    id: key,
+    key,
+    label: t(label),
+    entry: picks[key],
+    voice: false
+  }))
   const remove = async (model: string): Promise<void> => {
     if (!onDeleteUnused) return
     setDeleting(model)

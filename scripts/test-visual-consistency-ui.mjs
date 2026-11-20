@@ -60,8 +60,8 @@ const known = {
   // Le Classement : les dix colonnes, avec des points de duel (et leur nombre de duels) dans les trois catégories.
   getModelOverview: async () => ({ vramGb: 8, codeModel: 'qwen2.5-coder:7b', entries: [
     { model: 'ministral-3:3b', vramGb: 3, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', omniscience: -64, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
-    { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, omniscience: -77.5, duels: { voice: { points: -10, duels: 10 } } },
-    { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, omniscience: -47.9, duels: { voice: { points: 64, duels: 25 } } }
+    { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, omniscience: -77.5, duels: { agent: { points: -10, duels: 10 } } },
+    { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, omniscience: -47.9, duels: { agent: { points: 64, duels: 25 } } }
   ] })
 }
 window.jaris = new Proxy(known, {

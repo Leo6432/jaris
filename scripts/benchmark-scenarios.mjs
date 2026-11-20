@@ -1130,7 +1130,6 @@ export const SCENARIOS = [
     },
     check: (ctx) => {
       if (!callsOf(ctx, 'search_web').length) return 'adresse jamais cherchée'
-      const notes = [...ctx.state.notes.values()].map(norm)
       const saved = [...ctx.state.notes.entries()].filter(([, n]) => norm(n).includes('place de la mairie') && norm(n).includes('35000'))
       if (!saved.length) return 'l’adresse trouvée (place de la Mairie, 35000 Rennes) n’a pas été notée'
       // Relecture du 05/10/2026 : une note SANS titre (l'appel avait « note » à la place de « title ») était comptée

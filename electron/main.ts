@@ -120,7 +120,7 @@ import {
   stopDuelRun,
   voteDuel
 } from './services/duelSession'
-import { isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProbability, type DuelCategory } from '../shared/duel'
+import { inDuelPool, isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels, switchProbability, type DuelCategory, type DuelPool } from '../shared/duel'
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
@@ -263,13 +263,14 @@ setOllamaVersionSource(() => getLocalOllamaVersion())
 // Étape 355 : la force que les votes des duels donnent aux modèles remplace leur note d'Artificial Analysis. Recalculée
 // seulement quand les votes changent (le choix des modèles la demande à chaque calcul).
 let duelStrengthCache: { votes: unknown; byCategory: Map<string, ReturnType<typeof rankDuels>> } | null = null
-setDuelStrengthSource((category: DuelCategory) => {
+// Étape 504 : par groupe de votes (DuelPool) — `actions` réunit Discussion et Agentique pour Moyen et Élevé.
+setDuelStrengthSource((pool: DuelPool) => {
   const votes = getRankingVotes()
   if (duelStrengthCache?.votes !== votes) duelStrengthCache = { votes, byCategory: new Map() }
-  let standings = duelStrengthCache.byCategory.get(category)
+  let standings = duelStrengthCache.byCategory.get(pool)
   if (!standings) {
-    standings = rankDuels(votes.filter((v) => v.category === category))
-    duelStrengthCache.byCategory.set(category, standings)
+    standings = rankDuels(votes.filter((v) => inDuelPool(v.category, pool)))
+    duelStrengthCache.byCategory.set(pool, standings)
   }
   return standings
 })
@@ -277,12 +278,12 @@ setDuelStrengthSource((category: DuelCategory) => {
 // Étape 361 : probabilité calculée avec l'a priori prudent de la décision (switchProbability), sur les votes de la
 // catégorie, mise en cache par jeu de votes comme la force.
 let switchCache: { votes: unknown; results: Map<string, number | null> } | null = null
-setDuelProbability((category, challenger, incumbent) => {
+setDuelProbability((pool, challenger, incumbent) => {
   const votes = getRankingVotes()
   if (switchCache?.votes !== votes) switchCache = { votes, results: new Map() }
-  const key = `${category}\u0000${challenger}\u0000${incumbent}`
+  const key = `${pool}\u0000${challenger}\u0000${incumbent}`
   if (!switchCache.results.has(key)) {
-    switchCache.results.set(key, switchProbability(votes.filter((v) => v.category === category), challenger, incumbent))
+    switchCache.results.set(key, switchProbability(votes.filter((v) => inDuelPool(v.category, pool)), challenger, incumbent))
   }
   return switchCache.results.get(key) ?? null
 })
@@ -1421,7 +1422,7 @@ const STARTUP_ENGINE_CONFIRM_MS = 10_000
 async function warmUpConversationModel(): Promise<boolean> {
   const profile = await getProfile()
   // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
-  const model = profile?.modelChoices?.voice || (profile?.voiceModels ?? profile?.models)?.flash
+  const model = profile?.modelChoices?.voice || profile?.models?.flash
   if (!model) return false
   // Fenêtre automatique (ollama.ts) : la même que la première vraie demande.
   return preloadModel(model)
@@ -1874,7 +1875,7 @@ app.whenReady().then(async () => {
     return value
   }
   ipcMain.handle(IPC_CHANNELS.duelPlan, (_event, category: unknown) => planDuel(duelCategory(category)))
-  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown, judged: unknown, judgeScreens: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.duelStart, (_event, category: unknown, pick: unknown, series: unknown, judged: unknown, judgeScreens: unknown, spokenAnswers: unknown) => {
     // Étape 382 : une série de duels Code — le nombre de duels par modèle (revérifié par startDuel).
     if (series !== undefined && series !== null && !isDuelSeriesCount(series)) throw new Error(t('duel.error.badRequest'))
     // Étape 399 : duels Conversation jugés par Claude — le nombre de duels par modèle (revérifié par startDuel).
@@ -1883,15 +1884,17 @@ app.whenReady().then(async () => {
     const judgePerModel = typeof judged === 'number' ? judged : undefined
     // Étape 399 : montrer l'écran à Claude (captures) — un booléen, rien d'autre.
     const screens = judgeScreens === true
+    // Étape 504 : Discussion lue à voix haute (l'ancien duel Vocal) — un booléen, rien d'autre (revérifié par startDuel).
+    const spoken = spokenAnswers === true
     // Un nombre (modèles au hasard) ou, étape 363, la liste des modèles choisis à la main — revérifiée par startDuel.
     if (Array.isArray(pick)) {
       if (pick.length > 200 || !pick.every((m) => typeof m === 'string' && m.length > 0 && m.length <= 200)) {
         throw new Error(t('duel.error.badRequest'))
       }
-      return startDuel(duelCategory(category), pick as string[], perModel, judgePerModel, screens)
+      return startDuel(duelCategory(category), pick as string[], perModel, judgePerModel, screens, spoken)
     }
     if (typeof pick !== 'number' || !Number.isInteger(pick) || pick < 2 || pick > 6) throw new Error(t('duel.error.badRequest'))
-    return startDuel(duelCategory(category), pick, perModel, judgePerModel, screens)
+    return startDuel(duelCategory(category), pick, perModel, judgePerModel, screens, spoken)
   })
   // Étape 399 : la clé API Claude (jamais renvoyée à l'écran : seulement « enregistrée » et ses 4 derniers caractères).
   ipcMain.handle(IPC_CHANNELS.claudeKeyStatus, () => claudeKeyStatus())

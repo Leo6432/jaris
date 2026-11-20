@@ -11,7 +11,7 @@ import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLarg
 import { MACHINE_DISK_RESERVED_GB, connectedMachine } from './remoteMachine'
 import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, patchProfile } from './profileStore'
-import type { CapacityScanResult, ModelTiers, ModelToTest } from '../../shared/ipc'
+import type { CapacityScanResult, ModelToTest } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
 import { isVideoQualityInstalled } from './videoGenerator'
 import { detectRamGb } from './systemResources'
@@ -83,9 +83,7 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
       picked.models.medium,
       picked.models.large,
       picked.visionModel,
-      picked.codeModel,
-      // Étape 355 : les modèles de la voix choisis par les duels « Vocal », quand ce ne sont pas ceux du Chat.
-      ...(picked.voiceModels ? Object.values(picked.voiceModels) : [])
+      picked.codeModel
     ])
     let newFailure = false
     for (const model of modelsToInstall) {
@@ -177,13 +175,10 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
     const inService = ([before, after]: [string | undefined, string]): string =>
       (skipped.has(after) || failedHuggingFace.has(after)) && before ? before : after
     for (const role of roles) keep.add(inService(role))
-    // Étape 355 : les rôles de la voix, quand les duels « Vocal » choisissent d'autres modèles que ceux du Chat.
-    const voiceRoles: [string | undefined, string][] | null = picked.voiceModels
-      ? (['flash', 'medium', 'large'] as const).map((r) => [profile.voiceModels?.[r] ?? profile.models?.[r], (picked.voiceModels as ModelTiers)[r]])
-      : null
-    if (voiceRoles) for (const role of voiceRoles) keep.add(inService(role))
     // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
     for (const chosen of Object.values(profile.modelChoices ?? {})) if (chosen) keep.add(chosen)
+    // Étape 504 : les anciens modèles propres à la voix (duels « Vocal », fusionnés dans la Discussion) partent aussi
+    // s'ils ne servent plus à rien d'autre.
     const oldModels = [...roles.map(([before]) => before), ...Object.values(profile.voiceModels ?? {})].filter((m): m is string => Boolean(m))
     // Étape 231 : le modèle de pilotage installé ce coup-ci, sinon celui d'avant s'il existe encore un rôle
     // (téléchargement raté) ; plus de rôle du tout (carte trop petite) = l'ancien est supprimé comme les autres.
@@ -207,13 +202,12 @@ async function quickSetup(onLine: (line: string) => void, onProgress?: PullProgr
     }
 
     const models = { flash: inService(roles[0]), medium: inService(roles[1]), large: inService(roles[2]) }
-    const voiceModels = voiceRoles ? { flash: inService(voiceRoles[0]), medium: inService(voiceRoles[1]), large: inService(voiceRoles[2]) } : undefined
-    const sameAsChat = !voiceModels || (voiceModels.flash === models.flash && voiceModels.medium === models.medium && voiceModels.large === models.large)
     // Relecture croisée : seulement les champs de la configuration, sur le profil RELU après les téléchargements et les
     // suppressions (patchProfile) — réécrire la copie lue avant effaçait tout réglage fait pendant ce temps (micro, voix…).
     await patchProfile((current) => ({
       models,
-      voiceModels: sameAsChat ? undefined : voiceModels,
+      // Étape 504 : la voix utilise toujours les modèles du Chat — l'ancienne valeur est effacée.
+      voiceModels: undefined,
       visionModel: inService(roles[3]),
       codeModel: inService(roles[4]),
       pilotModel,

@@ -48,8 +48,9 @@ function setup(votes, { vramMib = 8 * 1024, ramGb = 32 } = {}) {
   const exports = {}
   vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   exports.setOllamaVersionSource(() => '0.40.10')
-  if (votes) exports.setDuelStrengthSource((category) => duel.rankDuels(votes.filter((v) => v.category === category)))
-  exports.setDuelProbability((category, c, i) => (votes ? duel.switchProbability(votes.filter((v) => v.category === category), c, i) : null))
+  // Comme main.ts (étape 504) : un rôle lit les votes de SON groupe — Moyen et Élevé : Discussion ET Agentique.
+  if (votes) exports.setDuelStrengthSource((pool) => duel.rankDuels(votes.filter((v) => duel.inDuelPool(v.category, pool))))
+  exports.setDuelProbability((pool, c, i) => (votes ? duel.switchProbability(votes.filter((v) => duel.inDuelPool(v.category, pool)), c, i) : null))
   return exports
 }
 
@@ -74,11 +75,10 @@ test('sans vote (étape 358) : tous à 0 point, le choix ne dépend plus d’Art
   assert.equal(none.voiceModels, undefined, 'la voix et le Chat partagent leurs modèles')
 })
 
-test('Conversation : sans modèle en service, les votes décident tout de suite, pour le Chat ET la voix', async () => {
+test('Discussion : sans modèle en service, les votes décident tout de suite (la voix utilise les modèles du Chat)', async () => {
   const picks = await setup(wins(8, LARGE, 'qwen3.5:27b', 'conversation')).pickBestModelsFromBenchmark()
   assert.equal(picks.models.large, LARGE)
-  // La voix suit les votes Conversation tant qu'elle n'a pas les siens : rien ne la sépare du Chat.
-  assert.equal(picks.voiceModels, undefined)
+  assert.equal(picks.voiceModels, undefined, 'étape 504 : plus de modèles « Vocal » à part')
   // Le Code, lui, n'est pas concerné par des votes de Conversation.
   assert.equal(picks.codeModel, 'ornith-1.5:35b')
 })
@@ -108,11 +108,16 @@ test('modèle en service (étape 360) : remplacé seulement s’il est PROUVÉ m
   assert.equal(await code(8), LARGE)
 })
 
-test('modèle en service, Vocal (étape 361) : la probabilité est calculée sur les votes de la catégorie retenue', async () => {
+test('étape 504 : modèle en service, Agentique — la preuve se calcule sur Discussion ET Agentique ensemble', async () => {
   const inService = { models: { flash: 'granite4.2:8b', medium: 'granite4.2:8b', large: 'qwen3.5:27b' }, codeModel: 'ornith-1.5:35b' }
-  const picks = await setup(wins(8, LARGE, 'qwen3.5:27b', 'voice')).pickBestModelsFromBenchmark(new Set(), inService)
-  assert.equal(picks.models.large, 'qwen3.5:27b', 'le Chat n’a aucun vote : il garde son modèle')
-  assert.equal(picks.voiceModels?.large, LARGE, 'la voix a ses propres votes, qui prouvent le challenger')
+  const pick = async (votes) => (await setup(votes).pickBestModelsFromBenchmark(new Set(), inService)).models.large
+  // 8 victoires Agentique : prouvé pour Élevé, comme 8 victoires Discussion.
+  assert.equal(await pick(wins(8, LARGE, 'qwen3.5:27b', 'agent')), LARGE)
+  // 4 + 4 : aucune des deux catégories seule ne prouve rien, ensemble elles prouvent.
+  assert.equal(await pick(wins(4, LARGE, 'qwen3.5:27b', 'agent')), 'qwen3.5:27b')
+  assert.equal(await pick([...wins(4, LARGE, 'qwen3.5:27b', 'agent'), ...wins(4, LARGE, 'qwen3.5:27b', 'conversation')]), LARGE)
+  // Des votes Code ne comptent jamais pour Élevé.
+  assert.equal(await pick(wins(8, LARGE, 'qwen3.5:27b', 'code')), 'qwen3.5:27b')
 })
 
 test('modèle en service : moins de 5 duels ne suffit jamais, même avec une probabilité donnée à 99 %', async () => {
@@ -127,7 +132,7 @@ test('modèle en service : prouvé meilleur en duel mais à peine devant une foi
   const m = setup(null)
   m.setDuelProbability(() => 0.99)
   const withStrength = (x) =>
-    m.setDuelStrengthSource((category) => new Map(category === 'conversation' ? [[LARGE, { strength: x, duels: 20 }], [CHALLENGER, { strength: 1, duels: 20 }]] : []))
+    m.setDuelStrengthSource((pool) => new Map(pool === 'actions' ? [[LARGE, { strength: x, duels: 20 }], [CHALLENGER, { strength: 1, duels: 20 }]] : []))
   let threshold = null
   for (let x = 1; x <= 4 && threshold === null; x += 0.01) {
     withStrength(x)
@@ -151,15 +156,18 @@ test('modèle en service : sans la probabilité branchée, rien n’est jamais r
   assert.equal((await m.pickBestModelsFromBenchmark(new Set(), inService)).models.large, 'qwen3.5:27b')
 })
 
-test('Vocal : ses propres votes séparent la voix du Chat, seulement quand ils mènent ailleurs', async () => {
-  const votes = [...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, LARGE, CHALLENGER, 'voice')]
-  const picks = await setup(votes).pickBestModelsFromBenchmark()
-  assert.equal(picks.models.large, CHALLENGER, 'le Chat suit les votes Conversation')
-  assert.equal(picks.voiceModels.large, LARGE, 'la voix suit ses propres votes')
-  assert.equal(picks.voiceModels.flash, picks.models.flash)
-  // Des votes Vocal qui confirment la Conversation : rien à séparer.
-  const agree = await setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(2, CHALLENGER, LARGE, 'voice')]).pickBestModelsFromBenchmark()
-  assert.equal(agree.voiceModels, undefined)
+// Étape 504 (Léo : « Discussion plus Agentique ») : Faible répond vite à des demandes simples — seuls les votes
+// Discussion le choisissent ; Moyen et Élevé font les vraies tâches — votes Discussion ET Agentique.
+test('étape 504 : les votes Agentique choisissent Moyen et Élevé, jamais Faible', async () => {
+  const LFM = 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M'
+  const none = (await setup([]).pickBestModelsFromBenchmark()).models
+  assert.equal(none.flash, LFM)
+  // Agentique : K2 Horizon 3.7B bat qwen3.5:4b — Moyen et Élevé changent, Faible ne bouge pas.
+  const agent = (await setup(wins(8, K2_37B, 'qwen3.5:4b', 'agent')).pickBestModelsFromBenchmark()).models
+  assert.deepEqual([agent.flash, agent.medium, agent.large], [LFM, K2_37B, K2_37B])
+  // Faible : des défaites de LFM2.5 en Agentique ne le touchent pas ; les mêmes en Discussion, si.
+  assert.equal((await setup(wins(8, 'qwen3.5:4b', LFM, 'agent')).pickBestModelsFromBenchmark()).models.flash, LFM)
+  assert.notEqual((await setup(wins(8, 'qwen3.5:4b', LFM, 'conversation')).pickBestModelsFromBenchmark()).models.flash, LFM)
 })
 
 test('Code : les votes Code décident du modèle Code, pas des rôles de conversation', async () => {
@@ -187,21 +195,19 @@ test('étape 475 : les votes Vision choisissent le modèle Vision ; seuls les mo
 })
 
 test('le calcul affiché dit d’où vient la note : les duels (points et nombre de votes), 0 point sans vote', async () => {
-  const m = setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, LARGE, CHALLENGER, 'voice')])
+  const m = setup([...wins(8, CHALLENGER, LARGE, 'conversation'), ...wins(9, CHALLENGER, LARGE, 'agent')])
   const profile = {
     models: { flash: 'granite4.2:8b', medium: K2_7B, large: CHALLENGER },
-    voiceModels: { flash: 'granite4.2:8b', medium: K2_7B, large: LARGE },
     visionModel: LARGE,
     codeModel: LARGE
   }
   const picks = await m.getMyModelPicks(profile)
   assert.equal(picks.large.note.base.kind, 'duel')
-  assert.equal(picks.large.note.base.duels, 8)
+  // Étape 504 : Élevé compte ses duels Discussion (8) ET Agentique (9).
+  assert.equal(picks.large.note.base.duels, 17)
   assert.ok(picks.large.note.base.points > 0)
   assert.equal('omniscienceShare' in picks.large.note, false, 'étape 498 : plus de part « n’invente pas » (Artificial Analysis)')
-  // Les rôles de la voix : SES votes (9 duels Vocal), pas les 8 de la Conversation.
-  assert.equal(picks.voice.large.model, LARGE)
-  assert.deepEqual([picks.voice.large.note.base.kind, picks.voice.large.note.base.duels], ['duel', 9])
+  assert.equal('voice' in picks, false, 'étape 504 : plus de lignes « voix » à part')
   // Jamais en duel : 0 point, force 1 — plus d'Artificial Analysis ni de Terminal-Bench pour ces rôles.
   assert.deepEqual([picks.medium.note.base.kind, picks.medium.note.base.value, picks.medium.note.base.points], ['duel', 1, 0])
   assert.deepEqual([picks.code.note.base.kind, picks.code.note.base.duels], ['duel', 0])
@@ -256,10 +262,11 @@ test('une session sur la machine de Léo : les modèles déjà utilisés, puis u
 
 test('main.ts branche la source des votes, et le classement de l’écran est celui du choix (tous partent de 0)', () => {
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
-  assert.match(main, /setDuelStrengthSource\(\(category: DuelCategory\) => \{/)
-  assert.match(main, /rankDuels\(votes\.filter\(\(v\) => v\.category === category\)\)/)
-  assert.match(main, /setDuelProbability\(\(category, challenger, incumbent\) => \{/)
-  assert.match(main, /switchProbability\(votes\.filter\(\(v\) => v\.category === category\), challenger, incumbent\)/)
+  // Étape 504 : par GROUPE de votes (Moyen et Élevé : Discussion + Agentique), le même filtre que ce test.
+  assert.match(main, /setDuelStrengthSource\(\(pool: DuelPool\) => \{/)
+  assert.match(main, /rankDuels\(votes\.filter\(\(v\) => inDuelPool\(v\.category, pool\)\)\)/)
+  assert.match(main, /setDuelProbability\(\(pool, challenger, incumbent\) => \{/)
+  assert.match(main, /switchProbability\(votes\.filter\(\(v\) => inDuelPool\(v\.category, pool\)\), challenger, incumbent\)/)
   const session = readFileSync(new URL('../electron/services/duelSession.ts', import.meta.url), 'utf8')
   assert.match(session, /rankDuels\(votes\)/)
 })
@@ -281,7 +288,7 @@ test('sans carte graphique et 16 Go de RAM (étape 357) : assez de petits modèl
   assert.ok(candidates.length >= 4, `seulement ${candidates.length} modèles : ${candidates.map((c) => c.model)}`)
   assert.ok(candidates.every((c) => c.vramGb <= 16 - 6), 'jamais un modèle qui prendrait la RAM de Windows')
   assert.ok(duel.selectDuelModels(candidates, 4).length >= 2)
-  for (const category of ['code', 'voice']) assert.ok((await m.getDuelCandidates(category, null)).length >= 2, category)
+  for (const category of ['code', 'agent']) assert.ok((await m.getDuelCandidates(category, null)).length >= 2, category)
 })
 
 test('étape 363 : la liste à cocher montre TOUS les modèles de Jaris ; disponibles = exactement les candidats du hasard', async () => {
@@ -353,6 +360,6 @@ test('étape 486 : le nombre de duels votés par catégorie — chaque duel comp
   const votes = [...wins(3, 'qwen3.5:4b', 'qwen3-vl:4b', 'vision'), ...wins(2, 'qwen3.5:4b', 'gemma4:e4b', 'code'), ...wins(1, 'gemma4:e4b', 'qwen3.5:4b', 'code')]
   // Copie JSON : l'objet vient d'un autre contexte (vm), que deepEqual ne compare pas directement.
   const plain = async (v) => JSON.parse(JSON.stringify((await setup(v).getModelOverview()).duelTotals))
-  assert.deepEqual(await plain(votes), { conversation: 0, code: 3, voice: 0, vision: 3 })
-  assert.deepEqual(await plain([]), { conversation: 0, code: 0, voice: 0, vision: 0 })
+  assert.deepEqual(await plain(votes), { conversation: 0, agent: 0, code: 3, vision: 3 })
+  assert.deepEqual(await plain([]), { conversation: 0, agent: 0, code: 0, vision: 0 })
 })

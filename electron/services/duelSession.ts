@@ -82,6 +82,7 @@ import {
   pairKey,
   rankDuels,
   selectDuelModels,
+  type DuelAction,
   type DuelAdviceEffort,
   type DuelAdviceModel,
   type DuelCategory,
@@ -105,6 +106,7 @@ import type {
 } from '../../shared/ipc'
 import { formatDecimal, replyLanguageRule, t, tn, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
+import { agentTaskExists, pickAgentTask, runAgentTask, type AgentTask } from './duelAgent'
 
 /**
  * Étape 355 — le Duel. Léo : « un bouton duel, une session télécharge 4-6 modèles qui tiennent, anonymes, on choisit
@@ -166,6 +168,8 @@ interface SideState extends DuelSideView {
   baseHtml: string | null
   /** Étape 416 : « Écrire le code maintenant » pour la génération en cours de ce côté (`null` hors génération). */
   writeNow: AbortController | null
+  /** Étape 504 : duel Agentique — tâche réussie selon le test automatique (`null` avant la fin). Montré après le vote. */
+  agentOk: boolean | null
 }
 
 interface RoundState {
@@ -191,6 +195,8 @@ interface RoundState {
   image?: string | null
   /** Étape 484 : série Vision — le nom de l'image proposée (scripts/duel-vision), pour la retrouver et l'afficher. */
   sample?: string | null
+  /** Étape 504 : duel Agentique — la tâche jouée sur le PC simulé, la même pour A et B. */
+  task?: AgentTask | null
 }
 
 /**
@@ -213,6 +219,10 @@ interface Session {
   vramGb: number | null
   sizes: Map<string, number>
   category: DuelCategory
+  /** Étape 504 : Discussion lue à voix haute (l'ancien duel Vocal). */
+  spoken: boolean
+  /** Étape 504 : duel Agentique — les tâches déjà jouées dans cette session (une autre à chaque duel). */
+  agentPlayed: Set<string>
   phase: DuelSessionView['phase']
   /** Les modèles de la session, dans l'ordre où ils ont été choisis. */
   models: string[]
@@ -378,7 +388,8 @@ function emptySide(): SideState {
     toolLog: [],
     baseHtml: null,
     writeNow: null,
-    earlier: []
+    earlier: [],
+    agentOk: null
   }
 }
 
@@ -393,9 +404,10 @@ function revivePreviews(round: RoundState | null): void {
   }
 }
 
-function sideView(side: SideState): DuelSideView {
-  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, writeNow: _hurry, ...view } = side
-  return view
+function sideView(side: SideState, revealed = false): DuelSideView {
+  const { audioData: _audio, html: _html, retries: _retries, toolLog: _log, baseHtml: _base, writeNow: _hurry, agentOk, ...view } = side
+  // Étape 504 : le jugement automatique de l'Agentique n'est montré qu'après le vote (pour ne pas influencer Léo).
+  return { ...view, check: revealed ? agentOk : null }
 }
 
 export function getDuelView(): DuelSessionView | null {
@@ -406,6 +418,7 @@ export function getDuelView(): DuelSessionView | null {
   return {
     id: session.id,
     category: session.category,
+    spoken: session.spoken,
     phase: session.phase,
     remote: session.remote !== null,
     modelCount: session.models.length,
@@ -418,8 +431,8 @@ export function getDuelView(): DuelSessionView | null {
           number: round.number,
           prompt: round.prompt,
           followUps: round.followUps,
-          a: sideView(round.sides.a),
-          b: sideView(round.sides.b),
+          a: sideView(round.sides.a, Boolean(round.revealed)),
+          b: sideView(round.sides.b, Boolean(round.revealed)),
           revealed: round.revealed,
           together: round.together,
           canSwap: swapCandidates(session, round).length > 0 && swapAllowed(session, round),
@@ -620,9 +633,12 @@ export async function startDuel(
   pick: number | readonly string[],
   seriesPerModel?: number,
   judgePerModel?: number,
-  judgeScreens = false
+  judgeScreens = false,
+  spoken = false
 ): Promise<DuelSessionView> {
   if (busy()) throw new Error(t('duel.error.alreadyRunning'))
+  // Étape 504 : lire les réponses à voix haute n'a de sens qu'en Discussion (l'ancien duel Vocal).
+  if (spoken && category !== 'conversation') throw new Error(t('duel.error.badRequest'))
   // Étape 399 : Claude juge — duels Conversation seulement, et jamais sans clé enregistrée.
   if (judgePerModel !== undefined) {
     if (category !== 'conversation' || seriesPerModel !== undefined) throw new Error(t('duel.error.badRequest'))
@@ -683,6 +699,8 @@ export async function startDuel(
     vramGb: machine?.vramGb ?? null,
     sizes: sizeOf,
     category,
+    spoken,
+    agentPlayed: new Set(),
     phase: 'preparing',
     models: shuffled,
     downloaded: new Map(),
@@ -843,6 +861,18 @@ export function askDuel(prompt: string): DuelSessionView {
   const text = prompt.trim()
   if (!current || current.phase !== 'ready' || !current.round) throw new Error(t('duel.error.noRound'))
   if (current.round.prompt !== null) throw new Error(t('duel.error.alreadyAsked'))
+  // Étape 504 : un duel Agentique ne part jamais d'un texte de Léo — Jaris tire une tâche du test (PC simulé), la même
+  // pour A et B, puis les fait jouer l'un après l'autre (rien n'agit sur le vrai PC : B n'attend pas que Léo vérifie).
+  if (current.category === 'agent') {
+    const round = current.round
+    const task = pickAgentTask(current.agentPlayed)
+    current.agentPlayed.add(task.id)
+    round.task = task
+    round.prompt = task.turns[0]
+    round.followUps = task.turns.slice(1)
+    void runAgentPair(current, round)
+    return getDuelView() as DuelSessionView
+  }
   if (!text) throw new Error(t('duel.error.emptyPrompt'))
   // Étape 475 : un Duel Vision ne part que d'une image (askDuelImage), jamais d'un texte.
   if (current.category === 'vision') throw new Error(t('duel.error.badRequest'))
@@ -851,6 +881,13 @@ export function askDuel(prompt: string): DuelSessionView {
   // Étape 379 : en Code, avec assez de mémoire pour les deux, B n'attend pas A.
   if (current.round.together) void runSide(current, current.round, 'b')
   return getDuelView() as DuelSessionView
+}
+
+/** Étape 504 : duel Agentique — A joue la tâche, puis B, sans attendre Léo (le PC est simulé). */
+async function runAgentPair(current: Session, round: RoundState): Promise<void> {
+  await runSide(current, round, 'a')
+  if (session !== current || round.sides.a.status === 'stopped' || round.sides.b.status !== 'idle') return
+  await runSide(current, round, 'b')
 }
 
 /**
@@ -938,7 +975,7 @@ async function claudeVerdict(
               b: { ...judgedSide(b), earlier: b.earlier.map((turn) => turn.text) },
               tools: TOOLS.filter((tool) => round.tools?.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description })),
               followUps: round.followUps,
-              spoken: current.category === 'voice',
+              spoken: current.spoken,
               model,
               effort
             }, signal)
@@ -982,8 +1019,9 @@ export function followUpDuel(message: unknown): DuelSessionView {
   if (!current || current.phase !== 'ready' || !round || round.prompt === null) throw new Error(t('duel.error.noRound'))
   // L'écran ne propose jamais de répondre dans ces cas : une telle demande ne vient pas de lui.
   if (current.batch?.includes(round)) throw new Error(t('duel.error.badRequest'))
-  // Étape 475 : un Duel Vision se juge sur la seule description de l'image, sans échange ensuite.
-  if (current.category === 'vision') throw new Error(t('duel.error.badRequest'))
+  // Étape 475 : un Duel Vision se juge sur la seule description de l'image, sans échange ensuite. Étape 504 : un duel
+  // Agentique joue lui-même les messages suivants de la tâche.
+  if (current.category === 'vision' || current.category === 'agent') throw new Error(t('duel.error.badRequest'))
   if (round.revealed) throw new Error(t('duel.error.alreadyVoted'))
   if (round.sides.a.trouble || round.sides.b.trouble) throw new Error(t('duel.error.trouble'))
   if (!sideFinished(round.sides.a) || !sideFinished(round.sides.b)) throw new Error(t('duel.error.notFinished'))
@@ -1684,6 +1722,9 @@ export async function restoreDuelSeries(): Promise<boolean> {
     vramGb: snapshot.vramGb,
     sizes: new Map(Object.entries(snapshot.sizes)),
     category,
+    // Une série ne joue que Code ou Vision : jamais lue à voix haute, jamais Agentique.
+    spoken: false,
+    agentPlayed: new Set(),
     phase: 'ready',
     models: snapshot.models,
     downloaded: new Map(Object.entries(snapshot.downloaded)),
@@ -1723,7 +1764,7 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
     // Ollama arrêté : `null`, et le niveau part tel quel (Ollama le ramène à un niveau du modèle).
     const think = equivalentThink(DUEL_THINK_LEVEL, await onModels(current.remote, () => getModelThinking(model)))
     // Les outils sont ceux de CE PC, même quand les modèles tournent ailleurs.
-    if ((current.category === 'conversation' || current.category === 'voice') && !round.tools) round.tools = await duelToolsHere()
+    if (current.category === 'conversation' && !round.tools) round.tools = await duelToolsHere()
     // « Arrêter » pendant ces lectures : le modèle ne doit pas partir quand même (le signal est déjà donné).
     if (!controller.signal.aborted) {
       const tools = round.tools ?? new Set<string>()
@@ -1734,7 +1775,9 @@ async function runSide(current: Session, round: RoundState, sideName: DuelSide):
             ? runCode(current, side, model, codeAsk(round, side, prompt), think, controller.signal)
             : current.category === 'vision'
               ? runVision(side, model, round.image ?? '', think, controller.signal)
-              : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
+              : current.category === 'agent'
+                ? runAgent(round, side, model, think, controller.signal)
+                : runConversation(current, side, model, prompt, think, tools, controller.signal, history),
         current.sizes
       )
     }
@@ -1804,7 +1847,8 @@ async function runConversation(
   const profile = await getProfile()
   // « Arrêter » pendant cette lecture : rien ne part au modèle.
   if (signal.aborted) return
-  const channel = current.category === 'voice' ? 'voice' : 'chat'
+  // Étape 504 : Discussion « lue à voix haute » (l'ancien duel Vocal) : réponse écrite pour la voix, comme à l'Agent vocal.
+  const channel = current.spoken ? 'voice' : 'chat'
   let streamed = ''
   const reply = await converse(
     prompt,
@@ -1849,7 +1893,7 @@ async function runConversation(
   side.text = side.trouble ? withoutModelNames(reply, current.models, current.round?.pair ?? ['', '']) : reply
   // Duel Vocal : la réponse est lue par la voix de Jaris, comme à l'Agent vocal. Une voix en panne n'efface jamais la
   // réponse écrite : Léo peut toujours voter dessus.
-  if (current.category === 'voice' && !signal.aborted && reply.trim()) {
+  if (current.spoken && !signal.aborted && reply.trim()) {
     try {
       side.audioData = await synthesizeSpeech(reply)
       side.audio = true
@@ -1857,6 +1901,33 @@ async function runConversation(
       side.audioError = err instanceof Error ? err.message : String(err)
     }
   }
+}
+
+/**
+ * Étape 504 : un côté du duel Agentique — la tâche du test jouée sur le PC simulé (duelAgent.ts). Pendant la tâche, les
+ * actions s'affichent au fil de l'eau ; à la fin, chaque message de la tâche retrouve ses actions et sa réponse (les
+ * messages d'avant dans `earlier`, comme quand Léo répond aux modèles). Le jugement automatique est gardé pour être
+ * montré après le vote.
+ */
+async function runAgent(round: RoundState, side: SideState, model: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
+  const task = round.task
+  if (!task || !agentTaskExists(task.id)) throw new Error(t('duel.error.noRound'))
+  const actionsByTurn: DuelAction[][] = task.turns.map(() => [])
+  const outcome = await runAgentTask(task, model, think, signal, (step) => {
+    if (step.kind === 'thinking') side.activity = { kind: 'thinking' }
+    else if (step.kind === 'tool') {
+      const action = duelActionFromLog(`Outil appelé : ${step.name}(${JSON.stringify(step.args)})`) ?? { tool: step.name, detail: null }
+      actionsByTurn[step.turn]?.push(action)
+      side.actions = [...side.actions, action]
+      side.activity = { kind: 'action', action }
+    }
+    emitSoon()
+  })
+  const last = task.turns.length - 1
+  side.earlier = outcome.replies.slice(0, last).map((text, index) => ({ text, actions: actionsByTurn[index], error: null, durationMs: null }))
+  side.actions = actionsByTurn[last] ?? []
+  side.text = outcome.replies[last] ?? ''
+  side.agentOk = outcome.ok
 }
 
 /**
@@ -2733,7 +2804,7 @@ export async function endDuel(force = false): Promise<DuelSummary> {
         if (applied) await patchProfile({ visionModel: picks.vision })
       }
     } else {
-      const before = (current.category === 'voice' ? profile.voiceModels ?? profile.models : profile.models) ?? null
+      const before = profile.models ?? null
       const next = { ...(before ?? { flash: picks.flash, medium: picks.medium, large: picks.large }) }
       for (const role of ROLES) {
         if (before && sameModel(before[role], picks[role])) continue
@@ -2741,15 +2812,8 @@ export async function endDuel(force = false): Promise<DuelSummary> {
         changes.push({ role, from: before?.[role] ?? null, to: picks[role], applied })
         if (applied) next[role] = picks[role]
       }
-      if (changes.some((c) => c.applied)) {
-        if (current.category === 'voice') {
-          const chat = profile.models
-          const same = chat && ROLES.every((r) => sameModel(chat[r], next[r]))
-          await patchProfile({ voiceModels: same ? undefined : next })
-        } else {
-          await patchProfile({ models: next })
-        }
-      }
+      // Étape 504 : la voix utilise les modèles du Chat — une seule liste, quel que soit le duel (Discussion ou Agentique).
+      if (changes.some((c) => c.applied)) await patchProfile({ models: next })
     }
   }
 
@@ -2757,7 +2821,6 @@ export async function endDuel(force = false): Promise<DuelSummary> {
   const used = new Set(
     [
       ...Object.values(updated?.models ?? {}),
-      ...Object.values(updated?.voiceModels ?? {}),
       updated?.visionModel,
       updated?.codeModel,
       updated?.pilotModel,

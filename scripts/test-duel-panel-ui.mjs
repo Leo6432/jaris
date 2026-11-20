@@ -46,8 +46,8 @@ window.__plan = window.__plan || {
 }
 window.__rankings = window.__rankings || [
   { category: 'conversation', votes: 3, pending: 0, ranking: [{ model: 'granite4.2:8b', score: 120.4, margin: 310, strength: 2, rankBest: 1, rankWorst: 2, wins: 2, losses: 0, ties: 1, duels: 3 }, { model: 'qwen3.5:9b', score: -120.4, margin: 310, strength: 0.5, rankBest: 1, rankWorst: 2, wins: 0, losses: 2, ties: 1, duels: 3 }] },
+  { category: 'agent', votes: 0, pending: 0, ranking: [] },
   { category: 'code', votes: 0, pending: 2, ranking: [] },
-  { category: 'voice', votes: 0, pending: 0, ranking: [] },
   { category: 'vision', votes: 0, pending: 0, ranking: [] }
 ]
 window.__view = window.__view === undefined ? null : window.__view
@@ -64,7 +64,8 @@ window.jaris = {
   duelState: async () => window.__view,
   duelPlan: async (category) => { window.__calls.push(['plan', category]); return { ...window.__plan, category } },
   duelRankings: async () => window.__rankings,
-  duelStart: async (category, count, series, judged, judgeScreens) => {
+  duelStart: async (category, count, series, judged, judgeScreens, spoken) => {
+    window.__spoken = spoken
     window.__calls.push(judged !== undefined ? ['start', category, count, series, judged, judgeScreens] : series === undefined ? ['start', category, count] : ['start', category, count, series])
     window.__category = category
     return { id: 'session-1', category, phase: 'preparing', modelCount: count, preparing: { done: 0, total: 2, percent: 37, installed: 3 }, dropped: 0, votes: 0, round: null, error: null }
@@ -254,11 +255,11 @@ const NAMES = ['qwen3.5', 'granite4.2', 'ministral', 'gemma4', 'Qwen3.5', 'Grani
 const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
 
 // Étape 475 (Léo : « ajoute un Duel Vision ») : une quatrième catégorie, Vision (une image, aucune question).
-test('accueil : quatre catégories (Conversation, Code, Vocal, Vision), le nombre de modèles, ce qui sera téléchargé', options, async () => {
+test('accueil : quatre catégories (Discussion, Agentique, Code, Vision), le nombre de modèles, ce qui sera téléchargé', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.duel-category')
-    assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Conversation', 'Code', 'Vocal', 'Vision'])
-    assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Conversation')
+    assert.deepEqual(await page.locator('.duel-category__name').allTextContents(), ['Discussion', 'Agentique', 'Code', 'Vision'])
+    assert.equal(await page.locator('.duel-category[aria-checked="true"] .duel-category__name').textContent(), 'Discussion')
     assert.match(await page.textContent('.duel-home__facts'), /agissent vraiment sur ton PC/)
     // Étape 475 : en Vision, rien n'est fait sur le PC — pas d'avertissement à ce sujet.
     await page.click('.duel-category:has-text("Vision")')
@@ -269,7 +270,7 @@ test('accueil : quatre catégories (Conversation, Code, Vocal, Vision), le nombr
     assert.match(await page.textContent('.duel-judge'), /envoyées à Anthropic/)
     assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/vision-0-accueil-cle.png`, fullPage: true })
-    await page.click('.duel-category:has-text("Conversation")')
+    await page.click('.duel-category:has-text("Discussion")')
     await page.waitForSelector('.duel-size')
     assert.deepEqual(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size').allTextContents(), ['4', '5', '6'])
     assert.equal(await page.locator('.duel-sizes:not(.duel-pickmode):not(.duel-remote__mode):not(.duel-judge__modes) .duel-size[aria-checked="true"]').textContent(), '5', '5 modèles par défaut')
@@ -373,7 +374,7 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
   await withPage(
     async (page) => {
       await page.waitForSelector('.duel__ask .empty-state')
-      assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/)
+      assert.match(await page.textContent('.duel__bar'), /Duel 1 · Discussion/)
       // Une suggestion remplit le champ, Entrée envoie au modèle A.
       // Étape 372 : 4 idées tirées au hasard parmi 10 ; « Autres idées » en montre 4 autres, jamais les mêmes.
       const ideas = () => page.$$eval('.empty-state__suggestion', (els) => els.map((el) => el.textContent ?? ''))
@@ -444,12 +445,12 @@ test('un duel : A répond et agit, B attend qu’on ait vérifié, puis le vote 
       assert.match(await page.textContent('.duel-vote--revealed'), /Gagnant : qwen3\.8:27b/)
       // Étape 460 : plus de bouton une fois voté — il est dans le bloc du vote, AVANT de voter.
       assert.equal(await page.locator('.duel-vote--revealed .duel-export__button').count(), 0)
-      assert.match(await page.textContent('.duel__bar'), /Duel 1 · Conversation/, 'on reste sur ce duel tant qu’on n’a pas demandé le suivant')
+      assert.match(await page.textContent('.duel__bar'), /Duel 1 · Discussion/, 'on reste sur ce duel tant qu’on n’a pas demandé le suivant')
       await page.click('.duel-vote--revealed .duel-btn--primary')
       assert.ok((await page.evaluate(() => window.__calls)).includes('next'))
       await page.waitForSelector('.duel__ask .empty-state')
       assert.equal(await page.locator('.duel-side__model').count(), 0, 'le duel suivant est de nouveau anonyme')
-      assert.match(await page.textContent('.duel__bar'), /Duel 2 · Conversation/)
+      assert.match(await page.textContent('.duel__bar'), /Duel 2 · Discussion/)
       assert.match(await page.textContent('.duel__bar'), /Votes : 1/)
     },
     "window.__view = { id: 'session-1', category: 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null } }, error: null }"
@@ -670,7 +671,7 @@ const HISTORY = `window.__history = [
              b: { text: 'Je ne peux pas.', actions: [], durationMs: 5000, error: null, app: false } } },
   { id: 'v2', category: 'code', at: Date.now() - 3600000, prompt: 'Un jeu du serpent', outcome: 'b', modelA: 'qwen3.8:27b', modelB: 'granite4.2:8b',
     sides: { a: { text: '', actions: [], durationMs: 90000, error: null, app: true }, b: { text: '', actions: [], durationMs: 60000, error: null, app: true } } },
-  { id: 'v1', category: 'voice', at: Date.now() - 90000000, prompt: 'Quelle heure est-il ?', outcome: 'tie', modelA: 'gemma4:e4b', modelB: 'ministral-3:8b', sides: null }
+  { id: 'v1', category: 'agent', at: Date.now() - 90000000, prompt: 'Quelle heure est-il ?', outcome: 'tie', modelA: 'gemma4:e4b', modelB: 'ministral-3:8b', sides: null }
 ]`
 
 test('historique : un petit bouton ouvre tous les duels, avec les réponses et les noms (révélés dès le vote)', options, async () => {
@@ -1516,19 +1517,19 @@ test('série : « 1 duel chacun » au singulier, « 2 duels chacun » au pluriel
   }
 })
 
-/** Un duel Vocal dont la réponse A a un son : il se joue tout seul, dès qu'il arrive (le test décide quand). */
+/** Étape 504 : une Discussion lue à voix haute (l'ancien duel Vocal) dont la réponse A a un son : il se joue tout seul, dès qu'il arrive (le test décide quand). */
 const VOICE_ROUND = `
-  window.__category = 'voice'
+  window.__category = 'conversation'
   window.__media = []
   HTMLMediaElement.prototype.play = function () { window.__media.push('play'); return Promise.resolve() }
   HTMLMediaElement.prototype.pause = function () { window.__media.push('pause') }
   window.__duelAudio = () => new Promise((resolve) => (window.__giveAudio = () => resolve(new Uint8Array([82, 73, 70, 70]))))
   const done = { status: 'done', text: 'Il est midi.', activity: null, startedAt: null, durationMs: 2000, actions: [], previewUrl: null, audio: true, audioError: null, error: null, trouble: null }
   const idle = { ...done, status: 'idle', text: '', durationMs: null, audio: false }
-  window.__view = { id: 'session-1', category: 'voice', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: 'Quelle heure est-il ?', a: done, b: idle } }
+  window.__view = { id: 'session-1', category: 'conversation', spoken: true, phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: 'Quelle heure est-il ?', a: done, b: idle } }
 `
 
-test('duel Vocal : une voix arrêtée avant l’arrivée de son son ne démarre jamais après coup', options, async () => {
+test('Discussion lue à voix haute : une voix arrêtée avant l’arrivée de son son ne démarre jamais après coup', options, async () => {
   await withPage(async (page) => {
     await page.waitForFunction(() => typeof window.__giveAudio === 'function')
     // Le modèle B démarre (comme après « Suivant ») : la voix de A doit se taire, même si son son n'est pas encore là.
@@ -1540,7 +1541,7 @@ test('duel Vocal : une voix arrêtée avant l’arrivée de son son ne démarre 
   }, VOICE_ROUND)
 })
 
-test('duel Vocal : quitter l’écran Duel coupe la voix ; une voix attendue ne démarre pas pendant ce temps', options, async () => {
+test('Discussion lue à voix haute : quitter l’écran Duel coupe la voix ; une voix attendue ne démarre pas pendant ce temps', options, async () => {
   await withPage(async (page) => {
     await page.waitForFunction(() => typeof window.__giveAudio === 'function')
     await page.evaluate(() => window.__giveAudio())
@@ -1739,8 +1740,8 @@ test('étape 476 : avis de Claude au vote d’un Duel Vision — seulement avec 
 })
 
 // Étape 480 (Léo : « ajoute le système demander à Claude à Code aussi, et à Message et à Vocal, à tout, avec l'effort »).
-test('étape 480 : l’avis de Claude (modèle et effort) au vote des duels Conversation, Code et Vocal', options, async () => {
-  for (const category of ['conversation', 'code', 'voice']) {
+test('étape 480 : l’avis de Claude (modèle et effort) au vote des duels Discussion, Agentique et Code', options, async () => {
+  for (const category of ['conversation', 'agent', 'code']) {
     await withPage(
       async (page) => {
         await page.evaluate(() =>
@@ -1770,7 +1771,7 @@ test('étape 480 : la clé Claude (facultative) sur l’accueil de chaque catég
     await page.click('.duel-category:has-text("Code")')
     await page.waitForFunction(() => /laquelle des deux applications/.test(document.querySelector('.duel-judge')?.textContent ?? ''))
     assert.match(await page.textContent('.duel-judge'), /le code des deux applications/)
-    await page.click('.duel-category:has-text("Vocal")')
+    await page.click('.duel-category:has-text("Agentique")')
     await page.waitForFunction(() => /laquelle des deux réponses/.test(document.querySelector('.duel-judge')?.textContent ?? ''))
     assert.equal(await page.locator('.duel-judge .duel-judge__key-input').count(), 1)
   })
@@ -1885,4 +1886,74 @@ test('étape 488 : l’historique dit quand c’est Claude qui a voté (et avec 
     assert.match(await page.textContent('.duel-history__item:nth-child(1) .duel-history__meta'), /voté par Opus 5\.5/)
     assert.equal(await page.locator('.duel-history__item:nth-child(2) .duel-history__by-claude').count(), 0, 'un vote de Léo n’est pas marqué')
   }, `${HISTORY}; window.__history[0].judge = 'claude-opus-5-5';`)
+})
+
+// Étape 504 (Léo : « oui, Discussion plus Agentique ») : la voix devient une case de la Discussion ; l'Agentique part
+// d'un bouton (pas de question à écrire), et le test automatique ne s'affiche qu'après le vote.
+test('étape 504 : « Lire les réponses à voix haute » — seulement en Discussion, envoyé au lancement', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-spoken')
+    assert.equal(await page.getAttribute('.duel-spoken', 'aria-checked'), 'false')
+    await page.click('.duel-spoken')
+    assert.equal(await page.getAttribute('.duel-spoken', 'aria-checked'), 'true')
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-discussion.png`, fullPage: true })
+    await page.click('.duel-category:has-text("Agentique")')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'plan' && c[1] === 'agent'))
+    assert.equal(await page.locator('.duel-spoken').count(), 0, 'pas de voix en Agentique')
+    assert.match(await page.textContent('.duel-home'), /Rien ne se passe sur ton vrai PC : tout est simulé/)
+    assert.doesNotMatch(await page.textContent('.duel-home__facts'), /agissent vraiment/)
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-agentique.png`, fullPage: true })
+    await page.click('.duel-home__start')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'start'))
+    assert.equal(await page.evaluate(() => window.__spoken), false)
+  })
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-spoken')
+    await page.click('.duel-spoken')
+    await page.click('.duel-home__start')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'start'))
+    assert.deepEqual(await page.evaluate(() => [window.__calls.find((c) => c[0] === 'start')[1], window.__spoken]), ['conversation', true])
+  })
+  // À 760 px : la case tient sur la largeur, son explication passe à la ligne au lieu de déborder.
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-spoken')
+      const box = await page.evaluate(() => {
+        const el = document.querySelector('.duel-spoken')
+        const hint = document.querySelector('.duel-spoken__hint').getBoundingClientRect()
+        const r = el.getBoundingClientRect()
+        return { overflow: el.scrollWidth - el.clientWidth, inside: hint.right <= r.right + 0.5, page: document.documentElement.scrollWidth - document.documentElement.clientWidth }
+      })
+      assert.deepEqual(box, { overflow: 0, inside: true, page: 0 })
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-discussion-760.png`, fullPage: true })
+    },
+    '',
+    { width: 760, height: 900 }
+  )
+})
+
+test('étape 504 : duel Agentique — un bouton lance la tâche, pas de champ ; « tâche réussie / ratée » seulement après le vote', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-agent-start')
+      assert.equal(await page.locator('.composer__input').count(), 0, 'rien à écrire')
+      await page.click('.duel-agent-start button')
+      await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'ask'))
+      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', ''])
+      const done = (text, check) => ({ status: 'done', text, activity: null, startedAt: null, durationMs: 8000, actions: [{ tool: 'open_app', detail: 'Spotify' }, { tool: 'media_control', detail: 'volume_up' }], previewUrl: null, audio: false, audioError: null, error: null, trouble: null, check })
+      await page.evaluate((round) => window.__emit(window.__ready(round)), { number: 1, prompt: 'Lance Spotify et monte le son.', a: done('C’est fait, Spotify est lancé et le son monte.', null), b: done('Spotify est lancé.', null) })
+      await page.waitForSelector('.duel-vote__button')
+      assert.equal(await page.locator('.duel-side__check').count(), 0, 'le test automatique ne souffle pas le vote')
+      // La tâche vient de Jaris, et le PC est simulé : l'écran ne dit ni « Ta demande » ni « ton PC ».
+      assert.equal(await page.textContent('.duel-round__prompt-label'), 'La tâche tirée par Jaris')
+      assert.deepEqual(await page.locator('.duel-side__actions-title').allTextContents(), ['Ce qu’il a fait sur le PC simulé', 'Ce qu’il a fait sur le PC simulé'].map((x) => x.replace('’', "'")))
+      assert.equal(await page.locator('.composer__input').count(), 0, 'pas de suite à écrire')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-agentique-duel.png`, fullPage: true })
+      await page.evaluate((round) => window.__emit(window.__ready(round)), { number: 1, prompt: 'Lance Spotify et monte le son.', a: done('C’est fait, Spotify est lancé et le son monte.', true), b: done('Spotify est lancé.', false), revealed: { a: 'qwen3.8:27b', b: 'granite4.2:8b', outcome: 'a', voteId: 'vote-1' } })
+      await page.waitForSelector('.duel-side__check')
+      assert.deepEqual(await page.locator('.duel-side__check').allTextContents(), ['Test automatique : tâche réussie', 'Test automatique : tâche ratée'])
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-agentique-vote.png`, fullPage: true })
+    },
+    "window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
+  )
 })

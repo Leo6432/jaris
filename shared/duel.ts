@@ -8,12 +8,33 @@
  */
 
 /**
- * Les sortes de duel. Vocal : la réponse est écrite pour être lue à voix haute, puis lue par Jaris. Vision (étape 475,
- * Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit décrire ») : les deux modèles décrivent la
- * même image, sans autre consigne ; leurs votes choisissent le modèle du rôle Vision.
+ * Les sortes de duel. Vision (étape 475, Léo : « l'utilisateur met juste une image, et aucun prompt, et il doit
+ * décrire ») : les deux modèles décrivent la même image, sans autre consigne ; leurs votes choisissent le modèle Vision.
+ *
+ * Étape 504 (Léo : « conversation et vocal sont assez proches », puis « oui, Discussion plus Agentique ») :
+ * - `conversation` s'affiche « Discussion » et absorbe l'ancien duel Vocal : une option fait lire les réponses à voix
+ *   haute (`spoken`, comme à l'Agent vocal), les votes restent des votes Discussion. Les anciens votes « voice » sont
+ *   relus comme des votes Discussion (parseDuelVote) : aucun n'est perdu.
+ * - `agent` (Agentique) : une vraie tâche en plusieurs étapes, jouée sur un PC SIMULÉ (celui du test des demandes
+ *   complètes, scripts/benchmark-scenarios.mjs) — rien n'est vraiment ouvert, tapé ni envoyé, deux fois.
  */
-export type DuelCategory = 'conversation' | 'code' | 'voice' | 'vision'
-export const DUEL_CATEGORIES: readonly DuelCategory[] = ['conversation', 'code', 'voice', 'vision']
+export type DuelCategory = 'conversation' | 'agent' | 'code' | 'vision'
+export const DUEL_CATEGORIES: readonly DuelCategory[] = ['conversation', 'agent', 'code', 'vision']
+
+/**
+ * Étape 504 : quels votes classent les modèles d'un rôle. Faible : la Discussion. Moyen et Élevé, qui font les actions
+ * de Jaris : la Discussion ET l'Agentique ensemble (`actions`). Code et Vision : les leurs.
+ */
+export type DuelPool = DuelCategory | 'actions'
+export function inDuelPool(category: string, pool: DuelPool): boolean {
+  return pool === 'actions' ? category === 'conversation' || category === 'agent' : category === pool
+}
+
+/** Étape 504 : la catégorie d'un vote relu sur le disque — l'ancien « voice » (Vocal) compte désormais en Discussion. */
+export function storedDuelCategory(value: unknown): DuelCategory | null {
+  if (value === 'voice') return 'conversation'
+  return isDuelCategory(value) ? value : null
+}
 
 /**
  * Étape 475 : la plus longue image (en caractères base64) qu'un Duel Vision accepte, revérifiée côté main. L'écran la
@@ -173,7 +194,8 @@ export function parseDuelVote(value: unknown): DuelVote | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
   if (typeof v.id !== 'string' || !v.id) return null
-  if (!isDuelCategory(v.category) || !isDuelOutcome(v.outcome)) return null
+  const category = storedDuelCategory(v.category)
+  if (!category || !isDuelOutcome(v.outcome)) return null
   if (typeof v.modelA !== 'string' || !v.modelA || typeof v.modelB !== 'string' || !v.modelB || v.modelA === v.modelB) return null
   if (typeof v.at !== 'number' || !Number.isFinite(v.at)) return null
   const a = parseVoteSide(typeof v.sides === 'object' && v.sides !== null ? (v.sides as Record<string, unknown>).a : null)
@@ -184,7 +206,7 @@ export function parseDuelVote(value: unknown): DuelVote | null {
     : []
   return {
     id: v.id,
-    category: v.category,
+    category,
     at: v.at,
     sessionId: typeof v.sessionId === 'string' ? v.sessionId : '',
     modelA: v.modelA,

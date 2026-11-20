@@ -54,24 +54,26 @@ import type { MessageKey } from '../../shared/i18n'
  * B n'est lancé qu'une fois que Léo a vérifié ce que A a fait. Les noms ne sont révélés qu'à la fin de la session.
  */
 
+// Étape 504 : Discussion (Conversation + l'ancien Vocal) et Agentique (tâche sur un PC simulé).
 const CATEGORY_LABEL: Record<DuelCategory, MessageKey> = {
   conversation: 'duel.category.conversation',
+  agent: 'duel.category.agent',
   code: 'duel.category.code',
-  voice: 'duel.category.voice',
   vision: 'duel.category.vision'
 }
 
 const CATEGORY_HINT: Record<DuelCategory, MessageKey> = {
   conversation: 'duel.category.conversation.hint',
+  agent: 'duel.category.agent.hint',
   code: 'duel.category.code.hint',
-  voice: 'duel.category.voice.hint',
   vision: 'duel.category.vision.hint'
 }
 
 const CATEGORY_ICON: Record<DuelCategory, string> = {
   conversation: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z',
+  // Étape 504 : le pointeur de la souris — le modèle agit sur un PC (simulé).
+  agent: 'M5 3l13 6-5.5 2L10 17z M13 13l5 5',
   code: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16',
-  voice: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3',
   // Étape 475 : une image (cadre, soleil, montagne).
   vision: 'M4 5h16v14H4zM8.5 9.5a1.5 1.5 0 1 0 0 .01M20 15l-5-5L5 19'
 }
@@ -83,7 +85,8 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
   conversation: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.conversation.${i + 1}` as MessageKey),
   // Étape 382 : 40 idées d'applications (la série y tire ses demandes, comme l'écran).
   code: Array.from({ length: DUEL_CODE_IDEAS }, (_, i) => `duel.suggest.code.${i + 1}` as MessageKey),
-  voice: Array.from({ length: IDEAS_PER_CATEGORY }, (_, i) => `duel.suggest.voice.${i + 1}` as MessageKey),
+  // Étape 504 : pas de phrase à écrire en Agentique — Jaris tire une tâche du test.
+  agent: [],
   // Étape 475 : pas d'idée de phrase en Vision — on n'y écrit rien, on donne une image.
   vision: []
 }
@@ -852,7 +855,7 @@ function EarlierTurns({ turns, followUps, category }: { turns: readonly DuelTurn
           {/* Étape 415 : en Code, un tour d'avant est une version de l'application, remplacée par la modification suivante. */}
           {category === 'code' && !turn.error && <p className="duel-side__muted">{t('duel.followUp.codeVersion', { number: index + 1 })}</p>}
           {turn.text.trim() ? (
-            <div className="duel-side__text">{category === 'voice' ? turn.text : renderFormattedText(turn.text)}</div>
+            <div className="duel-side__text">{renderFormattedText(turn.text)}</div>
           ) : (
             !turn.error && category !== 'code' && <p className="duel-side__muted">{t('duel.noReply')}</p>
           )}
@@ -933,7 +936,7 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model,
 
       {showActions && (
         <div className="duel-side__actions">
-          <h3 className="duel-side__actions-title">{t('duel.actions.title')}</h3>
+          <h3 className="duel-side__actions-title">{t(category === 'agent' ? 'duel.agent.actionsTitle' : 'duel.actions.title')}</h3>
           {side.actions.length ? (
             <ul>
               {side.actions.map((action, index) => (
@@ -958,18 +961,21 @@ function SideCard({ name, side, category, now, playing, onStop, onListen, model,
           </div>
         ) : null
       ) : side.text.trim() ? (
-        <div className="duel-side__text">
-          {category === 'voice' ? side.text : renderFormattedText(side.text)}
-        </div>
+        <div className="duel-side__text">{renderFormattedText(side.text)}</div>
       ) : null}
 
-      {category === 'voice' && side.audio && (
+      {/* Étape 504 : Discussion lue à voix haute (l'ancien duel Vocal) — seule elle produit une réponse lue. */}
+      {side.audio && (
         <button type="button" className="duel-btn duel-side__listen" onClick={onListen} aria-pressed={playing}>
           <LineIcon d="M5 9v6h4l5 4V5L9 9H5zM17 9a4 4 0 0 1 0 6" size={16} />
           {playing ? t('duel.listenAgain') : t('duel.listen')}
         </button>
       )}
-      {category === 'voice' && side.audioError && <p className="duel-side__muted">{t('duel.audioFailed', { error: side.audioError })}</p>}
+      {/* Étape 504 : duel Agentique — le verdict du test automatique, seulement après le vote (side.check). */}
+      {side.check != null && (
+        <p className={`duel-side__check${side.check ? ' duel-side__check--ok' : ''}`}>{t(side.check ? 'duel.agent.checkOk' : 'duel.agent.checkFail')}</p>
+      )}
+      {side.audioError && <p className="duel-side__muted">{t('duel.audioFailed', { error: side.audioError })}</p>}
 
       {empty && <p className="duel-side__muted">{t('duel.noReply')}</p>}
       {side.status === 'error' && side.error && <p className="duel-side__error">{side.error}</p>}
@@ -1112,7 +1118,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
       <EarlierTurns turns={side.earlier ?? []} followUps={entry.followUps ?? []} category={entry.category} />
       {entry.category !== 'code' && entry.category !== 'vision' && (
         <div className="duel-side__actions">
-          <h3 className="duel-side__actions-title">{t('duel.actions.title')}</h3>
+          <h3 className="duel-side__actions-title">{t(entry.category === 'agent' ? 'duel.agent.actionsTitle' : 'duel.actions.title')}</h3>
           {side.actions.length ? (
             <ul>
               {side.actions.map((action, index) => (
@@ -1143,9 +1149,7 @@ function HistorySide({ entry, name, side }: HistorySideProps): JSX.Element {
           )}
         </>
       ) : side.text.trim() ? (
-        <div className="duel-side__text">
-          {entry.category === 'voice' ? side.text : renderFormattedText(side.text)}
-        </div>
+        <div className="duel-side__text">{renderFormattedText(side.text)}</div>
       ) : (
         !side.error && <p className="duel-side__muted">{t('duel.noReply')}</p>
       )}
@@ -1444,7 +1448,7 @@ const ADVICE_EFFORT_LABEL: Record<DuelAdviceEffort, MessageKey> = {
 /** Étape 480 : ce qui part chez Anthropic pour l'avis, dit sur l'accueil de chaque catégorie. */
 const ADVICE_LEAD: Record<DuelCategory, MessageKey> = {
   conversation: 'duel.advice.lead',
-  voice: 'duel.advice.lead',
+  agent: 'duel.advice.lead',
   code: 'duel.advice.leadCode',
   vision: 'duel.vision.advice.lead'
 }
@@ -2042,6 +2046,8 @@ export default function DuelPanel(): JSX.Element {
   const [judgeMode, setJudgeMode] = useState(false)
   // Étape 399 : captures d'écran envoyées à Claude (avant A, après A, après B) — Léo les a demandées ; il peut les couper.
   const [judgeScreens, setJudgeScreens] = useState(true)
+  // Étape 504 : Discussion lue à voix haute (l'ancien duel Vocal), à la demande.
+  const [spokenAnswers, setSpokenAnswers] = useState(false)
   const [claudeKey, setClaudeKey] = useState<ClaudeKeyStatus | null>(null)
   /** Votes de Claude encore à vérifier, et l'écran façon Tinder. */
   const [reviewCount, setReviewCount] = useState(0)
@@ -2209,7 +2215,7 @@ export default function DuelPanel(): JSX.Element {
 
   // Une réponse lue se joue d'elle-même une fois prête, comme à l'Agent vocal — seulement si l'écran Duel est affiché.
   useEffect(() => {
-    if (!view || view.category !== 'voice' || !round || !active) return
+    if (!view || !view.spoken || !round || !active) return
     for (const side of ['a', 'b'] as const) {
       const key = `${view.id}:${round.number}:${side}`
       if (round[side].audio && !autoPlayed.current.has(key)) {
@@ -2219,7 +2225,7 @@ export default function DuelPanel(): JSX.Element {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view?.id, view?.category, round?.number, round?.a.audio, round?.b.audio, active])
+  }, [view?.id, view?.spoken, round?.number, round?.a.audio, round?.b.audio, active])
 
   // Le modèle B qui démarre, ou un nouveau duel : la voix précédente se tait.
   useEffect(() => {
@@ -2259,7 +2265,8 @@ export default function DuelPanel(): JSX.Element {
       const series = (category === 'code' || category === 'vision') && seriesMode ? perModel : undefined
       const judged = category === 'conversation' && judgeMode ? perModel : undefined
       const pick = pickMode === 'random' ? size : pickMode === 'fast' ? fastest : pickedNow
-      setView(await window.jaris.duelStart(category, pick, series, judged, judged !== undefined && judgeScreens))
+      const spoken = category === 'conversation' && spokenAnswers && judged === undefined
+      setView(await window.jaris.duelStart(category, pick, series, judged, judged !== undefined && judgeScreens, spoken))
     })
   }
 
@@ -2274,6 +2281,11 @@ export default function DuelPanel(): JSX.Element {
   }
 
   /** Étape 475 : l'image d'un Duel Vision part aux deux modèles, sans aucune question. */
+  /** Étape 504 : duel Agentique — Jaris tire une tâche du test, la même pour A et B (aucun texte à écrire). */
+  const askAgent = (): void => {
+    void run('ask', async () => setView(await window.jaris.duelAsk('')))
+  }
+
   const askImage = (image: DuelImage, round: number): void => {
     void run('ask', async () => {
       setView(await window.jaris.duelAskImage(image.base64))
@@ -2458,6 +2470,30 @@ export default function DuelPanel(): JSX.Element {
               ))}
             </div>
           </section>
+
+          {/* Étape 504 (Léo : « Discussion plus Agentique ») : l'ancien duel Vocal devient une option de la Discussion. */}
+          {category === 'conversation' && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={spokenAnswers}
+              className={`duel-spoken${spokenAnswers ? ' duel-spoken--checked' : ''}`}
+              onClick={() => setSpokenAnswers((on) => !on)}
+            >
+              <span className="duel-pick__box" aria-hidden="true">
+                {spokenAnswers && (
+                  <svg viewBox="0 0 16 16" width="12" height="12">
+                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="duel-spoken__text">
+                <span className="duel-spoken__label">{t('duel.spoken.label')}</span>
+                <span className="duel-spoken__hint">{t('duel.spoken.hint')}</span>
+              </span>
+            </button>
+          )}
+          {category === 'agent' && <p className="duel-home__note">{t('duel.agent.note')}</p>}
 
           <DuelMachineNote remote={plan?.remote} />
 
@@ -2716,8 +2752,9 @@ export default function DuelPanel(): JSX.Element {
           )}
 
           <ul className="duel-home__facts">
-            {/* Étape 475 : en Vision, les modèles ne font rien sur le PC (ils décrivent une image, sans outil). */}
-            {category !== 'vision' && <li>{t('duel.realActions')}</li>}
+            {/* Étape 475 : en Vision, les modèles ne font rien sur le PC (ils décrivent une image, sans outil). Étape 504 :
+                en Agentique non plus — le PC est simulé (duel.agent.note le dit). */}
+            {category !== 'vision' && category !== 'agent' && <li>{t('duel.realActions')}</li>}
             <li>{t('duel.anonymous')}</li>
           </ul>
 
@@ -2883,7 +2920,9 @@ export default function DuelPanel(): JSX.Element {
     // Étape 401 : Léo peut répondre aux deux modèles (une question sur sa ville…) avant de voter. Étape 415 : en Code
     // aussi — une modification que chaque modèle apporte à SON application.
     // Étape 475 : un Duel Vision se juge sur la seule description, sans réponse de Léo ensuite.
-    const canFollowUp = bothDone && !trouble && !round.revealed && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS && view.category !== 'vision'
+    // Étape 504 : en Agentique, la tâche joue elle-même ses messages suivants — Léo n'y répond pas.
+    const canFollowUp =
+      bothDone && !trouble && !round.revealed && !view.batch && followUps.length < DUEL_MAX_FOLLOW_UPS && view.category !== 'vision' && view.category !== 'agent'
     const code = view.category === 'code'
     const waitingB = (
       <>
@@ -2934,7 +2973,16 @@ export default function DuelPanel(): JSX.Element {
           <div className="duel__scroll duel__center">
             <VisionDuelAsk key={`${view.id}-${round.number}`} busy={pending === 'ask'} onSend={(image) => askImage(image, round.number)} onError={setError} />
           </div>
-        ) : round.prompt === null && view.category === 'voice' ? (
+        ) : round.prompt === null && view.category === 'agent' ? (
+          <div className="duel__scroll duel__center">
+            <div className="duel-agent-start">
+              <p className="duel-home__note">{t('duel.agent.lead')}</p>
+              <button type="button" className="duel-btn duel-btn--primary" onClick={askAgent} disabled={pending !== null}>
+                {pending === 'ask' ? t('common.loading') : t('duel.agent.start')}
+              </button>
+            </div>
+          </div>
+        ) : round.prompt === null && view.spoken ? (
           <div className="duel__scroll duel__center">
             <VoiceDuelStage
               round={round}
@@ -2967,7 +3015,7 @@ export default function DuelPanel(): JSX.Element {
         ) : (
           <div className="duel__scroll">
             <div className="duel-round">
-              {view.category === 'voice' ? (
+              {view.spoken ? (
                 <VoiceDuelStage
                   round={round}
                   now={now}
@@ -3003,7 +3051,7 @@ export default function DuelPanel(): JSX.Element {
                   </div>
                 ) : (
                   <div className="duel-round__prompt">
-                    <span className="duel-round__prompt-label">{t('duel.yourPrompt')}</span>
+                    <span className="duel-round__prompt-label">{t(view.category === 'agent' ? 'duel.agent.task' : 'duel.yourPrompt')}</span>
                     <p>{round.prompt}</p>
                   </div>
                 )}
@@ -3096,7 +3144,7 @@ export default function DuelPanel(): JSX.Element {
                   <h2 id="duel-vote-title" className="duel-vote__title">
                     {t('duel.vote.title')}
                   </h2>
-                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t(code ? 'duel.followUp.hintCode' : view.category === 'voice' && !voiceWrite ? 'duel.voice.tapFollowUp' : 'duel.followUp.hint')}</p>}
+                  {canFollowUp && <p className="duel-vote__text duel-vote__follow-hint">{t(code ? 'duel.followUp.hintCode' : view.spoken && !voiceWrite ? 'duel.voice.tapFollowUp' : 'duel.followUp.hint')}</p>}
                   <div className="duel-vote__buttons">
                     {OUTCOMES.map(({ outcome, label }) => (
                       <button
@@ -3124,12 +3172,12 @@ export default function DuelPanel(): JSX.Element {
 
         {error && <p className="duel__error">{error}</p>}
 
-        {view.category === 'voice' && !voiceWrite && (round.prompt === null || canFollowUp) && (
+        {view.spoken && !voiceWrite && (round.prompt === null || canFollowUp) && (
           <button type="button" className="duel-btn duel-voice__write" onClick={() => setVoiceWrite(true)}>
             {t('duel.voice.write')}
           </button>
         )}
-        {round.prompt === null && !batchEditing && view.category !== 'vision' && (view.category !== 'voice' || voiceWrite) && (
+        {round.prompt === null && !batchEditing && view.category !== 'vision' && view.category !== 'agent' && (!view.spoken || voiceWrite) && (
           <Composer
             value={prompt}
             onChange={setPrompt}
@@ -3146,7 +3194,7 @@ export default function DuelPanel(): JSX.Element {
             rows={2}
           />
         )}
-        {canFollowUp && (view.category !== 'voice' || voiceWrite) && (
+        {canFollowUp && (!view.spoken || voiceWrite) && (
           <Composer
             value={reply}
             onChange={setReply}
@@ -3239,7 +3287,7 @@ export default function DuelPanel(): JSX.Element {
                         <li key={change.role}>
                           <span>
                             {t('duel.summary.change', {
-                              role: summary.category === 'voice' && change.role !== 'code' ? t('role.voice', { role }) : role,
+                              role,
                               from: change.from ? formatModelName(change.from) : t('duel.summary.none'),
                               to: formatModelName(change.to)
                             })}

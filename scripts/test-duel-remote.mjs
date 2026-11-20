@@ -153,6 +153,12 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
       saveSeriesApp: async () => {},
       readSeriesApp: async () => null
     },
+    './duelAgent': {
+      // Étape 504 : le duel Agentique (PC simulé) ; les tests qui l'exercent remplacent runAgentTask.
+      pickAgentTask: (played) => ({ id: played.has('ouvrir-bloc-notes') ? 'chercher-mail' : 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
+      agentTaskExists: (id) => ['ouvrir-bloc-notes', 'chercher-mail'].includes(id),
+      runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args)
+    },
     './duelStore': {
       addDuelVote: async (vote) => votes.push(vote),
       getDuelVotes: () => votes,

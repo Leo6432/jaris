@@ -548,3 +548,20 @@ test('étape 414 : « Les plus rapides » — les N plus rapides disponibles, ja
   assert.equal(duel.fastestDuelModels(models, 10).join(), 'rapide:4b,moyen-a:6b,moyen-b:7b,lent:8b', 'seulement les vitesses connues')
   assert.equal(duel.fastestDuelModels(models, 0).length, 0)
 })
+
+// Étape 504 (Léo : « oui, Discussion plus Agentique ») : Conversation et Vocal fusionnent en Discussion ; les anciens
+// votes Vocal ne sont jamais perdus, ils comptent en Discussion. Moyen et Élevé lisent Discussion ET Agentique.
+test('étape 504 : un ancien vote « Vocal » relu compte en Discussion ; les groupes de votes des rôles', () => {
+  const old = duel.parseDuelVote({ ...vote('a:1b', 'b:2b', 'a'), category: 'voice' })
+  assert.equal(old.category, 'conversation')
+  assert.equal(duel.parseDuelVote({ ...vote('a:1b', 'b:2b', 'a'), category: 'agent' }).category, 'agent')
+  assert.equal(duel.parseDuelVote({ ...vote('a:1b', 'b:2b', 'a'), category: 'inventee' }), null)
+  assert.deepEqual([...duel.DUEL_CATEGORIES], ['conversation', 'agent', 'code', 'vision'])
+  assert.equal(duel.isDuelCategory('voice'), false, 'plus de nouveau duel Vocal')
+  assert.deepEqual(
+    ['conversation', 'agent', 'code', 'vision'].map((c) => duel.inDuelPool(c, 'actions')),
+    [true, true, false, false]
+  )
+  assert.equal(duel.inDuelPool('agent', 'conversation'), false, 'Faible : la Discussion seule')
+  assert.equal(duel.inDuelPool('code', 'code'), true)
+})

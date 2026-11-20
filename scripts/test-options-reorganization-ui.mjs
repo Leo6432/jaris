@@ -152,12 +152,12 @@ const overrides = {
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
     // Étape 486 : le nombre de duels votés, sous le tableau.
-    duelTotals: { conversation: 8, code: 64, voice: 5, vision: 12 },
+    duelTotals: { conversation: 8, agent: 5, code: 64, vision: 12 },
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: window.__overviewEntries ?? [
       { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', toolScores: { conversation: '6/6', vision: '30/34', code: '4/5' }, demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8, omniscience: -64, terminalBench: 0, duels: { code: { points: 120.4, duels: 3 }, conversation: { points: 0, duels: 2 } } },
-      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5, duels: { voice: { points: -10, duels: 10 } } },
-      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: '29/34', toolScores: { conversation: null, vision: '29/34', code: null }, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4, duels: { voice: { points: 64, duels: 25 } } }
+      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null, omniscience: -77.5, duels: { agent: { points: -10, duels: 10 } } },
+      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: '29/34', toolScores: { conversation: null, vision: '29/34', code: null }, intelligence: null, artificialAnalysisIndex: null, omniscience: -47.9, terminalBench: 43.4, duels: { agent: { points: 64, duels: 25 } } }
     ]
   })
 }
@@ -491,17 +491,17 @@ test('« Tous les modèles » a quitté les Options : c’est l’écran « Clas
       'la croix se lit aussi au lecteur d’écran'
     )
     // Étape 370 (Léo : « tout enlever ») : plus aucune colonne d'Artificial Analysis — les points de duel par
-    // catégorie (Conversation, Code, Vocal), « — » pour un modèle jamais passé en duel.
+    // catégorie (étape 504 : Discussion, Agentique, Code, Vision), « — » pour un modèle jamais passé en duel.
     const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!headers.some((h) => /Intelligence|Omniscience|Terminal|Artificial/.test(h)), `colonnes d'Artificial Analysis encore là : ${headers}`)
     assert.ok(headers[4].startsWith('Vision') && headers[5].startsWith('Code'), `colonnes Vision et Code : ${headers}`)
-    assert.ok(headers[6].startsWith('Duels Conversation') && headers[7].startsWith('Duels Code') && headers[8].startsWith('Duels Vocal'), `colonnes de duels : ${headers}`)
+    assert.ok(headers[6].startsWith('Duels Discussion') && headers[7].startsWith('Duels Agentique') && headers[8].startsWith('Duels Code') && headers[9].startsWith('Duels Vision'), `colonnes de duels : ${headers}`)
     // Étape 371 : le nombre de duels s'affiche sous les points (plus seulement en infobulle).
-    assert.equal(rows[0][6], '0Duels : 2', `points de duel Conversation : ${rows[0][6]}`)
-    assert.equal(rows[0][7], '+120Duels : 3', `points de duel Code : ${rows[0][7]}`)
-    assert.equal(rows[0][8], '—', `jamais en duel Vocal : ${rows[0][8]}`)
-    assert.equal(rows[1][7], '—', `jamais en duel : ${rows[1][7]}`)
-    assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(8) .options-menu__duel-count', (el) => getComputedStyle(el).display), 'block', 'nombre de duels sur sa propre ligne')
+    assert.equal(rows[0][6], '0Duels : 2', `points de duel Discussion : ${rows[0][6]}`)
+    assert.equal(rows[0][8], '+120Duels : 3', `points de duel Code : ${rows[0][8]}`)
+    assert.equal(rows[0][7], '—', `jamais en duel Agentique : ${rows[0][7]}`)
+    assert.equal(rows[1][8], '—', `jamais en duel : ${rows[1][8]}`)
+    assert.equal(await page.$eval('.options-page--models tbody tr td:nth-child(9) .options-menu__duel-count', (el) => getComputedStyle(el).display), 'block', 'nombre de duels sur sa propre ligne')
     // Étape 378 (Léo : « en rouge quand il y a très peu de duels, plus c'est vert plus c'est bon ») : la teinte de la
     // note suit le nombre de duels — rouge à 2, vert franc à partir de 20, entre les deux à 10. Mesurée, pas relue.
     const hueOf = (selector) =>
@@ -515,14 +515,14 @@ test('« Tous les modèles » a quitté les Options : c’est l’écran « Clas
         return (h * 60 + 360) % 360
       })
     const few = await hueOf('.options-page--models tbody tr:nth-child(1) td:nth-child(7) .options-menu__duel-points')
-    const many = await hueOf('.options-page--models tbody tr:nth-child(3) td:nth-child(9) .options-menu__duel-points')
-    const half = await hueOf('.options-page--models tbody tr:nth-child(2) td:nth-child(9) .options-menu__duel-points')
+    const many = await hueOf('.options-page--models tbody tr:nth-child(3) td:nth-child(8) .options-menu__duel-points')
+    const half = await hueOf('.options-page--models tbody tr:nth-child(2) td:nth-child(8) .options-menu__duel-points')
     assert.ok(few !== null && few < 25, `2 duels : rouge attendu, teinte ${few}`)
     assert.ok(many !== null && many > 120 && many < 160, `25 duels : vert attendu, teinte ${many}`)
     assert.ok(half !== null && half > few + 30 && half < many - 30, `10 duels : entre les deux, teinte ${half}`)
     assert.match(await page.$eval('.options-page--models tbody tr:nth-child(1) td:nth-child(7)', (el) => el.title), /à partir de 20 duels/)
     // Vitesse : « — » sans mesure.
-    assert.equal(rows[0][9], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][9]}`)
+    assert.equal(rows[0][10], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][10]}`)
     // Un modèle non retenu : sa ligne sous le nom ne donne que la catégorie (vérifié plus haut, metas[1]).
 
   })
@@ -546,7 +546,7 @@ const LONG_OVERVIEW = [
   toolCalling: `${50 + i}/78`, demands: /vl|coder|GLM/.test(model) ? null : `${20 + i}/48`, intelligence: null,
   artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null,
   omniscience: i % 7 === 0 ? null : -77.5 + i * 2.3, terminalBench: i % 6 === 0 ? null : 10 + i * 2.9,
-  duels: i % 4 === 0 ? {} : { conversation: { points: -345 + i * 31, duels: i }, code: { points: 1234 - i * 97, duels: i }, voice: { points: -9 * i, duels: i } },
+  duels: i % 4 === 0 ? {} : { conversation: { points: -345 + i * 31, duels: i }, code: { points: 1234 - i * 97, duels: i }, agent: { points: -9 * i, duels: i } },
   quantization: i % 9 === 4 ? 'Q8_0' : 'Q4_K_M'
 }))
 
@@ -807,7 +807,7 @@ test('une barre "Trier par" VISIBLE propose les 10 critères, sans avoir à devi
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Vision', 'Code', 'Duels Conversation', 'Duels Code', 'Duels Vocal', 'Duels Vision', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Vision', 'Code', 'Duels Discussion', 'Duels Agentique', 'Duels Code', 'Duels Vision', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.
@@ -866,7 +866,7 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
     await page.locator('.options-menu__sort-button', { hasText: 'Duels Code' }).first().click()
     assert.equal((await models())[0], 'ministral-3:3b', 'Duels Code : le seul modèle voté en tête')
-    await page.locator('.options-menu__sort-button', { hasText: 'Duels Conversation' }).first().click()
+    await page.locator('.options-menu__sort-button', { hasText: 'Duels Discussion' }).first().click()
     assert.equal((await models())[0], 'ministral-3:3b', '0 point (voté) passe devant « jamais en duel »')
   })
 })
@@ -1262,9 +1262,9 @@ test('étape 486 : dernière ligne du tableau — chaque nombre de duels sous SA
       })
     })
     assert.deepEqual(columns, [
-      ['Duels Conversation ↕', '8'],
+      ['Duels Discussion ↕', '8'],
+      ['Duels Agentique ↕', '5'],
       ['Duels Code ↕', '64'],
-      ['Duels Vocal ↕', '5'],
       ['Duels Vision ↕', '12']
     ])
     // Dans le tableau, après les modèles (dernière ligne), et une seule fois.

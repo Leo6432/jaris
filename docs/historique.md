@@ -12677,3 +12677,35 @@ Léo a envoyé l'export de son test (RTX 3070, Ollama 0.40.16, Jaris 0.72.3, 20/
 scores recopiés, LFM3 retiré de « À remesurer » (liste vide). Grille sans vote (Ollama 0.40.16) : sur les cartes de 6 et
 8 Go, Moyen (et Élevé avec 8 ou 16 Go de RAM) passe de LFM3 à qwen3.5:4b — égalité exacte des deux scores, le plus gros
 l'emporte (étape 499) ; Faible reste LFM3. Rien d'autre ne change.
+
+## Étape 504 — Duels : Discussion (Conversation + Vocal fusionnés) et nouveau duel Agentique
+
+Léo : « conversation et vocal sont assez proches… pourquoi pas garder le vocal, enlever la conversation et faire un duel
+agentique ? », puis, après mon avis (garder une seule catégorie de discussion, la voix en option), « oui, Discussion
+plus Agentique ». Catégories : Discussion, Agentique, Code, Vision.
+- Discussion = l'ancienne Conversation ; case « Lire les réponses à voix haute » (`spoken`, seulement en Discussion,
+  refusé ailleurs côté main) : réponses écrites pour la voix (canal `voice`) et lues par Supertonic, comme l'ancien
+  duel Vocal. Les anciens votes « voice » sont relus en Discussion (`storedDuelCategory`), jamais perdus.
+- Plus de modèles « Vocal » à part : la voix utilise les modèles du Chat (assistant.ts, voicePipeline.ts,
+  modelChoice.ts) ; `profile.voiceModels` n'est plus écrit, ses modèles sont supprimés par le test des modèles s'ils ne
+  servent plus. Lignes « voix » retirées de « Mes modèles », colonne « Duels Vocal » remplacée par « Duels Agentique ».
+- Agentique (`duelAgent.ts`) : Jaris tire une tâche du test des demandes complètes (benchmark-scenarios.mjs, en
+  français, ni « merci », ni blague, ni heure ; d'abord celles pas encore jouées), la même pour A et B, jouée sur le PC
+  SIMULÉ du test (rien de réel, même « éteindre le PC »). A puis B tournent tout seuls ; l'écran montre les actions et
+  la réponse ; le jugement automatique du test (« tâche réussie / ratée ») n'apparaît qu'APRÈS le vote. Pas de suite
+  (la tâche a ses propres messages). Une erreur d'Ollama remonte avec son vrai message ; un modèle qui tourne en rond
+  sans répondre a simplement raté la tâche.
+- Quels votes pour quel rôle (`DuelPool`, `inDuelPool`) : Faible = Discussion ; Moyen et Élevé = Discussion ET
+  Agentique ensemble (force et preuve de remplacement) ; Code et Vision : les leurs. Mesuré sur la machine de Léo :
+  8 victoires Agentique changent Moyen et Élevé, jamais Faible.
+- Piège : esbuild a cassé le bundle sur une ligne morte de benchmark-scenarios.mjs (`const notes = …` jamais lu, juste
+  après un `return '…'` sans point-virgule) — supprimée. Ces deux fichiers du test sont désormais dans l'appli : ils ne
+  lisent rien sur le disque.
+- Tests (mordent) : test-duel-agent (vrai simulateur + faux Ollama : réussie, ratée, erreur, boucle, choix de tâche),
+  test-duel-session (A puis B seuls, même tâche, verdict caché avant le vote, jamais converse(), voix seulement en
+  Discussion), test-hardwarescan-duel (groupes de votes), test-duel (ancien « voice » relu en Discussion).
+- Écran (vu sur les captures) : en Agentique, plus d'avertissement « les modèles agissent vraiment sur ton PC » ;
+  « La tâche tirée par Jaris » au lieu de « Ta demande », « Ce qu'il a fait sur le PC simulé » au lieu de « Ce qu'il a
+  demandé à ton PC ». La case « Lire à voix haute » a sa propre classe (`duel-spoken`) : avec `duel-pick`, elle était
+  comptée comme un modèle de plus dans « Je choisis ». Mesurée à 760 px (rien ne déborde).
+- Non vérifié en usage réel : pas d'Ollama dans le conteneur cette fois, la tâche n'a tourné qu'avec un faux modèle.

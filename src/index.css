@@ -7905,6 +7905,72 @@ ul.reply-list--nested {
   cursor: default;
 }
 
+/* Étape 504 : duel Agentique — lancer une tâche, puis le verdict du test automatique après le vote. */
+.duel-agent-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 560px;
+  text-align: center;
+}
+
+.duel-side__check {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--hud-danger-soft);
+}
+
+.duel-side__check--ok {
+  color: var(--hud-ok);
+}
+
+/* Étape 504 : « Lire les réponses à voix haute » — une case à cocher à part (pas une ligne de la liste des modèles,
+   .duel-pick), titre puis explication sur toute la largeur. */
+.duel-spoken {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.duel-spoken:hover {
+  background: var(--jv-hover);
+}
+
+.duel-spoken .duel-pick__box {
+  margin-top: 1px;
+}
+
+.duel-spoken--checked .duel-pick__box {
+  background: var(--hud-accent);
+  border-color: transparent;
+}
+
+.duel-spoken__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.duel-spoken__hint {
+  font-size: 12px;
+  color: var(--hud-text-dim);
+}
+
 .duel-btn--primary {
   color: var(--jv-accent-ink);
   background: var(--hud-accent);

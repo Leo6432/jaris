@@ -39,13 +39,14 @@ const side = (extra = {}) => ({ status: 'idle', text: '', activity: null, starte
 const said = (text) => side({ status: 'done', text, durationMs: 2000, audio: true })
 window.__side = side
 window.__said = said
-const view = (round) => ({ id: 'session-1', category: window.__category || 'voice', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round })
+// Étape 504 : l'ancien duel Vocal est une Discussion lue à voix haute (spoken).
+const view = (round) => ({ id: 'session-1', category: 'conversation', spoken: window.__category !== 'conversation', phase: 'ready', modelCount: 5, preparing: null, dropped: 0, votes: 0, error: null, round })
 window.__makeView = view
 window.__view = window.__initialRound ? view(window.__initialRound) : view({ number: 1, prompt: null, a: side(), b: side() })
 const listeners = []
 window.__emit = (next) => { window.__view = next; listeners.forEach((cb) => cb(next)) }
 const plan = {
-  category: 'voice', available: 6, freeDiskGb: 120, downloadBudgetGb: 115,
+  category: 'conversation', available: 6, freeDiskGb: 120, downloadBudgetGb: 115,
   sizes: [{ count: 4, toDownload: 0, downloadGb: 0, fitsDisk: true }],
   models: [{ model: 'granite4.2:8b', vramGb: 5.2, reason: null, installed: true }, { model: 'qwen3.5:9b', vramGb: 6.6, reason: null, installed: true }]
 }
@@ -53,7 +54,7 @@ const known = {
   onDuelChanged: (cb) => { listeners.push(cb); return () => {} },
   duelState: async () => window.__view,
   duelPlan: async (category) => ({ ...plan, category }),
-  duelRankings: async () => [{ category: 'conversation', votes: 0, pending: 0, ranking: [] }, { category: 'code', votes: 0, pending: 0, ranking: [] }, { category: 'voice', votes: 0, pending: 0, ranking: [] }],
+  duelRankings: async () => [{ category: 'conversation', votes: 0, pending: 0, ranking: [] }, { category: 'agent', votes: 0, pending: 0, ranking: [] }, { category: 'code', votes: 0, pending: 0, ranking: [] }],
   duelHistory: async () => [],
   duelAudio: async () => new Uint8Array([82, 73, 70, 70]),
   duelAsk: async (prompt) => {
@@ -121,7 +122,7 @@ const shot = async (page, name) => {
   await page.screenshot({ path: join(process.env.SHOTS, `${name}.png`) })
 }
 
-test('Duel Vocal : on parle à l’orbe comme au Vocal, la question part toute seule ; pas de cartes ni de champ', options, async () => {
+test('Discussion lue à voix haute (ancien Duel Vocal) : on parle à l’orbe comme au Vocal, la question part toute seule ; pas de cartes ni de champ', options, async () => {
   await withPage(async (page) => {
     const orb = page.locator('.duel-voice [role="button"]')
     await orb.waitFor()
@@ -147,7 +148,7 @@ test('Duel Vocal : on parle à l’orbe comme au Vocal, la question part toute s
   })
 })
 
-test('Duel Vocal : A répond à voix haute, un bouton pose la même question à B, puis réécouter et voter', options, async () => {
+test('Discussion lue à voix haute (ancien Duel Vocal) : A répond à voix haute, un bouton pose la même question à B, puis réécouter et voter', options, async () => {
   await withPage(
     async (page) => {
       await page.waitForSelector('.duel-voice')
@@ -182,7 +183,7 @@ test('Duel Vocal : A répond à voix haute, un bouton pose la même question à 
   )
 })
 
-test('Duel Conversation : pas de scène vocale, la question s’écrit comme avant', options, async () => {
+test('Discussion sans la voix : pas de scène vocale, la question s’écrit comme avant', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.composer__input')
     assert.equal(await page.locator('.duel-voice').count(), 0)

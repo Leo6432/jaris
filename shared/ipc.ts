@@ -123,8 +123,9 @@ export interface Profile {
   /** Modèles rapide/médium/puissant choisis par le scan de capacité, vide = OLLAMA_MODEL de .env pour les trois. */
   models?: ModelTiers
   /**
-   * Étape 355 : modèles de la VOIX choisis d'après les votes des duels « Vocal », quand ils diffèrent de ceux du Chat
-   * (`models`). Absent = la voix utilise `models`, comme avant.
+   * Étape 355 : modèles de la VOIX choisis d'après les votes des duels « Vocal ». Étape 504 (Discussion remplace
+   * Conversation et Vocal) : plus jamais lu ni écrit — la voix utilise `models`. Gardé pour que « Retester la
+   * configuration » efface l'ancienne valeur et supprime les modèles qui n'étaient qu'à elle (benchmarkRunner.ts).
    */
   voiceModels?: ModelTiers
   /**
@@ -346,8 +347,6 @@ export interface CapacityScanResult {
   gpuName: string | null
   vramGb: number | null
   models: ModelTiers
-  /** Étape 355 : modèles de la voix quand les votes « Vocal » en choisissent d'autres que `models` ; absent sinon. */
-  voiceModels?: ModelTiers
   visionModel: string
   /**
    * Meilleur modèle de code (CODE_CANDIDATES, hardwareScan.ts) qui tient réellement dans la VRAM+RAM de
@@ -415,8 +414,6 @@ export interface MyModelPicks {
   large: ModelOverviewEntry
   vision: ModelOverviewEntry
   code: ModelOverviewEntry
-  /** Étape 355 : les modèles de la voix, seulement quand les votes « Vocal » en ont choisi d'autres que ceux du Chat. */
-  voice?: { flash: ModelOverviewEntry; medium: ModelOverviewEntry; large: ModelOverviewEntry }
   /**
    * Rôles pour lesquels un meilleur modèle existe mais n'est pas celui utilisé : soit pas encore installé
    * (il suffit de « Retester la configuration »), soit bloqué au téléchargement (`blockedReason`).
@@ -486,7 +483,7 @@ export interface ModelOverviewEntry {
    * Étape 370, Léo (« pourquoi il y a encore les anciens scores de Terminal-Bench et d'Artificial Analysis ») : les
    * points de duel de ce modèle par catégorie (ce qui décide maintenant), absents tant qu'il n'a jamais été voté.
    */
-  duels?: Partial<Record<'conversation' | 'code' | 'voice' | 'vision', { points: number; duels: number }>>
+  duels?: Partial<Record<'conversation' | 'agent' | 'code' | 'vision', { points: number; duels: number }>>
   /**
    * Étape 329, Léo (« ça utilise combien de pourcentage ») : le calcul de la note de ce modèle pour le rôle où il
    * est affiché, facteur par facteur. Seulement dans « Modèles utilisés sur ta machine » (une note n'a de sens que
@@ -1091,6 +1088,11 @@ export interface DuelSideView {
   trouble: DuelToolTrouble | null
   /** Étape 401 : les réponses d'avant, quand Léo a répondu aux modèles ; la réponse en cours est `text`/`actions`. */
   earlier: DuelTurn[]
+  /**
+   * Étape 504 : duel Agentique — le jugement automatique du test des demandes complètes (tâche faite ou non), montré
+   * seulement APRÈS le vote de Léo (`null` avant, ou hors Agentique).
+   */
+  check?: boolean | null
 }
 
 export interface DuelRoundView {
@@ -1133,6 +1135,8 @@ export interface DuelAdvice {
 export interface DuelSessionView {
   id: string
   category: DuelCategory
+  /** Étape 504 : Discussion « lue à voix haute » (l'ancien duel Vocal) : les réponses sont lues par la voix de Jaris. */
+  spoken?: boolean
   phase: 'preparing' | 'ready' | 'ended'
   /** Étape 377 : les modèles de la session tournent sur une autre machine (téléchargés là-bas, pas sur ce PC). */
   remote?: boolean

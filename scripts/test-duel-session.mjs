@@ -290,6 +290,12 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
         return { outcome: 'a', reason: 'A a vraiment ouvert l’application.' }
       }
     },
+    './duelAgent': {
+      // Étape 504 : le duel Agentique (PC simulé) ; les tests qui l'exercent remplacent runAgentTask.
+      pickAgentTask: (played) => ({ id: played.has('ouvrir-bloc-notes') ? 'chercher-mail' : 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
+      agentTaskExists: (id) => ['ouvrir-bloc-notes', 'chercher-mail'].includes(id),
+      runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args)
+    },
     './duelStore': {
       addDuelReview: async (review) => {
         reviews.push(review)
@@ -637,9 +643,9 @@ test('suppression : seulement les modèles téléchargés par la session et dont
   assert.equal(env.session.getDuelView(), null)
 })
 
-test('duel Vocal : la réponse est écrite pour la voix, lue, et une voix en panne n’efface jamais la réponse', async () => {
+test('étape 504 : Discussion lue à voix haute (l’ancien duel Vocal) : la réponse est écrite pour la voix, lue, et une voix en panne n’efface jamais la réponse', async () => {
   const env = setup({ installed: MODELS })
-  await env.session.startDuel('voice', 4)
+  await env.session.startDuel('conversation', 4, undefined, undefined, false, true)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
   env.session.askDuel('Quel temps fera-t-il demain ?')
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
@@ -649,7 +655,7 @@ test('duel Vocal : la réponse est écrite pour la voix, lue, et une voix en pan
   assert.equal(env.session.duelAudio('b'), null)
 
   const broken = setup({ installed: MODELS, ttsFails: true })
-  await broken.session.startDuel('voice', 4)
+  await broken.session.startDuel('conversation', 4, undefined, undefined, false, true)
   await waitFor(() => broken.session.getDuelView()?.phase === 'ready', 'prête')
   broken.session.askDuel('Bonjour')
   await waitFor(() => broken.session.getDuelView().round.a.status === 'done', 'A')
@@ -659,18 +665,63 @@ test('duel Vocal : la réponse est écrite pour la voix, lue, et une voix en pan
   assert.equal(a.audioError, 'voix indisponible')
 })
 
-test('duel Vocal terminé : seuls les modèles de la VOIX changent, ceux du Chat restent', async () => {
+test('étape 504 : Discussion lue à voix haute terminée : ce sont les modèles du Chat qui changent (la voix les utilise)', async () => {
   const env = setup({ installed: MODELS })
-  await env.session.startDuel('voice', 4)
+  await env.session.startDuel('conversation', 4, undefined, undefined, false, true)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+  assert.equal(env.session.getDuelView().spoken, true)
   env.session.askDuel('Bonjour')
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
   env.session.runDuelB()
   await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
   await env.session.voteDuel('tie')
   await env.session.endDuel()
-  assert.deepEqual(env.profile.models, { flash: 'alpha-model:3b', medium: 'alpha-model:3b', large: 'bravo-model:8b' })
-  assert.deepEqual(env.profile.voiceModels, { flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b' })
+  assert.deepEqual(env.profile.models, { flash: 'charlie-model:4b', medium: 'charlie-model:4b', large: 'bravo-model:8b' })
+  assert.equal(env.profile.voiceModels, undefined, 'plus de modèles « Vocal » à part')
+})
+
+test('étape 504 : lire à voix haute, seulement en Discussion', async () => {
+  const env = setup({ installed: MODELS })
+  await assert.rejects(env.session.startDuel('code', 4, undefined, undefined, false, true))
+  await assert.rejects(env.session.startDuel('agent', 4, undefined, undefined, false, true))
+  assert.equal(env.session.getDuelView(), null, 'rien n’a démarré')
+})
+
+// Étape 504 (Léo : « oui, Discussion plus Agentique ») : une tâche du test, la même pour A et B, jouée sur le PC
+// simulé l'une après l'autre sans attendre Léo ; le jugement automatique n'est montré qu'après son vote.
+test('étape 504 : duel Agentique — la même tâche pour A puis B, tout seuls, verdict caché jusqu’au vote', async () => {
+  const runs = []
+  globalThis.__duelAgentRun = async (task, model, think, _signal, onStep) => {
+    runs.push({ task: task.id, model, think })
+    onStep({ kind: 'thinking', turn: 0 })
+    onStep({ kind: 'tool', turn: 0, name: 'open_app', args: { app_name: 'Bloc-notes' }, result: 'Bloc-notes a été lancé.' })
+    return { replies: [`Fait par ${model}`], ok: runs.length === 1 }
+  }
+  try {
+    const env = setup({ installed: MODELS })
+    await env.session.startDuel('agent', 4)
+    await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+    assert.equal(env.session.getDuelView().spoken, false)
+    env.session.askDuel('')
+    // B part tout seul après A (rien n'agit sur le vrai PC) : jamais de runDuelB ici.
+    await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+    const view = env.session.getDuelView()
+    assert.equal(view.round.prompt, 'Ouvre le bloc-notes et écris bonjour')
+    assert.deepEqual(runs.map((r) => r.task), ['ouvrir-bloc-notes', 'ouvrir-bloc-notes'], 'la même tâche pour les deux')
+    assert.notEqual(runs[0].model, runs[1].model)
+    assert.equal(env.calls.converse.length, 0, 'jamais converse() : aucun vrai outil')
+    assert.equal(view.round.a.actions[0].tool, 'open_app')
+    assert.match(view.round.a.text, /^Fait par /)
+    assert.deepEqual([view.round.a.check, view.round.b.check], [null, null], 'le verdict ne souffle pas le vote')
+    assert.throws(() => env.session.followUpDuel('Et ferme-le'), 'pas de suite : la tâche a ses propres messages')
+    await env.session.voteDuel('b')
+    const after = env.session.getDuelView()
+    assert.deepEqual([after.round.a.check, after.round.b.check], [true, false], 'après le vote : réussie / ratée')
+    assert.equal(env.votes.at(-1).category, 'agent')
+    assert.equal(env.votes.at(-1).prompt, 'Ouvre le bloc-notes et écris bonjour')
+  } finally {
+    delete globalThis.__duelAgentRun
+  }
 })
 
 // Étape 475 (Léo : « ajoute un Duel Vision, l'utilisateur met juste une image, et aucun prompt, et il doit décrire »).
@@ -817,9 +868,9 @@ test('étape 480 : avis de Claude en Code — le code des deux applications, san
   assert.equal(code.calls.judge.advice.length, 0, 'pas le chemin Vision')
 })
 
-test('étape 480 : avis de Claude en Vocal — Claude sait que la réponse est LUE à voix haute', async () => {
+test('étape 480 : avis de Claude en Discussion lue à voix haute — Claude sait que la réponse est LUE à voix haute', async () => {
   const env = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
-  await env.session.startDuel('voice', 4)
+  await env.session.startDuel('conversation', 4, undefined, undefined, false, true)
   await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
   env.session.askDuel('Quel temps fera-t-il demain ?')
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')

@@ -848,9 +848,8 @@ async function conversation(
     return extra.unavailable
   }
 
-  // Étape 355 : la voix a ses propres modèles quand les votes des duels « Vocal » en ont choisi d'autres.
-  const models = (channel === 'voice' ? profile?.voiceModels : undefined) ??
-    profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
+  // Étape 504 : la voix et le Chat utilisent les mêmes modèles (les duels « Vocal » sont fusionnés dans la Discussion).
+  const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   // Curseur de longueur de contexte (Options -> Modèles) : `undefined` tant que Léo n'y a jamais touché,
   // Jaris garde alors exactement le comportement d'avant ce réglage (OLLAMA_NUM_CTX, config.ts).
   // Léo (« tout automatique ») : la fenêtre de chaque demande est calculée par ollama.ts (autoContextFor) d'après ce
