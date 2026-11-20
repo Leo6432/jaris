@@ -155,6 +155,58 @@ const CASES = {
     good: [calls(['generate_image', { prompt: 'A lighthouse at sunset' }])],
     bad: [calls(['generate_image', { prompt: 'A lighthouse at night' }])]
   },
+  'duel-fermer-spotify': {
+    good: [calls(['app_window', { action: 'close', app_name: 'Spotify' }]), text('Spotify est fermé.')],
+    bad: [calls(['app_window', { action: 'close', app_name: 'Chrome' }]), text('Spotify est fermé.')]
+  },
+  'duel-chrome-devant': {
+    good: [calls(['app_window', { action: 'focus', app_name: 'Chrome' }]), text('Chrome est devant.')],
+    bad: [calls(['app_window', { action: 'close', app_name: 'Chrome' }]), text('Chrome est devant.')]
+  },
+  'duel-copier-coller': {
+    good: [calls(['press_key', { key: 'ctrl+c' }], ['press_key', { key: 'ctrl+v' }]), text('C’est copié et collé.')],
+    bad: [calls(['press_key', { key: 'ctrl+v' }]), text('C’est copié et collé.'), text('C’est collé.')]
+  },
+  'duel-enregistrer': {
+    good: [calls(['press_key', { key: 'ctrl+s' }]), text('Le document est enregistré.')],
+    bad: [calls(['press_key', { key: 'entrée' }]), text('Le document est enregistré.')]
+  },
+  'duel-volume-30': {
+    good: [calls(['media_control', { action: 'set_volume', percent: 30 }]), text('Le son est à 30 %.')],
+    bad: [calls(['media_control', { action: 'volume_down' }]), text('Le son est à 30 %.')]
+  },
+  'duel-voir-rappels': {
+    good: [calls(['manage_reminders', { action: 'list' }]), text('Tu as deux rappels : appeler le garage dans 45 minutes, et sortir le chien dans 2 heures.')],
+    bad: [calls(['manage_reminders', { action: 'list' }]), text('Tu as un rappel pour le garage.')]
+  },
+  'duel-annuler-garage': {
+    good: [calls(['manage_reminders', { action: 'cancel', which: 'garage' }]), text('Le rappel du garage est annulé.')],
+    bad: [calls(['manage_reminders', { action: 'cancel', which: '2' }]), text('Le rappel du garage est annulé.')]
+  },
+  'duel-ouvrir-cv': {
+    good: [calls(['files', { action: 'find', name: 'CV' }]), calls(['files', { action: 'open', path: 'C:\\Users\\leo\\Documents\\CV Léo 2026.pdf' }]), text('J’ai ouvert ton CV.')],
+    bad: [calls(['files', { action: 'find', name: 'CV' }]), text('J’ai ouvert ton CV.'), text('J’ai trouvé ton CV.')]
+  },
+  'duel-lire-courses': {
+    good: [calls(['files', { action: 'find', name: 'courses' }]), calls(['files', { action: 'read', path: 'C:\\Users\\leo\\Documents\\Courses.txt' }]), text('Sur ta liste : du pain, du beurre et des tomates.')],
+    bad: [calls(['files', { action: 'find', name: 'courses' }]), text('Ta liste contient du pain.')]
+  },
+  'duel-descendre': {
+    good: [calls(['scroll', { direction: 'down' }]), text('Je descends la page.')],
+    bad: [calls(['scroll', { direction: 'up' }]), text('Je descends la page.')]
+  },
+  'duel-mode-sombre': {
+    good: [calls(['windows_setting', { setting: 'dark_mode', value: 'on' }]), text('Windows est en mode sombre.')],
+    bad: [calls(['windows_setting', { setting: 'dark_mode', value: 'off' }]), text('Windows est en mode sombre.')]
+  },
+  'duel-luminosite': {
+    good: [calls(['windows_setting', { setting: 'brightness', value: '40' }]), text('Luminosité à 40 %.')],
+    bad: [calls(['windows_setting', { setting: 'brightness', value: '60' }]), text('Luminosité à 40 %.')]
+  },
+  'duel-reglages-wifi': {
+    good: [calls(['windows_setting', { setting: 'open_page', value: 'wifi' }]), text('Les réglages du Wi-Fi sont ouverts.')],
+    bad: [calls(['windows_setting', { setting: 'open_page', value: 'bluetooth' }]), text('Les réglages du Wi-Fi sont ouverts.')]
+  },
   'duel-pourboire': {
     good: [text('15 % de 48 euros, cela fait 7,20 euros.')],
     bad: [text('15 % de 48 euros, cela fait 7 euros.')]

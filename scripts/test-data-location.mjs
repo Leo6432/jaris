@@ -1263,7 +1263,9 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
     'electron/services/requestJournal.ts': { uses: 1, writes: ['journal-demandes.txt'] },
     // removeLeftoverSearxng(getDataRoot()) et removeLeftoverTerminalBench(getDataRoot()) : effacent les anciens
     // dossiers `searxng-docker` (étape 337) et `terminal-bench` (étape 353), n'y écrivent rien.
-    'electron/main.ts': { uses: 2, writes: [] }
+    'electron/main.ts': { uses: 2, writes: [] },
+    // Étape 508 : l'outil « fichiers » REFUSE de lire ou d'ouvrir les données de Jaris (relecture adverse) : n'y écrit rien.
+    'electron/services/fileTools.ts': { uses: 1, writes: [] }
   }
   for (const [file, uses] of indirect) {
     assert.ok(

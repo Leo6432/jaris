@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { TOOLS, withoutDateTimeNote } from './benchmark-cases.mjs'
+import { CONVERSATION_NUM_CTX, TOOLS, withoutDateTimeNote } from './benchmark-cases.mjs'
 import {
   FALLBACK_REPLY,
   MAX_HISTORY_MESSAGES,
@@ -20,6 +20,8 @@ import {
   SCENARIO_TEST_VERSION,
   SCENARIO_TOTAL,
   createSimulator,
+  SETTINGS_PAGE_NAMES,
+  ALLOWED_SHORTCUTS,
   demandSuccessRate,
   directSocialReply,
   findLeakedToolName,
@@ -592,7 +594,7 @@ test('le VRAI converse() et la copie du test envoient les mêmes requêtes et do
     }
     assert.equal(run.turns.length, jaris.outcomes.length, `${what} : nombre de tours joués`)
     assert.deepEqual(JSON.parse(JSON.stringify(run.finalState)), JSON.parse(JSON.stringify({ ...jaris.state, notes: Object.fromEntries(jaris.state.notes) })), `${what} : état final du PC`)
-    // Jaris envoie toujours la fenêtre de contexte du test (8192) et ses outils — sauf la dernière réponse, au
+    // Jaris envoie toujours la fenêtre de contexte du test (CONVERSATION_NUM_CTX) et ses outils — sauf la dernière réponse, au
     // plafond d'actions (étape 402), qui part sans aucun outil.
     const finalNote = (messages) => messages.at(-1)?.role === 'system' && /nombre maximal d'actions/.test(messages.at(-1).content)
     // Jaris laisse ollama.ts calculer la fenêtre (automatique) ; le test des modèles, lui, garde 8192 (scores mesurés ainsi).
@@ -701,10 +703,21 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
     'electron/services/computerUse.ts': ["if (!goal.trim()) return t('pilot.noGoal')"],
     'electron/services/inputControl.ts': [
       '`Texte tapé.`', 'Touche "${key}" pressée.', 'Action "${action}" effectuée.', 'return "Aucun texte à taper."',
-      "t('input.typeFailed', { error })", 'Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(\', \')}.',
+      "t('input.typeFailed', { error })",
+      'Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(\', \')}, F1 à F12 ; raccourcis permis : ${ALLOWED_SHORTCUTS.join(\', \')}.',
+      // Étape 508 : défiler.
+      "`Défilé de ${n} cran${n > 1 ? 's' : ''} vers le ${dir === 'up' ? 'haut' : 'bas'}.`",
       'Action multimédia "${action}" inconnue. Actions disponibles : ${Object.keys(MEDIA_KEY_CODES).join(\', \')}.',
       '`Clic ${safeButton} effectué${hasPos ? ` à (${px}, ${py})` : \'\'}.`'
-    ]
+    ],
+    // Étape 508 : les nouveaux outils.
+    'electron/services/pcControl.ts': [
+      "`${chosen[0].title} est au premier plan.`", "`Volume réglé à ${level} %.`", "`Luminosité réglée à ${percent} %.`",
+      "'Mode sombre activé.' : 'Mode clair activé.'", "`Page de Paramètres ouverte : ${String(value)}.`",
+      "`Action \"${action}\" inconnue : close ou focus.`", "'Pourcentage de volume invalide : un nombre de 0 à 100.'"
+    ],
+    'electron/services/reminders.ts': ["'Aucun rappel programmé.'", "`Rappel annulé : ${target.message}.`", '`Plusieurs rappels correspondent, lequel annuler ?\\n`'],
+    'electron/services/fileTools.ts': ['`Ouvert : ${real}`', "'Dis le nom (ou une partie du nom) du fichier à chercher.'"]
   }
   for (const [file, snippets] of Object.entries(sources)) {
     const content = read(file)
@@ -714,7 +727,24 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
   const input = read('electron/services/inputControl.ts')
   const keysOf = (name) => [...input.match(new RegExp(`const ${name}: Record<string, number> = \\{([^}]+)\\}`))[1].matchAll(/^\s*'?([^':\n]+?)'?:/gm)].map((m) => m[1])
   const sim = createSimulator()
-  assert.equal(sim.execute('press_key', { key: 'F5' }).result, `Touche "F5" inconnue. Touches disponibles : ${keysOf('KEY_CODES').join(', ')}.`)
+  assert.equal(sim.execute('press_key', { key: 'F13' }).result, `Touche "F13" inconnue. Touches disponibles : ${keysOf('KEY_CODES').join(', ')}, F1 à F12 ; raccourcis permis : ${ALLOWED_SHORTCUTS.join(', ')}.`)
+  // La liste des raccourcis permis est exactement celle de inputControl.ts.
+  const realShortcuts = [...read('electron/services/inputControl.ts').match(/export const ALLOWED_SHORTCUTS = \[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1])
+  assert.deepEqual(ALLOWED_SHORTCUTS, realShortcuts)
+  assert.match(sim.execute('press_key', { key: 'ctrl+shift+échap' }).result, /^Touche "ctrl\+shift\+échap" inconnue/)
+  assert.equal(sim.execute('press_key', { key: 'Shift + Ctrl + T' }).result, 'Touche "Shift + Ctrl + T" pressée.')
+  // Étape 508 : raccourcis — permis comme dans inputControl.ts (parseKeys), « win+r » refusé ; une lettre seule aussi.
+  assert.equal(sim.execute('press_key', { key: 'Ctrl + C' }).result, 'Touche "Ctrl + C" pressée.')
+  assert.match(sim.execute('press_key', { key: 'win+r' }).result, /^Touche "win\+r" inconnue/)
+  assert.match(sim.execute('press_key', { key: 'a' }).result, /^Touche "a" inconnue/)
+  assert.equal(sim.execute('media_control', { action: 'set_volume', percent: 130 }).result, 'Volume réglé à 100 %.')
+  // Les pages de Paramètres du simulateur sont exactement celles de pcControl.ts.
+  const pages = [...read('electron/services/pcControl.ts').match(/SETTINGS_PAGES: Record<string, string> = \{([^}]+)\}/)[1].matchAll(/^\s*(\w+):/gm)].map((m) => m[1])
+  assert.deepEqual(SETTINGS_PAGE_NAMES, pages)
+  // Les messages traduits du simulateur sont les textes français de Jaris.
+  const fr = read('shared/i18n/fr.ts')
+  assert.ok(fr.includes('"pc.appNotOpen": "Aucune fenêtre ouverte ne correspond à « {app} »."'))
+  assert.equal(sim.execute('app_window', { action: 'close', app_name: 'Spotify' }).result, 'Aucune fenêtre ouverte ne correspond à « Spotify ».')
   assert.equal(sim.execute('media_control', { action: 'louder' }).result, `Action multimédia "louder" inconnue. Actions disponibles : ${keysOf('MEDIA_KEY_CODES').join(', ')}.`)
   assert.equal(sim.execute('open_app', { app_name: 'bloc notes' }).result, 'Bloc-notes a été lancé.')
   assert.equal(sim.execute('set_reminder', { message: ' Linge ', delay_minutes: 1 }).result, 'Rappel programmé dans 1 minute : Linge')
@@ -853,17 +883,17 @@ test('vrai script : demandes complètes notées, trace, configuration et graines
     // Aucune des 78 questions n'est reposée : seuls des messages de demandes complètes arrivent.
     assert.ok(fake.requests.every((r) => SCENARIOS.some((s) => r.messages.some((m) => m.role === 'user' && withoutDateTimeNote(m.content) === s.turns[0]))))
     // Détail lisible : configuration, ratés avec leur raison, et chaque passage avec sa graine et sa trace.
-    assert.match(results, /### ministral-3:3b \(demandes\) — 48\/48\n\nConfiguration : digest abcdef123456, [^\n]*réflexion envoyée medium, contexte 8192/)
+    assert.match(results, /### ministral-3:3b \(demandes\) — 48\/48\n\nConfiguration : digest abcdef123456, [^\n]*réflexion envoyée medium, contexte 16384/)
     assert.match(results, /### qwen3:1\.7b \(demandes\) — 0\/48\n\nConfiguration : [^\n]*réflexion envoyée désactivée \(refusée par le modèle\)/)
     assert.match(results, /Réussite moyenne par demande : 100 % \(40 demandes, dont 8 jouées deux fois\)/)
-    assert.match(results, /Relances de Jaris : \d+ ; réponses coupées \(fenêtre pleine\) : 0 ; [^\n]*tokens envoyés : médiane 5000, maximum 5000 sur 8192/)
+    assert.match(results, /Relances de Jaris : \d+ ; réponses coupées \(fenêtre pleine\) : 0 ; [^\n]*tokens envoyés : médiane 5000, maximum 5000 sur 16384/)
     assert.match(results, /- RATÉ 1\/1 « ne-pas-lancer — Ne lance pas Spotify[^»]*» — obtenu : appel non prévu : open_app/)
     assert.match(results, /- RATÉ 2\/2 « bitcoin — /)
     assert.match(results, /compté juste — graine 1\d{3} — \[1\] « Lance Spotify et monte le son\. » ⇒ open_app \{"app_name":"Spotify"\} → « Spotify a été lancé\. »/)
     // Graines : chaque passage d'une demande a la sienne.
     const seedsOf = (model) => new Set(fake.requests.filter((r) => r.model === model).map((r) => r.options.seed))
     assert.equal(seedsOf('ministral-3:3b').size, SCENARIO_TOTAL)
-    assert.ok(fake.requests.every((r) => r.options.num_ctx === 8192))
+    assert.ok(fake.requests.every((r) => r.options.num_ctx === CONVERSATION_NUM_CTX))
     // Données brutes : chaque passage, complet, relisible et rejugeable sans relancer le test.
     const rawLine = results.split('\n').find((l) => l.startsWith('- `ministral-3:3b` '))
     const raw = JSON.parse(rawLine.slice('- `ministral-3:3b` '.length))

@@ -575,7 +575,14 @@ const ACTION_LABEL: Record<string, MessageKey> = {
   get_system_stats: 'duel.action.get_system_stats',
   media_control: 'duel.action.media_control',
   computer_use_task: 'duel.action.computer_use_task',
-  generate_image: 'duel.action.generate_image'
+  generate_image: 'duel.action.generate_image',
+  // Étape 508 : les nouveaux outils, et éteindre (simulé en Agentique).
+  app_window: 'duel.action.app_window',
+  manage_reminders: 'duel.action.manage_reminders',
+  files: 'duel.action.files',
+  scroll: 'duel.action.scroll',
+  windows_setting: 'duel.action.windows_setting',
+  shutdown_pc: 'duel.action.shutdown_pc'
 }
 
 const PHASE_LABEL: Record<Exclude<DuelActivity['kind'], 'action'>, MessageKey> = {

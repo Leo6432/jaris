@@ -14,6 +14,8 @@ import { engineStepFromLine, engineStepLine } from '../../shared/imageGallery'
 export const PHONE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'open_app',
   'set_reminder',
+  // Étape 508 : voir et annuler ses rappels depuis le téléphone (rien d'affiché ni de piloté sur le PC).
+  'manage_reminders',
   'search_web',
   'read_web_page',
   'remember',

@@ -12,7 +12,7 @@ import { t } from '../../shared/i18n'
 /** Un signe de vie tous les 50 caractères tapés : moins d'une seconde, même à ~16 ms par caractère (voir POWERSHELL_IDLE_MS). */
 export const TYPE_ALIVE_EVERY = 50
 
-const INPUT_HELPER_CS = `
+export const INPUT_HELPER_CS = `
 using System;
 using System.Runtime.InteropServices;
 
@@ -113,6 +113,35 @@ public static class JarisInput
         SendInput(1, new INPUT[] { up }, Marshal.SizeOf(typeof(INPUT)));
     }
 
+    /** Étape 508 : un raccourci (ctrl+c, alt+tab…) — les modificateurs enfoncés, la touche, puis tout relâché à l'envers. */
+    public static void KeyCombo(ushort[] modifiers, ushort vk)
+    {
+        foreach (ushort m in modifiers) SendKey(m, 0);
+        SendKey(vk, 0);
+        SendKey(vk, KEYEVENTF_KEYUP);
+        for (int i = modifiers.Length - 1; i >= 0; i--) SendKey(modifiers[i], KEYEVENTF_KEYUP);
+    }
+
+    private static void SendKey(ushort vk, uint flags)
+    {
+        // Flèches, Début, Fin, Inser, Suppr : touches « étendues », sinon Windows les prend pour celles du pavé numérique
+        // (Verr. Num. activé) et shift+flèche ne sélectionne rien.
+        if ((vk >= 0x21 && vk <= 0x28) || vk == 0x2D || vk == 0x2E) flags |= 0x0001;
+        INPUT k = new INPUT();
+        k.type = INPUT_KEYBOARD;
+        k.U.ki = new KEYBDINPUT { wVk = vk, wScan = 0, dwFlags = flags, time = 0, dwExtraInfo = IntPtr.Zero };
+        SendInput(1, new INPUT[] { k }, Marshal.SizeOf(typeof(INPUT)));
+    }
+
+    /** Étape 508 : la molette, notches crans (positif = vers le haut), là où se trouve la souris. */
+    public static void Wheel(int notches)
+    {
+        INPUT w = new INPUT();
+        w.type = INPUT_MOUSE;
+        w.U.mi = new MOUSEINPUT { dx = 0, dy = 0, mouseData = (uint)(notches * 120), dwFlags = 0x0800, time = 0, dwExtraInfo = IntPtr.Zero };
+        SendInput(1, new INPUT[] { w }, Marshal.SizeOf(typeof(INPUT)));
+    }
+
     public static void Click(int x, int y, bool hasPos, string button)
     {
         if (hasPos) SetCursorPos(x, y);
@@ -195,8 +224,17 @@ function killTree(proc: ReturnType<typeof spawn>): void {
 }
 
 function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, idleMs = POWERSHELL_IDLE_MS): Promise<string | null> {
-  const script = `Add-Type -TypeDefinition @'${INPUT_HELPER_CS}'@ -ErrorAction Stop\n${invocation}`
-  return new Promise((resolve) => {
+  return runPowerShellScript(`Add-Type -TypeDefinition @'${INPUT_HELPER_CS}'@ -ErrorAction Stop\n${invocation}`, env, idleMs).then((r) => r.error)
+}
+
+/**
+ * Étape 508 : un script PowerShell quelconque, surveillé par inactivité comme les actions clavier/souris. Les données de
+ * l'utilisateur passent TOUJOURS par `env` (relues avec $env:), jamais dans le texte du script. `error` : `null` si le
+ * script a réussi ; `stdout` : ce qu'il a écrit.
+ */
+export function runPowerShellScript(script: string, env?: NodeJS.ProcessEnv, idleMs = POWERSHELL_IDLE_MS): Promise<{ error: string | null; stdout: string }> {
+  let stdout = ''
+  return new Promise<string | null>((resolve) => {
     const proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true,
       env: env ?? process.env
@@ -219,14 +257,17 @@ function runPowerShell(invocation: string, env?: NodeJS.ProcessEnv, idleMs = POW
     }
     alive()
     let stderr = ''
-    proc.stdout?.on('data', alive)
+    proc.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString()
+      alive()
+    })
     proc.stderr?.on('data', (chunk) => {
       stderr += chunk.toString()
       alive()
     })
     proc.on('error', (err) => finish(err.message))
     proc.on('close', (code) => finish(code === 0 ? null : stderr.trim() || `code de sortie ${code}`))
-  })
+  }).then((error) => ({ error, stdout }))
 }
 
 /** Tape du texte à l'endroit où se trouve le focus actuel (champ de texte, barre de recherche...). */
@@ -292,14 +333,109 @@ export async function waitForForegroundApp(
   }
 }
 
-/** Appuie sur une touche spéciale nommée (entrée, tab, échap...), whitelist fixe dans KEY_CODES. */
-export async function pressKey(key: string): Promise<string> {
-  const vk = KEY_CODES[key.trim().toLowerCase()]
-  if (vk === undefined) {
-    return `Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(', ')}.`
+/**
+ * Étape 508 (Léo : « oui tout », pour les outils qui manquaient) : les raccourcis clavier. Modificateurs et touches
+ * toujours lus dans des listes fixes : un texte libre ne peut jamais déclencher une touche non prévue.
+ */
+const MODIFIER_CODES: Record<string, number> = {
+  ctrl: 0x11,
+  control: 0x11,
+  contrôle: 0x11,
+  controle: 0x11,
+  alt: 0x12,
+  shift: 0x10,
+  maj: 0x10,
+  majuscule: 0x10,
+  win: 0x5b,
+  windows: 0x5b
+}
+
+/**
+ * Relecture adverse (étape 508) : les raccourcis permis, et SEULEMENT eux. Bloquer « win+r » ne suffisait pas : la
+ * recherche du menu Démarrer (win+s, ctrl+échap), le Gestionnaire des tâches (ctrl+shift+échap), alt+f4 sur le bureau ou
+ * win+1…9 mènent aussi à lancer une commande. Copier, coller, annuler, enregistrer, chercher, onglets, changer de
+ * fenêtre, sélectionner du texte, afficher le bureau : rien d'autre.
+ */
+export const ALLOWED_SHORTCUTS = [
+  'ctrl+a', 'ctrl+c', 'ctrl+v', 'ctrl+x', 'ctrl+z', 'ctrl+y', 'ctrl+s', 'ctrl+f', 'ctrl+p', 'ctrl+n', 'ctrl+t', 'ctrl+w',
+  'ctrl+r', 'ctrl+l', 'ctrl+tab', 'ctrl+début', 'ctrl+fin', 'ctrl+gauche', 'ctrl+droite',
+  'ctrl+shift+t', 'ctrl+shift+tab', 'ctrl+shift+gauche', 'ctrl+shift+droite',
+  'alt+tab', 'alt+shift+tab', 'alt+gauche', 'alt+droite',
+  'shift+tab', 'shift+haut', 'shift+bas', 'shift+gauche', 'shift+droite', 'shift+début', 'shift+fin',
+  'win+d'
+]
+
+/** Une lettre, un chiffre ou F1…F12, en plus des touches nommées de KEY_CODES. */
+function keyCode(name: string): number | undefined {
+  if (Object.hasOwn(KEY_CODES, name)) return KEY_CODES[name]
+  if (/^[a-z]$/.test(name)) return name.toUpperCase().charCodeAt(0)
+  if (/^[0-9]$/.test(name)) return name.charCodeAt(0)
+  const f = name.match(/^f([1-9]|1[0-2])$/)
+  if (f) return 0x70 + Number(f[1]) - 1
+  return undefined
+}
+
+/** Une touche (« entrée ») ou un raccourci (« ctrl+c », « alt + tab », « ctrl+shift+t ») ; `null` si inconnu. */
+export function parseKeys(key: string): { modifiers: number[]; vk: number } | null {
+  const parsed = parseKeysRaw(key)
+  if (!parsed || !parsed.modifiers.length) return parsed
+  return ALLOWED_SIGNATURES.has(signature(parsed)) ? parsed : null
+}
+
+function signature(parsed: { modifiers: number[]; vk: number }): string {
+  return `${[...parsed.modifiers].sort((a, b) => a - b).join('+')}|${parsed.vk}`
+}
+
+function parseKeysRaw(key: string): { modifiers: number[]; vk: number } | null {
+  const parts = key
+    .trim()
+    .toLowerCase()
+    .split(/\s*\+\s*/)
+    .filter(Boolean)
+  if (!parts.length) return null
+  const last = parts[parts.length - 1]
+  const vk = keyCode(last)
+  if (vk === undefined) return null
+  const modifiers: number[] = []
+  for (const part of parts.slice(0, -1)) {
+    const code = Object.hasOwn(MODIFIER_CODES, part) ? MODIFIER_CODES[part] : undefined
+    if (code === undefined || modifiers.includes(code)) return null
+    modifiers.push(code)
   }
-  const error = await runPowerShell(`[JarisInput]::KeyPress(${vk})`)
+  // Une lettre ou un chiffre seuls s'écrivent avec type_text : press_key, ce sont les touches spéciales et les raccourcis.
+  if (!modifiers.length && !Object.hasOwn(KEY_CODES, last) && !/^f([1-9]|1[0-2])$/.test(last)) return null
+  if (!Number.isInteger(vk) || modifiers.some((m) => !Number.isInteger(m))) return null
+  return { modifiers, vk }
+}
+
+const ALLOWED_SIGNATURES = new Set(
+  ALLOWED_SHORTCUTS.map((combo) => {
+    const parsed = parseKeysRaw(combo)
+    if (!parsed) throw new Error(`raccourci permis illisible : ${combo}`)
+    return signature(parsed)
+  })
+)
+
+/** Appuie sur une touche spéciale nommée (entrée, tab, échap...) ou un raccourci (ctrl+c, alt+tab...), listes fixes. */
+export async function pressKey(key: string): Promise<string> {
+  const parsed = parseKeys(key)
+  if (!parsed) {
+    return `Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(', ')}, F1 à F12 ; raccourcis permis : ${ALLOWED_SHORTCUTS.join(', ')}.`
+  }
+  const invocation = parsed.modifiers.length
+    ? `[JarisInput]::KeyCombo([uint16[]]@(${parsed.modifiers.join(',')}), ${parsed.vk})`
+    : `[JarisInput]::KeyPress(${parsed.vk})`
+  const error = await runPowerShell(invocation)
   return error ? t('input.keyFailed', { error }) : `Touche "${key}" pressée.`
+}
+
+/** Étape 508 : fait défiler (molette) vers le haut ou le bas, de 1 à 20 crans, là où se trouve la souris. */
+export async function scrollWheel(direction: string, amount: unknown): Promise<string> {
+  const dir = direction.trim().toLowerCase()
+  if (dir !== 'up' && dir !== 'down') return `Direction "${direction}" inconnue : up ou down.`
+  const n = Math.min(20, Math.max(1, Math.round(Number(amount) || 3)))
+  const error = await runPowerShell(`[JarisInput]::Wheel(${dir === 'up' ? n : -n})`)
+  return error ? t('input.scrollFailed', { error }) : `Défilé de ${n} cran${n > 1 ? 's' : ''} vers le ${dir === 'up' ? 'haut' : 'bas'}.`
 }
 
 /**

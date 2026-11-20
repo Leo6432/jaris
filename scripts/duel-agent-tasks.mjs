@@ -343,6 +343,128 @@ export const DUEL_AGENT_TASKS = [
     }
   },
 
+  // --- Étape 508 : les nouveaux outils (fermer une application, raccourcis, volume exact, rappels, fichiers, défiler,
+  // réglages). Le test des modèles ne les pose pas encore : ces tâches les font jouer en attendant.
+  {
+    id: 'duel-fermer-spotify',
+    family: 'Applications',
+    turns: ['Ferme Spotify.'],
+    allow: ['app_window'],
+    setup: { windows: ['Spotify', 'Google Chrome'] },
+    check: (ctx) => {
+      if (ctx.state.closed.some((c) => c.app === 'Google Chrome')) return 'a fermé Chrome, qui n’était pas demandé'
+      return ctx.state.closed.some((c) => c.app === 'Spotify') ? null : 'Spotify n’a pas été fermé'
+    }
+  },
+  {
+    id: 'duel-chrome-devant',
+    family: 'Applications',
+    turns: ['Remets Chrome au premier plan.'],
+    allow: ['app_window'],
+    setup: { windows: ['Google Chrome', 'Discord'] },
+    check: (ctx) => {
+      if (ctx.state.closed.length) return 'a fermé une application au lieu de la remettre devant'
+      return ctx.state.focused.some((f) => f.app === 'Google Chrome') ? null : 'Chrome n’a pas été remis au premier plan'
+    }
+  },
+  {
+    id: 'duel-copier-coller',
+    family: 'Écrire',
+    turns: ['Copie le texte sélectionné puis colle-le.'],
+    allow: ['press_key'],
+    check: (ctx) => {
+      const keys = ctx.state.keys.map((k) => k.key)
+      const copy = keys.indexOf('ctrl+c')
+      if (copy < 0) return 'rien n’a été copié (ctrl+c)'
+      return keys.indexOf('ctrl+v', copy + 1) > copy ? null : 'rien n’a été collé après la copie (ctrl+v)'
+    }
+  },
+  {
+    id: 'duel-enregistrer',
+    family: 'Écrire',
+    turns: ['Enregistre le document.'],
+    allow: ['press_key'],
+    check: (ctx) => (ctx.state.keys.some((k) => k.key === 'ctrl+s') ? null : 'le document n’a pas été enregistré (ctrl+s)')
+  },
+  {
+    id: 'duel-volume-30',
+    family: 'Musique et son',
+    turns: ['Mets le son à 30 %.'],
+    allow: ['media_control'],
+    check: (ctx) => (ctx.state.volume === 30 ? null : 'le volume n’a pas été réglé à 30 %')
+  },
+  {
+    id: 'duel-voir-rappels',
+    family: 'Rappels',
+    turns: ["Qu'est-ce que j'ai comme rappels ?"],
+    allow: ['manage_reminders'],
+    setup: { reminders: [{ message: 'Appeler le garage', delay: 45 }, { message: 'Sortir le chien', delay: 120 }] },
+    check: (ctx) => {
+      if (!ctx.state.remindersListed) return 'n’a pas regardé les rappels'
+      const reply = replyOf(ctx)
+      return /garage/.test(reply) && /chien/.test(reply) ? null : 'les deux rappels (garage, chien) ne sont pas dans la réponse'
+    }
+  },
+  {
+    id: 'duel-annuler-garage',
+    family: 'Rappels',
+    turns: ['Annule mon rappel du garage.'],
+    allow: ['manage_reminders'],
+    setup: { reminders: [{ message: 'Appeler le garage', delay: 45 }, { message: 'Sortir le chien', delay: 120 }] },
+    check: (ctx) => {
+      if (ctx.state.cancelled.some((r) => /chien/i.test(r.message))) return 'a annulé le mauvais rappel (le chien)'
+      return ctx.state.cancelled.some((r) => /garage/i.test(r.message)) ? null : 'le rappel du garage n’a pas été annulé'
+    }
+  },
+  {
+    id: 'duel-ouvrir-cv',
+    family: 'Fichiers',
+    turns: ['Ouvre mon CV.'],
+    allow: ['files'],
+    setup: { files: { 'C:\\Users\\leo\\Documents\\CV Léo 2026.pdf': '', 'C:\\Users\\leo\\Documents\\Courses.txt': 'pain, beurre, tomates' } },
+    check: (ctx) => (ctx.state.filesOpened.some((f) => /CV Léo 2026\.pdf$/.test(f.path)) ? null : 'le CV n’a pas été ouvert')
+  },
+  {
+    id: 'duel-lire-courses',
+    family: 'Fichiers',
+    turns: ["Qu'est-ce qu'il y a dans ma liste de courses ?"],
+    allow: ['files'],
+    setup: { files: { 'C:\\Users\\leo\\Documents\\Courses.txt': 'pain, beurre, tomates', 'C:\\Users\\leo\\Documents\\CV Léo 2026.pdf': '' } },
+    check: (ctx) => {
+      if (!ctx.state.filesRead.length) return 'la liste n’a pas été lue'
+      const reply = replyOf(ctx)
+      return /beurre/.test(reply) && /tomates?/.test(reply) ? null : 'le contenu de la liste n’est pas dans la réponse'
+    }
+  },
+  {
+    id: 'duel-descendre',
+    family: 'Le PC',
+    turns: ['Descends un peu la page.'],
+    allow: ['scroll'],
+    check: (ctx) => (ctx.state.scrolls.some((s) => s.direction === 'down') ? null : 'la page n’a pas défilé vers le bas')
+  },
+  {
+    id: 'duel-mode-sombre',
+    family: 'Le PC',
+    turns: ['Passe Windows en mode sombre.'],
+    allow: ['windows_setting'],
+    check: (ctx) => (ctx.state.settings.some((x) => x.setting === 'dark_mode' && x.value === true) ? null : 'le mode sombre n’a pas été activé')
+  },
+  {
+    id: 'duel-luminosite',
+    family: 'Le PC',
+    turns: ['Mets la luminosité à 40 %.'],
+    allow: ['windows_setting'],
+    check: (ctx) => (ctx.state.settings.some((x) => x.setting === 'brightness' && x.value === 40) ? null : 'la luminosité n’a pas été réglée à 40 %')
+  },
+  {
+    id: 'duel-reglages-wifi',
+    family: 'Le PC',
+    turns: ['Ouvre les réglages du Wi-Fi.'],
+    allow: ['windows_setting'],
+    check: (ctx) => (ctx.state.settings.some((x) => x.setting === 'open_page' && x.value === 'wifi') ? null : 'la page Wi-Fi des Paramètres n’a pas été ouverte')
+  },
+
   // --- Calcul ---
   {
     id: 'duel-pourboire',

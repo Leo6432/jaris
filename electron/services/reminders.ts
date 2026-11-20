@@ -95,6 +95,54 @@ export async function scheduleReminder(message: string, delayMinutes: number, on
   return `Rappel programmé dans ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''} : ${reminder.message}`
 }
 
+/** Minuscules, sans accents ni ponctuation : « Sortir les pâtes ! » et « pates » se comparent. */
+function plain(text: string): string {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+/** « dans 9 min (10 h 09) » : le temps restant et l'heure, comme Léo les dirait. */
+function whenText(fireAt: string, now: number): string {
+  const at = new Date(fireAt)
+  const minutes = Math.max(0, Math.round((at.getTime() - now) / 60_000))
+  const clock = `${at.getHours()} h ${String(at.getMinutes()).padStart(2, '0')}`
+  const sameDay = at.toDateString() === new Date(now).toDateString()
+  return `dans ${minutes} min (${sameDay ? clock : `${at.toLocaleDateString('fr-FR')} à ${clock}`})`
+}
+
+/** Étape 508 (Léo : « oui tout ») : les rappels à venir, numérotés dans l'ordre où ils sonneront. */
+export async function listReminders(now: number = Date.now()): Promise<string> {
+  const reminders = (await readReminders()).sort((a, b) => a.fireAt.localeCompare(b.fireAt))
+  if (!reminders.length) return 'Aucun rappel programmé.'
+  return reminders.map((r, i) => `${i + 1}. ${r.message} — ${whenText(r.fireAt, now)}`).join('\n')
+}
+
+/**
+ * Étape 508 : annule un rappel, désigné par son numéro dans listReminders ou par des mots de son message. Plusieurs
+ * rappels correspondent : rien n'est annulé, la liste revient au modèle pour qu'il demande lequel.
+ */
+export async function cancelReminder(which: string, now: number = Date.now()): Promise<string> {
+  const wanted = which.trim()
+  if (!wanted) return 'Dis quel rappel annuler (son numéro ou quelques mots de son message).'
+  return exclusive(async () => {
+    const reminders = (await readReminders()).sort((a, b) => a.fireAt.localeCompare(b.fireAt))
+    if (!reminders.length) return 'Aucun rappel programmé.'
+    const index = /^\d+$/.test(wanted) ? Number(wanted) - 1 : -1
+    const words = plain(wanted).split(' ').filter((w) => w.length >= 2)
+    const matches =
+      index >= 0 && index < reminders.length
+        ? [reminders[index]]
+        : reminders.filter((r) => words.length > 0 && words.every((w) => plain(r.message).includes(w)))
+    if (!matches.length) return `Aucun rappel ne correspond à « ${wanted} ». Rappels programmés :\n` + reminders.map((r, i) => `${i + 1}. ${r.message} — ${whenText(r.fireAt, now)}`).join('\n')
+    if (matches.length > 1) return `Plusieurs rappels correspondent, lequel annuler ?\n` + matches.map((r) => `${reminders.indexOf(r) + 1}. ${r.message} — ${whenText(r.fireAt, now)}`).join('\n')
+    const target = matches[0]
+    await writeReminders(reminders.filter((r) => r.id !== target.id))
+    const timer = timers.get(target.id)
+    if (timer) clearTimeout(timer)
+    timers.delete(target.id)
+    return `Rappel annulé : ${target.message}.`
+  })
+}
+
 /** À appeler au démarrage : réarme les rappels persistés (ceux déjà en retard se déclenchent immédiatement). */
 export async function restoreReminders(onFire: ReminderFireHandler): Promise<void> {
   let reminders: Reminder[]

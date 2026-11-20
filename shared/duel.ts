@@ -281,7 +281,12 @@ export function isJarisToolFailure(tool: string, errorName: string | null | unde
 }
 
 /** Ce que Jaris ne fait jamais pendant un duel : un modèle qui se trompe ne doit pas éteindre le PC de Léo. */
-export const DUEL_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set(['shutdown_pc'])
+/**
+ * Étape 508 : en Discussion, les modèles agissent sur le VRAI PC de Léo — jamais fermer ses applications, annuler ses
+ * rappels, changer ses réglages ni lire ses fichiers (un avis de Claude enverrait leur contenu chez Anthropic). En
+ * Agentique (PC simulé), tous les outils restent permis.
+ */
+export const DUEL_FORBIDDEN_TOOLS: ReadonlySet<string> = new Set(['shutdown_pc', 'app_window', 'manage_reminders', 'files', 'windows_setting'])
 
 /** Ce que ce PC peut faire tourner, lu au début d'un duel. `installed` : `null` si Ollama n'a pas répondu. */
 export interface DuelMachineTools {
@@ -652,7 +657,12 @@ const DETAIL_FIELDS: Record<string, string> = {
   press_key: 'key',
   media_control: 'action',
   computer_use_task: 'goal',
-  generate_image: 'prompt'
+  generate_image: 'prompt',
+  app_window: 'app_name',
+  manage_reminders: 'which',
+  files: 'name',
+  scroll: 'direction',
+  windows_setting: 'setting'
 }
 
 /** Coupe un détail trop long pour une ligne (une recherche ou un texte tapé de plusieurs phrases). */

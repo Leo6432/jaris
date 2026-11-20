@@ -110,6 +110,31 @@ export const CAPABILITIES: CapabilityGroup[] = [
         description: 'capabilities.g1.i9.description',
         example: 'capabilities.g1.i9.example',
         toolNames: ['shutdown_pc']
+      },
+      // Étape 508 : fermer/remettre devant une application, défiler, réglages de Windows, fichiers.
+      {
+        title: 'capabilities.g1.i10.title',
+        description: 'capabilities.g1.i10.description',
+        example: 'capabilities.g1.i10.example',
+        toolNames: ['app_window']
+      },
+      {
+        title: 'capabilities.g1.i11.title',
+        description: 'capabilities.g1.i11.description',
+        example: 'capabilities.g1.i11.example',
+        toolNames: ['scroll']
+      },
+      {
+        title: 'capabilities.g1.i12.title',
+        description: 'capabilities.g1.i12.description',
+        example: 'capabilities.g1.i12.example',
+        toolNames: ['windows_setting']
+      },
+      {
+        title: 'capabilities.g1.i13.title',
+        description: 'capabilities.g1.i13.description',
+        example: 'capabilities.g1.i13.example',
+        toolNames: ['files']
       }
     ]
   },
@@ -152,6 +177,12 @@ export const CAPABILITIES: CapabilityGroup[] = [
         description: 'capabilities.g3.i3.description',
         example: 'capabilities.g3.i3.example',
         toolNames: ['set_reminder']
+      },
+      {
+        title: 'capabilities.g3.i4.title',
+        description: 'capabilities.g3.i4.description',
+        example: 'capabilities.g3.i4.example',
+        toolNames: ['manage_reminders']
       }
     ]
   },

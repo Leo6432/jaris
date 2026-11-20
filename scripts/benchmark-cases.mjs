@@ -48,10 +48,12 @@ export const CONVERSATION_TEST_VERSION = 6
 export const CONVERSATION_REPEATS = 3
 
 /**
- * Fenêtre de contexte des questions de conversation : la valeur minimale que Jaris utilise en vrai
- * (OLLAMA_NUM_CTX, electron/config.ts). Sans elle, Ollama prend sa valeur par défaut (4096).
+ * Fenêtre de contexte des questions de conversation. Sans elle, Ollama prend sa valeur par défaut (4096).
+ * Étape 508 : 16 384 — le premier palier que Jaris utilise vraiment en conversation (AUTO_CONTEXT_STEPS, ollama.ts).
+ * Avec 20 outils, consignes + outils dépassent ~7 500 tokens estimés : 8 192 ne laissait presque plus de place à la
+ * réflexion et à la réponse.
  */
-export const CONVERSATION_NUM_CTX = 8192
+export const CONVERSATION_NUM_CTX = 16384
 
 export const TOOLS = [
   {
@@ -224,13 +226,13 @@ export const TOOLS = [
     "type": "function",
     "function": {
       "name": "press_key",
-      "description": "Appuie sur une touche spéciale du clavier (par exemple pour valider un formulaire ou une recherche juste après avoir tapé du texte avec type_text).",
+      "description": "Appuie sur une touche spéciale du clavier (par exemple pour valider un formulaire ou une recherche juste après avoir tapé du texte avec type_text) ou sur un raccourci.",
       "parameters": {
         "type": "object",
         "properties": {
           "key": {
             "type": "string",
-            "description": "Nom de la touche : entrée, tab, échap, espace, retour arrière, suppr, haut, bas, gauche, droite, début, fin"
+            "description": "Nom de la touche : entrée, tab, échap, espace, retour arrière, suppr, haut, bas, gauche, droite, début, fin ; ou un raccourci, ex: \"ctrl+c\", \"alt+tab\""
           }
         },
         "required": [
@@ -285,7 +287,7 @@ export const TOOLS = [
     "type": "function",
     "function": {
       "name": "media_control",
-      "description": "Contrôle la lecture multimédia ou le volume du système, un cran à la fois (comme une touche multimédia physique) : monter/baisser le son, couper/réactiver le son, lecture/pause, piste suivante/précédente. Pour le volume, un appel = un seul cran : pour \"monte beaucoup le son\", appelle-le plusieurs fois.",
+      "description": "Contrôle la lecture multimédia ou le volume du système, un cran à la fois (comme une touche multimédia physique) : monter/baisser le son, couper/réactiver le son, lecture/pause, piste suivante/précédente. Pour le volume, un appel = un seul cran : pour \"monte beaucoup le son\", appelle-le plusieurs fois. Volume précis : set_volume avec percent (0 à 100).",
       "parameters": {
         "type": "object",
         "properties": {
@@ -298,8 +300,12 @@ export const TOOLS = [
               "mute",
               "play_pause",
               "next",
-              "previous"
+              "previous",
+              "set_volume"
             ]
+          },
+          "percent": {
+            "type": "number"
           }
         },
         "required": [
@@ -342,6 +348,138 @@ export const TOOLS = [
         },
         "required": [
           "prompt"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "app_window",
+      "description": "Ferme une application ouverte (comme sa croix) ou la remet au premier plan.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "close",
+              "focus"
+            ]
+          },
+          "app_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "app_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "manage_reminders",
+      "description": "Liste les rappels programmés, ou en annule un (which : son numéro ou des mots de son message).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "cancel"
+            ]
+          },
+          "which": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "files",
+      "description": "Fichiers de l'utilisateur (Documents, Bureau, Téléchargements, Images, Musique, Vidéos) : find cherche par name et donne les chemins ; open ouvre ce path ; read lit ce fichier texte.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "find",
+              "open",
+              "read"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "scroll",
+      "description": "Fait défiler la fenêtre sous la souris (amount : crans de molette, 3 par défaut).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "windows_setting",
+      "description": "Réglage de Windows. value : brightness = 0 à 100 ; dark_mode = on ou off ; open_page = wifi, bluetooth, display, sound, colors, battery, updates ou apps.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "brightness",
+              "dark_mode",
+              "open_page"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "setting",
+          "value"
         ]
       }
     }

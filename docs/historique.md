@@ -12772,3 +12772,48 @@ entendus ; LanguageTool demande Java ; Grammalecte, le français seul). Puis « 
   0,3 s de moins par phrase au moins. Journal : « Voix — correction par la liste de mots ».
 - Texte de l'option mis à jour (24 langues). Tests : test-transcript-corrector (réécrit, mord), test-model-preload,
   test-request-journal, faux ponts de test-voice-pipeline-346 et test-voice-restart.
+
+## Étape 508 — Sept outils de plus : raccourcis, fermer/basculer une app, rappels, fichiers, défiler, volume exact, réglages
+
+Léo : « est-ce que Jaris donne assez d'outils ? » → liste de ce qui manquait (passait jusqu'ici par le pilotage d'écran,
+lent et peu fiable) → « oui tout ».
+- 5 outils nouveaux, 2 enrichis (20 outils en tout) : `press_key` accepte des raccourcis ; `media_control` prend
+  `set_volume` + `percent` (Core Audio, IAudioEndpointVolume, sans dépendance) ; `app_window` (close/focus,
+  pcControl.ts) ; `manage_reminders` (list/cancel, reminders.ts) ; `files` (find/open/read, fileTools.ts) ; `scroll`
+  (molette, SendInput) ; `windows_setting` (luminosité par CIM, mode sombre, pages ms-settings: d'une liste fixe).
+  Toute valeur passe par variable d'environnement, jamais dans le texte d'un script PowerShell.
+- Mode sombre, version Store : Windows isole les écritures HKCU d'une application du Store (doc Microsoft « How packaged
+  desktop apps run on Windows ») — l'écrire aurait eu l'air de marcher sans rien changer ; la version Store ouvre la page
+  « Couleurs ». Version .exe : écrit directement.
+- Taille : consignes + outils estimés (2,5 car./token, comme ollama.ts) passaient de 6 817 à 8 237 — au-delà de
+  16 384 − 8 192 de réserve, CHAQUE demande serait passée à la fenêtre de 32 768 (deux fois plus de mémoire). Descriptions
+  raccourcies, aucune phrase ajoutée aux consignes : 7 579, marge 613 (avant : 1 375). Le test des modèles passe à
+  CONVERSATION_NUM_CTX = 16 384, le premier palier réel de Jaris (8 192 ne laissait presque plus de place).
+- Le test des 78 questions n'est PAS modifié : Jaris ne reconnaît que les scores mesurés sur les mêmes questions —
+  en ajouter effaçait tous les scores vérifiés. Les 5 nouveaux outils sont exercés par 13 nouvelles tâches Agentique
+  (44 tâches propres au duel), le PC simulé les connaît (mêmes textes que les vrais outils, vérifiés par test), et
+  test-benchmark-cases liste explicitement les outils « pas encore dans les questions ». Les scores existants ont été
+  mesurés avec 15 outils dans les consignes : remesure conseillée à la prochaine occasion.
+- Ce que Jaris sait faire : 5 entrées (24 langues) ; libellés des actions en duel ; 15 + 3 messages d'erreur (24 langues).
+- Duel Discussion (vrai PC) : app_window, manage_reminders, files, windows_setting interdits ; téléphone :
+  manage_reminders seulement.
+- Relecture adverse (agent séparé), corrigée :
+  H1 un texte lu (page, fichier) pouvait faire lire un fichier puis l'envoyer dans une adresse web → après un fichier
+  lu dans une demande, plus aucune page hors demande/recherche, plus d'outil MCP (assistant.ts, executeTool : le point
+  où tout passe) ; fichiers lisibles réduits à .txt/.md/.csv/.srt (plus .json/.ini/.log, souvent des secrets).
+  H2 un chemin \\serveur\… était résolu (realpath) AVANT le refus : Windows y aurait envoyé l'identifiant de Léo →
+  refus des chemins réseau et contrôle sur le texte du chemin avant tout accès disque.
+  M1 bloquer win+r ne suffisait pas (win+s, ctrl+échap, ctrl+shift+échap, alt+f4, win+1…9) → LISTE de raccourcis
+  permis (ALLOWED_SHORTCUTS, copiée et vérifiée dans le simulateur). M2 en duel et depuis le téléphone : une touche
+  seule, jamais un raccourci. M3 « ferme X » fermait toute fenêtre dont un mot ressemblait (onglet « Spotify » d'un
+  navigateur, Teams pour Edge, « word » dans « password ») → le programme d'abord, sinon le nom entier, jamais un
+  navigateur pour un autre nom, plusieurs programmes = on demande. M4 jamais les données de Jaris (même déplacées dans
+  Documents) ni un dossier AppData. L1 clés d'objet (« constructor ») refusées. L3 fichiers OneDrive « à la demande »
+  (vus comme des liens par Windows) plus ignorés : un lien est suivi s'il reste chez Léo. L4 « code de sortie 3 » dit en
+  clair ; remettre devant est vérifié (Windows peut seulement faire clignoter). L5 touches étendues pour shift+flèches.
+  Non fait, noté : L2 (annuler « le 2 » si un rappel a sonné entre-temps vise le suivant) ; ouvrir PowerShell/Terminal par
+  open_app reste possible (existant avant cette étape, utile à Léo).
+- Tests (mordent) : test-new-tools (raccourcis, défilement, fenêtres, volume, réglages, rappels, fichiers sur le vrai
+  disque, chemins réseau sans accès disque, données de Jaris ; sur la CI Windows : scripts PowerShell valides, C#
+  compilé, liste des fenêtres lue), test-assistant-history (exfiltration, raccourcis en duel), test-duel-agent-tasks,
+  test-benchmark-cases, test-benchmark-scenarios. Non vérifié en usage réel : pas de Windows ici.

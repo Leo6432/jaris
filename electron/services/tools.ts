@@ -2,11 +2,13 @@ import type { OllamaTool } from './ollama'
 import { launchedAppName, openApp } from './appLauncher'
 import { computerUseTask } from './computerUse'
 import { rememberNote, recallNote } from './memoryStore'
-import { scheduleReminder } from './reminders'
+import { cancelReminder, listReminders, scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWebDetailed } from './webSearch'
 import { readWebPage } from './webPage'
-import { clickMouse, mediaKey, pressKey, typeText, waitForForegroundApp } from './inputControl'
+import { clickMouse, mediaKey, pressKey, scrollWheel, typeText, waitForForegroundApp } from './inputControl'
+import { appWindow, setVolume, windowsSetting } from './pcControl'
+import { filesTool } from './fileTools'
 import { getSystemStatsText, shutdownPc } from './systemControl'
 import { generateImage, type GeneratedImage } from './imageGenerator'
 import type { WebActivity } from '../../shared/ipc'
@@ -172,7 +174,7 @@ export const TOOLS: OllamaTool[] = [
       name: 'press_key',
       description:
         'Appuie sur une touche spéciale du clavier (par exemple pour valider un formulaire ou une recherche ' +
-        'juste après avoir tapé du texte avec type_text).',
+        'juste après avoir tapé du texte avec type_text) ou sur un raccourci.',
       parameters: {
         type: 'object',
         properties: {
@@ -180,7 +182,7 @@ export const TOOLS: OllamaTool[] = [
             type: 'string',
             description:
               'Nom de la touche : entrée, tab, échap, espace, retour arrière, suppr, haut, bas, gauche, ' +
-              'droite, début, fin'
+              'droite, début, fin ; ou un raccourci, ex: "ctrl+c", "alt+tab"'
           }
         },
         required: ['key']
@@ -227,15 +229,16 @@ export const TOOLS: OllamaTool[] = [
         "Contrôle la lecture multimédia ou le volume du système, un cran à la fois (comme une touche " +
         'multimédia physique) : monter/baisser le son, couper/réactiver le son, lecture/pause, piste ' +
         "suivante/précédente. Pour le volume, un appel = un seul cran : pour \"monte beaucoup le son\", " +
-        'appelle-le plusieurs fois.',
+        'appelle-le plusieurs fois. Volume précis : set_volume avec percent (0 à 100).',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
             description: 'Action à effectuer',
-            enum: ['volume_up', 'volume_down', 'mute', 'play_pause', 'next', 'previous']
-          }
+            enum: ['volume_up', 'volume_down', 'mute', 'play_pause', 'next', 'previous', 'set_volume']
+          },
+          percent: { type: 'number' }
         },
         required: ['action']
       }
@@ -288,6 +291,73 @@ export const TOOLS: OllamaTool[] = [
           }
         },
         required: ['prompt']
+      }
+    }
+  },
+  // Étape 508 (Léo : « oui tout », pour les outils qui manquaient). Descriptions courtes à dessein : consignes + outils
+  // doivent rester sous ~7 500 tokens estimés, sinon chaque demande passe à la fenêtre de 32 768 (ollama.ts,
+  // AUTO_CONTEXT_STEPS) et le modèle prend deux fois plus de mémoire (vérifié par test-benchmark-cases).
+  {
+    type: 'function',
+    function: {
+      name: 'app_window',
+      description: 'Ferme une application ouverte (comme sa croix) ou la remet au premier plan.',
+      parameters: {
+        type: 'object',
+        properties: { action: { type: 'string', enum: ['close', 'focus'] }, app_name: { type: 'string' } },
+        required: ['action', 'app_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_reminders',
+      description: 'Liste les rappels programmés, ou en annule un (which : son numéro ou des mots de son message).',
+      parameters: {
+        type: 'object',
+        properties: { action: { type: 'string', enum: ['list', 'cancel'] }, which: { type: 'string' } },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'files',
+      description:
+        "Fichiers de l'utilisateur (Documents, Bureau, Téléchargements, Images, Musique, Vidéos) : find cherche par " +
+        'name et donne les chemins ; open ouvre ce path ; read lit ce fichier texte.',
+      parameters: {
+        type: 'object',
+        properties: { action: { type: 'string', enum: ['find', 'open', 'read'] }, name: { type: 'string' }, path: { type: 'string' } },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'scroll',
+      description: 'Fait défiler la fenêtre sous la souris (amount : crans de molette, 3 par défaut).',
+      parameters: {
+        type: 'object',
+        properties: { direction: { type: 'string', enum: ['up', 'down'] }, amount: { type: 'number' } },
+        required: ['direction']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'windows_setting',
+      description:
+        'Réglage de Windows. value : brightness = 0 à 100 ; dark_mode = on ou off ; open_page = wifi, bluetooth, ' +
+        'display, sound, colors, battery, updates ou apps.',
+      parameters: {
+        type: 'object',
+        properties: { setting: { type: 'string', enum: ['brightness', 'dark_mode', 'open_page'] }, value: { type: 'string' } },
+        required: ['setting', 'value']
       }
     }
   },
@@ -408,7 +478,23 @@ export function createToolExecutor(
       case 'get_system_stats':
         return getSystemStatsText()
       case 'media_control':
+        // Étape 508 : un volume précis en pourcentage.
+        if (String(args.action ?? '').trim().toLowerCase() === 'set_volume') return setVolume(args.percent)
         return mediaKey(String(args.action ?? ''))
+      case 'app_window':
+        return appWindow(String(args.action ?? '').trim().toLowerCase(), String(args.app_name ?? ''))
+      case 'manage_reminders': {
+        const action = String(args.action ?? '').trim().toLowerCase()
+        if (action === 'list') return listReminders()
+        if (action === 'cancel') return cancelReminder(String(args.which ?? ''))
+        return `Action "${action}" inconnue : list ou cancel.`
+      }
+      case 'files':
+        return filesTool(String(args.action ?? '').trim().toLowerCase(), { name: args.name, path: args.path })
+      case 'scroll':
+        return scrollWheel(String(args.direction ?? ''), args.amount)
+      case 'windows_setting':
+        return windowsSetting(String(args.setting ?? '').trim().toLowerCase(), args.value)
       case 'generate_image': {
         const image = await generateImage(String(args.prompt ?? ''), onLog, signal)
         onImage?.(image)

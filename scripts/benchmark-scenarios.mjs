@@ -25,7 +25,7 @@ export const SCENARIO_TEST_VERSION = 3
 
 /** Même valeur que MAX_TOOL_ROUNDS (assistant.ts), vérifiée par le test. */
 /** Copie de LOOKUP_TOOLS (assistant.ts), vérifiée par le test : après l'un d'eux, pas de relance vers search_web. */
-export const LOOKUP_TOOLS = new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats'])
+export const LOOKUP_TOOLS = new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats', 'manage_reminders', 'files'])
 
 export const MAX_TOOL_ROUNDS = 20
 
@@ -364,6 +364,22 @@ const KEY_NAMES = [
   'debut', 'home', 'fin', 'end'
 ]
 const MEDIA_ACTIONS = ['volume_up', 'volume_down', 'mute', 'play_pause', 'next', 'previous']
+/** Étape 508 : MODIFIER_CODES (inputControl.ts) et leur forme canonique. */
+const MODIFIER_NAMES_CANON = { ctrl: 'ctrl', control: 'ctrl', contrôle: 'ctrl', controle: 'ctrl', alt: 'alt', shift: 'shift', maj: 'shift', majuscule: 'shift', win: 'win', windows: 'win' }
+const MODIFIER_NAMES = Object.keys(MODIFIER_NAMES_CANON)
+const MODIFIER_ORDER = ['ctrl', 'alt', 'shift', 'win']
+const KEY_ALIASES = { tabulation: 'tab', debut: 'début', home: 'début', end: 'fin' }
+/** Étape 508 : ALLOWED_SHORTCUTS (inputControl.ts), dans le même ordre (il fait partie du message d'erreur). */
+export const ALLOWED_SHORTCUTS = [
+  'ctrl+a', 'ctrl+c', 'ctrl+v', 'ctrl+x', 'ctrl+z', 'ctrl+y', 'ctrl+s', 'ctrl+f', 'ctrl+p', 'ctrl+n', 'ctrl+t', 'ctrl+w',
+  'ctrl+r', 'ctrl+l', 'ctrl+tab', 'ctrl+début', 'ctrl+fin', 'ctrl+gauche', 'ctrl+droite',
+  'ctrl+shift+t', 'ctrl+shift+tab', 'ctrl+shift+gauche', 'ctrl+shift+droite',
+  'alt+tab', 'alt+shift+tab', 'alt+gauche', 'alt+droite',
+  'shift+tab', 'shift+haut', 'shift+bas', 'shift+gauche', 'shift+droite', 'shift+début', 'shift+fin',
+  'win+d'
+]
+/** Étape 508 : SETTINGS_PAGES (pcControl.ts). */
+export const SETTINGS_PAGE_NAMES = ['wifi', 'bluetooth', 'display', 'sound', 'colors', 'night_light', 'battery', 'notifications', 'updates', 'apps', 'default_apps', 'mouse', 'keyboard', 'printers', 'storage', 'privacy', 'language', 'date_time', 'power']
 
 /** Arguments d'un appel : objet, ou chaîne JSON chez certains modèles. */
 export function argsOf(raw) {
@@ -419,8 +435,22 @@ export function createSimulator(setup = {}) {
     shutdowns: [],
     images: [],
     screenLooks: 0,
-    statsReads: 0
+    statsReads: 0,
+    // Étape 508 : les nouveaux outils. `windows` : les applications ouvertes avant la demande (en plus de celles
+    // qu'ouvre le modèle) ; `files` : { chemin complet : contenu } dans les dossiers de l'utilisateur.
+    closed: [],
+    focused: [],
+    cancelled: [],
+    remindersListed: 0,
+    filesFound: [],
+    filesOpened: [],
+    filesRead: [],
+    scrolls: [],
+    settings: [],
+    volume: null
   }
+  for (const r of setup.reminders ?? []) state.reminders.push({ message: r.message, delay: r.delay, turn: -1 })
+  const openWindows = () => [...new Set([...(setup.windows ?? []), ...state.opened.map((o) => o.app)])].filter((app) => !state.closed.some((c) => c.app === app))
 
   const noteTitles = () => [...state.notes.keys()].sort(byWindowsOrder)
 
@@ -451,8 +481,16 @@ export function createSimulator(setup = {}) {
       }
       case 'press_key': {
         const key = str(args.key)
-        if (!KEY_NAMES.includes(key.trim().toLowerCase())) return { result: `Touche "${key}" inconnue. Touches disponibles : ${KEY_NAMES.join(', ')}.` }
-        state.keys.push({ key: key.trim().toLowerCase(), turn })
+        // Étape 508 : les raccourcis (ctrl+c, alt+tab…), avec les mêmes règles que parseKeys (inputControl.ts).
+        const parts = key.trim().toLowerCase().split(/\s*\+\s*/).filter(Boolean)
+        const last = parts.at(-1) ?? ''
+        const mods = parts.slice(0, -1)
+        const isKey = KEY_NAMES.includes(last) || /^f([1-9]|1[0-2])$/.test(last) || (mods.length > 0 && /^[a-z0-9]$/.test(last))
+        const okMods = mods.every((m) => MODIFIER_NAMES.includes(m)) && new Set(mods.map((m) => MODIFIER_NAMES_CANON[m])).size === mods.length
+        const canon = [...mods.map((m) => MODIFIER_NAMES_CANON[m]).sort((a, b) => MODIFIER_ORDER.indexOf(a) - MODIFIER_ORDER.indexOf(b)), KEY_ALIASES[last] ?? last].join('+')
+        const allowed = !mods.length || ALLOWED_SHORTCUTS.includes(canon)
+        if (!parts.length || !isKey || !okMods || !allowed) return { result: `Touche "${key}" inconnue. Touches disponibles : ${KEY_NAMES.join(', ')}, F1 à F12 ; raccourcis permis : ${ALLOWED_SHORTCUTS.join(', ')}.` }
+        state.keys.push({ key: canon, turn })
         return { result: `Touche "${key}" pressée.` }
       }
       case 'click_mouse': {
@@ -529,11 +567,103 @@ export function createSimulator(setup = {}) {
         return { result: 'CPU à 23%, RAM à 47%, 5.1 Go de VRAM libre, GPU à 52 degrés.' }
       case 'media_control': {
         const action = str(args.action)
+        // Étape 508 : un volume précis en pourcentage.
+        if (action.trim().toLowerCase() === 'set_volume') {
+          const value = Number(args.percent)
+          if (!Number.isFinite(value)) return { result: 'Pourcentage de volume invalide : un nombre de 0 à 100.' }
+          state.volume = Math.min(100, Math.max(0, Math.round(value)))
+          state.media.push({ action: 'set_volume', percent: state.volume, turn })
+          return { result: `Volume réglé à ${state.volume} %.` }
+        }
         if (!MEDIA_ACTIONS.includes(action.trim().toLowerCase())) {
           return { result: `Action multimédia "${action}" inconnue. Actions disponibles : ${MEDIA_ACTIONS.join(', ')}.` }
         }
         state.media.push({ action: action.trim().toLowerCase(), turn })
         return { result: `Action "${action}" effectuée.` }
+      }
+      case 'app_window': {
+        const action = str(args.action).trim().toLowerCase()
+        const wanted = str(args.app_name)
+        if (action !== 'close' && action !== 'focus') return { result: `Action "${action}" inconnue : close ou focus.` }
+        if (!wanted.trim()) return { result: "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir." }
+        const app = findApp(apps.filter((a) => openWindows().includes(a.name)), wanted)
+        if (!app) return { result: `Aucune fenêtre ouverte ne correspond à « ${wanted} ».` }
+        if (action === 'close') {
+          state.closed.push({ app: app.name, turn })
+          return { result: `Fermé : ${app.name}.` }
+        }
+        state.focused.push({ app: app.name, turn })
+        state.screen = `Je vois la fenêtre de ${app.name} ouverte au premier plan.`
+        return { result: `${app.name} est au premier plan.` }
+      }
+      case 'manage_reminders': {
+        const action = str(args.action).trim().toLowerCase()
+        const live = state.reminders.filter((r) => !state.cancelled.includes(r))
+        const line = (r, i) => `${i + 1}. ${r.message} — dans ${r.delay} min`
+        if (action === 'list') {
+          state.remindersListed++
+          return { result: live.length ? live.map(line).join('\n') : 'Aucun rappel programmé.' }
+        }
+        if (action !== 'cancel') return { result: `Action "${action}" inconnue : list ou cancel.` }
+        const which = str(args.which).trim()
+        if (!which) return { result: 'Dis quel rappel annuler (son numéro ou quelques mots de son message).' }
+        if (!live.length) return { result: 'Aucun rappel programmé.' }
+        const index = /^\d+$/.test(which) ? Number(which) - 1 : -1
+        const words = norm(which).split(' ').filter((w) => w.length >= 2)
+        const matches = index >= 0 && index < live.length ? [live[index]] : live.filter((r) => words.length > 0 && words.every((w) => norm(r.message).includes(w)))
+        if (!matches.length) return { result: `Aucun rappel ne correspond à « ${which} ». Rappels programmés :\n` + live.map(line).join('\n') }
+        if (matches.length > 1) return { result: 'Plusieurs rappels correspondent, lequel annuler ?\n' + matches.map((r) => line(r, live.indexOf(r))).join('\n') }
+        state.cancelled.push(matches[0])
+        return { result: `Rappel annulé : ${matches[0].message}.` }
+      }
+      case 'files': {
+        const action = str(args.action).trim().toLowerCase()
+        const files = setup.files ?? {}
+        if (action === 'find') {
+          const words = norm(str(args.name)).split(' ').filter((w) => w.length >= 2)
+          if (!words.length) return { result: 'Dis le nom (ou une partie du nom) du fichier à chercher.' }
+          state.filesFound.push({ name: str(args.name), turn })
+          const found = Object.keys(files).filter((path) => words.every((w) => norm(path.split('\\').at(-1)).includes(w)))
+          return { result: found.length ? found.map((path) => `[fichier] ${path} (modifié le 01/10/2026)`).join('\n') : `Aucun fichier ni dossier dont le nom contient « ${str(args.name)} » dans les dossiers de l'utilisateur.` }
+        }
+        if (action !== 'open' && action !== 'read') return { result: `Action "${action}" inconnue : find, open ou read.` }
+        const path = str(args.path)
+        if (!(path in files)) return { result: `Fichier introuvable : ${path}` }
+        if (action === 'open') {
+          state.filesOpened.push({ path, turn })
+          return { result: `Ouvert : ${path}` }
+        }
+        if (!/\.(txt|md|csv|json|log)$/i.test(path)) return { result: "Je ne lis que les fichiers texte, pas ce type de fichier." }
+        state.filesRead.push({ path, turn })
+        return { result: files[path] }
+      }
+      case 'scroll': {
+        const direction = str(args.direction).trim().toLowerCase()
+        if (direction !== 'up' && direction !== 'down') return { result: `Direction "${direction}" inconnue : up ou down.` }
+        const n = Math.min(20, Math.max(1, Math.round(Number(args.amount) || 3)))
+        state.scrolls.push({ direction, amount: n, turn })
+        return { result: `Défilé de ${n} cran${n > 1 ? 's' : ''} vers le ${direction === 'up' ? 'haut' : 'bas'}.` }
+      }
+      case 'windows_setting': {
+        const setting = str(args.setting).trim().toLowerCase()
+        const value = str(args.value).trim().toLowerCase()
+        if (setting === 'brightness') {
+          const level = Number(value.replace('%', ''))
+          if (!Number.isFinite(level)) return { result: 'Luminosité invalide : un nombre de 0 à 100.' }
+          state.settings.push({ setting, value: Math.min(100, Math.max(0, Math.round(level))), turn })
+          return { result: `Luminosité réglée à ${Math.min(100, Math.max(0, Math.round(level)))} %.` }
+        }
+        if (setting === 'dark_mode') {
+          const dark = /^(true|on|oui|sombre|dark|1)$/.test(value)
+          state.settings.push({ setting, value: dark, turn })
+          return { result: dark ? 'Mode sombre activé.' : 'Mode clair activé.' }
+        }
+        if (setting === 'open_page') {
+          if (!SETTINGS_PAGE_NAMES.includes(value)) return { result: `Page "${value}" inconnue. Pages disponibles : ${SETTINGS_PAGE_NAMES.join(', ')}.` }
+          state.settings.push({ setting, value, turn })
+          return { result: `Page de Paramètres ouverte : ${value}.` }
+        }
+        return { result: `Réglage "${setting}" inconnu : brightness, dark_mode ou open_page.` }
       }
       case 'shutdown_pc':
         state.shutdowns.push({ restart: isTrue(args.restart), turn })
@@ -738,8 +868,10 @@ export function rejudge(scenario, record) {
  * l'écran, lui, reste réservé aux demandes qui agissent à l'écran (étape 242) : il charge le modèle de vision.
  */
 const HARMLESS_TOOLS = new Set(['search_web', 'read_web_page', 'remember', 'recall_memory', 'get_system_stats'])
+// Étape 508 : voir les rappels et chercher ou lire un fichier ne changent rien — permis partout, comme les autres lectures.
+const HARMLESS_ACTIONS = { manage_reminders: ['list'], files: ['find', 'read'] }
 /** Outils qui agissent sur ce qui est affiché : après eux, regarder l'écran pour vérifier est permis (étape 242). */
-const SCREEN_ACTIONS = new Set(['open_app', 'type_text', 'press_key', 'click_mouse', 'computer_use_task', 'media_control'])
+const SCREEN_ACTIONS = new Set(['open_app', 'type_text', 'press_key', 'click_mouse', 'computer_use_task', 'media_control', 'app_window', 'scroll'])
 
 /**
  * Règles communes, puis le jugement propre à la demande. Un appel non prévu (outil inconnu, ou outil qui agit sur
@@ -764,7 +896,8 @@ export function judge(scenario, ctx) {
     // Étape 242 : regarder l'écran pour vérifier une action À L'ÉCRAN (application ouverte, texte écrit) est
     // légitime ; pour une question de météo ou de mémoire, il n'y a rien à y voir.
     const looksToCheck = call.name === 'look_at_screen' && [...allowed].some((t) => SCREEN_ACTIONS.has(t))
-    if (!HARMLESS_TOOLS.has(call.name) && !allowed.has(call.name) && !looksToCheck) return { ok: false, reason: `appel non prévu : ${call.name} ${JSON.stringify(call.args)}` }
+    const harmlessAction = HARMLESS_ACTIONS[call.name]?.includes(str(argsOf(call.args).action).trim().toLowerCase())
+    if (!HARMLESS_TOOLS.has(call.name) && !harmlessAction && !allowed.has(call.name) && !looksToCheck) return { ok: false, reason: `appel non prévu : ${call.name} ${JSON.stringify(call.args)}` }
   }
   const reason = scenario.check(ctx)
   return reason ? { ok: false, reason } : { ok: true, reason: null }
