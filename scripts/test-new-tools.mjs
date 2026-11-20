@@ -388,6 +388,24 @@ test('relecture adverse : jamais les données de Jaris (même déplacées dans D
   assert.equal(await files.readTextFile(join(docs, 'liste.txt'), [docs]), 'ok')
   assert.match(await files.readTextFile(join(data, 'notes.txt'), [docs]), /^Je n'ouvre et ne lis que/)
   assert.match(await files.readTextFile(join(docs, 'AppData', 'Roaming', 'jeton.txt'), [docs]), /^Je n'ouvre et ne lis que/)
+  // CI Windows (étape 510) : les données de Jaris désignées par un AUTRE chemin (nom court 8.3, jonction, lien) que
+  // leur vrai chemin restent refusées.
+  const alias = join(base, 'alias-donnees')
+  let aliased = true
+  try {
+    symlinkSync(data, alias, 'junction')
+  } catch {
+    aliased = false
+  }
+  if (aliased) {
+    const viaAlias = loadTsModule('electron/services/fileTools.ts', {
+      electron: { app: { getPath: () => { throw new Error('pas ici') } }, shell: { openPath: async () => '' } },
+      'fs/promises': nodeRequire('fs/promises'),
+      path: nodeRequire('path'),
+      './dataLocation': { getDataRoot: () => alias }
+    })
+    assert.match(await viaAlias.readTextFile(join(data, 'notes.txt'), [docs]), /^Je n'ouvre et ne lis que/, 'données de Jaris par un autre chemin')
+  }
   // CI Windows (étape 509) : le dossier temporaire est sous C:\\Users\\…\\AppData\\Local\\Temp. Un AppData AU-DESSUS du dossier
   // de Léo ne doit rien refuser ; seul un AppData DEDANS compte.
   const underAppData = join(base, 'AppData', 'Local', 'Temp', 'Documents')

@@ -4806,8 +4806,10 @@ textarea:not(.composer__input):focus-visible {
 
   /* Étape 446 : avec les colonnes Vision et Code, un nom très long finit par « … » (nom complet en infobulle), et
      titres de colonnes et scores un peu plus serrés : toutes les colonnes tiennent encore à 760 px. */
+  /* Étape 510 : 150 px, pas 160 — avec un nom long (inkling-2-mini:26b-a5b) la colonne atteint sa limite et, à 760 px,
+     le tableau débordait de 2 px : « Vitesse sur ton PC » sortait du cadre. */
   .options-page--models .options-menu__model-name {
-    max-width: 160px;
+    max-width: 150px;
   }
 
   .options-page--models .options-menu__model-overview th {

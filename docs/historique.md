@@ -12829,3 +12829,33 @@ lent et peu fiable) → « oui tout ».
 - Test (mord, aussi sous Linux) : un dossier autorisé rangé sous `AppData/Local/Temp` laisse lire son fichier.
 - Leçon : un test « vrai disque » sur Windows passe par `tmpdir()`, lui-même dans AppData — penser au chemin COMPLET
   de la CI, pas seulement à la partie créée par le test.
+
+## Étape 510 — 0.75.1 encore bloquée : les données de Jaris lisibles par un autre chemin ; Inkling 2 Mini en « Futur modèle »
+
+- **CI Windows (vrai défaut de sécurité)** : `fileTools.ts` comparait le chemin RÉEL du fichier (realpath) au chemin
+  ÉCRIT des données de Jaris (`getDataRoot()`). Sur la CI, `tmpdir()` est en nom court 8.3 (`RUNNER~1`), le realpath en
+  nom long : la comparaison ratait et les fichiers des données de Jaris redevenaient lisibles. Même risque chez Léo avec
+  une jonction ou un dossier « Déplacé ». Correctif : realpath aussi des dossiers exclus. Test (mord, aussi sous Linux) :
+  données désignées par un lien → toujours refusées.
+- Leçon : une garde de chemin compare des chemins de MÊME nature (realpath des deux côtés), partout — l'étape 508
+  l'avait fait pour les dossiers de Léo mais pas pour les dossiers exclus.
+- **Inkling 2 Mini** (Léo : « Inkling 2 Mini est dingue », puis « met le en futur dans le classement ») : Thinking
+  Machines, sorti le 20/11/2026, 26 Md de paramètres (5,4 actifs), Apache 2.0, lit les images. Registre d'Ollama relu :
+  un seul tag `26b-a5b` (= `latest`), format MLX NVFP4, 20 188 097 918 octets, `requires: 0.40.17` (préversion),
+  « Requires a Mac with 32GB+ memory » → Ollama ne le fait pas tourner sous Windows, donc ligne « Futur modèle »
+  (`shared/futureModels.ts`), jamais choisi. Léo : « il est sur windows » — exact par llama.cpp : GGUF officiels
+  `ggml-org/Inkling-2-Mini-GGUF` (IQ4_NL 17,6 Go, Q8_0 27,8 Go) ; mon premier « Mac seulement » confondait Ollama et
+  le modèle. Jaris passe par Ollama : reste « futur » tant qu'Ollama ne lit pas l'architecture `inkling2` sous Windows. Scores indépendants modestes (Vals AI 38e/43, Artificial Analysis 20) face à ceux de l'éditeur.
+  Capture montrée à Léo (760 px), validée. À tester dès qu'une version GGUF pour Windows existe.
+- Effet de bord mesuré : le nom long `inkling-2-mini:26b-a5b` amène la colonne « Modèle » à sa limite (160 px) ; à
+  760 px le tableau débordait alors de 2 px et « Vitesse sur ton PC » sortait du cadre (test visuel dark/light, qui
+  mord : il échouait avant). Limite ramenée à 150 px (`index.css`) — vrai aussi pour tout autre nom long.
+- Léo : « enlève olala mini dans future model il est trop nul » → retiré de `shared/futureModels.ts`. Son test
+  (taille inconnue = « — », jamais devinée ; autant de cases que de colonnes) garde le cas par un faux modèle du test
+  (`exemple-sans-taille`) et vérifie Inkling 2 Mini (20,2 Go, NVFP4).
+- Léo : « regarde dans des commit ou future commit ». Dépôt d'Ollama relu : PR ollama/ollama#19799 « mlxrunner: add
+  Inkling 2 Mini » (ouverte le 20/11, pas fusionnée), uniquement dans le moteur MLX (`mlx/`, `mlxrunner/`), rien dans
+  le moteur GGML habituel. Or le moteur MLX d'Ollama existe aussi sur Windows avec une carte NVIDIA (CUDA), par un
+  paquet À PART (`ollama-windows-amd64-mlx.zip`, docs/windows.mdx) que Jaris n'installe pas (`ENGINE_ZIP` =
+  `ollama-windows-amd64.zip` seul). Piste quand la PR sera dans une version stable : ajouter ce paquet, puis mesurer
+  pour de vrai (la page d'Ollama ne promet que Mac et DGX Spark).

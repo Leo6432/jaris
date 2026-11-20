@@ -20,6 +20,13 @@ export interface FutureModel {
  * Étape 495 (Léo : « mets-le dans futur modèle ») : Olala mini 7A1B d'OVHcloud, annoncé le 17/11/2026 (communiqué
  * officiel : 7 milliards de paramètres dont 1 actif, Differential-TPA + Mamba-3, Apache 2.0, 32 000 jetons de contexte,
  * texte seulement), présenté le 19/11, poids promis sur Hugging Face. Pas encore sur ollama.com (404 vérifié), aucun
- * score publié : à tester dès qu'Ollama sait le faire tourner.
+ * score publié : à tester dès qu'Ollama sait le faire tourner. Étape 510 (Léo : « enlève olala mini dans future model
+ * il est trop nul ») : retiré.
+ * Étape 510 (Léo : « Inkling 2 Mini est dingue », puis « met le en futur dans le classement ») : Inkling 2 Mini de
+ * Thinking Machines, sorti le 20/11/2026 (26 Md de paramètres, 5,4 Md actifs, Apache 2.0, lit les images). Registre
+ * d'Ollama relu : un seul tag (`26b-a5b` = `latest`, digest 4f5569f2774e), au format MLX (NVFP4), 20 188 097 918 octets,
+ * `requires: 0.40.17` (préversion) et « Requires a Mac with 32GB+ memory » : Ollama ne le fait pas tourner sous Windows,
+ * donc pas candidat. Des GGUF existent (ggml-org/Inkling-2-Mini-GGUF : llama.cpp, Windows compris ; IQ4_NL 17,6 Go) :
+ * à tester dès qu'Ollama sait lire l'architecture `inkling2` sous Windows.
  */
-export const FUTURE_MODELS: FutureModel[] = [{ model: 'Olala mini 7A1B', vramGb: null, readsImages: false, quantization: null }]
+export const FUTURE_MODELS: FutureModel[] = [{ model: 'inkling-2-mini:26b-a5b', vramGb: 20.2, readsImages: true, quantization: 'NVFP4' }]

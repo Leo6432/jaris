@@ -85,7 +85,12 @@ export async function insideRoots(path: string, roots: readonly string[], exclud
     // si Léo les a « Déplacées » dans ses Documents — ni un dossier AppData (jetons d'autres applications). Seulement ce
     // qui est SOUS le dossier de Léo : un dossier de Léo lui-même rangé sous un AppData (la CI Windows : Temp) reste permis.
     if (relative(realRoot, real).split(/[\\/]/).some((part) => part.toLowerCase() === 'appdata')) return null
-    if (excluded.some((dir) => within(dir, real))) return null
+    // CI Windows (étape 510) : comparer au VRAI chemin des données de Jaris, pas à leur écriture (nom court 8.3 comme
+    // RUNNER~1, jonction, lien) — sinon le texte diffère et ses fichiers redevenaient lisibles.
+    for (const dir of excluded) {
+      const realDir = await realpath(dir).catch(() => resolve(dir))
+      if (within(realDir, real) || within(resolve(dir), real)) return null
+    }
     return real
   }
   return null
