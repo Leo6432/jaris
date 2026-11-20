@@ -12817,3 +12817,15 @@ lent et peu fiable) → « oui tout ».
   disque, chemins réseau sans accès disque, données de Jaris ; sur la CI Windows : scripts PowerShell valides, C#
   compilé, liste des fenêtres lue), test-assistant-history (exfiltration, raccourcis en duel), test-duel-agent-tasks,
   test-benchmark-cases, test-benchmark-scenarios. Non vérifié en usage réel : pas de Windows ici.
+
+## Étape 509 — 0.75.0 bloquée par la CI : un AppData AU-DESSUS du dossier de Léo refusait tout
+
+- Constat (journal de la CI, 3 tests en échec sur Windows seulement) : la garde « jamais un dossier AppData » de
+  `fileTools.ts` regardait TOUT le chemin. Sur la CI, le dossier temporaire des tests est sous
+  `C:\Users\…\AppData\Local\Temp` : tout fichier y était refusé, même dans le dossier autorisé.
+- Correctif : seul ce qui est SOUS le dossier de Léo compte (`relative(realRoot, real)`). Un AppData dans ses Documents
+  reste refusé. Chez Léo (Documents hors AppData) rien ne change, mais un dossier personnel redirigé sous un AppData
+  aurait été entièrement bloqué.
+- Test (mord, aussi sous Linux) : un dossier autorisé rangé sous `AppData/Local/Temp` laisse lire son fichier.
+- Leçon : un test « vrai disque » sur Windows passe par `tmpdir()`, lui-même dans AppData — penser au chemin COMPLET
+  de la CI, pas seulement à la partie créée par le test.

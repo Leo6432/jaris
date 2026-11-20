@@ -388,6 +388,12 @@ test('relecture adverse : jamais les données de Jaris (même déplacées dans D
   assert.equal(await files.readTextFile(join(docs, 'liste.txt'), [docs]), 'ok')
   assert.match(await files.readTextFile(join(data, 'notes.txt'), [docs]), /^Je n'ouvre et ne lis que/)
   assert.match(await files.readTextFile(join(docs, 'AppData', 'Roaming', 'jeton.txt'), [docs]), /^Je n'ouvre et ne lis que/)
+  // CI Windows (étape 509) : le dossier temporaire est sous C:\\Users\\…\\AppData\\Local\\Temp. Un AppData AU-DESSUS du dossier
+  // de Léo ne doit rien refuser ; seul un AppData DEDANS compte.
+  const underAppData = join(base, 'AppData', 'Local', 'Temp', 'Documents')
+  mkdirSync(underAppData, { recursive: true })
+  writeFileSync(join(underAppData, 'liste.txt'), 'ok aussi')
+  assert.equal(await files.readTextFile(join(underAppData, 'liste.txt'), [underAppData]), 'ok aussi')
   // Plus de .json, .ini, .log lisibles : ils gardent souvent des mots de passe et des jetons.
   writeFileSync(join(docs, 'config.json'), '{"token":"x"}')
   assert.match(await files.readTextFile(join(docs, 'config.json'), [docs]), /^Je ne lis que les fichiers texte/)

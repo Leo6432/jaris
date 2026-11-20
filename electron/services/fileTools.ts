@@ -82,8 +82,9 @@ export async function insideRoots(path: string, roots: readonly string[], exclud
     }
     if (!within(realRoot, real)) continue
     // Relecture adverse (étape 508) : jamais les données de Jaris (réglages, clés des outils MCP, conversations) — même
-    // si Léo les a « Déplacées » dans ses Documents — ni un dossier AppData (jetons d'autres applications).
-    if (real.split(/[\\/]/).some((part) => part.toLowerCase() === 'appdata')) return null
+    // si Léo les a « Déplacées » dans ses Documents — ni un dossier AppData (jetons d'autres applications). Seulement ce
+    // qui est SOUS le dossier de Léo : un dossier de Léo lui-même rangé sous un AppData (la CI Windows : Temp) reste permis.
+    if (relative(realRoot, real).split(/[\\/]/).some((part) => part.toLowerCase() === 'appdata')) return null
     if (excluded.some((dir) => within(dir, real))) return null
     return real
   }
