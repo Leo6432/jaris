@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris ei lue osoitetta {url}: se johtaa tähän tietokoneeseen tai verkkosi laitteeseen, ei verkkosivustolle.",
   "page.tooManyRedirects": "Sivu {url} ohjaa liian moneen muuhun osoitteeseen: Jaris lopetti sen seuraamisen.",
   "voice.ttsStalled": "Jarisin ääni ei ole vastannut {seconds} s aikana: se käynnistetään uudelleen seuraavaa lausetta varten.",
+  "voice.ttsStartStalled": "Jarisin ääni ei käynnisty: ei elonmerkkejä {seconds} sekuntiin.",
+  "voice.ttsLastMessage": "Ääniohjelman viimeisin viesti: {detail}",
   "input.timeout": "ei vastausta Windowsilta {seconds} s aikana, toiminto keskeytettiin",
   "voice.transcriptionInterrupted": "Litterointia ei voitu viedä loppuun: {reason}.",
   "voice.listeningStopped": "kuuntelu pysäytettiin tietokoneella",

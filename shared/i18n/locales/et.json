@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris ei loe aadressi {url}: see viib sellesse arvutisse või sinu võrgu seadmesse, mitte veebisaidile.",
   "page.tooManyRedirects": "Leht {url} suunab liiga paljudele teistele aadressidele: Jaris lõpetas selle järgimise.",
   "voice.ttsStalled": "Jarise hääl pole {seconds} s jooksul vastanud: see taaskäivitatakse järgmise lause jaoks.",
+  "voice.ttsStartStalled": "Jarise hääl ei käivitu: {seconds} s pole elumärki.",
+  "voice.ttsLastMessage": "Hääleprogrammi viimane teade: {detail}",
   "input.timeout": "Windows ei vastanud {seconds} s jooksul, toiming peatati",
   "voice.transcriptionInterrupted": "Kõnetuvastust ei õnnestunud lõpetada: {reason}.",
   "voice.listeningStopped": "kuulamine peatati arvutis",

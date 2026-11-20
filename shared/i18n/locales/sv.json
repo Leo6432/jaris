@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris läser inte {url}: den här adressen leder till den här datorn eller till en enhet i ditt nätverk, inte till en webbplats.",
   "page.tooManyRedirects": "Sidan {url} omdirigerar till för många andra adresser: Jaris följer den inte längre.",
   "voice.ttsStalled": "Jaris röst har inte svarat på {seconds} s: den startas om vid nästa mening.",
+  "voice.ttsStartStalled": "Jaris röst startar inte: inget livstecken på {seconds} s.",
+  "voice.ttsLastMessage": "Senaste meddelandet från röstprogrammet: {detail}",
   "input.timeout": "inget svar från Windows på {seconds} s, åtgärden stoppades",
   "voice.transcriptionInterrupted": "Transkriberingen kunde inte slutföras: {reason}.",
   "voice.listeningStopped": "lyssnandet stoppades på datorn",

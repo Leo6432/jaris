@@ -1033,6 +1033,8 @@
   "page.blockedAddress": "Jaris ne bere {url}: ta naslov vodi do tega računalnika ali do naprave v tvojem omrežju, ne do spletnega mesta.",
   "page.tooManyRedirects": "Stran {url} preusmerja na preveč drugih naslovov: Jaris ji je nehal slediti.",
   "voice.ttsStalled": "Jarisov glas se ne odziva že {seconds} s: znova se bo zagnal pri naslednjem stavku.",
+  "voice.ttsStartStalled": "Jarisov glas se ne zažene: že {seconds} s ni znaka življenja.",
+  "voice.ttsLastMessage": "Zadnje sporočilo glasovnega programa: {detail}",
   "input.timeout": "ni odziva sistema Windows {seconds} s, dejanje ustavljeno",
   "voice.transcriptionInterrupted": "Prepisa ni bilo mogoče dokončati: {reason}.",
   "voice.listeningStopped": "poslušanje je bilo na računalniku ustavljeno",

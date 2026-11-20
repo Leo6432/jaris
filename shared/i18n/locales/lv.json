@@ -1012,6 +1012,8 @@
   "page.blockedAddress": "Jaris nelasa {url}: šī adrese ved uz šo datoru vai uz ierīci tavā tīklā, nevis uz tīmekļa vietni.",
   "page.tooManyRedirects": "Lapa {url} pāradresē uz pārāk daudzām citām adresēm: Jaris pārstāja tai sekot.",
   "voice.ttsStalled": "Jaris balss neatbild jau {seconds} s: tā tiks restartēta nākamajam teikumam.",
+  "voice.ttsStartStalled": "Jaris balss nestartē: nav dzīvības pazīmju jau {seconds} s.",
+  "voice.ttsLastMessage": "Balss programmas pēdējais ziņojums: {detail}",
   "input.timeout": "Windows neatbildēja {seconds} s, darbība apturēta",
   "voice.transcriptionInterrupted": "Atšifrēšanu neizdevās pabeigt: {reason}.",
   "voice.listeningStopped": "klausīšanās tika apturēta datorā",

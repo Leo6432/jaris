@@ -1012,6 +1012,8 @@
   "page.blockedAddress": "Jaris nečte {url}: tato adresa vede k tomuto PC nebo k zařízení ve tvé síti, ne na webovou stránku.",
   "page.tooManyRedirects": "Stránka {url} přesměrovává na příliš mnoho jiných adres: Jaris ji přestal sledovat.",
   "voice.ttsStalled": "Hlas Jarise nereaguje už {seconds} s: při další větě se spustí znovu.",
+  "voice.ttsStartStalled": "Hlas Jarise se nespouští: žádná známka života už {seconds} s.",
+  "voice.ttsLastMessage": "Poslední zpráva hlasového programu: {detail}",
   "input.timeout": "žádná odpověď od Windows po dobu {seconds} s, akce zastavena",
   "voice.transcriptionInterrupted": "Přepis se nepodařilo dokončit: {reason}.",
   "voice.listeningStopped": "poslech byl na PC zastaven",

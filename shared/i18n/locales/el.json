@@ -991,6 +991,8 @@
   "page.blockedAddress": "Ο Jaris δεν διαβάζει το {url}: αυτή η διεύθυνση οδηγεί σε αυτόν τον υπολογιστή ή σε μια συσκευή του δικτύου σου, όχι σε ιστότοπο.",
   "page.tooManyRedirects": "Η σελίδα {url} ανακατευθύνει σε πάρα πολλές άλλες διευθύνσεις: ο Jaris σταμάτησε να την ακολουθεί.",
   "voice.ttsStalled": "Η φωνή του Jaris δεν απαντά εδώ και {seconds} s: θα επανεκκινηθεί στην επόμενη πρόταση.",
+  "voice.ttsStartStalled": "Η φωνή του Jaris δεν ξεκινά: κανένα σημάδι ζωής εδώ και {seconds} s.",
+  "voice.ttsLastMessage": "Τελευταίο μήνυμα του προγράμματος φωνής: {detail}",
   "input.timeout": "καμία απάντηση από τα Windows για {seconds} s, η ενέργεια σταμάτησε",
   "voice.transcriptionInterrupted": "Η μεταγραφή δεν μπόρεσε να ολοκληρωθεί: {reason}.",
   "voice.listeningStopped": "η ακρόαση σταμάτησε στον υπολογιστή",

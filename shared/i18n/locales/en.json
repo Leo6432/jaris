@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris doesn't read {url}: this address leads to this PC or to a device on your network, not to a website.",
   "page.tooManyRedirects": "The page {url} redirects to too many other addresses: Jaris stopped following it.",
   "voice.ttsStalled": "Jaris's voice hasn't responded for {seconds} s: it will be restarted for the next sentence.",
+  "voice.ttsStartStalled": "Jaris's voice won't start: no sign of life for {seconds} s.",
+  "voice.ttsLastMessage": "Last message from the voice program: {detail}",
   "input.timeout": "no response from Windows for {seconds} s, action stopped",
   "voice.transcriptionInterrupted": "The transcription couldn't finish: {reason}.",
   "voice.listeningStopped": "listening was stopped on the PC",

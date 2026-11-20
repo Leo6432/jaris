@@ -1033,6 +1033,8 @@
   "page.blockedAddress": "Jaris не читає {url}: ця адреса веде до цього ПК або до пристрою у твоїй мережі, а не до сайту.",
   "page.tooManyRedirects": "Сторінка {url} перенаправляє на забагато інших адрес: Jaris перестав за нею переходити.",
   "voice.ttsStalled": "Голос Jaris не відповідає вже {seconds} с: його буде перезапущено на наступній фразі.",
+  "voice.ttsStartStalled": "Голос Jaris не запускається: немає ознак життя вже {seconds} с.",
+  "voice.ttsLastMessage": "Останнє повідомлення голосової програми: {detail}",
   "input.timeout": "Windows не відповідала {seconds} с, дію зупинено",
   "voice.transcriptionInterrupted": "Не вдалося завершити розпізнавання: {reason}.",
   "voice.listeningStopped": "прослуховування було зупинено на ПК",

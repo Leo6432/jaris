@@ -1012,6 +1012,8 @@
   "page.blockedAddress": "Jaris nu citește {url}: această adresă duce la acest PC sau la un dispozitiv din rețeaua ta, nu la un site web.",
   "page.tooManyRedirects": "Pagina {url} redirecționează către prea multe alte adrese: Jaris a încetat s-o mai urmeze.",
   "voice.ttsStalled": "Vocea lui Jaris nu mai răspunde de {seconds} s: va fi repornită la următoarea frază.",
+  "voice.ttsStartStalled": "Vocea lui Jaris nu pornește: niciun semn de viață de {seconds} s.",
+  "voice.ttsLastMessage": "Ultimul mesaj al programului de voce: {detail}",
   "input.timeout": "niciun răspuns de la Windows timp de {seconds} s, acțiune oprită",
   "voice.transcriptionInterrupted": "Transcrierea nu a putut fi terminată: {reason}.",
   "voice.listeningStopped": "ascultarea a fost oprită pe PC",

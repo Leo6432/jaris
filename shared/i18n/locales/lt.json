@@ -1012,6 +1012,8 @@
   "page.blockedAddress": "Jaris neskaito {url}: šis adresas veda į šį kompiuterį arba į tavo tinklo įrenginį, o ne į svetainę.",
   "page.tooManyRedirects": "Puslapis {url} nukreipia į per daug kitų adresų: Jaris nustojo jį sekti.",
   "voice.ttsStalled": "Jaris balsas neatsako jau {seconds} s: jis bus paleistas iš naujo kitam sakiniui.",
+  "voice.ttsStartStalled": "Jaris balsas nepasileidžia: jau {seconds} s nėra gyvybės ženklų.",
+  "voice.ttsLastMessage": "Paskutinis balso programos pranešimas: {detail}",
   "input.timeout": "Windows neatsakė {seconds} s, veiksmas sustabdytas",
   "voice.transcriptionInterrupted": "Transkripcijos nepavyko užbaigti: {reason}.",
   "voice.listeningStopped": "klausymas buvo sustabdytas kompiuteryje",

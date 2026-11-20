@@ -7,6 +7,7 @@ import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { resolvePythonBin } from './pythonRuntime'
 import { currentLanguage, t } from '../../shared/i18n'
+import { failureDetail } from '../../shared/failureDetail'
 
 type TtsServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -96,12 +97,41 @@ export class TtsClient extends EventEmitter {
       this.proc = proc
 
       let settled = false
+      // Étape 505 (Léo, version Store : « si je change de voix, ça ne veut même pas » — « Lecture… » sans fin, aucun
+      // message) : le DÉMARRAGE n'avait aucune surveillance, seules les phrases en avaient une. Un tts_server.py bloqué au
+      // chargement de Supertonic (téléchargement du modèle, import) faisait attendre pour toujours. Même règle : le temps
+      // depuis le dernier signe de vie (une ligne écrite, sur stdout ou stderr — la progression d'un téléchargement en est
+      // un), jamais la durée totale. Les dernières lignes du programme donnent la vraie raison.
+      const recent: string[] = []
+      let startTimer: ReturnType<typeof setTimeout> | null = null
+      const detail = (): string => {
+        const text = failureDetail(recent)
+        return text ? ` ${t('voice.ttsLastMessage', { detail: text })}` : ''
+      }
+      const armStart = (): void => {
+        if (startTimer) clearTimeout(startTimer)
+        startTimer = null
+        if (settled) return
+        startTimer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          if (this.proc === proc) {
+            this.proc = null
+            this.ready = null
+          }
+          proc.kill()
+          rejectReady(new Error(t('voice.ttsStartStalled', { seconds: Math.round(this.idleMs / 1000) }) + detail()))
+        }, this.idleMs)
+      }
+      armStart()
       const rl = createInterface({ input: proc.stdout })
       rl.on('line', (line) => {
         let payload: TtsServerEvent
         try {
           payload = JSON.parse(line)
         } catch {
+          if (line.trim()) recent.push(line.trim())
+          armStart()
           this.watch(proc)
           return
         }
@@ -109,10 +139,12 @@ export class TtsClient extends EventEmitter {
         switch (payload.event) {
           case 'ready':
             settled = true
+            armStart()
             resolveReady()
             break
           case 'fatal':
             settled = true
+            armStart()
             rejectReady(new Error(payload.message))
             break
           case 'speech':
@@ -126,7 +158,12 @@ export class TtsClient extends EventEmitter {
       })
 
       proc.stderr.on('data', (chunk: Buffer) => {
-        console.error('[tts_server]', chunk.toString())
+        const text = chunk.toString()
+        console.error('[tts_server]', text)
+        // Une barre de progression réécrit sa ligne avec « \r » : seule la dernière version compte.
+        for (const line of text.split(/\r?\n|\r/)) if (line.trim()) recent.push(line.trim())
+        recent.splice(0, Math.max(0, recent.length - 30))
+        armStart()
         this.watch(proc)
       })
 
@@ -137,13 +174,21 @@ export class TtsClient extends EventEmitter {
           this.ready = null
           this.watch(proc)
         }
-        const err = new Error(t('voice.ttsStoppedEarly', { code: String(code) }))
-        if (!settled) rejectReady(err)
+        const err = new Error(t('voice.ttsStoppedEarly', { code: String(code) }) + detail())
+        if (!settled) {
+          settled = true
+          armStart()
+          rejectReady(err)
+        }
         for (const pending of queue.splice(0)) pending.reject(err)
       })
 
       proc.on('error', (err) => {
-        if (!settled) rejectReady(err)
+        if (!settled) {
+          settled = true
+          armStart()
+          rejectReady(err)
+        }
       })
     })
 

@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris no lee {url}: esta dirección lleva a este PC o a un dispositivo de tu red, no a un sitio web.",
   "page.tooManyRedirects": "La página {url} redirige a demasiadas direcciones: Jaris ha dejado de seguirla.",
   "voice.ttsStalled": "La voz de Jaris no responde desde hace {seconds} s: se reiniciará en la próxima frase.",
+  "voice.ttsStartStalled": "La voz de Jaris no arranca: ninguna señal de vida desde hace {seconds} s.",
+  "voice.ttsLastMessage": "Último mensaje del programa de voz: {detail}",
   "input.timeout": "Windows no respondió durante {seconds} s, acción detenida",
   "voice.transcriptionInterrupted": "La transcripción no pudo terminar: {reason}.",
   "voice.listeningStopped": "la escucha se detuvo en el PC",

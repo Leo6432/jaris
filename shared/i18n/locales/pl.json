@@ -1033,6 +1033,8 @@
   "page.blockedAddress": "Jaris nie czyta {url}: ten adres prowadzi do tego komputera lub do urządzenia w twojej sieci, a nie do strony internetowej.",
   "page.tooManyRedirects": "Strona {url} przekierowuje do zbyt wielu innych adresów: Jaris przestał za nią podążać.",
   "voice.ttsStalled": "Głos Jarisa nie odpowiada od {seconds} s: zostanie uruchomiony ponownie przy następnym zdaniu.",
+  "voice.ttsStartStalled": "Głos Jarisa się nie uruchamia: brak oznak życia od {seconds} s.",
+  "voice.ttsLastMessage": "Ostatni komunikat programu głosowego: {detail}",
   "input.timeout": "brak odpowiedzi Windows przez {seconds} s, działanie przerwane",
   "voice.transcriptionInterrupted": "Nie udało się dokończyć transkrypcji: {reason}.",
   "voice.listeningStopped": "nasłuchiwanie zostało zatrzymane na komputerze",

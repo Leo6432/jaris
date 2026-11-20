@@ -1001,6 +1001,8 @@ export const fr = {
   "page.blockedAddress": "Jaris ne lit pas {url} : cette adresse mène à ce PC ou à un appareil de ton réseau, pas à un site internet.",
   "page.tooManyRedirects": "La page {url} renvoie vers trop d'autres adresses : Jaris a arrêté de la suivre.",
   "voice.ttsStalled": "La voix de Jaris ne répond plus depuis {seconds} s : elle sera relancée à la prochaine phrase.",
+  "voice.ttsStartStalled": "La voix de Jaris ne démarre pas : aucun signe de vie depuis {seconds} s.",
+  "voice.ttsLastMessage": "Dernier message du programme de voix : {detail}",
   "input.timeout": "pas de réponse de Windows pendant {seconds} s, action arrêtée",
   "voice.transcriptionInterrupted": "La transcription n'a pas pu se terminer : {reason}.",
   "voice.listeningStopped": "l'écoute a été arrêtée sur le PC",

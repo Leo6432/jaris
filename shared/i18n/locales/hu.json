@@ -991,6 +991,8 @@
   "page.blockedAddress": "Jaris nem olvassa be ezt a címet: {url}. Ez erre a gépre vagy a hálózatod egyik eszközére mutat, nem egy weboldalra.",
   "page.tooManyRedirects": "A(z) {url} oldal túl sok másik címre irányít tovább: Jaris abbahagyta a követését.",
   "voice.ttsStalled": "Jaris hangja {seconds} mp óta nem válaszol: a következő mondatnál újraindul.",
+  "voice.ttsStartStalled": "Jaris hangja nem indul: {seconds} másodperce nincs életjel.",
+  "voice.ttsLastMessage": "A hangprogram utolsó üzenete: {detail}",
   "input.timeout": "a Windows {seconds} mp-ig nem válaszolt, a művelet leállt",
   "voice.transcriptionInterrupted": "Az átírást nem sikerült befejezni: {reason}.",
   "voice.listeningStopped": "a figyelés le lett állítva a gépen",

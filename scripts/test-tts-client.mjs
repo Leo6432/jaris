@@ -18,11 +18,12 @@ const { TtsClient, TTS_IDLE_MS } = loadTsModule('electron/services/ttsClient.ts'
   path: require('node:path'),
   '../config': { config: { tts: { voice: 'M1', language: 'fr' } } },
   '../paths': { pythonScriptsDir: () => '/python' },
-  './pythonRuntime': { resolvePythonBin: () => 'python' }
+  './pythonRuntime': { resolvePythonBin: () => 'python' },
+  '../../shared/failureDetail': loadTsModule('shared/failureDetail.ts')
 })
 
 /** Un faux tts_server.py : chaque phrase reçue est notée ; le test décide quand (et si) il répond. */
-function fakeVoice() {
+function fakeVoice({ silentStart = false } = {}) {
   const procs = []
   const spawn = () => {
     const proc = new EventEmitter()
@@ -37,7 +38,7 @@ function fakeVoice() {
     }
     proc.say = (payload) => proc.stdout.write(`${JSON.stringify(payload)}\n`)
     procs.push(proc)
-    setImmediate(() => proc.say({ event: 'ready' }))
+    if (!silentStart) setImmediate(() => proc.say({ event: 'ready' }))
     return proc
   }
   return { procs, spawn }
@@ -86,5 +87,61 @@ test('rien en attente : aucune surveillance, la voix inactive n’est jamais arr
   await client.start()
   await sleep(150)
   assert.equal(voice.procs[0].killed, false)
+  client.stop()
+})
+
+// Étape 505 (Léo, version Store : « si je change de voix, ça ne veut même pas » — « Lecture… » sans fin) : le démarrage
+// de la voix n'avait aucune surveillance. Bloqué au chargement de Supertonic, il faisait attendre pour toujours.
+test('étape 505 : une voix bloquée AU DÉMARRAGE échoue avec la vraie raison (ses dernières lignes), puis repart', async () => {
+  const voice = fakeVoice({ silentStart: true })
+  const client = new TtsClient({ idleMs: 80, spawn: voice.spawn })
+  const pending = client.synthesize('Bonjour')
+  await sleep(10)
+  voice.procs[0].stderr.write('Downloading model.onnx:  10%\rDownloading model.onnx:  12%\r')
+  voice.procs[0].stderr.write("OSError: [WinError 5] Accès refusé: 'C:\\Users\\leo\\.cache\\supertonic3'\n")
+  const started = Date.now()
+  await assert.rejects(pending, (err) => {
+    assert.match(err.message, /^La voix de Jaris ne démarre pas : aucun signe de vie depuis 0 s\./)
+    assert.match(err.message, /Dernier message du programme de voix : OSError: \[WinError 5\] Accès refusé/)
+    return true
+  })
+  assert.ok(Date.now() - started < 2000)
+  assert.equal(voice.procs[0].killed, true, 'le programme bloqué est arrêté')
+  // La phrase suivante relance la voix.
+  const next = client.synthesize('Rebonjour')
+  await sleep(10)
+  assert.equal(voice.procs.length, 2)
+  voice.procs[1].say({ event: 'ready' })
+  await sleep(10)
+  voice.procs[1].say({ event: 'speech', path: 'phrase.wav' })
+  assert.equal(await next, 'phrase.wav')
+  client.stop()
+})
+
+test('étape 505 : un long téléchargement qui avance n’est jamais coupé au démarrage', async () => {
+  const voice = fakeVoice({ silentStart: true })
+  const client = new TtsClient({ idleMs: 80, spawn: voice.spawn })
+  const pending = client.synthesize('Bonjour')
+  for (let i = 0; i < 6; i++) {
+    await sleep(40)
+    voice.procs[0]?.stderr.write(`Downloading model.onnx: ${i * 15}%\r`)
+  }
+  voice.procs[0].say({ event: 'ready' })
+  await sleep(10)
+  voice.procs[0].say({ event: 'speech', path: 'ok.wav' })
+  assert.equal(await pending, 'ok.wav')
+  assert.equal(voice.procs.length, 1, 'jamais relancé pendant qu’il avance')
+  client.stop()
+})
+
+test('étape 505 : la voix qui s’arrête au démarrage dit pourquoi (dernier message), plus seulement son code', async () => {
+  const voice = fakeVoice({ silentStart: true })
+  const client = new TtsClient({ idleMs: 5000, spawn: voice.spawn })
+  const pending = client.synthesize('Bonjour')
+  await sleep(10)
+  voice.procs[0].stderr.write('ModuleNotFoundError: No module named onnxruntime\n')
+  await sleep(5)
+  voice.procs[0].emit('exit', 1)
+  await assert.rejects(pending, /code 1\).*Dernier message du programme de voix : ModuleNotFoundError: No module named onnxruntime/)
   client.stop()
 })

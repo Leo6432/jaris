@@ -12725,3 +12725,10 @@ rien (+3 s). Deux corrections :
   doublée + e : quel/quelle, bon/bonne) — la correction sert aux mots mal entendus, pas à la grammaire ;
 - l'exception accepte le patron `quel(le)(s) heure|jour|date` (copie dans benchmark-scenarios.mjs alignée).
 Tests (mordent) : test-transcript-corrector, test-knowledge-question.
+- Suite (même étape) : Léo, version Store, Options → Voix → changer de voix : « Lecture… » sans fin, aucun message. Les
+  questions de Léo : aucun son. Le DÉMARRAGE de tts_server.py n'avait aucune surveillance (seules les phrases en avaient
+  une, étape « relecture croisée ») : bloqué au chargement de Supertonic, il faisait attendre pour toujours. Surveillé
+  maintenant par inactivité (120 s sans aucune ligne sur stdout/stderr — la progression d'un téléchargement compte comme
+  signe de vie) ; l'échec dit « La voix de Jaris ne démarre pas… » + les dernières lignes du programme (failureDetail).
+  Un arrêt au démarrage donne aussi ces lignes, plus seulement « code N ». Cause du blocage chez Léo : encore inconnue —
+  c'est ce message qui la dira. test-tts-client (mord).
