@@ -1,5 +1,6 @@
 import { SCENARIOS, runScenario, type Scenario } from '../../scripts/benchmark-scenarios.mjs'
 import { TOOLS as SCENARIO_TOOLS } from '../../scripts/benchmark-cases.mjs'
+import { DUEL_AGENT_TASKS } from '../../scripts/duel-agent-tasks.mjs'
 import { chatWithOllama, type OllamaMessage, type OllamaTool } from './ollama'
 import type { ThinkValue } from '../../shared/effort'
 
@@ -20,15 +21,38 @@ export interface AgentTask {
   variant: number
 }
 
-/** Les demandes du test qui exigent au moins une action (les « merci », blagues et heures ne départagent rien ici). */
-const AGENT_SCENARIOS: Scenario[] = SCENARIOS.filter((s) => !['merci', 'blague', 'heure'].includes(s.id))
+/**
+ * Les demandes du test qui exigent au moins une action (les « merci », blagues et heures ne départagent rien ici), plus,
+ * étape 506 (Léo : « ajoute plein de propositions agentique »), les tâches propres au duel (duel-agent-tasks.mjs).
+ */
+const AGENT_SCENARIOS: Scenario[] = [...SCENARIOS.filter((s) => !['merci', 'blague', 'heure'].includes(s.id)), ...DUEL_AGENT_TASKS]
+
+const toTask = (scenario: Scenario, random: () => number): AgentTask => ({
+  id: scenario.id,
+  turns: [...scenario.turns],
+  variant: scenario.repeat ? Math.floor(random() * 2) : 0
+})
+
+/** Étape 506 : les tâches proposées à l'écran (le premier message de chacune), pour que Léo en choisisse une. */
+export interface AgentTaskChoice {
+  id: string
+  text: string
+}
+export function agentTaskChoices(): AgentTaskChoice[] {
+  return AGENT_SCENARIOS.map((s) => ({ id: s.id, text: s.turns[0] }))
+}
+
+/** Étape 506 : la tâche choisie par Léo (son identifiant), avec un jeu de résultats ; `null` si elle n'existe pas. */
+export function agentTaskById(id: string, random: () => number = Math.random): AgentTask | null {
+  const scenario = AGENT_SCENARIOS.find((s) => s.id === id)
+  return scenario ? toTask(scenario, random) : null
+}
 
 /** Une tâche pas encore jouée dans cette session (sinon n'importe laquelle), au hasard, avec un jeu de résultats. */
 export function pickAgentTask(played: ReadonlySet<string>, random: () => number = Math.random): AgentTask {
   const fresh = AGENT_SCENARIOS.filter((s) => !played.has(s.id))
   const pool = fresh.length ? fresh : AGENT_SCENARIOS
-  const scenario = pool[Math.floor(random() * pool.length) % pool.length]
-  return { id: scenario.id, turns: [...scenario.turns], variant: scenario.repeat ? Math.floor(random() * 2) : 0 }
+  return toTask(pool[Math.floor(random() * pool.length) % pool.length], random)
 }
 
 export function agentTaskExists(id: string): boolean {
@@ -59,7 +83,7 @@ export async function runAgentTask(
   signal: AbortSignal,
   onStep: (step: AgentStep) => void
 ): Promise<AgentOutcome> {
-  const scenario = SCENARIOS.find((s) => s.id === task.id)
+  const scenario = AGENT_SCENARIOS.find((s) => s.id === task.id)
   if (!scenario) throw new Error(`tâche inconnue : ${task.id}`)
   const run = await runScenario(
     scenario,

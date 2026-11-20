@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import * as scenarios from './benchmark-scenarios.mjs'
 import * as cases from './benchmark-cases.mjs'
+import * as duelTasks from './duel-agent-tasks.mjs'
 import { loadTsModule } from './load-ts-module.mjs'
 
 /**
@@ -14,6 +15,7 @@ const sent = []
 const duelAgent = loadTsModule('electron/services/duelAgent.ts', {
   '../../scripts/benchmark-scenarios.mjs': scenarios,
   '../../scripts/benchmark-cases.mjs': cases,
+  '../../scripts/duel-agent-tasks.mjs': duelTasks,
   './ollama': {
     chatWithOllama: async (messages, tools, model, think) => {
       sent.push({ model, think, tools: tools?.map((t) => t.function.name) ?? null, last: messages.at(-1) })
@@ -79,8 +81,14 @@ test('le choix de la tâche : jamais les « merci », blagues ou heures ; d’ab
   for (const id of ['merci', 'blague', 'heure']) assert.equal(duelAgent.agentTaskExists(id), false, id)
   assert.equal(duelAgent.agentTaskExists('spotify-volume'), true)
   assert.equal(duelAgent.agentTaskExists('inventee'), false)
-  const all = ids.filter((id) => duelAgent.agentTaskExists(id))
-  assert.ok(all.length >= 30, `assez de tâches (${all.length})`)
+  // Étape 506 : celles du test des modèles (sauf les trois écartées) ET les tâches propres au duel.
+  const all = duelAgent.agentTaskChoices().map((c) => c.id)
+  assert.deepEqual(all, [...ids.filter((id) => !['merci', 'blague', 'heure'].includes(id)), ...duelTasks.DUEL_AGENT_TASKS.map((t) => t.id)])
+  assert.ok(all.length >= 60, `assez de tâches (${all.length})`)
+  assert.ok(all.every((id) => duelAgent.agentTaskExists(id)))
+  // Choisie par Léo : son identifiant ; inconnue = rien.
+  assert.deepEqual(duelAgent.agentTaskById('duel-pause', () => 0), { id: 'duel-pause', turns: ['Mets la musique en pause.'], variant: 0 })
+  assert.equal(duelAgent.agentTaskById('inventee'), null)
   // Tout est joué sauf une : c'est elle qui sort, quel que soit le hasard.
   const played = new Set(all.slice(1))
   for (const r of [0, 0.5, 0.999]) assert.equal(duelAgent.pickAgentTask(played, () => r).id, all[0])

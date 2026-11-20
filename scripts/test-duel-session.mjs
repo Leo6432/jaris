@@ -292,8 +292,10 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
     },
     './duelAgent': {
       // Étape 504 : le duel Agentique (PC simulé) ; les tests qui l'exercent remplacent runAgentTask.
-      pickAgentTask: (played) => ({ id: played.has('ouvrir-bloc-notes') ? 'chercher-mail' : 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
+      pickAgentTask: (played) => (played.has('ouvrir-bloc-notes') ? { id: 'chercher-mail', turns: ['Cherche le mail de Julie', 'Et réponds-lui oui'], variant: 1 } : { id: 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
       agentTaskExists: (id) => ['ouvrir-bloc-notes', 'chercher-mail'].includes(id),
+      agentTaskChoices: () => [{ id: 'ouvrir-bloc-notes', text: 'Ouvre le bloc-notes et écris bonjour' }, { id: 'chercher-mail', text: 'Cherche le mail de Julie' }],
+      agentTaskById: (id) => ({ 'ouvrir-bloc-notes': { id, turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }, 'chercher-mail': { id, turns: ['Cherche le mail de Julie', 'Et réponds-lui oui'], variant: 1 } })[id] ?? null,
       runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args)
     },
     './duelStore': {
@@ -1771,6 +1773,86 @@ test('étape 484 : série Vision reprise après un redémarrage — images relue
   assert.ok(started.batch.length >= restored.batch.length)
 })
 
+// Étape 506 (Léo : « ajoute plein de propositions agentique, et aussi les séries dans Agentique »).
+test('étape 506 : Agentique — la tâche choisie par Léo (son identifiant) ; inconnue = refusée ; la liste est dans la vue', async () => {
+  const runs = []
+  globalThis.__duelAgentRun = async (task) => {
+    runs.push(task)
+    return { replies: ['Oui, fait.'], ok: true }
+  }
+  try {
+    const env = setup({ installed: MODELS })
+    await env.session.startDuel('agent', 4)
+    await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+    assert.deepEqual(env.session.getDuelView().agentTasks.map((x) => [x.id, x.played]), [['ouvrir-bloc-notes', false], ['chercher-mail', false]])
+    assert.throws(() => env.session.askDuel('tache-inventee'))
+    env.session.askDuel('chercher-mail')
+    await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+    assert.deepEqual(runs.map((r) => r.id), ['chercher-mail', 'chercher-mail'])
+    // Une tâche en deux messages : le deuxième part comme suite, le même pour les deux.
+    assert.deepEqual(env.session.getDuelView().round.followUps, ['Et réponds-lui oui'])
+    assert.equal(env.session.getDuelView().agentTasks.find((x) => x.id === 'chercher-mail').played, true)
+    // Hors Agentique, pas de liste de tâches.
+    const chat = setup({ installed: MODELS })
+    await chat.session.startDuel('conversation', 4)
+    assert.equal(chat.session.getDuelView().agentTasks, undefined)
+  } finally {
+    delete globalThis.__duelAgentRun
+  }
+})
+
+test('étape 506 : série Agentique — une tâche par duel, jouée seule ; gardée par son identifiant avec actions et verdict, puis reprise', async () => {
+  const store = newSeriesStore()
+  globalThis.__duelAgentRun = async (task, model, _think, _signal, onStep) => {
+    onStep({ kind: 'tool', turn: 0, name: 'open_app', args: { app_name: 'Bloc-notes' }, result: 'Bloc-notes a été lancé.' })
+    return { replies: task.turns.map((_, i) => `Réponse ${i + 1} de ${model}`), ok: model < 'c' }
+  }
+  try {
+    const env = setup({ installed: MODELS, seriesStore: store })
+    env.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+    const started = await env.session.startDuel('agent', 4, 2)
+    assert.equal(started.category, 'agent')
+    assert.ok(started.batch.length >= 4)
+    // Paquet mélangé : les deux tâches sortent avant qu'une revienne.
+    assert.deepEqual(new Set(started.batch.slice(0, 2).map((item) => item.prompt)), new Set(['Ouvre le bloc-notes et écris bonjour', 'Cherche le mail de Julie']))
+    await waitFor(() => seriesDone(env), 'la série Agentique a fini de tourner')
+    assert.equal(env.calls.converse.length, 0, 'jamais converse() : aucun vrai outil')
+    // Gardée sur le disque : la catégorie, la tâche (identifiant et jeu de résultats), les actions et le verdict.
+    assert.equal(store.snapshot.category, 'agent')
+    // Une tâche en deux messages : les actions du premier sont dans « earlier », celles du dernier dans « actions ».
+    const allActions = (side) => [...(side.earlier ?? []).flatMap((turn) => turn.actions), ...(side.actions ?? [])]
+    for (const r of store.snapshot.rounds) {
+      assert.ok(['ouvrir-bloc-notes', 'chercher-mail'].includes(r.task.id))
+      assert.deepEqual(allActions(r.a), [{ tool: 'open_app', detail: 'Bloc-notes' }])
+      assert.equal(typeof r.a.check, 'boolean')
+    }
+    // Ouvert : le verdict reste caché jusqu'au vote.
+    const first = env.session.getDuelView().batch[0]
+    env.session.openBatchRound(first.number)
+    assert.deepEqual([env.session.getDuelView().round.a.check, env.session.getDuelView().round.b.check], [null, null])
+    await env.session.voteDuel('a')
+    assert.equal(typeof env.session.getDuelView().round.a.check, 'boolean')
+    assert.equal(env.votes.at(-1).category, 'agent')
+    // Jaris fermé puis rouvert : la série reprend avec ses tâches, actions et verdicts.
+    env.session.abortDuel()
+    await waitFor(() => !env.session.getDuelView().series?.active, 'série arrêtée')
+    const second = setup({ installed: MODELS, seriesStore: store })
+    second.session.setDuelSeriesDelays({ idleCheckMs: 20 })
+    assert.equal(await second.session.restoreDuelSeries(), true)
+    const restored = second.session.getDuelView()
+    assert.equal(restored.category, 'agent')
+    assert.equal(restored.batch.length, started.batch.length - 1)
+    const next = restored.batch[0]
+    second.session.openBatchRound(next.number)
+    const round = second.session.getDuelView().round
+    assert.deepEqual(allActions(round.a), [{ tool: 'open_app', detail: 'Bloc-notes' }])
+    await second.session.voteDuel('b')
+    assert.equal(typeof second.session.getDuelView().round.b.check, 'boolean', 'le verdict gardé est montré après le vote')
+  } finally {
+    delete globalThis.__duelAgentRun
+  }
+})
+
 test('étape 484 : série Vision sans images proposées — refusée avec une phrase claire ; Conversation toujours refusée', async () => {
   const env = setup({ installed: MODELS, profile: VISION_PROFILE, visionSamples: [] })
   await assert.rejects(() => env.session.startDuel('vision', 4, 2), /images proposées sont introuvables/)
@@ -2232,4 +2314,33 @@ test('étape 401 : pas de réponse aux modèles au-delà de la limite', async ()
   }
   assert.throws(() => env.session.followUpDuel('Encore'), new RegExp(String(duelModule.DUEL_MAX_FOLLOW_UPS)))
   assert.equal(env.session.getDuelView().round.a.earlier.length, duelModule.DUEL_MAX_FOLLOW_UPS)
+})
+
+// Étape 506 : le fichier d'une série Agentique ne garde qu'un identifiant de tâche — jamais un chemin ni autre chose.
+test('étape 506 : série Agentique relue — identifiant de tâche et jeu de résultats vérifiés, actions raccourcies', () => {
+  const base = (task, side = {}) => ({
+    format: seriesStoreModule.SERIES_FORMAT,
+    version: seriesStoreModule.SERIES_VERSION,
+    id: 's',
+    createdAt: 1,
+    perModel: 2,
+    remote: null,
+    vramGb: 8,
+    sizes: {},
+    models: ['a:1b', 'b:2b'],
+    downloaded: {},
+    dropped: 0,
+    dropReason: null,
+    deleted: 0,
+    category: 'agent',
+    rounds: [{ number: 1, pair: ['a:1b', 'b:2b'], prompt: 'Coupe le son.', task, a: { status: 'done', text: 'Fait.', error: null, durationMs: 1, app: false, ...side }, b: { status: 'idle', text: '', error: null, durationMs: null, app: false } }]
+  })
+  const ok = seriesStoreModule.parseSeriesSnapshot(base({ id: 'duel-couper-son', variant: 0 }, { actions: [{ tool: 'media_control', detail: 'x'.repeat(900) }], check: true }))
+  assert.equal(ok.category, 'agent')
+  assert.deepEqual(ok.rounds[0].task, { id: 'duel-couper-son', variant: 0 })
+  assert.equal(ok.rounds[0].a.actions[0].detail.length, 500)
+  assert.equal(ok.rounds[0].a.check, true)
+  for (const bad of [{ id: '../secret', variant: 0 }, { id: 'duel-pause', variant: 2 }, { id: '', variant: 0 }, null]) {
+    assert.equal(seriesStoreModule.parseSeriesSnapshot(base(bad)), null, JSON.stringify(bad))
+  }
 })

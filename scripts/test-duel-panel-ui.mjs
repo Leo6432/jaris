@@ -1937,9 +1937,19 @@ test('étape 504 : duel Agentique — un bouton lance la tâche, pas de champ ; 
     async (page) => {
       await page.waitForSelector('.duel-agent-start')
       assert.equal(await page.locator('.composer__input').count(), 0, 'rien à écrire')
-      await page.click('.duel-agent-start button')
+      // Étape 506 : 4 tâches proposées, d'abord celles pas encore jouées ; « Autres tâches » en montre d'autres.
+      const shown = await page.locator('.duel-agent-start .empty-state__suggestion').allTextContents()
+      assert.equal(shown.length, 4)
+      assert.ok(!shown.includes('Lance Steam puis Discord.'), 'une tâche déjà jouée passe après les autres')
+      await page.click('.duel-agent-start__actions .empty-state__more')
+      const again = await page.locator('.duel-agent-start .empty-state__suggestion').allTextContents()
+      assert.ok(again.some((x) => !shown.includes(x)), 'd’autres tâches')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/506-agentique-taches.png`, fullPage: true })
+      // Une tâche proposée : son identifiant part au main.
+      await page.locator('.duel-agent-start .empty-state__suggestion', { hasText: again[0] }).click()
       await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'ask'))
-      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', ''])
+      const ids = { 'Ouvre la calculatrice.': 't1', 'Coupe le son.': 't2', 'Mets la musique en pause.': 't3', 'Dessine un chat astronaute.': 't4', 'Retiens que le code du portail est 4821.': 't5', 'Lance Steam puis Discord.': 't6' }
+      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', ids[again[0]]])
       const done = (text, check) => ({ status: 'done', text, activity: null, startedAt: null, durationMs: 8000, actions: [{ tool: 'open_app', detail: 'Spotify' }, { tool: 'media_control', detail: 'volume_up' }], previewUrl: null, audio: false, audioError: null, error: null, trouble: null, check })
       await page.evaluate((round) => window.__emit(window.__ready(round)), { number: 1, prompt: 'Lance Spotify et monte le son.', a: done('C’est fait, Spotify est lancé et le son monte.', null), b: done('Spotify est lancé.', null) })
       await page.waitForSelector('.duel-vote__button')
@@ -1954,6 +1964,35 @@ test('étape 504 : duel Agentique — un bouton lance la tâche, pas de champ ; 
       assert.deepEqual(await page.locator('.duel-side__check').allTextContents(), ['Test automatique : tâche réussie', 'Test automatique : tâche ratée'])
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-agentique-vote.png`, fullPage: true })
     },
-    "window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
+    "window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', agentTasks: [{ id: 't1', text: 'Ouvre la calculatrice.', played: false }, { id: 't2', text: 'Coupe le son.', played: false }, { id: 't3', text: 'Mets la musique en pause.', played: false }, { id: 't4', text: 'Dessine un chat astronaute.', played: false }, { id: 't5', text: 'Retiens que le code du portail est 4821.', played: false }, { id: 't6', text: 'Lance Steam puis Discord.', played: true }], phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
   )
+})
+
+test('étape 506 : « Une tâche au hasard » (rien de choisi) ; et la série en Agentique', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-agent-start__actions .duel-btn--primary')
+      assert.equal(await page.textContent('.duel-agent-start__actions .duel-btn--primary'), 'Une tâche au hasard')
+      await page.click('.duel-agent-start__actions .duel-btn--primary')
+      await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'ask'))
+      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask'), ['ask', ''])
+    },
+    "window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', agentTasks: [{ id: 't1', text: 'Ouvre la calculatrice.', played: false }], phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
+  )
+  await withPage(async (page) => {
+    await page.waitForSelector('.duel-category')
+    await page.click('.duel-category:has-text("Agentique")')
+    await page.waitForSelector('#duel-series-title')
+    await page.click('.duel-series__mode .duel-size:has-text("Série")')
+    assert.match(await page.textContent('.duel-home__section:has(#duel-series-title)'), /tâches tirées au hasard et jouées sur un PC simulé/)
+    // La couleur du bouton choisi s'anime : la capture attend la fin.
+    if (process.env.SHOTS) {
+      await page.waitForTimeout(400)
+      await page.screenshot({ path: `${process.env.SHOTS}/506-agentique-serie.png`, fullPage: true })
+    }
+    await page.click('.duel-home__start, button:has-text("Lancer la série")')
+    await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'start' && c[1] === 'agent'))
+    const call = (await page.evaluate(() => window.__calls)).find((c) => c[0] === 'start' && c[1] === 'agent')
+    assert.equal(typeof call[3], 'number', 'une série : le nombre de duels par modèle part avec la demande')
+  })
 })

@@ -7915,6 +7915,15 @@ ul.reply-list--nested {
   text-align: center;
 }
 
+/* Étape 506 : sous les tâches proposées, « Autres tâches » et « Une tâche au hasard » côte à côte (passent à la ligne). */
+.duel-agent-start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
 .duel-side__check {
   margin: 8px 0 0;
   font-size: 13px;

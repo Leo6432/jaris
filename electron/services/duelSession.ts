@@ -106,7 +106,7 @@ import type {
 } from '../../shared/ipc'
 import { formatDecimal, replyLanguageRule, t, tn, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
-import { agentTaskExists, pickAgentTask, runAgentTask, type AgentTask } from './duelAgent'
+import { agentTaskById, agentTaskChoices, agentTaskExists, pickAgentTask, runAgentTask, type AgentTask } from './duelAgent'
 
 /**
  * Étape 355 — le Duel. Léo : « un bouton duel, une session télécharge 4-6 modèles qui tiennent, anonymes, on choisit
@@ -419,6 +419,9 @@ export function getDuelView(): DuelSessionView | null {
     id: session.id,
     category: session.category,
     spoken: session.spoken,
+    ...(session.category === 'agent'
+      ? { agentTasks: agentTaskChoices().map((choice) => ({ ...choice, played: session!.agentPlayed.has(choice.id) })) }
+      : {}),
     phase: session.phase,
     remote: session.remote !== null,
     modelCount: session.models.length,
@@ -649,7 +652,8 @@ export async function startDuel(
   // Étape 484 (Léo : « ajoute les séries dans Vision ») : Vision aussi — décrire une image n'agit pas sur le PC non plus.
   let samples: { name: string; base64: string }[] = []
   if (seriesPerModel !== undefined) {
-    if (category !== 'code' && category !== 'vision') throw new Error(t('duel.error.batchCodeOnly'))
+    // Étape 506 (Léo : « les séries dans Agentique ») : Agentique aussi — tout s'y passe sur le PC simulé.
+    if (category !== 'code' && category !== 'vision' && category !== 'agent') throw new Error(t('duel.error.batchCodeOnly'))
     if (!isDuelSeriesCount(seriesPerModel)) throw new Error(t('duel.error.badRequest'))
     if (category === 'vision') {
       samples = (await environment.visionSamples?.().catch(() => [])) ?? []
@@ -865,7 +869,10 @@ export function askDuel(prompt: string): DuelSessionView {
   // pour A et B, puis les fait jouer l'un après l'autre (rien n'agit sur le vrai PC : B n'attend pas que Léo vérifie).
   if (current.category === 'agent') {
     const round = current.round
-    const task = pickAgentTask(current.agentPlayed)
+    // Étape 506 : Léo choisit une des tâches proposées (son identifiant), sinon une au hasard.
+    const chosen = text ? agentTaskById(text) : null
+    if (text && !chosen) throw new Error(t('duel.error.badRequest'))
+    const task = chosen ?? pickAgentTask(current.agentPlayed)
     current.agentPlayed.add(task.id)
     round.task = task
     round.prompt = task.turns[0]
@@ -1353,6 +1360,20 @@ function assignSeriesPrompts(
   samples: readonly { name: string; base64: string }[] = [],
   random: () => number = Math.random
 ): void {
+  // Étape 506 : série Agentique — une tâche tirée par duel (paquet mélangé : pas deux fois la même tant qu'il en reste),
+  // la même pour A et B, jouée sur le PC simulé.
+  if (category === 'agent') {
+    const played = new Set<string>()
+    for (const round of rounds) {
+      const task = pickAgentTask(played, random)
+      played.add(task.id)
+      if (played.size >= agentTaskChoices().length) played.clear()
+      round.task = task
+      round.prompt = task.turns[0]
+      round.followUps = task.turns.slice(1)
+    }
+    return
+  }
   // Étape 484 : série Vision — une image proposée tirée au hasard par duel (paquet mélangé, comme les idées du Code :
   // pas deux fois la même tant qu'il en reste), et la consigne fixe du Duel Vision.
   if (category === 'vision') {
@@ -1628,7 +1649,17 @@ const formatGb = (value: number): string => t('unit.gb', { value: formatDecimal(
 function seriesSnapshot(current: Session, series: SeriesState): SeriesSnapshot {
   const side = (s: SideState): SeriesSideSnapshot =>
     s.status === 'done' || s.status === 'error'
-      ? { status: s.status, text: s.text, error: s.error, durationMs: s.durationMs, app: Boolean(s.html) }
+      ? {
+          status: s.status,
+          text: s.text,
+          error: s.error,
+          durationMs: s.durationMs,
+          app: Boolean(s.html),
+          // Étape 506 : série Agentique — ce que le modèle a fait, et le jugement automatique (montré après le vote).
+          ...(s.actions.length ? { actions: s.actions } : {}),
+          ...(s.earlier.length ? { earlier: s.earlier.map((turn) => ({ text: turn.text, actions: turn.actions })) } : {}),
+          ...(s.agentOk !== null ? { check: s.agentOk } : {})
+        }
       : { status: 'idle', text: '', error: null, durationMs: null, app: false }
   return {
     format: SERIES_FORMAT,
@@ -1649,7 +1680,15 @@ function seriesSnapshot(current: Session, series: SeriesState): SeriesSnapshot {
     category: current.category,
     rounds: (current.batch ?? [])
       .filter((r) => !r.revealed)
-      .map((r) => ({ number: r.number, pair: r.pair, prompt: r.prompt ?? '', ...(r.sample ? { sample: r.sample } : {}), a: side(r.sides.a), b: side(r.sides.b) }))
+      .map((r) => ({
+        number: r.number,
+        pair: r.pair,
+        prompt: r.prompt ?? '',
+        ...(r.sample ? { sample: r.sample } : {}),
+        ...(r.task ? { task: { id: r.task.id, variant: r.task.variant } } : {}),
+        a: side(r.sides.a),
+        b: side(r.sides.b)
+      }))
   }
 }
 
@@ -1686,7 +1725,10 @@ export async function restoreDuelSeries(): Promise<boolean> {
       error: saved.error,
       durationMs: saved.durationMs,
       html,
-      previewUrl: html ? createGeneratedAppPreview(html) : null
+      previewUrl: html ? createGeneratedAppPreview(html) : null,
+      actions: saved.actions ?? [],
+      earlier: (saved.earlier ?? []).map((turn) => ({ text: turn.text, actions: turn.actions, error: null, durationMs: null })),
+      agentOk: saved.check ?? null
     }
   }
   const category: DuelCategory = snapshot.category ?? 'code'
@@ -1697,11 +1739,17 @@ export async function restoreDuelSeries(): Promise<boolean> {
   for (const r of snapshot.rounds) {
     const image = images && r.sample ? images.get(r.sample) ?? null : null
     if (images && !image) continue
+    // Étape 506 : série Agentique — la tâche relue par son identifiant ; une tâche disparue (Jaris mis à jour sans elle)
+    // retire le duel plutôt que de le jouer sans rien à faire.
+    const known = category === 'agent' && r.task ? agentTaskById(r.task.id) : null
+    const task = known && r.task ? { ...known, variant: r.task.variant } : null
+    if (category === 'agent' && !task) continue
     rounds.push({
       number: r.number,
       pair: r.pair,
       prompt: r.prompt,
-      followUps: [],
+      followUps: task ? task.turns.slice(1) : [],
+      ...(task ? { task } : {}),
       sides: { a: await restoreSide(r.number, 'a', r.a), b: await restoreSide(r.number, 'b', r.b) },
       revealed: null,
       tools: null,

@@ -155,8 +155,10 @@ function setup({ remote, versionFails = null, installedHere = ['vision-model:8b'
     },
     './duelAgent': {
       // Étape 504 : le duel Agentique (PC simulé) ; les tests qui l'exercent remplacent runAgentTask.
-      pickAgentTask: (played) => ({ id: played.has('ouvrir-bloc-notes') ? 'chercher-mail' : 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
+      pickAgentTask: (played) => (played.has('ouvrir-bloc-notes') ? { id: 'chercher-mail', turns: ['Cherche le mail de Julie', 'Et réponds-lui oui'], variant: 1 } : { id: 'ouvrir-bloc-notes', turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }),
       agentTaskExists: (id) => ['ouvrir-bloc-notes', 'chercher-mail'].includes(id),
+      agentTaskChoices: () => [{ id: 'ouvrir-bloc-notes', text: 'Ouvre le bloc-notes et écris bonjour' }, { id: 'chercher-mail', text: 'Cherche le mail de Julie' }],
+      agentTaskById: (id) => ({ 'ouvrir-bloc-notes': { id, turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }, 'chercher-mail': { id, turns: ['Cherche le mail de Julie', 'Et réponds-lui oui'], variant: 1 } })[id] ?? null,
       runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args)
     },
     './duelStore': {

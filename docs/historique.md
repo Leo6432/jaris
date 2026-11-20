@@ -12732,3 +12732,23 @@ Tests (mordent) : test-transcript-corrector, test-knowledge-question.
   signe de vie) ; l'échec dit « La voix de Jaris ne démarre pas… » + les dernières lignes du programme (failureDetail).
   Un arrêt au démarrage donne aussi ces lignes, plus seulement « code N ». Cause du blocage chez Léo : encore inconnue —
   c'est ce message qui la dira. test-tts-client (mord).
+
+## Étape 506 — Agentique : beaucoup plus de tâches, proposées à l'écran, et les séries
+
+Léo : « ajoute plein de propositions agentique, et aussi les séries dans Agentique, mets plein de propositions ».
+- 31 tâches propres au duel (`scripts/duel-agent-tasks.mjs`), en plus des 37 du test des modèles (sans « merci »,
+  blague, heure) : applications, écrire, musique et son, rappels (dont « demain à 10 h » = 1440 min, et une correction au
+  2e message), mémoire (relire une note, ajouter sans effacer), chercher (dont lire la page), le PC, images, calcul.
+  Même forme que SCENARIOS, jouées par le même runScenario sur le même PC simulé — le test des modèles n'en voit
+  AUCUNE (ses scores vérifiés ne bougent pas). Chaque jugement vérifié dans les deux sens (test-duel-agent-tasks : une
+  bonne façon passe, une mauvaise échoue). Pièges vus : norm() enlève « œ » (« œufs ») ; open_app en échec et
+  look_at_screen d'une question sur l'écran répondent eux-mêmes — le défaut jugé y est de ne pas essayer.
+- Écran : « Quelle tâche ? » — 4 tâches proposées (d'abord celles pas encore jouées), « Autres tâches », « Une tâche
+  au hasard ». La vue d'une session Agentique porte la liste (`agentTasks`, premier message de chaque tâche) ; le choix
+  part au main par l'identifiant de la tâche (une inconnue est refusée).
+- Séries Agentique (« Série (je vote plus tard) ») : une tâche par duel (paquet mélangé), A et B jouent seuls. Le
+  fichier de la série garde l'identifiant de la tâche et son jeu de résultats (revérifiés à la relecture : minuscules,
+  chiffres, tirets ; 0 ou 1), les actions (raccourcies) et le verdict automatique, montré seulement après le vote. Une
+  tâche disparue à la reprise retire son duel. Le vote automatique de Claude marche comme en Discussion.
+- Tests (mordent) : test-duel-agent-tasks, test-duel-agent, test-duel-session (tâche choisie, série + reprise, fichier
+  relu), test-duel-panel-ui (propositions, hasard, série).

@@ -1137,6 +1137,11 @@ export interface DuelSessionView {
   category: DuelCategory
   /** Étape 504 : Discussion « lue à voix haute » (l'ancien duel Vocal) : les réponses sont lues par la voix de Jaris. */
   spoken?: boolean
+  /**
+   * Étape 506 (Léo : « ajoute plein de propositions agentique ») : en Agentique, les tâches que Léo peut choisir (le
+   * premier message de chacune) ; `played` : déjà jouée dans cette session.
+   */
+  agentTasks?: { id: string; text: string; played: boolean }[]
   phase: 'preparing' | 'ready' | 'ended'
   /** Étape 377 : les modèles de la session tournent sur une autre machine (téléchargés là-bas, pas sur ce PC). */
   remote?: boolean

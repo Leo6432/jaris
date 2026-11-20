@@ -91,6 +91,61 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
   vision: []
 }
 
+/**
+ * Étape 506 (Léo : « ajoute plein de propositions agentique ») : le début d'un duel Agentique — 4 tâches proposées
+ * (d'abord celles pas encore jouées), « Autres tâches » pour en voir d'autres, et « Une tâche au hasard ».
+ */
+function AgentAsk({
+  tasks,
+  busy,
+  loading,
+  onPick
+}: {
+  tasks: { id: string; text: string; played: boolean }[]
+  busy: boolean
+  loading: boolean
+  onPick: (taskId?: string) => void
+}): JSX.Element {
+  const pick = (shown: readonly string[]): string[] => {
+    const shuffled = [...tasks].sort(() => Math.random() - 0.5)
+    const order = [
+      ...shuffled.filter((x) => !x.played && !shown.includes(x.id)),
+      ...shuffled.filter((x) => x.played && !shown.includes(x.id)),
+      ...shuffled.filter((x) => shown.includes(x.id))
+    ]
+    return order.slice(0, IDEAS_SHOWN).map((x) => x.id)
+  }
+  const [shown, setShown] = useState<string[]>(() => pick([]))
+  const byId = new Map(tasks.map((x) => [x.id, x.text]))
+  const texts = shown.map((id) => byId.get(id) ?? '').filter(Boolean)
+  return (
+    <div className="duel-agent-start">
+      <EmptyState
+        title={t('duel.agent.title')}
+        description={t('duel.agent.lead')}
+        suggestions={texts}
+        onSuggestion={(text) => {
+          if (busy) return
+          const id = shown.find((x) => byId.get(x) === text)
+          if (id) onPick(id)
+        }}
+      >
+        <div className="duel-agent-start__actions">
+          <button type="button" className="empty-state__more" onClick={() => setShown(pick(shown))} disabled={busy}>
+            {t('duel.agent.more')}
+          </button>
+          <button type="button" className="duel-btn duel-btn--primary" onClick={() => onPick()} disabled={busy}>
+            {loading ? t('common.loading') : t('duel.agent.start')}
+          </button>
+        </div>
+      </EmptyState>
+    </div>
+  )
+}
+
+/** Étape 506 (Léo : « les séries dans Agentique ») : les catégories qui ont des séries (rien n'y agit sur le vrai PC). */
+const hasSeries = (category: DuelCategory): boolean => category === 'code' || category === 'vision' || category === 'agent'
+
 /** 4 idées au hasard, en évitant celles déjà montrées (« Autres idées » montre vraiment d'autres phrases). */
 function pickIdeas(category: DuelCategory, shown: readonly MessageKey[] = [], count: number = IDEAS_SHOWN): MessageKey[] {
   const shuffle = (keys: MessageKey[]): MessageKey[] => {
@@ -2262,7 +2317,7 @@ export default function DuelPanel(): JSX.Element {
       setEnded(null)
       setDeleted(null)
       // Étape 484 : séries en Code et en Vision.
-      const series = (category === 'code' || category === 'vision') && seriesMode ? perModel : undefined
+      const series = hasSeries(category) && seriesMode ? perModel : undefined
       const judged = category === 'conversation' && judgeMode ? perModel : undefined
       const pick = pickMode === 'random' ? size : pickMode === 'fast' ? fastest : pickedNow
       const spoken = category === 'conversation' && spokenAnswers && judged === undefined
@@ -2282,8 +2337,9 @@ export default function DuelPanel(): JSX.Element {
 
   /** Étape 475 : l'image d'un Duel Vision part aux deux modèles, sans aucune question. */
   /** Étape 504 : duel Agentique — Jaris tire une tâche du test, la même pour A et B (aucun texte à écrire). */
-  const askAgent = (): void => {
-    void run('ask', async () => setView(await window.jaris.duelAsk('')))
+  /** Étape 506 : `taskId` = la tâche proposée choisie par Léo ; sans, une au hasard. */
+  const askAgent = (taskId = ''): void => {
+    void run('ask', async () => setView(await window.jaris.duelAsk(taskId)))
   }
 
   const askImage = (image: DuelImage, round: number): void => {
@@ -2419,7 +2475,7 @@ export default function DuelPanel(): JSX.Element {
     const remoteDown = Boolean(plan?.remote?.error)
     // Étape 382 : une série ne télécharge qu'un modèle à la fois (supprimé après ses duels) : il suffit que le plus gros
     // tienne sur le disque.
-    const series = (category === 'code' || category === 'vision') && seriesMode
+    const series = hasSeries(category) && seriesMode
     // Étape 399 : duels Conversation jugés par Claude — même calcul « au moins N duels par modèle » qu'une série.
     const judged = category === 'conversation' && judgeMode
     const seriesCount = manual ? chosenList.length : size
@@ -2578,7 +2634,7 @@ export default function DuelPanel(): JSX.Element {
             )}
           </section>
 
-          {(category === 'code' || category === 'vision') && (
+          {hasSeries(category) && (
             <section className="duel-home__section" aria-labelledby="duel-series-title">
               <h2 id="duel-series-title" className="duel-home__label">
                 {t('duel.series.title')}
@@ -2599,7 +2655,7 @@ export default function DuelPanel(): JSX.Element {
               </div>
               {seriesMode && (
                 <>
-                  <p className="duel-home__note">{t(category === 'vision' ? 'duel.series.leadVision' : 'duel.series.lead')}</p>
+                  <p className="duel-home__note">{t(category === 'vision' ? 'duel.series.leadVision' : category === 'agent' ? 'duel.series.leadAgent' : 'duel.series.lead')}</p>
                   <div className="duel-series__count">
                     <span className="duel-series__count-label" id="duel-series-count">
                       {t('duel.series.perModel')}
@@ -2975,12 +3031,7 @@ export default function DuelPanel(): JSX.Element {
           </div>
         ) : round.prompt === null && view.category === 'agent' ? (
           <div className="duel__scroll duel__center">
-            <div className="duel-agent-start">
-              <p className="duel-home__note">{t('duel.agent.lead')}</p>
-              <button type="button" className="duel-btn duel-btn--primary" onClick={askAgent} disabled={pending !== null}>
-                {pending === 'ask' ? t('common.loading') : t('duel.agent.start')}
-              </button>
-            </div>
+            <AgentAsk key={round.number} tasks={view.agentTasks ?? []} busy={pending !== null} loading={pending === 'ask'} onPick={askAgent} />
           </div>
         ) : round.prompt === null && view.spoken ? (
           <div className="duel__scroll duel__center">
