@@ -1309,6 +1309,7 @@
   "bench.testRunning": "Test już trwa: poczekaj, aż się skończy, albo zatrzymaj go przyciskiem „Zatrzymaj test”.",
   "bench.testLaunchFailed": "Nie można uruchomić testu: {error}",
   "bench.testStopped": "Test zatrzymał się przed końcem (kod {code}). Uruchom go ponownie: wznowi się tam, gdzie skończył.",
+  "bench.testStoppedWhy": "Test zatrzymał się przed końcem (kod {code}): {reason}. Uruchom go ponownie: wznowi się tam, gdzie skończył.",
   "move.outsideParent": "Wybierz folder poza {parent}: Jaris przechowuje tam już własne pliki. Nic nie zostało przeniesione.",
   "move.windowsOnly": "Ta funkcja jest dostępna tylko w Windows.",
   "move.alreadyThere": "Wszystko jest już w {dir}.",

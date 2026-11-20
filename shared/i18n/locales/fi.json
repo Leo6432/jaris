@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Testi on jo käynnissä: odota sen päättymistä tai pysäytä se painikkeella ”Pysäytä testi”.",
   "bench.testLaunchFailed": "Testiä ei voitu käynnistää: {error}",
   "bench.testStopped": "Testi pysähtyi ennen loppua (koodi {code}). Käynnistä se uudelleen: se jatkaa siitä, mihin jäi.",
+  "bench.testStoppedWhy": "Testi pysähtyi ennen loppua (koodi {code}): {reason}. Käynnistä se uudelleen: se jatkaa siitä, mihin jäi.",
   "move.outsideParent": "Valitse kansio kansion {parent} ulkopuolelta: Jaris säilyttää siellä jo omia tiedostojaan. Mitään ei siirretty.",
   "move.windowsOnly": "Tämä toiminto on käytettävissä vain Windowsissa.",
   "move.alreadyThere": "Kaikki on jo kansiossa {dir}.",

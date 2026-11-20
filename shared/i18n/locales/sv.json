@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Ett test pågår redan: vänta tills det är klart eller stoppa det med ”Stoppa testet”.",
   "bench.testLaunchFailed": "Kan inte starta testet: {error}",
   "bench.testStopped": "Testet stoppades före slutet (kod {code}). Starta det igen: det fortsätter där det var.",
+  "bench.testStoppedWhy": "Testet stoppades före slutet (kod {code}): {reason}. Starta det igen: det fortsätter där det var.",
   "move.outsideParent": "Välj en mapp utanför {parent}: Jaris har redan sina egna filer där. Inget har flyttats.",
   "move.windowsOnly": "Den här funktionen finns bara på Windows.",
   "move.alreadyThere": "Allt finns redan i {dir}.",

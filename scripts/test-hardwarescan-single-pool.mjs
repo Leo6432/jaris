@@ -238,8 +238,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
 // Étape 462 : GLM-4.6V-Flash retiré de Jaris — plus aucun modèle n'attend le test de Léo.
 // Étape 473 : Qwen3.5-0.8B corrigé, ajouté (469), noté (472) puis retiré — plus aucun modèle n'attend le test de Léo.
-// Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, attend d'être remesuré sur le PC de Léo.
-const AWAITING = ['lfm3:1.7b']
+// Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, attend d'être remesuré sur le PC de Léo — mais il exige
+// Ollama 0.40.13 (étape 501) : avec une version inconnue (ces tests), il n'est jamais proposé.
+const AWAITING = []
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -274,8 +275,9 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333), LFM3 1.7B (étape 497).
-  assert.equal(conversationModels.size, 35)
+  // 30, plus phi4-mini (étape 316), Muse Glimmer et Ornith 1.5 9B/35B (étape 333). LFM3 1.7B (étape 497) est retiré
+  // plus haut avec les modèles qui exigent un Ollama récent (0.40.13, étape 501 ; version inconnue ici).
+  assert.equal(conversationModels.size, 34)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).

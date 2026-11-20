@@ -1309,6 +1309,7 @@
   "bench.testRunning": "Preizkus že teče: počakaj, da se konča, ali ga ustavi z gumbom »Ustavi preizkus«.",
   "bench.testLaunchFailed": "Preizkusa ni mogoče zagnati: {error}",
   "bench.testStopped": "Preizkus se je ustavil pred koncem (koda {code}). Znova ga zaženi: nadaljeval bo, kjer se je ustavil.",
+  "bench.testStoppedWhy": "Preizkus se je ustavil pred koncem (koda {code}): {reason}. Znova ga zaženi: nadaljeval bo, kjer se je ustavil.",
   "move.outsideParent": "Izberi mapo zunaj {parent}: Jaris tam že hrani svoje datoteke. Nič ni bilo premaknjeno.",
   "move.windowsOnly": "Ta funkcija je na voljo samo v sistemu Windows.",
   "move.alreadyThere": "Vse je že v {dir}.",

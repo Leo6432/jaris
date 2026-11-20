@@ -293,7 +293,9 @@ const MIN_OLLAMA_VERSION = {
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4',
   // Étape 347 : voir MIN_OLLAMA_VERSION dans hardwareScan.ts.
   'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': '0.40.5',
-  'nemotron-3.5-bolt:e4b': '0.40.10'
+  'nemotron-3.5-bolt:e4b': '0.40.10',
+  // Étape 501 : voir MIN_OLLAMA_VERSION dans hardwareScan.ts.
+  'lfm3:1.7b': '0.40.13'
 }
 
 /** Même lecture que Jaris : « 0.40.4-rc1 » compte comme 0.40.4 (la pré-version charge déjà K2 Horizon). */

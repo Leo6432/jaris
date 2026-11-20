@@ -75,7 +75,10 @@ test('Spark-X2.6 exige Ollama 0.40.5 et Nemotron 3.5 Bolt E4B 0.40.10 (versions 
   assert.ok(needs('0.40.4').includes(SPARK) && needs('0.40.4').includes(BOLT))
   assert.ok(!needs('0.40.5').includes(SPARK) && needs('0.40.5').includes(BOLT))
   assert.ok(needs('0.40.9').includes(BOLT), '0.40.9 < 0.40.10 : la comparaison doit être numérique, pas alphabétique')
-  assert.deepEqual(needs('0.40.10'), [])
+  // Étape 501 : LFM3 déclare « requires 0.40.13 » (registre d'Ollama) — le test de Léo s'arrêtait sur « code 1 ».
+  assert.deepEqual(needs('0.40.10'), ['lfm3:1.7b'])
+  assert.ok(needs('0.40.12').includes('lfm3:1.7b'))
+  assert.deepEqual(needs('0.40.13'), [])
   // Version inconnue : prudence, les deux restent de côté.
   assert.ok(needs(null).includes(SPARK) && needs(null).includes(BOLT))
 })
@@ -136,8 +139,8 @@ test('Ollama 0.40.10 : Bolt E4B proposé au test (Spark-X2.6 tout noté), aucun 
   // Étape 445 : qwen3-vl:2b et qwen2.5-coder:14b aussi. Étape 448 : qwen2.5-coder:32b, north-mini-code-1.0 et
   // qwen3.6:35b-a3b aussi. Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
   // Étape 462 : GLM-4.6V-Flash retiré de Jaris.
-  // Étape 497 : LFM3 1.7B (section « À remesurer ») est aussi proposé.
-  const visionAndCode = ['lfm3:1.7b']
+  // Étape 497 : LFM3 1.7B est « À remesurer » — mais il exige Ollama 0.40.13 (étape 501) : pas proposé avec 0.40.10.
+  const visionAndCode = []
   assert.deepEqual(offered.sort(), [BOLT, ...visionAndCode].sort())
   // Avec les vrais scores, Bolt n'a plus rien à passer : il n'est plus proposé.
   const now = [...setup({ scores: withCodeForAll(REAL_SCORES), vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]

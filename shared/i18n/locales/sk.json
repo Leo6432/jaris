@@ -1288,6 +1288,7 @@
   "bench.testRunning": "Test už beží: počkaj na jeho koniec alebo ho zastav tlačidlom „Zastaviť test“.",
   "bench.testLaunchFailed": "Test sa nedá spustiť: {error}",
   "bench.testStopped": "Test sa zastavil pred koncom (kód {code}). Spusti ho znova: bude pokračovať tam, kde skončil.",
+  "bench.testStoppedWhy": "Test sa zastavil pred koncom (kód {code}): {reason}. Spusti ho znova: bude pokračovať tam, kde skončil.",
   "move.outsideParent": "Zvoľ priečinok mimo {parent}: Jaris tam už ukladá svoje vlastné súbory. Nič nebolo presunuté.",
   "move.windowsOnly": "Táto funkcia je dostupná len vo Windowse.",
   "move.alreadyThere": "Všetko je už v {dir}.",

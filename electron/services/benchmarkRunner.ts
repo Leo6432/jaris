@@ -19,6 +19,7 @@ import { pickImageModel } from '../../shared/imageModel'
 import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
 import { pickVideoModel } from '../../shared/videoModel'
 import { formatDecimal, t } from '../../shared/i18n'
+import { failureDetail } from '../../shared/failureDetail'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -489,6 +490,14 @@ export async function testUnscoredModels(
       if (powerSaveBlocker.isStarted(awake)) powerSaveBlocker.stop(awake)
     }
     let buffer = ''
+    // Étape 501 (Léo : « Le test s'est arrêté avant la fin (code 1) », rien d'autre) : les dernières lignes du script,
+    // pour dire POURQUOI il s'est arrêté.
+    const lastLines: string[] = []
+    const keepLine = (line: string): void => {
+      lastLines.push(line)
+      if (lastLines.length > 60) lastLines.shift()
+      onLine(line)
+    }
     // setEncoding : un caractère accentué coupé entre deux morceaux reste entier (piège déjà rencontré, étape 121).
     proc.stdout.setEncoding('utf8')
     proc.stderr.setEncoding('utf8')
@@ -496,7 +505,7 @@ export async function testUnscoredModels(
       buffer += chunk
       let newlineIndex: number
       while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-        onLine(buffer.slice(0, newlineIndex))
+        keepLine(buffer.slice(0, newlineIndex))
         buffer = buffer.slice(newlineIndex + 1)
       }
     }
@@ -512,10 +521,13 @@ export async function testUnscoredModels(
       release()
       if (runningTest === proc) runningTest = null
       if (runningTestExit === exit) runningTestExit = null
-      if (buffer.trim()) onLine(buffer)
+      if (buffer.trim()) keepLine(buffer)
       if (stopAsked) resolve({ models, resultsPath, stopped: true })
       else if (code === 0) resolve({ models, resultsPath })
-      else reject(new Error(t('bench.testStopped', { code: code ?? '?' })))
+      else {
+        const detail = failureDetail(lastLines).replace(/[.\s]+$/, '')
+        reject(new Error(detail ? t('bench.testStoppedWhy', { code: code ?? '?', reason: detail }) : t('bench.testStopped', { code: code ?? '?' })))
+      }
     })
   })
 }

@@ -1,4 +1,5 @@
 import { withI18n } from './i18n-test-module.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -15,7 +16,9 @@ function load() {
   const out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   const stub = new Proxy(function () {}, { get: (_t, key) => (key === Symbol.toPrimitive ? () => '' : stub), apply: () => stub, construct: () => stub })
   const exports = {}
-  vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(exports, withI18n(() => stub), { exports })
+  // Étape 501 : le détail d'un échec vient du module partagé (le même que pour le test des modèles).
+  const failureDetail = loadTsModule('shared/failureDetail.ts')
+  vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(exports, withI18n((id) => (id === '../../shared/failureDetail' ? failureDetail : stub)), { exports })
   return exports
 }
 
@@ -55,4 +58,15 @@ test('échec de pip : ses lignes « ERROR » sont gardées dans le message, jama
   const unix = source.replace(/\r\n/g, '\n') // CI Windows en CRLF
   const install = unix.slice(unix.indexOf('async function installDependencies'))
   assert.match(install.slice(0, install.indexOf('\n}\n')), /pipFailureDetail\(output\)/, 'le détail part dans le message d’échec')
+})
+
+// Étape 501 (Léo : « Le test s'est arrêté avant la fin (code 1) », rien d'autre) : le test des modèles dit aussi
+// POURQUOI il s'est arrêté, avec les dernières lignes d'erreur du script — jamais ses repères internes (##…##).
+test('test des modèles arrêté : la vraie raison arrive dans le message, sans les repères internes', () => {
+  const { failureDetail } = loadTsModule('shared/failureDetail.ts')
+  const lines = ['##TEST_PROGRESS## 3 131', 'Téléchargement de lfm3:1.7b…', 'Error: pull model manifest: 412: this model requires Ollama 0.40.13 or newer', '##EXIT##']
+  assert.equal(failureDetail(lines), 'Error: pull model manifest: 412: this model requires Ollama 0.40.13 or newer')
+  const runner = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  assert.match(runner, /failureDetail\(lastLines\)/, 'le runner garde les dernières lignes du script')
+  assert.match(runner, /t\('bench\.testStoppedWhy', \{ code: code \?\? '\?', reason: detail \}\)/, 'et les met dans le message')
 })

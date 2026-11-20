@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Test juba käib: oota, kuni see lõpeb, või peata see nupuga „Peata test“.",
   "bench.testLaunchFailed": "Testi ei saa käivitada: {error}",
   "bench.testStopped": "Test peatus enne lõppu (kood {code}). Käivita see uuesti: see jätkab sealt, kus pooleli jäi.",
+  "bench.testStoppedWhy": "Test peatus enne lõppu (kood {code}): {reason}. Käivita see uuesti: see jätkab sealt, kus pooleli jäi.",
   "move.outsideParent": "Vali kaust väljaspool kausta {parent}: Jaris hoiab seal juba oma faile. Midagi ei teisaldatud.",
   "move.windowsOnly": "See funktsioon on saadaval ainult Windowsis.",
   "move.alreadyThere": "Kõik on juba kaustas {dir}.",

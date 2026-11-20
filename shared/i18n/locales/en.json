@@ -1267,6 +1267,7 @@
   "bench.testRunning": "A test is already running: wait for it to finish, or stop it with “Stop the test”.",
   "bench.testLaunchFailed": "Unable to start the test: {error}",
   "bench.testStopped": "The test stopped before the end (code {code}). Run it again: it will resume where it left off.",
+  "bench.testStoppedWhy": "The test stopped before the end (code {code}): {reason}. Run it again: it will resume where it left off.",
   "move.outsideParent": "Choose a folder outside {parent}: Jaris already keeps its own files there. Nothing was moved.",
   "move.windowsOnly": "This feature is only available on Windows.",
   "move.alreadyThere": "Everything is already in {dir}.",

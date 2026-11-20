@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Már fut egy teszt: várd meg a végét, vagy állítsd le a „Teszt leállítása” gombbal.",
   "bench.testLaunchFailed": "A teszt nem indítható: {error}",
   "bench.testStopped": "A teszt a vége előtt leállt (kód: {code}). Indítsd újra: ott folytatja, ahol abbahagyta.",
+  "bench.testStoppedWhy": "A teszt a vége előtt leállt (kód: {code}): {reason}. Indítsd újra: ott folytatja, ahol abbahagyta.",
   "move.outsideParent": "Válassz mappát ezen kívül: {parent}. Jaris ott már a saját fájljait tárolja. Semmi sem lett áthelyezve.",
   "move.windowsOnly": "Ez a funkció csak Windowson érhető el.",
   "move.alreadyThere": "Már minden itt van: {dir}.",

@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Un test è già in corso: aspetta che finisca o fermalo con «Ferma il test».",
   "bench.testLaunchFailed": "Impossibile avviare il test: {error}",
   "bench.testStopped": "Il test si è fermato prima della fine (codice {code}). Riavvialo: riprenderà da dove si era fermato.",
+  "bench.testStoppedWhy": "Il test si è fermato prima della fine (codice {code}): {reason}. Riavvialo: riprenderà da dove si era fermato.",
   "move.outsideParent": "Scegli una cartella al di fuori di {parent}: Jaris ci tiene già i suoi file. Non è stato spostato nulla.",
   "move.windowsOnly": "Questa funzione è disponibile solo su Windows.",
   "move.alreadyThere": "Tutto è già in {dir}.",

@@ -136,7 +136,7 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   // Étape 497 (Léo : « LFM3 1.7B vs LFM2.5 2.6B », puis « s'il est plus fort on le remplace ») : LFM3 1.7B, tag
-  // OFFICIEL d'Ollama (`lfm3:1.7b`, architecture `lfm3` chargée par Ollama 0.40.16, capacités tools + thinking,
+  // OFFICIEL d'Ollama (`lfm3:1.7b`, architecture `lfm3`, « requires 0.40.13 » — étape 501, capacités tools + thinking,
   // 1,10 Go en Q4_K_M lus dans le registre), même licence que LFM2.5 (LFM Open License v1.0). Choisi d'après son score
   // d'appel d'outils (verified-tool-scores.md, mesuré ici) puis les duels, comme les autres.
   { model: 'lfm3:1.7b', vramGb: 1.1 },
@@ -537,7 +537,10 @@ export const MIN_OLLAMA_VERSION: Record<string, string> = {
   // Étape 347 : architecture `spark2_5`, chargée par Ollama 0.40.5 (essayé pour de vrai ; aucune version plus
   // ancienne vérifiée) ; Bolt E4B déclare lui-même « requires 0.40.10 » dans sa configuration Ollama.
   'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': '0.40.5',
-  'nemotron-3.5-bolt:e4b': '0.40.10'
+  'nemotron-3.5-bolt:e4b': '0.40.10',
+  // Étape 501 (test de Léo arrêté « code 1 ») : LFM3 déclare lui-même « requires 0.40.13 » dans sa configuration
+  // Ollama (lue dans le registre). Mesuré ici avec 0.40.16 : rien ne disait qu'un Ollama plus ancien ne le charge pas.
+  'lfm3:1.7b': '0.40.13'
 }
 
 /** Version d'Ollama installée, branchée par main.ts sur le dernier contrôle (dependencyServices.ts). */

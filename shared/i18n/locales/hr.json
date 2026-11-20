@@ -1288,6 +1288,7 @@
   "bench.testRunning": "Test je već u tijeku: pričekaj da završi ili ga zaustavi gumbom „Zaustavi test”.",
   "bench.testLaunchFailed": "Nije moguće pokrenuti test: {error}",
   "bench.testStopped": "Test se zaustavio prije kraja (kod {code}). Ponovno ga pokreni: nastavit će ondje gdje je stao.",
+  "bench.testStoppedWhy": "Test se zaustavio prije kraja (kod {code}): {reason}. Ponovno ga pokreni: nastavit će ondje gdje je stao.",
   "move.outsideParent": "Odaberi mapu izvan {parent}: Jaris ondje već sprema svoje datoteke. Ništa nije premješteno.",
   "move.windowsOnly": "Ova je značajka dostupna samo u sustavu Windows.",
   "move.alreadyThere": "Sve je već u {dir}.",

@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Já há um teste em andamento: espere ele terminar ou pare-o com “Parar o teste”.",
   "bench.testLaunchFailed": "Não foi possível iniciar o teste: {error}",
   "bench.testStopped": "O teste parou antes do fim (código {code}). Inicie-o de novo: ele vai continuar de onde parou.",
+  "bench.testStoppedWhy": "O teste parou antes do fim (código {code}): {reason}. Inicie-o de novo: ele vai continuar de onde parou.",
   "move.outsideParent": "Escolha uma pasta fora de {parent}: o Jaris já guarda os próprios arquivos lá. Nada foi movido.",
   "move.windowsOnly": "Este recurso só está disponível no Windows.",
   "move.alreadyThere": "Tudo já está em {dir}.",

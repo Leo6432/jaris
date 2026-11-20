@@ -12636,3 +12636,21 @@ le renommage de pip échoue dans cette vue fusionnée. L'étape 491 avait sorti 
 - Test (mord) : test-models-location.mjs (Store : moteurs dans `.jaris`, jamais AppData ; installeur habituel inchangé ;
   les quatre modules passent par `jarisLocalDir()`). Faux ponts mis à jour (`scripts/jaris-local-dir-fake.mjs`).
 - Non vérifié ici : le vrai premier lancement de la version Store chez Léo.
+
+## Étape 501 — Test des modèles : LFM3 exige Ollama 0.40.13, et l'arrêt dit enfin pourquoi (0.72.3)
+
+Capture de Léo : Classement des modèles → « Modèles à tester (1) : lfm3:1.7b — outils (à remesurer), code (à
+remesurer) » puis « Le test s'est arrêté avant la fin (code 1). Relance-le… », sans aucune raison.
+- **Cause probable** : la configuration de `lfm3:1.7b` dans le registre d'Ollama déclare `"requires":"0.40.13"` ; je
+  l'avais mesuré avec 0.40.16 sans vérifier ce champ, et les tests de Jaris simulent Léo en 0.40.10. Ajouté à
+  `MIN_OLLAMA_VERSION` (hardwareScan.ts et sa copie dans benchmark-models.mjs) : avec un Ollama plus ancien, LFM3 n'est
+  ni proposé au test, ni choisi (sinon Faible/Moyen auraient pu tomber sur un modèle qui ne démarre pas). Champ
+  `requires` relu pour TOUS les modèles de la bibliothèque d'Ollama : LFM3 est le seul au-dessus de 0.40.10.
+  Leçon : avant d'ajouter un modèle, lire `requires` dans sa configuration du registre.
+- **Message** : le runner gardait les lignes du script sans s'en servir. Il garde les 60 dernières et
+  `failureDetail()` (nouveau `shared/failureDetail.ts`, aussi utilisé pour pip — étape 497) met les lignes d'erreur
+  dans `bench.testStoppedWhy` (24 langues) : « Le test s'est arrêté avant la fin (code 1) : <raison>. Relance-le… ».
+  Les repères internes (`##…##`) ne sont jamais montrés.
+- Choix sans vote chez Léo (Ollama 0.40.10) : Faible LFM2.5, Moyen qwen3.5:4b (LFM3 écarté jusqu'à la mise à jour
+  d'Ollama). Tests : min-ollama, duel, single-pool, benchmark-runner-cleanup, python-download (le détail mord).
+- Non vérifié : la vraie raison du « code 1 » chez Léo (le prochain arrêt l'affichera s'il y en a un).

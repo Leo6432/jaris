@@ -1288,6 +1288,7 @@
   "bench.testRunning": "Un test rulează deja: așteaptă să se termine sau oprește-l cu „Oprește testul”.",
   "bench.testLaunchFailed": "Testul nu poate fi pornit: {error}",
   "bench.testStopped": "Testul s-a oprit înainte de final (cod {code}). Repornește-l: va relua de unde rămăsese.",
+  "bench.testStoppedWhy": "Testul s-a oprit înainte de final (cod {code}): {reason}. Repornește-l: va relua de unde rămăsese.",
   "move.outsideParent": "Alege un dosar în afara {parent}: Jaris își ține deja acolo propriile fișiere. Nimic nu a fost mutat.",
   "move.windowsOnly": "Această funcție este disponibilă doar pe Windows.",
   "move.alreadyThere": "Totul este deja în {dir}.",

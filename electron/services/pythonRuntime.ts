@@ -9,6 +9,7 @@ import { getStorageRoot } from './storageRoot'
 import { jarisLocalDir } from './jarisLocalDir'
 import { describeDownloadFailure, downloadToFile } from './download'
 import { t } from '../../shared/i18n'
+import { failureDetail } from '../../shared/failureDetail'
 
 /**
  * Installe et gère le Python de Jaris (étape 16 du roadmap).
@@ -104,9 +105,7 @@ export type InstallProgress = (message: string, percent?: number) => void
  * sortie passait à l'écran, puis disparaissait. Les dernières lignes sont gardées pour le message d'échec.
  */
 export function pipFailureDetail(lines: string[]): string {
-  const meaningful = lines.map((l) => l.trim()).filter(Boolean)
-  const errors = meaningful.filter((l) => /^(ERROR|error)\b|Error:|OSError|denied|refus/i.test(l)).slice(-3)
-  return (errors.length ? errors : meaningful.slice(-2)).join(' / ').slice(0, 600)
+  return failureDetail(lines)
 }
 
 function run(exe: string, args: string[], onProgress: InstallProgress, output?: string[]): Promise<number> {

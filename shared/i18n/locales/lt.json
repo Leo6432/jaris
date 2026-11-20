@@ -1288,6 +1288,7 @@
   "bench.testRunning": "Testas jau vyksta: palauk, kol baigsis, arba sustabdyk jį mygtuku „Sustabdyti testą“.",
   "bench.testLaunchFailed": "Nepavyko paleisti testo: {error}",
   "bench.testStopped": "Testas sustojo nepasibaigęs (kodas {code}). Paleisk jį dar kartą: jis tęsis nuo ten, kur sustojo.",
+  "bench.testStoppedWhy": "Testas sustojo nepasibaigęs (kodas {code}): {reason}. Paleisk jį dar kartą: jis tęsis nuo ten, kur sustojo.",
   "move.outsideParent": "Pasirink aplanką už {parent} ribų: ten Jaris jau laiko savo failus. Niekas nebuvo perkelta.",
   "move.windowsOnly": "Ši funkcija pasiekiama tik „Windows“.",
   "move.alreadyThere": "Viskas jau yra {dir}.",

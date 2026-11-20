@@ -1288,6 +1288,7 @@
   "bench.testRunning": "Tests jau notiek: pagaidi, līdz tas beidzas, vai aptur to ar “Apturēt testu”.",
   "bench.testLaunchFailed": "Testu nevar palaist: {error}",
   "bench.testStopped": "Tests apstājās pirms beigām (kods {code}). Palaid to vēlreiz: tas turpinās no vietas, kur apstājās.",
+  "bench.testStoppedWhy": "Tests apstājās pirms beigām (kods {code}): {reason}. Palaid to vēlreiz: tas turpinās no vietas, kur apstājās.",
   "move.outsideParent": "Izvēlies mapi ārpus {parent}: Jaris tur jau glabā savus failus. Nekas netika pārvietots.",
   "move.windowsOnly": "Šī funkcija ir pieejama tikai sistēmā Windows.",
   "move.alreadyThere": "Viss jau ir mapē {dir}.",

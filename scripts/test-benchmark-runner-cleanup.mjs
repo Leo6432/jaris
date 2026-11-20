@@ -123,6 +123,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     if (id === './systemResources') return { detectRamGb: () => ramGb }
     if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' } }
     if (id === '../../shared/imageModel') return loadModule('../shared/imageModel.ts', () => ({}))
+    if (id === '../../shared/failureDetail') return loadModule('../shared/failureDetail.ts', () => ({}))
     if (id === '../../shared/pilotModel') return loadModule('../shared/pilotModel.ts', () => ({}))
     // Le modèle vidéo du résumé de fin : même décision (pickVideoModel) que la carte des modèles.
     if (id === '../../shared/videoModel') return loadModule('../shared/videoModel.ts', () => ({}))
@@ -475,6 +476,7 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     if (id === './systemResources') return {}
     if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' }, powerSaveBlocker }
     if (id === '../../shared/imageModel' || id === '../../shared/pilotModel' || id === '../../shared/videoModel') return {}
+    if (id === '../../shared/failureDetail') return loadModule('../shared/failureDetail.ts', () => ({}))
     if (id === './videoGenerator') return {}
     throw new Error(`module non simulé dans le test : ${id}`)
   })

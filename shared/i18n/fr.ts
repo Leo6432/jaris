@@ -1277,6 +1277,7 @@ export const fr = {
   "bench.testRunning": "Un test est déjà en cours : attends sa fin, ou arrête-le avec « Arrêter le test ».",
   "bench.testLaunchFailed": "Impossible de lancer le test : {error}",
   "bench.testStopped": "Le test s'est arrêté avant la fin (code {code}). Relance-le : il reprendra là où il en était.",
+  "bench.testStoppedWhy": "Le test s'est arrêté avant la fin (code {code}) : {reason}. Relance-le : il reprendra là où il en était.",
   "move.outsideParent": "Choisis un dossier en dehors de {parent} : Jaris y range déjà ses propres fichiers. Rien n'a été déplacé.",
   "move.windowsOnly": "Cette fonctionnalité n'est disponible que sur Windows.",
   "move.alreadyThere": "Tout est déjà dans {dir}.",

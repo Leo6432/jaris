@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Er loopt al een test: wacht tot hij klaar is, of stop hem met ‘Test stoppen’.",
   "bench.testLaunchFailed": "Kan de test niet starten: {error}",
   "bench.testStopped": "De test is voor het einde gestopt (code {code}). Start hem opnieuw: hij gaat verder waar hij was gebleven.",
+  "bench.testStoppedWhy": "De test is voor het einde gestopt (code {code}): {reason}. Start hem opnieuw: hij gaat verder waar hij was gebleven.",
   "move.outsideParent": "Kies een map buiten {parent}: Jaris bewaart daar al zijn eigen bestanden. Er is niets verplaatst.",
   "move.windowsOnly": "Deze functie is alleen beschikbaar op Windows.",
   "move.alreadyThere": "Alles staat al in {dir}.",

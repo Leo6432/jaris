@@ -1267,6 +1267,7 @@
   "bench.testRunning": "Ya hay una prueba en curso: espera a que termine o detenla con «Detener la prueba».",
   "bench.testLaunchFailed": "No se puede iniciar la prueba: {error}",
   "bench.testStopped": "La prueba se detuvo antes del final (código {code}). Vuelve a lanzarla: seguirá donde se quedó.",
+  "bench.testStoppedWhy": "La prueba se detuvo antes del final (código {code}): {reason}. Vuelve a lanzarla: seguirá donde se quedó.",
   "move.outsideParent": "Elige una carpeta fuera de {parent}: Jaris ya guarda allí sus propios archivos. No se ha movido nada.",
   "move.windowsOnly": "Esta función solo está disponible en Windows.",
   "move.alreadyThere": "Todo está ya en {dir}.",

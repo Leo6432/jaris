@@ -1267,6 +1267,7 @@
   "bench.testRunning": "En test kører allerede: vent til den er færdig, eller stop den med „Stop testen“.",
   "bench.testLaunchFailed": "Kan ikke starte testen: {error}",
   "bench.testStopped": "Testen stoppede før tid (kode {code}). Start den igen: den fortsætter, hvor den slap.",
+  "bench.testStoppedWhy": "Testen stoppede før tid (kode {code}): {reason}. Start den igen: den fortsætter, hvor den slap.",
   "move.outsideParent": "Vælg en mappe uden for {parent}: Jaris har allerede sine egne filer der. Intet er blevet flyttet.",
   "move.windowsOnly": "Denne funktion findes kun på Windows.",
   "move.alreadyThere": "Alt ligger allerede i {dir}.",
