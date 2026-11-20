@@ -1546,6 +1546,8 @@ export const IPC_CHANNELS = {
   duelAdvice: 'jaris:duel-advice',
   duelAutoVote: 'jaris:duel-auto-vote',
   openStartupSettings: 'jaris:open-startup-settings',
+  /** Étape 502 : version Store — ouvre la page « Téléchargements » du Microsoft Store (adresse fixe, côté main). */
+  openStoreUpdates: 'jaris:open-store-updates',
   duelAutoVoteStop: 'jaris:duel-auto-vote-stop',
   duelRunB: 'jaris:duel-run-b',
   /** Étape 401 : Léo répond aux deux modèles (même message) avant de voter. */

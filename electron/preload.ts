@@ -332,6 +332,7 @@ const api = {
   // Étape 491 : version Microsoft Store (paquet MSIX) — mises à jour par le Store, démarrage réglé dans Windows.
   storeBuild: process.windowsStore === true,
   openStartupSettings: (): Promise<void> => invoke(IPC_CHANNELS.openStartupSettings),
+  openStoreUpdates: (): Promise<void> => invoke(IPC_CHANNELS.openStoreUpdates),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
     invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),
   getWidgetMode: (): Promise<WidgetMode> => invoke(IPC_CHANNELS.getWidgetMode),

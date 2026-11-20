@@ -12654,3 +12654,18 @@ remesurer) » puis « Le test s'est arrêté avant la fin (code 1). Relance-le�
 - Choix sans vote chez Léo (Ollama 0.40.10) : Faible LFM2.5, Moyen qwen3.5:4b (LFM3 écarté jusqu'à la mise à jour
   d'Ollama). Tests : min-ollama, duel, single-pool, benchmark-runner-cleanup, python-download (le détail mord).
 - Non vérifié : la vraie raison du « code 1 » chez Léo (le prochain arrêt l'affichera s'il y en a un).
+
+## Étape 502 — Version Store : « nouvelle version disponible » et bouton « Ouvrir le Microsoft Store »
+
+Léo : « quand il y a une mise à jour du Store, ça met ou pas Rechercher une mise à jour, Version installée : 0.72.2,
+nouvelle version dispo… ? » — non : depuis l'étape 491, la version Store ne regardait rien. Puis « oui ».
+- `checkForUpdate` (appUpdater.ts) lit aussi la dernière Release dans la version Store, sans jamais garder d'installeur
+  (`cachedDownloadUrl` nul ; `updateApp` toujours refusé). Options → Général : le bouton « Rechercher une mise à jour »
+  revient ; si une version plus récente existe, « Jaris X est sorti (tu as Y). Le Microsoft Store l'installe tout
+  seul, en général dans l'heure qui suit sa validation par Microsoft. » + bouton « Ouvrir le Microsoft Store »
+  (`openStoreUpdates`, adresse fixe `ms-windows-store://downloadsandupdates` côté main). Le bandeau de démarrage a son
+  texte Store (`app.jarisOutdatedStore`). 3 textes en 24 langues (noms d'onglets repris des traductions existantes).
+- Limite dite à Léo : Jaris voit la version dès sa publication sur GitHub, le Store seulement après la vérification de
+  Microsoft — d'où « en général dans l'heure qui suit sa validation ».
+- Tests (mordent) : test-app-updater (la version Store annonce, n'installe rien), test-options-reorganization-ui
+  (message, bouton qui ouvre le Store, jamais « Mettre à jour »).

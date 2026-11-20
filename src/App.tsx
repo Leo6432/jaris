@@ -855,7 +855,7 @@ export default function App(): JSX.Element {
                   {/* Onglet "Mise à jour", pas "Modèles" : celui de Jaris a son propre onglet depuis qu'il a
                       été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
                       quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
-                  {t('app.jarisOutdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
+                  {t(window.jaris.storeBuild ? 'app.jarisOutdatedStore' : 'app.jarisOutdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
                 </p>
                 <button onClick={() => setAppPopupDismissed(true)}>{t('common.close')}</button>
               </div>

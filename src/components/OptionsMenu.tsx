@@ -1265,19 +1265,29 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 description={
                   <>
                     {t('options.update.installed')} <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
-                    {window.jaris.storeBuild ? <> — {t('options.update.store')}</> : updateCheckMessage ? <> — {updateCheckMessage}</> : null}
+                    {window.jaris.storeBuild && <> — {t('options.update.store')}</>}
+                    {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
                   </>
                 }
               >
-                {/* Étape 491 : la version Microsoft Store est mise à jour par le Store, pas de bouton ici. */}
-                {!window.jaris.storeBuild && (
-                  <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-                    {checkingUpdate ? t('options.update.checking') : t('options.update.check')}
-                  </button>
-                )}
+                {/* Étape 502 : la version Store recherche aussi (pour annoncer une nouvelle version) ; c'est le Store qui
+                    l'installe (étape 491). */}
+                <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+                  {checkingUpdate ? t('options.update.checking') : t('options.update.check')}
+                </button>
               </SettingRow>
 
-              {appVersionStatus?.outdated && (
+              {/* Étape 502 : version Store — la nouvelle version s'annonce, et un bouton ouvre la page « Téléchargements »
+                  du Store (« Obtenir les mises à jour ») au lieu de télécharger un installeur. */}
+              {appVersionStatus?.outdated && window.jaris.storeBuild && (
+                <div className="options-menu__ollama-warning options-menu__store-update">
+                  {t('options.update.storeOutdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
+                  <div className="options-menu__ollama-update-actions">
+                    <button onClick={() => void window.jaris.openStoreUpdates()}>{t('options.update.openStore')}</button>
+                  </div>
+                </div>
+              )}
+              {appVersionStatus?.outdated && !window.jaris.storeBuild && (
                 <div className="options-menu__ollama-warning">
                   {t('options.update.outdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
                   <div className="options-menu__ollama-update-actions">

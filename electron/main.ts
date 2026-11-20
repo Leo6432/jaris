@@ -197,7 +197,7 @@ import {
   wasLaunchedAtLogin,
   STORE_STARTUP_SETTINGS_URL
 } from './services/launchAtStartup'
-import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
+import { STORE_UPDATES_URL, checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import { isPermissionAllowed } from './services/permissions'
 import { isSameDocument, isWebUrl } from './services/navigationGuard'
 import { isSearchContents } from './services/webSearch'
@@ -2070,6 +2070,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform, process.windowsStore === true))
   // Étape 491 : une adresse fixe, jamais une valeur venue de l'écran.
   ipcMain.handle(IPC_CHANNELS.openStartupSettings, () => shell.openExternal(STORE_STARTUP_SETTINGS_URL))
+  // Étape 502 : adresse fixe, jamais une adresse venue de l'écran.
+  ipcMain.handle(IPC_CHANNELS.openStoreUpdates, () => shell.openExternal(STORE_UPDATES_URL))
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
     setLaunchAtStartup(app, process.platform, enabled, process.windowsStore === true)
   )

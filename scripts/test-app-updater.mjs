@@ -178,18 +178,14 @@ test('un installeur incomplet ne ferme PAS Jaris et ne se lance jamais', async (
 
 test.after(() => rmSync(fakeTmp, { recursive: true, force: true }))
 
-test('étape 491 : version Microsoft Store — aucune recherche ni installation par Jaris, le Store s’en charge', async () => {
+// Étape 502 (Léo : « quand il y a une mise à jour du Store, ça met ou pas nouvelle version dispo ? ») : la version Store
+// LIT la dernière Release pour l'annoncer, mais n'installe jamais rien elle-même (étape 491).
+test('étape 491/502 : version Microsoft Store — la nouvelle version s’annonce, mais aucune installation par Jaris', async () => {
   reset()
-  const realFetch = globalThis.fetch
-  let fetched = 0
-  globalThis.fetch = (...args) => {
-    fetched += 1
-    return realFetch(...args)
-  }
   process.windowsStore = true
   try {
-    assert.deepEqual(await checkForUpdate(), { status: null, error: null })
-    assert.equal(fetched, 0, 'aucun appel à GitHub')
+    const check = await checkForUpdate()
+    assert.deepEqual(check.status, { current: '0.8.1', latest: '0.9.0', outdated: true }, 'la nouvelle version est annoncée')
     const result = await updateApp()
     assert.equal(result.success, false)
     assert.match(result.message, /Microsoft Store/)
@@ -197,7 +193,6 @@ test('étape 491 : version Microsoft Store — aucune recherche ni installation 
     assert.equal(electronApp.quitCalls, 0)
   } finally {
     delete process.windowsStore
-    globalThis.fetch = realFetch
   }
 })
 

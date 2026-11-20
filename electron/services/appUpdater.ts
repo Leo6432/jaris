@@ -81,9 +81,14 @@ export function checkAppFreshness(): Promise<void> {
  * une mise à jour" (OptionsMenu.tsx), l'utilisateur doit voir la vraie raison d'un échec (pare-feu, réseau
  * d'entreprise, GitHub injoignable...) plutôt qu'un silence qui ressemble à un bug côté Jaris.
  */
+/**
+ * Étape 502 (Léo : « quand il y a une mise à jour du Store, ça met ou pas nouvelle version dispo ? ») : la version
+ * Microsoft Store lit AUSSI la dernière Release, pour annoncer qu'une version existe — mais ne télécharge jamais son
+ * installeur (le Store installe, étape 491) : Options propose seulement d'ouvrir le Store.
+ */
+export const STORE_UPDATES_URL = 'ms-windows-store://downloadsandupdates'
+
 export async function checkForUpdate(): Promise<{ status: AppVersionStatus | null; error: string | null }> {
-  // Étape 491 : la version Microsoft Store est mise à jour par le Store, jamais par son propre installeur.
-  if (process.windowsStore === true) return { status: null, error: null }
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
@@ -104,7 +109,8 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
     const currentParts = parseSemver(currentVersion) ?? [0, 0, 0]
     const exeAsset = release.assets?.find((a) => a.name.endsWith('.exe'))
 
-    cachedDownloadUrl = exeAsset?.browser_download_url ?? null
+    // Étape 491 : jamais d'installeur pour la version Store (updateApp la refuse de toute façon).
+    cachedDownloadUrl = process.windowsStore === true ? null : exeAsset?.browser_download_url ?? null
     cachedStatus = {
       current: currentVersion,
       latest: latestParts.join('.'),

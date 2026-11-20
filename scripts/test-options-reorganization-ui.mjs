@@ -71,7 +71,16 @@ const overrides = {
     window.__emitOllamaStatus = cb
     return () => {}
   },
-  getAppVersionStatus: async () => ({ current: '0.13.0', latest: '0.13.0', outdated: false }),
+  getAppVersionStatus: async () => window.__appStatus ?? { current: '0.13.0', latest: '0.13.0', outdated: false },
+  checkForUpdate: async () => ({ status: window.__appStatus ?? { current: '0.13.0', latest: '0.13.0', outdated: false }, error: null }),
+  // Étape 502 : version Store — « Ouvrir le Microsoft Store » au lieu de télécharger un installeur.
+  openStoreUpdates: async () => {
+    window.__storeUpdatesOpened = (window.__storeUpdatesOpened ?? 0) + 1
+  },
+  updateApp: async () => {
+    window.__updateAppCalls = (window.__updateAppCalls ?? 0) + 1
+    return { success: false, message: '' }
+  },
   getAppVersion: async () => '0.13.0',
   // Étape 165 : imite l'entrée de démarrage de Windows, relue après chaque bascule.
   getLaunchAtStartup: async () =>
@@ -330,8 +339,15 @@ test('étape 491 : version Microsoft Store — démarrage réglé dans Windows (
     await open.click()
     await page.waitForFunction(() => window.__startupSettingsOpened === 1)
     assert.match(await page.textContent('.options-page__content'), /Cette version vient du Microsoft Store : c'est lui qui installe les mises à jour\./)
-    assert.equal(await page.getByRole('button', { name: 'Rechercher une mise à jour' }).count(), 0, 'pas de mise à jour par Jaris')
-  }, 'window.__store = true')
+    // Étape 502 : une nouvelle version s'annonce, et le bouton ouvre le Store — jamais « Mettre à jour » (installeur).
+    assert.match(await page.textContent('.options-page__content'), /Jaris 0\.14\.0 est sorti \(tu as 0\.13\.0\)\. Le Microsoft Store l'installe tout seul/)
+    assert.equal(await page.getByRole('button', { name: 'Mettre à jour', exact: true }).count(), 0, 'pas d’installeur pour la version Store')
+    await page.getByRole('button', { name: 'Ouvrir le Microsoft Store' }).click()
+    await page.waitForFunction(() => window.__storeUpdatesOpened === 1)
+    assert.equal(await page.evaluate(() => window.__updateAppCalls ?? 0), 0)
+    // La recherche reste possible (elle annonce, elle n'installe rien).
+    assert.equal(await page.getByRole('button', { name: 'Rechercher une mise à jour' }).count(), 1)
+  }, "window.__store = true; window.__appStatus = { current: '0.13.0', latest: '0.14.0', outdated: true }")
   // La version habituelle garde son bouton.
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Général")')

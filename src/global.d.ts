@@ -246,6 +246,7 @@ declare global {
       /** Étape 491 : version Microsoft Store. Absent dans les faux ponts des tests = version habituelle. */
       storeBuild?: boolean
       openStartupSettings: () => Promise<void>
+      openStoreUpdates: () => Promise<void>
       duelAutoVoteStop: () => Promise<DuelSessionView | null>
       duelRunB: () => Promise<DuelSessionView>
       duelFollowUp: (message: string) => Promise<DuelSessionView>
