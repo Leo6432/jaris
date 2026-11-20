@@ -41,6 +41,20 @@ test('une réponse, une reformulation ou un ajout sont refusés', () => {
   assert.equal(c.acceptCorrection('ouvre steam', ''), false)
 })
 
+// Étape 505 (journal de Léo, lfm3:1.7b) : « Quelle heure est-il? » → « Quel heure est-il? ». Une correction qui ne change
+// que des terminaisons d'accord touche à la grammaire, pas à un mot mal entendu : refusée.
+test('étape 505 : seulement des terminaisons changées (quelle/quel, accords) — refusé ; un vrai mot mal entendu passe', async () => {
+  assert.equal(c.acceptCorrection('Quelle heure est-il?', 'Quel heure est-il?'), false)
+  assert.equal(c.acceptCorrection('les petit chats', 'les petits chats'), false)
+  assert.equal(c.acceptCorrection('ils mange', 'ils mangent'), false)
+  // Un mot vraiment mal entendu, même à côté d'un accord, passe toujours.
+  assert.equal(c.acceptCorrection('ouvre stime et les petit jeux', 'ouvre Steam et les petits jeux'), true)
+  assert.equal(c.acceptCorrection('ouvre stime', 'Ouvre Steam.'), true)
+  // Bout à bout : le texte de Léo reste tel qu'il l'a dit.
+  const out = await c.correctTranscript('Quelle heure est-il?', reply('Quel heure est-il?'))
+  assert.deepEqual(out, { text: 'Quelle heure est-il?', changed: false })
+})
+
 test('correctTranscript : correction acceptée → phrase corrigée, marquée comme changée', async () => {
   const out = await c.correctTranscript('ouvre stime', reply('Ouvre Steam.'))
   assert.deepEqual({ ...out }, { text: 'Ouvre Steam.', changed: true })

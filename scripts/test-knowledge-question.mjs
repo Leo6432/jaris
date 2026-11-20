@@ -63,6 +63,10 @@ for (const prompt of [
   "N'oublie pas que je déteste le café",
   'Quelle heure est-il ?',
   'Quel jour on est ?',
+  // Étape 505 (journal de Léo) : « Quel heure est-il? », mal « corrigé » par le petit modèle — toujours l'heure.
+  'Quel heure est-il?',
+  'Il est quelle heure ?',
+  'Quelle date on est ?',
   "Comment tu t'appelles ?",
   'Tu vas bien ?',
   'Est-ce que tu vas bien ?',

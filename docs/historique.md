@@ -12709,3 +12709,19 @@ plus Agentique ». Catégories : Discussion, Agentique, Code, Vision.
   demandé à ton PC ». La case « Lire à voix haute » a sa propre classe (`duel-spoken`) : avec `duel-pick`, elle était
   comptée comme un modèle de plus dans « Je choisis ». Mesurée à 760 px (rien ne déborde).
 - Non vérifié en usage réel : pas d'Ollama dans le conteneur cette fois, la tâche n'a tourné qu'avec un faux modèle.
+
+## Étape 505 — « Oups » à chaque question vocale : la vraie raison écrite dans le journal ; correction « quelle » → « quel » refusée
+
+Léo (capture de `journal-demandes`, lfm3:1.7b) : « je demande des questions, ça fait toujours Oups, et dans Demandes je vois
+les réponses ». Le journal dit « Fin : réponse donnée » : le modèle répond, c'est APRÈS que l'orbe passe à « Oups ». Dans
+voicePipeline.ts, seules deux choses font « Oups » : la lecture à voix haute qui échoue (synthesizeSpeech) et une erreur
+du programme d'écoute — leur message partait seulement à l'écran (`log`), jamais dans le journal. Cause encore inconnue :
+- les deux erreurs sont maintenant écrites dans le journal des demandes avec leur vrai message (« Voix — lecture à voix
+  haute impossible : … », « Voix — erreur de l'écoute : … ») ; test-voice-pipeline-346 (mord).
+Deuxième défaut lu dans le même journal : la correction de la transcription par lfm3 a changé « Quelle heure est-il? » en
+« Quel heure est-il? » ; l'exception « quelle heure » ne reconnaissait plus l'heure → relance « cherche sur le web » pour
+rien (+3 s). Deux corrections :
+- acceptCorrection refuse une « correction » qui ne change que des terminaisons d'accord (e, s, es, x, nt, ent, consonne
+  doublée + e : quel/quelle, bon/bonne) — la correction sert aux mots mal entendus, pas à la grammaire ;
+- l'exception accepte le patron `quel(le)(s) heure|jour|date` (copie dans benchmark-scenarios.mjs alignée).
+Tests (mordent) : test-transcript-corrector, test-knowledge-question.

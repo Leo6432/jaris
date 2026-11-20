@@ -267,6 +267,9 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('log', (message: string) => this.emit('log', message))
     this.voice.on('error', (err: Error) => {
       this.emit('log', `Erreur pipeline vocal : ${err.message}`)
+      // Étape 505 : écrite aussi dans le journal des demandes (le fichier que Léo ouvre) — avant, le « Oups ! » de l'orbe
+      // n'y laissait aucune trace, la vraie raison n'était visible nulle part.
+      void appendJournal(['', `Voix — erreur de l'écoute : ${err.message}`])
       this.setEmotion('surprised')
       this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     })
@@ -659,7 +662,11 @@ export class VoicePipeline extends EventEmitter {
 
       this.scheduleIdle(speechFallbackIdleMs(audio, reply))
     } catch (err) {
-      this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
+      const message = err instanceof Error ? err.message : String(err)
+      this.emit('log', `Erreur de synthèse vocale : ${message}`)
+      // Étape 505 (Léo : « je demande des questions, ça fait toujours Oups, et dans Demandes je vois les réponses ») : la
+      // réponse était donnée, c'est la lecture à voix haute qui échouait — sans laisser sa raison dans le journal.
+      void appendJournal(['', `Voix — lecture à voix haute impossible : ${message}`])
       this.setEmotion('surprised')
       this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     }

@@ -120,7 +120,7 @@ const QUESTION_START_WORDS =
   /^(qui|que|qu['’]|quoi|quel|quelle|quels|quelles|quand|où|comment|pourquoi|combien|c['’]est quoi|est-ce que|est-ce qu['’])\b/i
 const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|recherche|dis[- ]moi|donne[- ]moi)\b/i
 const NOT_A_KNOWLEDGE_QUESTION =
-  /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
+  /\b(quel(?:le)?s? heure|quel(?:le)?s? jour|quel(?:le)?s? date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
 // Étape 346 : une question adressée à Jaris lui-même (« tu m'entends ? »), sur ce qui a déjà été dit (« je t'ai dit
 // quoi ? »), sur la date, ou une demande explicite de ne pas chercher : aucune donnée du monde à aller lire sur internet.
 // Pas de \b après un mot accentué (« là ») : en JavaScript, \b ne connaît que les lettres sans accent.

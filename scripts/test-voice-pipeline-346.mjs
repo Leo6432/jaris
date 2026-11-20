@@ -32,7 +32,7 @@ class FakeVoiceClient extends EventEmitter {
 }
 
 const noop = () => {}
-const harness = { converse: async () => 'Réponse.', exchanges: [], audio: null }
+const harness = { converse: async () => 'Réponse.', exchanges: [], audio: null, journal: [], ttsError: null }
 const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck, wavDurationMs, speechFallbackIdleMs } = loadTsModule('electron/services/voicePipeline.ts', {
   events: { EventEmitter },
   crypto: { randomUUID: () => 'id' },
@@ -40,7 +40,7 @@ const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck, wavDurationMs, s
     VoiceClient: FakeVoiceClient,
     listeningUnavailableReason: (status) => (status.state === 'ready' ? null : `écoute ${status.state}`)
   },
-  './tts': { synthesizeSpeech: async () => harness.audio ?? Buffer.from([1, 2, 3, 4]) },
+  './tts': { synthesizeSpeech: async () => { if (harness.ttsError) throw new Error(harness.ttsError); return harness.audio ?? Buffer.from([1, 2, 3, 4]) } },
   './conversationStore': { appendConversationEntry: async () => {}, getActiveConversationId: async () => 'conv' },
   './assistant': { converse: (...args) => harness.converse(...args), LOOKUP_TOOLS: new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats']) },
   './conversationSession': { VOICE_CONTEXT_MAX_AGE_MS: 1, clearSessionHistory: noop, getSessionHistory: async () => [], pushSessionExchange: noop },
@@ -51,7 +51,7 @@ const { VoicePipeline, normalizeSpokenSymbols, isPresenceCheck, wavDurationMs, s
   './transcriptCorrector': { CORRECTION_SCHEMA: {}, correctTranscript: async (text) => ({ text, changed: false }) },
   './ollama': { structuredChat: async () => '', preferLoadedModel: async (_c, preferred) => preferred },
   '../config': { config: { ollama: { model: 'm', numCtx: 8192 } } },
-  './requestJournal': { appendJournal: noop, formatElapsed: () => '' },
+  './requestJournal': { appendJournal: async (lines) => { harness.journal.push(...lines) }, formatElapsed: () => '' },
   '../../shared/voiceActivity': { activityFromLog: () => null, formatActivity: () => '', thinkingActivity: () => '' }
 })
 
@@ -323,5 +323,26 @@ test('étape 413 : sans signal de fin de lecture (fenêtre fermée), le filet at
     assert.equal(emotions.at(-1), 'idle')
   } finally {
     harness.audio = null
+  }
+})
+
+// Étape 505 (Léo : « je demande des questions, ça fait toujours Oups, et dans Demandes je vois les réponses ») : la réponse
+// était donnée, la lecture à voix haute échouait — sans que sa raison soit écrite dans le journal des demandes.
+test('étape 505 : lecture à voix haute impossible — « Oups », et la VRAIE raison écrite dans le journal des demandes', async () => {
+  harness.converse = async () => 'Il est 19 h 35.'
+  harness.journal = []
+  harness.ttsError = 'Le modèle de voix est introuvable : C:\\Users\\leo\\.jaris\\supertonic'
+  try {
+    const { voice, emotions } = await started()
+    voice.emit('transcript', 'Quelle heure est-il ?')
+    await wait(50)
+    assert.equal(emotions.at(-1), 'surprised')
+    assert.ok(harness.journal.includes(`Voix — lecture à voix haute impossible : ${harness.ttsError}`), harness.journal.join(' | '))
+    // Et une erreur du programme d'écoute aussi.
+    voice.emit('error', new Error('micro débranché'))
+    await wait(10)
+    assert.ok(harness.journal.includes("Voix — erreur de l'écoute : micro débranché"))
+  } finally {
+    harness.ttsError = null
   }
 })

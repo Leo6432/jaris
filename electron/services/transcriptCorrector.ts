@@ -102,7 +102,31 @@ export function acceptCorrection(original: string, corrected: string): boolean {
   const allowed = Math.max(3, Math.ceil(a.length * 0.3))
   if (distance > allowed) return false
   // Pas plus d'un mot en plus ou en moins : une correction remplace, elle n'ajoute pas de phrase.
-  return Math.abs(a.split(' ').length - b.split(' ').length) <= 1
+  if (Math.abs(a.split(' ').length - b.split(' ').length) > 1) return false
+  return !onlyEndingsChanged(a, b)
+}
+
+/**
+ * Étape 505 (journal de Léo : « Quelle heure est-il ? » → « Quel heure est-il ? » par lfm3:1.7b) : la correction sert
+ * aux mots MAL ENTENDUS (« stime » → « Steam »), pas à la grammaire. Si les seuls mots changés ne diffèrent que par une
+ * terminaison d'accord (quelle/quel, petit/petits, mange/mangent), le modèle « corrige » ce que la transcription avait
+ * bien entendu — et peut le casser, comme ici (l'heure n'était plus reconnue). Refusé.
+ */
+const AGREEMENT_ENDING = /^(?:e|s|es|x|nt|ent)$/
+function onlyEndingsChanged(a: string, b: string): boolean {
+  const wa = a.split(' ')
+  const wb = b.split(' ')
+  if (wa.length !== wb.length) return false
+  const changed = wa.map((word, i) => [word, wb[i]] as const).filter(([x, y]) => x !== y)
+  if (!changed.length) return false
+  return changed.every(([x, y]) => {
+    const [short, long] = x.length <= y.length ? [x, y] : [y, x]
+    if (short.length < 2 || !long.startsWith(short)) return false
+    const ending = long.slice(short.length)
+    // Le féminin double parfois la consonne finale : quel → quelle, bon → bonne.
+    const doubled = ending.startsWith(short.slice(-1)) ? ending.slice(1) : null
+    return AGREEMENT_ENDING.test(ending) || (doubled !== null && /^(?:e|es)$/.test(doubled))
+  })
 }
 
 /** Lit le champ « texte » de la réponse JSON ; tout ce qui n'y ressemble pas est ignoré. */
