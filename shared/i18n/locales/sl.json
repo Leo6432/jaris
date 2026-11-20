@@ -193,7 +193,7 @@
   "options.sound.beeps": "Zvoki vmesnika",
   "options.sound.beeps.hint": "Kratek zvok ob poslušanju, razmišljanju, kliku.",
   "options.sound.correct": "Popravljaj, kar rečem",
-  "options.sound.correct.hint": "Popravi narobe razumljene besede, preden Jaris odgovori.",
+  "options.sound.correct.hint": "Popravi narobe razumljena imena (aplikacije, Jaris, tvoje ime, tvoje zapiske), preden Jaris odgovori.",
   "options.sound.micTest": "Preizkusi mikrofon",
   "options.sound.micTest.hint": "Preveri, ali Jaris dobro sliši tvoj glas.",
   "common.stop": "Ustavi",

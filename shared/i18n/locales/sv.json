@@ -191,7 +191,7 @@
   "options.sound.beeps": "Gränssnittsljud",
   "options.sound.beeps.hint": "Ett kort ljud vid lyssnande, eftertanke, klick.",
   "options.sound.correct": "Rätta det jag säger",
-  "options.sound.correct.hint": "Rättar felhörda ord innan Jaris svarar.",
+  "options.sound.correct.hint": "Rättar felhörda namn (appar, Jaris, ditt förnamn, dina anteckningar) innan Jaris svarar.",
   "options.sound.micTest": "Testa mikrofonen",
   "options.sound.micTest.hint": "Kontrollerar att Jaris hör din röst ordentligt.",
   "common.stop": "Stoppa",

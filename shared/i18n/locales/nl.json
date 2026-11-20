@@ -191,7 +191,7 @@
   "options.sound.beeps": "Interfacepiepjes",
   "options.sound.beeps.hint": "Een kort geluid bij luisteren, nadenken, klikken.",
   "options.sound.correct": "Corrigeren wat ik zeg",
-  "options.sound.correct.hint": "Verbetert verkeerd verstane woorden voordat Jaris antwoordt.",
+  "options.sound.correct.hint": "Herstelt verkeerd verstane namen (apps, Jaris, je voornaam, je notities) voordat Jaris antwoordt.",
   "options.sound.micTest": "Microfoon testen",
   "options.sound.micTest.hint": "Controleert of Jaris je stem goed hoort.",
   "common.stop": "Stoppen",

@@ -191,7 +191,7 @@
   "options.sound.beeps": "Ήχοι διεπαφής",
   "options.sound.beeps.hint": "Ένας σύντομος ήχος στην ακρόαση, στη σκέψη, στο κλικ.",
   "options.sound.correct": "Διόρθωνε ό,τι λέω",
-  "options.sound.correct.hint": "Διορθώνει τις λέξεις που ακούστηκαν λάθος πριν απαντήσει ο Jaris.",
+  "options.sound.correct.hint": "Διορθώνει ονόματα που ακούστηκαν λάθος (εφαρμογές, Jaris, το όνομά σου, τις σημειώσεις σου) πριν απαντήσει ο Jaris.",
   "options.sound.micTest": "Δοκιμή μικροφώνου",
   "options.sound.micTest.hint": "Ελέγχει ότι ο Jaris ακούει καλά τη φωνή σου.",
   "common.stop": "Διακοπή",

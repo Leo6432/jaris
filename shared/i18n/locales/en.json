@@ -191,7 +191,7 @@
   "options.sound.beeps": "Interface beeps",
   "options.sound.beeps.hint": "A short sound when listening, thinking, or clicking.",
   "options.sound.correct": "Fix what I say",
-  "options.sound.correct.hint": "Corrects misheard words before Jaris answers.",
+  "options.sound.correct.hint": "Fixes misheard names (apps, Jaris, your first name, your notes) before Jaris answers.",
   "options.sound.micTest": "Test the microphone",
   "options.sound.micTest.hint": "Checks that Jaris hears your voice properly.",
   "common.stop": "Stop",

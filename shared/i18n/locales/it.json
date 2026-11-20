@@ -191,7 +191,7 @@
   "options.sound.beeps": "Bip dell'interfaccia",
   "options.sound.beeps.hint": "Un suono breve all'ascolto, al ragionamento, a un clic.",
   "options.sound.correct": "Correggi ciò che dico",
-  "options.sound.correct.hint": "Sistema le parole capite male prima che Jaris risponda.",
+  "options.sound.correct.hint": "Corregge i nomi capiti male (app, Jaris, il tuo nome, le tue note) prima che Jaris risponda.",
   "options.sound.micTest": "Prova il microfono",
   "options.sound.micTest.hint": "Verifica che Jaris senta bene la tua voce.",
   "common.stop": "Interrompi",

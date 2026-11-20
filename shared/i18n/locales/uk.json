@@ -193,7 +193,7 @@
   "options.sound.beeps": "Звуки інтерфейсу",
   "options.sound.beeps.hint": "Короткий звук під час прослуховування, роздумів, клацання.",
   "options.sound.correct": "Виправляти те, що я кажу",
-  "options.sound.correct.hint": "Виправляє неправильно зрозумілі слова, перш ніж Jaris відповість.",
+  "options.sound.correct.hint": "Виправляє неправильно почуті назви (застосунки, Jaris, твоє ім'я, твої нотатки), перш ніж Jaris відповість.",
   "options.sound.micTest": "Перевірити мікрофон",
   "options.sound.micTest.hint": "Перевіряє, чи добре Jaris чує твій голос.",
   "common.stop": "Зупинити",

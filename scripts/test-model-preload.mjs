@@ -186,11 +186,11 @@ test('étape 346 : le modèle de Jaris déjà chargé est préféré, sinon le m
   assert.equal(await ollama.preferLoadedModel(['qwen3.5:9b'], 'ministral-3:3b'), 'ministral-3:3b', 'Ollama muet : le modèle prévu')
 })
 
-test('étape 346 : la correction (voix) et la mémoire passent bien par le modèle déjà chargé', () => {
+test('étape 346 : la mémoire passe bien par le modèle déjà chargé (étape 507 : la correction de la voix, par aucun)', () => {
   const voice = readFileSync(new URL('../electron/services/voicePipeline.ts', import.meta.url), 'utf8')
   const memory = readFileSync(new URL('../electron/services/memoryExtractor.ts', import.meta.url), 'utf8')
-  // Étape 504 : la voix utilise les modèles du Chat (plus de modèles « Vocal » à part) — toujours le Rapide en repli.
-  assert.match(voice, /const voiceModels = profile\?\.models\s+const model = await preferLoadedModel\(Object\.values\(voiceModels \?\? \{\}\), voiceModels\?\.flash/)
+  // Étape 507 : la correction de la voix n'utilise plus aucun modèle (liste de mots) : rien à charger pour elle.
+  assert.doesNotMatch(voice, /preferLoadedModel|structuredChat/)
   assert.match(memory, /const model = await preferLoadedModel\(Object\.values\(profile\?\.models \?\? \{\}\), profile\?\.models\?\.medium/)
 })
 

@@ -192,7 +192,7 @@
   "options.sound.beeps": "Zvuky rozhraní",
   "options.sound.beeps.hint": "Krátký zvuk při poslechu, přemýšlení, kliknutí.",
   "options.sound.correct": "Opravovat, co říkám",
-  "options.sound.correct.hint": "Opraví špatně pochopená slova, než Jaris odpoví.",
+  "options.sound.correct.hint": "Opraví špatně pochopená jména (aplikace, Jaris, tvé jméno, tvé poznámky), než Jaris odpoví.",
   "options.sound.micTest": "Otestovat mikrofon",
   "options.sound.micTest.hint": "Ověří, že Jaris tvůj hlas dobře slyší.",
   "common.stop": "Zastavit",

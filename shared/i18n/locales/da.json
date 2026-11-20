@@ -191,7 +191,7 @@
   "options.sound.beeps": "Lyde i brugerfladen",
   "options.sound.beeps.hint": "En kort lyd ved lytning, tænkning, klik.",
   "options.sound.correct": "Ret det, jeg siger",
-  "options.sound.correct.hint": "Retter misforståede ord, før Jaris svarer.",
+  "options.sound.correct.hint": "Retter navne, der er hørt forkert (apps, Jaris, dit fornavn, dine noter), før Jaris svarer.",
   "options.sound.micTest": "Test mikrofonen",
   "options.sound.micTest.hint": "Kontrollerer, at Jaris hører din stemme godt.",
   "common.stop": "Stop",

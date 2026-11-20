@@ -191,7 +191,7 @@
   "options.sound.beeps": "Käyttöliittymän äänet",
   "options.sound.beeps.hint": "Lyhyt ääni kuunneltaessa, ajateltaessa ja napsautettaessa.",
   "options.sound.correct": "Korjaa sanomani",
-  "options.sound.correct.hint": "Korjaa väärin kuullut sanat ennen kuin Jaris vastaa.",
+  "options.sound.correct.hint": "Korjaa väärin kuullut nimet (sovellukset, Jaris, etunimesi, muistiinpanosi) ennen kuin Jaris vastaa.",
   "options.sound.micTest": "Testaa mikrofoni",
   "options.sound.micTest.hint": "Tarkistaa, että Jaris kuulee äänesi hyvin.",
   "common.stop": "Pysäytä",

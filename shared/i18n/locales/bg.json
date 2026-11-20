@@ -191,7 +191,7 @@
   "options.sound.beeps": "Звуци на интерфейса",
   "options.sound.beeps.hint": "Кратък звук при слушане, мислене, щракване.",
   "options.sound.correct": "Поправяй каквото казвам",
-  "options.sound.correct.hint": "Поправя погрешно разбраните думи, преди Jaris да отговори.",
+  "options.sound.correct.hint": "Поправя погрешно разбрани имена (приложения, Jaris, твоето име, бележките ти), преди Jaris да отговори.",
   "options.sound.micTest": "Тествай микрофона",
   "options.sound.micTest.hint": "Проверява дали Jaris чува добре гласа ти.",
   "common.stop": "Спри",

@@ -36,6 +36,18 @@ async function listInstalledApps(): Promise<StartApp[]> {
 }
 
 /**
+ * Étape 507 : les noms des applications du menu Démarrer, pour la correction de ce que Léo dit (transcriptCorrector.ts) ;
+ * aucune si Windows ne peut pas les donner (la correction continue avec le reste de la liste).
+ */
+export async function installedAppNames(): Promise<string[]> {
+  try {
+    return (await listInstalledApps()).map((app) => app.Name).filter((name): name is string => typeof name === 'string' && Boolean(name))
+  } catch {
+    return []
+  }
+}
+
+/**
  * Ramène un nom d'application à une forme comparable : minuscules, accents retirés, et toute ponctuation
  * (trait d'union, apostrophe, point...) remplacée par une espace.
  *

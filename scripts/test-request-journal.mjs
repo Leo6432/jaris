@@ -196,7 +196,8 @@ test('chatWithOllama transmet les mesures d’Ollama en streaming (Chat), réfle
 
 test('voix : le temps de correction de la transcription est noté, et le journal suit les données lors d’un « Déplacer »', () => {
   const pipeline = readFileSync(new URL('../electron/services/voicePipeline.ts', import.meta.url), 'utf8')
-  assert.match(pipeline, /appendJournal\(\[[\s\S]{0,200}correction de la transcription[\s\S]{0,80}formatElapsed\(Date\.now\(\) - correctionStart\)/)
+  // Étape 507 : la correction par la liste de mots (plus de modèle).
+  assert.match(pipeline, /appendJournal\(\[[\s\S]{0,200}correction par la liste de mots[\s\S]{0,80}formatElapsed\(Date\.now\(\) - correctionStart\)/)
   const storage = readFileSync(new URL('../electron/services/storageRoot.ts', import.meta.url), 'utf8')
   assert.match(storage, /OWNED_ENTRIES = \[[^\]]*'journal-demandes\.txt'/)
 })

@@ -191,7 +191,7 @@
   "options.sound.beeps": "Oberflächentöne",
   "options.sound.beeps.hint": "Ein kurzer Ton beim Zuhören, beim Nachdenken, bei einem Klick.",
   "options.sound.correct": "Korrigieren, was ich sage",
-  "options.sound.correct.hint": "Korrigiert falsch verstandene Wörter, bevor Jaris antwortet.",
+  "options.sound.correct.hint": "Korrigiert falsch verstandene Namen (Apps, Jaris, dein Vorname, deine Notizen), bevor Jaris antwortet.",
   "options.sound.micTest": "Mikrofon testen",
   "options.sound.micTest.hint": "Prüft, ob Jaris deine Stimme gut hört.",
   "common.stop": "Stoppen",

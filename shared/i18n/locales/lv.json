@@ -192,7 +192,7 @@
   "options.sound.beeps": "Saskarnes skaņas",
   "options.sound.beeps.hint": "Īsa skaņa klausoties, domājot, noklikšķinot.",
   "options.sound.correct": "Labot to, ko saku",
-  "options.sound.correct.hint": "Izlabo nepareizi saprastos vārdus, pirms Jaris atbild.",
+  "options.sound.correct.hint": "Izlabo nepareizi saklausītus nosaukumus (lietotnes, Jaris, tavs vārds, tavas piezīmes), pirms Jaris atbild.",
   "options.sound.micTest": "Pārbaudīt mikrofonu",
   "options.sound.micTest.hint": "Pārbauda, vai Jaris labi dzird tavu balsi.",
   "common.stop": "Apturēt",

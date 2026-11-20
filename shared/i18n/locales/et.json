@@ -191,7 +191,7 @@
   "options.sound.beeps": "Liidese helid",
   "options.sound.beeps.hint": "Lühike heli kuulamisel, mõtlemisel, klõpsul.",
   "options.sound.correct": "Paranda, mida ütlen",
-  "options.sound.correct.hint": "Parandab valesti mõistetud sõnad enne, kui Jaris vastab.",
+  "options.sound.correct.hint": "Parandab valesti kuuldud nimed (rakendused, Jaris, sinu eesnimi, sinu märkmed), enne kui Jaris vastab.",
   "options.sound.micTest": "Testi mikrofoni",
   "options.sound.micTest.hint": "Kontrollib, kas Jaris kuuleb su häält hästi.",
   "common.stop": "Peata",

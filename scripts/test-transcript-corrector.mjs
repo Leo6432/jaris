@@ -1,103 +1,62 @@
-import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import vm from 'node:vm'
-import ts from 'typescript'
+import { SCENARIOS } from './benchmark-scenarios.mjs'
+import { DUEL_AGENT_TASKS } from './duel-agent-tasks.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 
 /**
- * Correcteur de ce que Léo a dit (étape 207). Le modèle est simulé ici : ce qui est vérifié, ce sont les VERROUS
- * qui empêchent un petit modèle local de remplacer la phrase par une réponse, une reformulation ou un ajout —
- * le texte d'origine doit toujours revenir dès qu'un verrou cède. La qualité réelle des corrections a été
- * mesurée à part, avec de vrais modèles du palier Rapide dans Ollama (voir CLAUDE.md, étape 207).
+ * Étape 507 (Léo : « il n'y a pas un système de correction à la place d'utiliser un modèle ? », puis « oui ») : la
+ * correction de ce que Léo dit par la LISTE des mots que Jaris connaît (applications, son nom, le prénom de Léo, les
+ * titres des notes). Un nom mal entendu est remis ; une phrase juste n'est jamais touchée.
  */
-const projectRoot = fileURLToPath(new URL('..', import.meta.url))
+const c = loadTsModule('electron/services/transcriptCorrector.ts')
 
-function load(relativePath) {
-  const source = ts.transpileModule(readFileSync(join(projectRoot, relativePath), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText
-  const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(module.exports, module, withI18n((name) => { throw new Error(`import inattendu : ${name}`) }))
-  return module.exports
-}
+// Un vrai menu Démarrer de Windows français, chargé d'applications courantes.
+const APPS = ['Microsoft Edge', 'Paramètres', 'Calculatrice', 'Bloc-notes', 'Photos', 'Courrier', 'Calendrier', 'Microsoft Store', 'Spotify', 'Discord', 'Steam', 'Google Chrome', 'Paint', 'Explorateur de fichiers', 'Horloge', 'Météo', 'Xbox', 'Microsoft Teams', 'Word', 'Excel', 'PowerPoint', 'OneDrive', 'VLC media player', 'Visual Studio Code', 'Jaris', 'Outil Capture d’écran', 'Terminal', 'Gestionnaire des tâches', 'Netflix', 'WhatsApp', 'Telegram', 'OBS Studio', 'Epic Games Launcher', 'Battle.net', 'Minecraft Launcher', 'Ubisoft Connect', 'EA app', 'Firefox', 'Brave', 'Opera GX', 'Signal', 'Zoom', 'Skype', 'Audacity', 'GIMP', 'Blender', 'Notepad++', '7-Zip', 'Adobe Acrobat', 'Microsoft Clipchamp', 'Lecteur multimédia', 'Enregistreur vocal', 'Pense-bête', 'Cartes', 'Conseils', 'Assistance rapide', 'Panneau de configuration', 'Invite de commandes', 'Windows PowerShell']
+const lexicon = c.buildLexicon({ apps: APPS, userName: 'Léo', notes: ['Voiture', 'Anniversaires', 'Courses', 'Mot de passe wifi', 'Portail'] })
+const fix = (text) => c.correctTranscript(text, lexicon).text
 
-const c = load('electron/services/transcriptCorrector.ts')
-const reply = (texte) => async () => JSON.stringify({ texte })
-
-test('une vraie correction passe : mot déformé, nom de l’assistant, ponctuation', () => {
-  assert.equal(c.acceptCorrection('ouvre stime', 'Ouvre Steam.'), true)
-  assert.equal(c.acceptCorrection('Charisse mets un minuteur de dis minutes', 'Jaris, mets un minuteur de dix minutes.'), true)
-  assert.equal(c.acceptCorrection('quel temps fait il à paris demain', 'Quel temps fait-il à Paris demain ?'), true)
+test('un nom mal entendu est remis : application, nom de l’assistant', () => {
+  assert.equal(fix('ouvre stime'), 'ouvre Steam')
+  assert.equal(fix('Charisse mets un minuteur de dix minutes'), 'Jaris mets un minuteur de dix minutes')
+  assert.equal(fix('lance crome'), 'lance Chrome')
+  assert.equal(fix('ouvre exel'), 'ouvre Excel')
+  // Ponctuation, espaces et autres mots restent exactement tels qu'entendus.
+  assert.equal(fix('Bon, ouvre stime !'), 'Bon, ouvre Steam !')
+  const out = c.correctTranscript('ouvre stime', lexicon)
+  assert.deepEqual([out.changed, out.replaced], [true, [['stime', 'Steam']]])
 })
 
-test('une réponse, une reformulation ou un ajout sont refusés', () => {
-  assert.equal(c.acceptCorrection('quelle est la capitale de la france', 'La capitale de la France est Paris.'), false)
-  assert.equal(c.acceptCorrection('bonjour', 'Bonjour, comment puis-je t’aider ?'), false)
-  assert.equal(c.acceptCorrection('ouvre steam', "Bien sûr, j'ouvre Steam pour toi."), false)
-  assert.equal(c.acceptCorrection('raconte moi une blague', 'Voici une blague : pourquoi les plongeurs...'), false)
-  assert.equal(c.acceptCorrection('ouvre steam', ''), false)
+test('étape 505 (journal de Léo) : « Quelle heure est-il? » n’est plus jamais touché', () => {
+  assert.deepEqual(c.correctTranscript('Quelle heure est-il?', lexicon), { text: 'Quelle heure est-il?', changed: false, replaced: [] })
 })
 
-// Étape 505 (journal de Léo, lfm3:1.7b) : « Quelle heure est-il? » → « Quel heure est-il? ». Une correction qui ne change
-// que des terminaisons d'accord touche à la grammaire, pas à un mot mal entendu : refusée.
-test('étape 505 : seulement des terminaisons changées (quelle/quel, accords) — refusé ; un vrai mot mal entendu passe', async () => {
-  assert.equal(c.acceptCorrection('Quelle heure est-il?', 'Quel heure est-il?'), false)
-  assert.equal(c.acceptCorrection('les petit chats', 'les petits chats'), false)
-  assert.equal(c.acceptCorrection('ils mange', 'ils mangent'), false)
-  // Un mot vraiment mal entendu, même à côté d'un accord, passe toujours.
-  assert.equal(c.acceptCorrection('ouvre stime et les petit jeux', 'ouvre Steam et les petits jeux'), true)
-  assert.equal(c.acceptCorrection('ouvre stime', 'Ouvre Steam.'), true)
-  // Bout à bout : le texte de Léo reste tel qu'il l'a dit.
-  const out = await c.correctTranscript('Quelle heure est-il?', reply('Quel heure est-il?'))
-  assert.deepEqual(out, { text: 'Quelle heure est-il?', changed: false })
+test('un vrai mot qui ne diffère que par sa terminaison n’est pas un nom mal entendu (« signale », « blocs »)', () => {
+  assert.equal(fix('Un formateur de JSON qui signale les erreurs'), 'Un formateur de JSON qui signale les erreurs')
+  assert.equal(fix("Un jeu où l'on empile des blocs"), "Un jeu où l'on empile des blocs")
+  // Les mots courants ne sont jamais remplacés, même s'ils sonnent comme une application (« pain » / Paint).
+  assert.equal(fix('écris la liste : pain, lait, œufs'), 'écris la liste : pain, lait, œufs')
 })
 
-test('correctTranscript : correction acceptée → phrase corrigée, marquée comme changée', async () => {
-  const out = await c.correctTranscript('ouvre stime', reply('Ouvre Steam.'))
-  assert.deepEqual({ ...out }, { text: 'Ouvre Steam.', changed: true })
+test('aucune des vraies demandes du test des modèles et des duels n’est changée (≈ 230 phrases)', () => {
+  const fr = readFileSync(new URL('../shared/i18n/fr.ts', import.meta.url), 'utf8')
+  const ideas = [...fr.matchAll(/"duel\.suggest\.[a-z]+\.\d+": "([^"]+)"/g)].map((m) => m[1])
+  const phrases = [...SCENARIOS.flatMap((s) => s.turns), ...DUEL_AGENT_TASKS.flatMap((s) => s.turns), ...ideas]
+  assert.ok(phrases.length >= 200, `${phrases.length} phrases`)
+  const changed = phrases.map((p) => [p, c.correctTranscript(p, lexicon)]).filter(([, r]) => r.changed)
+  assert.deepEqual(changed.map(([p, r]) => `${p} → ${JSON.stringify(r.replaced)}`), [])
 })
 
-test('correctTranscript : le modèle répond à la question → la phrase entendue est gardée telle quelle', async () => {
-  const out = await c.correctTranscript('quelle est la capitale de la france', reply('La capitale de la France est Paris.'))
-  assert.deepEqual({ ...out }, { text: 'quelle est la capitale de la france', changed: false })
+test('la liste : Jaris toujours, le prénom, chaque mot des applications et des notes ; sans doublon ni mot trop court', () => {
+  const small = c.buildLexicon({ apps: ['Google Chrome', 'EA app', 'Steam', 'steam'], userName: 'Léonard', notes: ['Portail'] })
+  assert.deepEqual(small.words.map((w) => w.display).sort(), ['Chrome', 'Google', 'Jaris', 'Léonard', 'Portail', 'Steam'])
+  // Sans rien (Windows n'a pas donné ses applications) : Jaris reste reconnu.
+  assert.equal(c.correctTranscript('Charisse ouvre stime', c.buildLexicon({})).text, 'Jaris ouvre stime')
 })
 
-test('correctTranscript : réponse illisible, modèle en panne ou trop lent → la phrase entendue, sans bloquer', async () => {
-  assert.equal((await c.correctTranscript('ouvre stime', async () => 'pas du JSON')).changed, false)
-  assert.equal((await c.correctTranscript('ouvre stime', async () => JSON.stringify({ autre: 'x' }))).changed, false)
-  assert.equal((await c.correctTranscript('ouvre stime', async () => { throw new Error('Ollama injoignable') })).text, 'ouvre stime')
-  const slow = (_s, _u, signal) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason)))
-  const started = Date.now()
-  const out = await c.correctTranscript('ouvre stime', slow, null, undefined, 50)
-  assert.equal(out.text, 'ouvre stime')
-  assert.ok(Date.now() - started < 2000, 'le délai coupe l’attente')
-})
-
-test('correctTranscript : une annulation demandée par Jaris (nouvelle phrase captée) remonte au lieu d’être avalée', async () => {
-  const controller = new AbortController()
-  const slow = (_s, _u, signal) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('annulé'))))
-  const running = c.correctTranscript('ouvre stime', slow, null, controller.signal, 60_000)
-  controller.abort()
-  await assert.rejects(running)
-})
-
-test('le prénom de Léo et le nom de Jaris sont donnés au modèle ; une phrase vide n’appelle pas le modèle', async () => {
-  let system = ''
-  await c.correctTranscript('ouvre stime', async (s) => ((system = s), JSON.stringify({ texte: 'Ouvre Steam.' })), 'Léo')
-  assert.match(system, /« Jaris »/)
-  assert.match(system, /« Léo »/)
-  let called = false
-  await c.correctTranscript('  ', async () => ((called = true), '{}'))
-  assert.equal(called, false)
-})
-
-test('le pipeline vocal répond à la phrase CORRIGÉE, et le réglage d’Options peut couper le correcteur', () => {
-  const source = readFileSync(join(projectRoot, 'electron/services/voicePipeline.ts'), 'utf8')
-  assert.match(source, /voiceCorrectionEnabled !== false/)
-  assert.match(source, /converse\(\s*question,/)
-  assert.match(source, /pushSessionExchange\(question, reply\)/)
-  assert.match(source, /correctTranscript\([\s\S]{0,400}controller\.signal/, 'la correction est annulable comme la réflexion')
+test('la voix corrige par la liste (appLauncher, notes, prénom) et plus par un modèle', () => {
+  const pipeline = readFileSync(new URL('../electron/services/voicePipeline.ts', import.meta.url), 'utf8')
+  assert.match(pipeline, /correctTranscript\(combined, buildLexicon\(\{ apps, userName: profile\?\.name \?\? null, notes \}\)\)/)
+  assert.doesNotMatch(pipeline, /structuredChat|preferLoadedModel/)
 })

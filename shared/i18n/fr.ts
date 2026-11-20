@@ -201,7 +201,7 @@ export const fr = {
   "options.sound.beeps": "Bips d'interface",
   "options.sound.beeps.hint": "Un son court à l'écoute, la réflexion, un clic.",
   "options.sound.correct": "Corriger ce que je dis",
-  "options.sound.correct.hint": "Remet les mots mal compris avant que Jaris réponde.",
+  "options.sound.correct.hint": "Remet les noms mal compris (applications, Jaris, ton prénom, tes notes) avant que Jaris réponde.",
   "options.sound.micTest": "Tester le micro",
   "options.sound.micTest.hint": "Vérifie que Jaris capte bien ta voix.",
   "common.stop": "Arrêter",

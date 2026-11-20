@@ -191,7 +191,8 @@ export interface Profile {
   soundEffectsEnabled?: boolean
   /**
    * Étape 207 (Léo : « un correcteur un peu comme Apple ») : absent/true par défaut — la phrase dite est corrigée
-   * (mots mal compris) avant que Jaris y réponde (transcriptCorrector.ts). false = la transcription brute.
+   * (mots mal compris) avant que Jaris y réponde (transcriptCorrector.ts). false = la transcription brute. Étape 507 :
+   * par la liste des mots que Jaris connaît, plus par un modèle.
    */
   voiceCorrectionEnabled?: boolean
   /** Étape 214 : accès depuis le téléphone (Tailscale) — absent/false = désactivé, choix explicite de Léo. */

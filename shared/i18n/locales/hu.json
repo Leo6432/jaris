@@ -191,7 +191,7 @@
   "options.sound.beeps": "Felületi hangok",
   "options.sound.beeps.hint": "Rövid hang figyeléskor, gondolkodáskor, kattintáskor.",
   "options.sound.correct": "Amit mondok, javítsa",
-  "options.sound.correct.hint": "Kijavítja a rosszul értett szavakat, mielőtt Jaris válaszol.",
+  "options.sound.correct.hint": "Kijavítja a félreértett neveket (alkalmazások, Jaris, a keresztneved, a jegyzeteid), mielőtt Jaris válaszol.",
   "options.sound.micTest": "Mikrofon tesztelése",
   "options.sound.micTest.hint": "Ellenőrzi, hogy Jaris jól hallja-e a hangodat.",
   "common.stop": "Leállítás",

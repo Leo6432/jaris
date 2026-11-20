@@ -10,9 +10,9 @@ import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtra
 import { getProfile } from './profileStore'
 import { getModelGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
-import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
-import { preferLoadedModel, structuredChat } from './ollama'
-import { config } from '../config'
+import { buildLexicon, correctTranscript } from './transcriptCorrector'
+import { installedAppNames } from './appLauncher'
+import { listMemoryTitles } from './memoryStore'
 import { appendJournal, formatElapsed } from './requestJournal'
 import { activityFromLog, formatActivity, thinkingActivity } from '../../shared/voiceActivity'
 import { t } from '../../shared/i18n'
@@ -493,26 +493,15 @@ export class VoicePipeline extends EventEmitter {
       try {
         const profile = await getProfile()
         if (profile?.voiceCorrectionEnabled !== false) {
-          // Étape 346 : le modèle déjà chargé par Ollama s'il fait partie de ceux de Jaris — sinon, sur une carte où le
-          // Rapide et le Moyen ne tiennent pas ensemble, chaque phrase rechargeait les deux (correction, puis réponse).
-          // Étape 355 : les modèles de la voix quand les duels « Vocal » en ont choisi d'autres que ceux du Chat.
-          // Étape 504 : la voix utilise les modèles du Chat.
-          const voiceModels = profile?.models
-          const model = await preferLoadedModel(Object.values(voiceModels ?? {}), voiceModels?.flash ?? config.ollama.model)
-          // Étape 294 : fenêtre automatique (ollama.ts), qui garde celle de la conversation tant que le modèle est
-          // chargé — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
+          // Étape 507 : plus de modèle — la liste des mots que Jaris connaît (applications du menu Démarrer, son nom, le
+          // prénom de Léo, les titres des notes). La liste des applications est gardée 5 minutes par appLauncher.ts.
           const correctionStart = Date.now()
-          const corrected = await correctTranscript(
-            combined,
-            (system, user, signal) =>
-              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal),
-            profile?.name ?? null,
-            controller.signal
-          )
+          const [apps, notes] = await Promise.all([installedAppNames(), listMemoryTitles().catch(() => [] as string[])])
+          const corrected = correctTranscript(combined, buildLexicon({ apps, userName: profile?.name ?? null, notes }))
           // Étape 245 : écrit juste avant l'entrée de la demande dans le journal, pour compter ce temps-là aussi.
           void appendJournal([
             '',
-            `Voix — correction de la transcription par ${model} : ${formatElapsed(Date.now() - correctionStart)}` +
+            `Voix — correction par la liste de mots : ${formatElapsed(Date.now() - correctionStart)}` +
               (corrected.changed ? ` (« ${combined} » → « ${corrected.text} »)` : ' (rien à corriger)')
           ])
           if (corrected.changed) {

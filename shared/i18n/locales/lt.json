@@ -192,7 +192,7 @@
   "options.sound.beeps": "Sąsajos garsai",
   "options.sound.beeps.hint": "Trumpas garsas klausantis, mąstant, spustelėjus.",
   "options.sound.correct": "Taisyti tai, ką sakau",
-  "options.sound.correct.hint": "Pataiso klaidingai suprastus žodžius, prieš Jaris atsakant.",
+  "options.sound.correct.hint": "Ištaiso neteisingai išgirstus pavadinimus (programos, Jaris, tavo vardas, tavo užrašai), kol Jaris dar neatsakė.",
   "options.sound.micTest": "Išbandyti mikrofoną",
   "options.sound.micTest.hint": "Patikrina, ar Jaris gerai girdi tavo balsą.",
   "common.stop": "Sustabdyti",

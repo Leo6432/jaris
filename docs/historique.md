@@ -12752,3 +12752,23 @@ Léo : « ajoute plein de propositions agentique, et aussi les séries dans Agen
   tâche disparue à la reprise retire son duel. Le vote automatique de Claude marche comme en Discussion.
 - Tests (mordent) : test-duel-agent-tasks, test-duel-agent, test-duel-session (tâche choisie, série + reprise, fichier
   relu), test-duel-panel-ui (propositions, hasard, série).
+
+## Étape 507 — Correction de la voix : une liste de mots à la place du modèle
+
+Léo (après le « quel heure » de l'étape 505) : « il n'y a pas un système de correction à la place d'utiliser un
+modèle ? » ; écartés après discussion : Grammalecte et LanguageTool (ils corrigent la grammaire, pas les noms mal
+entendus ; LanguageTool demande Java ; Grammalecte, le français seul). Puis « oui » à la liste de mots. La case
+« Corriger ce que je dis » (Options → Voix) commandait la correction PAR LE MODÈLE ; elle commande maintenant celle-ci.
+- transcriptCorrector.ts réécrit, sans modèle : la liste = Jaris, le prénom de Léo, chaque mot de 4 lettres ou plus des
+  applications du menu Démarrer (appLauncher.installedAppNames, liste déjà lue pour « ouvre X », gardée 5 min) et des
+  titres des notes. Un mot entendu qui SE PRONONCE comme un seul mot de la liste (prononciation simplifiée : « stime »
+  et « Steam » = stim, « Charisse » et « Jaris » = jari, « crome » et « Chrome » = krom) est remplacé ; jamais un mot
+  courant (« pain »/Paint), jamais un mot qui ne diffère que par une terminaison d'accord (« signale »/Signal,
+  « blocs »/Bloc — vus en mesurant), jamais un mot de moins de 4 sons. Rien d'autre de la phrase ne bouge.
+- Mesuré : 0 phrase changée sur les ≈ 230 vraies demandes (test des modèles, tâches Agentique, idées de duel), avec un
+  menu Démarrer de ~60 applications. Manqués acceptés : « discorde », « netflixe » (nom + terminaison) — open_app les
+  retrouve déjà.
+- La voix ne charge plus de modèle pour corriger (plus de preferLoadedModel/structuredChat dans voicePipeline.ts) :
+  0,3 s de moins par phrase au moins. Journal : « Voix — correction par la liste de mots ».
+- Texte de l'option mis à jour (24 langues). Tests : test-transcript-corrector (réécrit, mord), test-model-preload,
+  test-request-journal, faux ponts de test-voice-pipeline-346 et test-voice-restart.

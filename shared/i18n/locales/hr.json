@@ -192,7 +192,7 @@
   "options.sound.beeps": "Zvukovi sučelja",
   "options.sound.beeps.hint": "Kratak zvuk pri slušanju, razmišljanju, kliku.",
   "options.sound.correct": "Ispravljaj ono što kažem",
-  "options.sound.correct.hint": "Ispravlja krivo shvaćene riječi prije nego što Jaris odgovori.",
+  "options.sound.correct.hint": "Ispravlja krivo shvaćena imena (aplikacije, Jaris, tvoje ime, tvoje bilješke) prije nego što Jaris odgovori.",
   "options.sound.micTest": "Testiraj mikrofon",
   "options.sound.micTest.hint": "Provjerava čuje li Jaris dobro tvoj glas.",
   "common.stop": "Zaustavi",

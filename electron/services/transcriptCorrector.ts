@@ -1,175 +1,133 @@
-import { replyLanguageName } from '../../shared/i18n'
 /**
- * Correcteur de ce que Léo a dit (étape 207, Léo : « pour le vocal, ajouter un correcteur un peu comme Apple » —
- * précisé : « corriger ce que j'ai dit », tout seul, avant la réponse). La transcription locale se trompe sur
- * les homophones et les noms propres (« Charisse » pour « Jaris », « ouvre stime » pour « ouvre Steam ») ; une
- * passe par le petit modèle déjà utilisé pour les questions simples remet le bon mot, comme la dictée d'Apple
- * corrige d'après le contexte.
+ * Correcteur de ce que Léo a dit (étape 207, Léo : « pour le vocal, ajouter un correcteur un peu comme Apple »). La
+ * transcription locale se trompe surtout sur les NOMS (« Charisse » pour « Jaris », « ouvre stime » pour « ouvre
+ * Steam »).
  *
- * Le danger d'un petit modèle local est connu dans ce dépôt : il répond à la phrase au lieu de la corriger, ou
- * la reformule. D'où trois verrous, et le texte d'origine est gardé dès qu'un seul cède :
- * 1. sortie structurée (schéma JSON à un seul champ) et température 0 ;
- * 2. `acceptCorrection` : la correction doit rester TRÈS proche de l'original (distance d'édition, longueur) —
- *    une réponse ou une reformulation n'y ressemble jamais assez ;
- * 3. délai court et annulation : si le modèle tarde ou échoue, Jaris continue avec ce qu'il a entendu, jamais
- *    bloqué par le correcteur.
+ * Étape 507 (Léo : « il n'y a pas un système de correction à la place d'utiliser un modèle ? », puis « oui ») : plus de
+ * modèle. Le petit modèle chargé corrigeait aussi ce que la transcription avait BIEN entendu — lfm3:1.7b a changé
+ * « Quelle heure est-il? » en « Quel heure est-il? » (journal de Léo, étape 505) — et coûtait 0,3 s ou plus par phrase.
+ * À la place, une liste de mots que Jaris connaît déjà (applications du menu Démarrer, son nom, le prénom de Léo, les
+ * titres de ses notes) : un mot entendu qui SE PRONONCE comme un mot de la liste, et qui n'est pas un mot courant, est
+ * remplacé par celui-ci. Instantané, dans toutes les langues, et une phrase juste n'est jamais touchée : seuls les
+ * mots de la liste peuvent y entrer. Écartés : Grammalecte et LanguageTool, qui corrigent la grammaire, pas les noms
+ * mal entendus (et LanguageTool demande Java).
  */
 
-export type CorrectionChat = (system: string, user: string, signal?: AbortSignal) => Promise<string>
-
-export const CORRECTION_TIMEOUT_MS = 6000
-
-/**
- * Étape 293 (24 langues) : `language` est le nom anglais de la langue parlée (« German »). Hors français, les exemples
- * français et les homophones propres à la transcription française sont retirés — un petit modèle aurait pu les prendre
- * pour une invitation à TRADUIRE la phrase en français —, et la consigne interdit explicitement toute traduction.
- */
-export function correctionSystemPrompt(userName: string | null, language = 'French'): string {
-  if (language !== 'French') {
-    return [
-      `Tu corriges la transcription automatique d'une phrase dite à voix haute, en ${language}, à un assistant vocal.`,
-      'Règles :',
-      `- La phrase est en ${language} : garde-la dans cette langue, ne la traduis JAMAIS.`,
-      '- Corrige UNIQUEMENT les mots mal reconnus (homophones, noms propres ou de marques déformés, mots coupés), les accents et la ponctuation.',
-      "- Ne réponds JAMAIS à la phrase. N'ajoute rien, ne retire rien, ne reformule pas : même sens, mêmes mots quand ils sont justes.",
-      "- L'assistant s'appelle « Jaris » (« Jarvis » devient « Jaris »).",
-      userName ? `- La personne qui parle s'appelle « ${userName} ».` : '',
-      "- S'il n'y a rien à corriger, renvoie la phrase telle quelle.",
-      'Réponds au format JSON demandé, avec la phrase corrigée dans « texte ».'
-    ]
-      .filter(Boolean)
-      .join('\n')
-  }
-  return [
-    "Tu corriges la transcription automatique d'une phrase dite à voix haute, en français, à un assistant vocal.",
-    'Règles :',
-    '- Corrige UNIQUEMENT les mots mal reconnus (homophones, noms propres ou de marques déformés, mots coupés), les accents et la ponctuation.',
-    '- Ne réponds JAMAIS à la phrase. N\'ajoute rien, ne retire rien, ne reformule pas : même sens, mêmes mots quand ils sont justes.',
-    '- Garde le tutoiement et la même forme des verbes (« envoie » reste « envoie », jamais « envoyez »). Un nom propre bien écrit ne se change pas.',
-    "- L'assistant s'appelle « Jaris » : « Charisse », « Jarice », « Jarvis », « Jariste » deviennent « Jaris ».",
-    userName ? `- La personne qui parle s'appelle « ${userName} ».` : '',
-    "- S'il n'y a rien à corriger, renvoie la phrase telle quelle.",
-    'Exemples :',
-    '« ouvre stime » → « Ouvre Steam. »',
-    '« Charisse mets un minuteur de dis minutes » → « Jaris, mets un minuteur de dix minutes. »',
-    '« quel temps fait il à paris demain » → « Quel temps fait-il à Paris demain ? »',
-    'Réponds au format JSON demandé, avec la phrase corrigée dans « texte ».'
-  ]
-    .filter(Boolean)
-    .join('\n')
+export interface LexiconWord {
+  /** Le mot tel qu'il s'écrit (« Steam », « Jaris »). */
+  display: string
+  /** Minuscules sans accents : un mot entendu identique n'est jamais « corrigé ». */
+  plain: string
+  /** Sa prononciation simplifiée (phonetic). */
+  sound: string
 }
 
-export const CORRECTION_SCHEMA = {
-  type: 'object',
-  properties: { texte: { type: 'string' } },
-  required: ['texte']
+export interface Lexicon {
+  words: LexiconWord[]
 }
 
-function levenshtein(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, j) => j)
-  for (let i = 1; i <= a.length; i++) {
-    const current = [i]
-    for (let j = 1; j <= b.length; j++) {
-      current[j] = a[i - 1] === b[j - 1] ? previous[j - 1] : 1 + Math.min(previous[j - 1], previous[j], current[j - 1])
-    }
-    previous = current
-  }
-  return previous[b.length]
-}
-
-/** Compare le fond, pas la forme : minuscules, sans accents ni ponctuation (une correction de ponctuation est gratuite). */
-function comparable(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    // \p{L} et pas a-z : une phrase en russe ou en grec n'est pas vidée de toutes ses lettres (étape 293).
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
+/** Minuscules, sans accents. */
+function plainOf(word: string): string {
+  return word.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
 /**
- * Vrai seulement si `corrected` est une CORRECTION de `original` : quelques lettres changées, pas une autre
- * phrase. Tolérance : un mot déformé sur quatre environ (« stime » → « Steam », « Charisse » → « Jaris »), mais
- * jamais une réponse (« Il fait beau à Paris demain. ») ni un ajout (« Bien sûr, j'ouvre Steam »).
+ * Une prononciation simplifiée, à la française, qui rapproche ce que la transcription confond : « steam » et « stime »
+ * (stim), « Jaris » et « Charisse » (jari). Pas un vrai phonétiseur : juste assez pour des noms, et seulement des mots
+ * de 4 sons ou plus sont comparés (sans quoi trop de mots courts se ressemblent).
  */
-export function acceptCorrection(original: string, corrected: string): boolean {
-  const a = comparable(original)
-  const b = comparable(corrected)
-  if (!a || !b) return false
-  if (a === b) return true
-  const distance = levenshtein(a, b)
-  const allowed = Math.max(3, Math.ceil(a.length * 0.3))
-  if (distance > allowed) return false
-  // Pas plus d'un mot en plus ou en moins : une correction remplace, elle n'ajoute pas de phrase.
-  if (Math.abs(a.split(' ').length - b.split(' ').length) > 1) return false
-  return !onlyEndingsChanged(a, b)
+export function soundOf(word: string): string {
+  let s = plainOf(word).replace(/[^a-z]/g, '')
+  s = s
+    .replace(/ph/g, 'f')
+    // « Chrome », « Christophe » : « ch » devant une consonne se dit « k ».
+    .replace(/ch(?=[^aeiouy]|$)/g, 'k')
+    .replace(/(sch|sh|ch)/g, 'j')
+    .replace(/g(?=[eiy])/g, 'j')
+    .replace(/qu|ck|q/g, 'k')
+    .replace(/c(?=[eiy])/g, 's')
+    .replace(/c/g, 'k')
+    .replace(/x/g, 'ks')
+    .replace(/w/g, 'v')
+    .replace(/z/g, 's')
+    .replace(/h/g, '')
+    .replace(/eau|au/g, 'o')
+    .replace(/oo|ou/g, 'u')
+    .replace(/ee|ea|y/g, 'i')
+    .replace(/ai|ei/g, 'e')
+    .replace(/(.)\1+/g, '$1')
+  // Les finales muettes du français : « Charisse » → « jarise » → « jaris » → « jari ».
+  s = s.replace(/e$/, '').replace(/[stdx]$/, '')
+  return s
 }
 
 /**
- * Étape 505 (journal de Léo : « Quelle heure est-il ? » → « Quel heure est-il ? » par lfm3:1.7b) : la correction sert
- * aux mots MAL ENTENDUS (« stime » → « Steam »), pas à la grammaire. Si les seuls mots changés ne diffèrent que par une
- * terminaison d'accord (quelle/quel, petit/petits, mange/mangent), le modèle « corrige » ce que la transcription avait
- * bien entendu — et peut le casser, comme ici (l'heure n'était plus reconnue). Refusé.
+ * Les mots courants ne sont jamais remplacés, même s'ils sonnent comme un nom de la liste (« pain » et l'application
+ * « Paint »). Liste volontairement large sur les mots que Léo dit tous les jours à Jaris.
+ */
+const COMMON = new Set(
+  (
+    'alors aller allume appelle appeler apres arrete arreter aujourd hui aussi autre avant avec avoir baisse bien bonjour bonsoir ' +
+    'cela celle celui cherche chercher chose comme comment dans demain depuis dernier dessine dessiner deux dire dis donne donner ' +
+    'dont ecris ecrire elle encore ensuite entre envoie envoyer etre fais faire fait fenetre ferme fermer heure heures ici jamais ' +
+    'jour jours juste lance lancer leur lire liste maintenant mais matin meme merci mets mettre minute minutes moins monte musique ' +
+    'note notes notre nous nouveau ouvre ouvrir page pain parce pause personne petit peut peux plus pour pourquoi premier prends ' +
+    'quand quel quelle quelles quels quoi rappel rappelle rappelles regarde retiens sans semaine seulement soir sont sous suivante ' +
+    'sur temps tout toute toutes tous tres trop trouve vers veux voila voir vous ecran image photo photos video videos fichier ' +
+    'fichiers dossier mail mails message messages courrier calendrier horloge meteo parametres reglages musique paint word code ' +
+    'pari paris paul pierre marie jean julie maman papa voiture maison travail ecole film films jeu jeux carte cartes'
+  ).split(' ')
+)
+
+const MIN_SOUND = 4
+
+/**
+ * Un mot qui ne diffère d'un mot de la liste que par une terminaison d'accord (« signale » / Signal, « blocs » / Bloc,
+ * « notes » / Note) est un vrai mot, pas un nom mal entendu (mesuré sur les phrases du test des modèles).
  */
 const AGREEMENT_ENDING = /^(?:e|s|es|x|nt|ent)$/
-function onlyEndingsChanged(a: string, b: string): boolean {
-  const wa = a.split(' ')
-  const wb = b.split(' ')
-  if (wa.length !== wb.length) return false
-  const changed = wa.map((word, i) => [word, wb[i]] as const).filter(([x, y]) => x !== y)
-  if (!changed.length) return false
-  return changed.every(([x, y]) => {
-    const [short, long] = x.length <= y.length ? [x, y] : [y, x]
-    if (short.length < 2 || !long.startsWith(short)) return false
-    const ending = long.slice(short.length)
-    // Le féminin double parfois la consonne finale : quel → quelle, bon → bonne.
-    const doubled = ending.startsWith(short.slice(-1)) ? ending.slice(1) : null
-    return AGREEMENT_ENDING.test(ending) || (doubled !== null && /^(?:e|es)$/.test(doubled))
-  })
+function onlyEndingDiffers(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a]
+  if (!long.startsWith(short)) return false
+  const ending = long.slice(short.length)
+  const doubled = ending.startsWith(short.slice(-1)) ? ending.slice(1) : null
+  return AGREEMENT_ENDING.test(ending) || (doubled !== null && /^(?:e|es)$/.test(doubled))
 }
 
-/** Lit le champ « texte » de la réponse JSON ; tout ce qui n'y ressemble pas est ignoré. */
-export function parseCorrection(raw: string): string | null {
-  try {
-    const data = JSON.parse(raw) as { texte?: unknown }
-    return typeof data.texte === 'string' && data.texte.trim() ? data.texte.trim() : null
-  } catch {
-    return null
+/** La liste des mots de Jaris : chaque mot de 4 lettres ou plus des noms donnés (« Google Chrome » → Google, Chrome). */
+export function buildLexicon(sources: { apps?: readonly string[]; userName?: string | null; notes?: readonly string[] }): Lexicon {
+  const names = ['Jaris', ...(sources.userName ? [sources.userName] : []), ...(sources.apps ?? []), ...(sources.notes ?? [])]
+  const seen = new Map<string, LexiconWord>()
+  for (const name of names) {
+    for (const word of name.split(/[^\p{L}\p{N}]+/u)) {
+      if (word.length < 4) continue
+      const plain = plainOf(word)
+      if (seen.has(plain)) continue
+      const sound = soundOf(word)
+      if (sound.length < MIN_SOUND) continue
+      seen.set(plain, { display: word, plain, sound })
+    }
   }
+  return { words: [...seen.values()] }
 }
 
 /**
- * La phrase à utiliser : corrigée si le modèle a proposé une vraie correction, l'originale sinon (échec, délai
- * dépassé, correction refusée par acceptCorrection). Une annulation demandée par l'appelant, elle, remonte.
+ * La phrase à utiliser : chaque mot qui sonne comme UN SEUL mot de la liste (et qui n'est ni ce mot, ni un mot courant)
+ * est remplacé ; tout le reste — ponctuation, espaces, autres mots — reste exactement tel qu'entendu.
  */
-export async function correctTranscript(
-  text: string,
-  chat: CorrectionChat,
-  userName: string | null = null,
-  signal?: AbortSignal,
-  timeoutMs = CORRECTION_TIMEOUT_MS
-): Promise<{ text: string; changed: boolean }> {
-  const original = text.trim()
-  if (comparable(original).length < 2) return { text: original, changed: false }
-  // Un vrai minuteur plutôt qu'AbortSignal.timeout : ce dernier ne retient pas la boucle d'évènements de Node,
-  // donc le délai pouvait ne jamais se déclencher si rien d'autre ne tournait (vu en test).
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(new Error('Correction trop lente.')), timeoutMs)
-  const forward = (): void => controller.abort(signal?.reason)
-  if (signal?.aborted) forward()
-  else signal?.addEventListener('abort', forward, { once: true })
-  let raw: string
-  try {
-    raw = await chat(correctionSystemPrompt(userName, replyLanguageName()), original, controller.signal)
-  } catch (err) {
-    if (signal?.aborted) throw err
-    return { text: original, changed: false }
-  } finally {
-    clearTimeout(timer)
-    signal?.removeEventListener('abort', forward)
-  }
-  const corrected = parseCorrection(raw)
-  if (!corrected || !acceptCorrection(original, corrected)) return { text: original, changed: false }
-  return { text: corrected, changed: corrected !== original }
+export function correctTranscript(text: string, lexicon: Lexicon): { text: string; changed: boolean; replaced: [string, string][] } {
+  const replaced: [string, string][] = []
+  const out = text.replace(/[\p{L}\p{N}]+/gu, (heard) => {
+    const plain = plainOf(heard)
+    if (heard.length < 4 || COMMON.has(plain)) return heard
+    if (lexicon.words.some((w) => w.plain === plain)) return heard
+    const sound = soundOf(heard)
+    if (sound.length < MIN_SOUND) return heard
+    const matches = new Set(lexicon.words.filter((w) => w.sound === sound && !onlyEndingDiffers(w.plain, plain)).map((w) => w.display))
+    if (matches.size !== 1) return heard
+    const [display] = matches
+    replaced.push([heard, display])
+    return display
+  })
+  return { text: out, changed: replaced.length > 0, replaced }
 }

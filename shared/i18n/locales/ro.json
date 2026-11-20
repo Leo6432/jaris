@@ -192,7 +192,7 @@
   "options.sound.beeps": "Sunete de interfață",
   "options.sound.beeps.hint": "Un sunet scurt la ascultare, gândire, clic.",
   "options.sound.correct": "Corectează ce spun",
-  "options.sound.correct.hint": "Corectează cuvintele înțelese greșit înainte ca Jaris să răspundă.",
+  "options.sound.correct.hint": "Corectează numele înțelese greșit (aplicații, Jaris, prenumele tău, notițele tale) înainte ca Jaris să răspundă.",
   "options.sound.micTest": "Testează microfonul",
   "options.sound.micTest.hint": "Verifică dacă Jaris îți aude bine vocea.",
   "common.stop": "Oprește",

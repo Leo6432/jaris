@@ -193,7 +193,7 @@
   "options.sound.beeps": "Dźwięki interfejsu",
   "options.sound.beeps.hint": "Krótki dźwięk przy słuchaniu, myśleniu, kliknięciu.",
   "options.sound.correct": "Poprawiaj to, co mówię",
-  "options.sound.correct.hint": "Poprawia źle zrozumiane słowa, zanim Jaris odpowie.",
+  "options.sound.correct.hint": "Poprawia źle usłyszane nazwy (aplikacje, Jaris, twoje imię, twoje notatki), zanim Jaris odpowie.",
   "options.sound.micTest": "Przetestuj mikrofon",
   "options.sound.micTest.hint": "Sprawdza, czy Jaris dobrze słyszy twój głos.",
   "common.stop": "Zatrzymaj",
