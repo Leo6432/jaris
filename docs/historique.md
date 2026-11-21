@@ -12859,3 +12859,18 @@ lent et peu fiable) → « oui tout ».
   paquet À PART (`ollama-windows-amd64-mlx.zip`, docs/windows.mdx) que Jaris n'installe pas (`ENGINE_ZIP` =
   `ollama-windows-amd64.zip` seul). Piste quand la PR sera dans une version stable : ajouter ce paquet, puis mesurer
   pour de vrai (la page d'Ollama ne promet que Mac et DGX Spark).
+
+## Étape 511 — Nanbeige4.3-33B en « Futur modèle », à côté d'Inkling 2 Mini
+
+Léo : « ajoute Nanbeige4.3-33B aussi dans future model pour que on installe Nanbeige4.3-33B plus l'autre en même temps
+même s'il est déjà dispo ». Vérifié sur Hugging Face (API) : Nanbeige/Nanbeige4.3-33B, 24/10/2026, Apache 2.0,
+`LlamaForCausalLM` dense (Ollama sait charger l'architecture llama), texte seulement, outils documentés (format XML
+conseillé, JSON possible), 512K de contexte. Pas dans la bibliothèque d'Ollama, pas de GGUF du créateur : GGUF de
+bartowski, Q4_K_M = 20 788 825 216 octets → 20,8 Go. Ligne « Futur modèle » (`shared/futureModels.ts`), jamais choisi :
+il sera testé et ajouté EN MÊME TEMPS qu'Inkling 2 Mini, comme Léo le demande. Point à vérifier au test : l'appel
+d'outils passe par le modèle de discussion du GGUF, que Ollama lit lui-même.
+- Ollama 0.40.17 (stable) contient Inkling 2 Mini, mais « compatible uniquement avec les processeurs Apple Silicon dans
+  cette version. La compatibilité PC sera disponible dans une prochaine version » (notes de version, capture de Léo).
+  Ollama 0.40.17 utilise llama.cpp b12257 (10/11), d'avant l'architecture `inkling2` de llama.cpp ; Ollama met à jour
+  sa copie de llama.cpp environ tous les 5 jours (35 fois de fin mai au 10/11). Suivi quotidien programmé.
+- Capture du Classement à 760 px montrée à Léo (onze colonnes visibles).

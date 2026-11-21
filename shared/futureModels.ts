@@ -27,6 +27,16 @@ export interface FutureModel {
  * d'Ollama relu : un seul tag (`26b-a5b` = `latest`, digest 4f5569f2774e), au format MLX (NVFP4), 20 188 097 918 octets,
  * `requires: 0.40.17` (préversion) et « Requires a Mac with 32GB+ memory » : Ollama ne le fait pas tourner sous Windows,
  * donc pas candidat. Des GGUF existent (ggml-org/Inkling-2-Mini-GGUF : llama.cpp, Windows compris ; IQ4_NL 17,6 Go) :
- * à tester dès qu'Ollama sait lire l'architecture `inkling2` sous Windows.
+ * à tester dès qu'Ollama sait lire l'architecture `inkling2` sous Windows. Ollama 0.40.17 (stable) : « compatible
+ * uniquement avec les processeurs Apple Silicon dans cette version. La compatibilité PC sera disponible dans une
+ * prochaine version » (notes de version).
+ * Étape 511 (Léo : « ajoute Nanbeige4.3-33B aussi dans future model pour que on installe Nanbeige4.3-33B plus l'autre en
+ * même temps même s'il est déjà dispo ») : Nanbeige4.3-33B (Nanbeige, 24/10/2026, Apache 2.0, LlamaForCausalLM dense,
+ * texte seulement, outils documentés, 512K de contexte). Pas dans la bibliothèque d'Ollama ; pas de GGUF du créateur
+ * (safetensors, FP8, INT4) : GGUF de bartowski, Q4_K_M = 20 788 825 216 octets (API Hugging Face). Architecture llama :
+ * Ollama sait la charger. Volontairement en « futur » : à tester et ajouter EN MÊME TEMPS qu'Inkling 2 Mini.
  */
-export const FUTURE_MODELS: FutureModel[] = [{ model: 'inkling-2-mini:26b-a5b', vramGb: 20.2, readsImages: true, quantization: 'NVFP4' }]
+export const FUTURE_MODELS: FutureModel[] = [
+  { model: 'inkling-2-mini:26b-a5b', vramGb: 20.2, readsImages: true, quantization: 'NVFP4' },
+  { model: 'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M', vramGb: 20.8, readsImages: false, quantization: 'Q4_K_M' }
+]
