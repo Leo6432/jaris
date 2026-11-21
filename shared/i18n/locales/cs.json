@@ -1285,6 +1285,7 @@
   "dl.noBody": "Server odpověděl bez jakéhokoli souboru ke stažení.",
   "dl.incomplete": "Neúplné stažení: přijato {received} z ohlášených {total}. Zkontroluj připojení k internetu a zkus to znovu.",
   "upd.githubHttp": "GitHub odpověděl HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store nedokázal zjistit, zda má pro Jaris aktualizaci: {error}",
   "upd.githubUnexpected": "Neočekávaná odpověď GitHubu: nebyla rozpoznána žádná verze.",
   "upd.none": "Žádná aktualizace není k dispozici.",
   "upd.noInstaller": "Existuje nová verze ({version}), ale k jejímu vydání na GitHubu není přiložen žádný instalátor.",

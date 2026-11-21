@@ -1264,6 +1264,7 @@
   "dl.noBody": "Servern svarade utan någon fil att ladda ner.",
   "dl.incomplete": "Ofullständig nedladdning: {received} mottaget av {total} utlovade. Kontrollera din internetanslutning och försök sedan igen.",
   "upd.githubHttp": "GitHub svarade HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store kunde inte säga om det finns en uppdatering för Jaris: {error}",
   "upd.githubUnexpected": "Oväntat svar från GitHub: ingen version kändes igen.",
   "upd.none": "Ingen uppdatering tillgänglig.",
   "upd.noInstaller": "Det finns en ny version ({version}), men inget installationsprogram är bifogat till dess GitHub-release.",

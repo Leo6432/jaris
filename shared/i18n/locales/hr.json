@@ -1285,6 +1285,7 @@
   "dl.noBody": "Poslužitelj je odgovorio bez ikakve datoteke za preuzimanje.",
   "dl.incomplete": "Nepotpuno preuzimanje: primljeno {received} od najavljenih {total}. Provjeri internetsku vezu, zatim pokušaj ponovno.",
   "upd.githubHttp": "GitHub je odgovorio HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store nije mogao reći ima li ažuriranje za Jaris: {error}",
   "upd.githubUnexpected": "Neočekivan odgovor GitHuba: nije prepoznata nijedna verzija.",
   "upd.none": "Nema dostupnih ažuriranja.",
   "upd.noInstaller": "Postoji nova verzija ({version}), ali uz njezino izdanje na GitHubu nije priložen instalacijski program.",

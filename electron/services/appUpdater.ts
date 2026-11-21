@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { DownloadError, downloadToFile } from './download'
+import { runPowerShellScript } from './inputControl'
 import type { UpdateProgress } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 
@@ -83,12 +84,79 @@ export function checkAppFreshness(): Promise<void> {
  */
 /**
  * Étape 502 (Léo : « quand il y a une mise à jour du Store, ça met ou pas nouvelle version dispo ? ») : la version
- * Microsoft Store lit AUSSI la dernière Release, pour annoncer qu'une version existe — mais ne télécharge jamais son
- * installeur (le Store installe, étape 491) : Options propose seulement d'ouvrir le Store.
+ * Microsoft Store annonce aussi une nouvelle version — mais ne télécharge jamais d'installeur (le Store installe,
+ * étape 491) : Options propose seulement d'ouvrir le Store. Depuis l'étape 512, elle le demande au Store (voir plus bas).
  */
 export const STORE_UPDATES_URL = 'ms-windows-store://downloadsandupdates'
 
+/**
+ * Étape 512 (capture de Léo : « Jaris 0.75.3 est sorti… il arrive par le Microsoft Store » alors que la 0.75.3 était
+ * encore en certification) : la version Store ne lit plus GitHub — une Release y est publiée des jours avant que
+ * Microsoft valide le paquet. Elle demande au Store LUI-MÊME s'il a une mise à jour pour Jaris
+ * (`StoreContext.GetAppAndOptionalStorePackageUpdatesAsync`, API Windows.Services.Store) : une seule source de vérité,
+ * le message n'apparaît que quand la mise à jour est vraiment téléchargeable. PowerShell lancé par Jaris hérite de
+ * l'identité du paquet (application empaquetée « full trust »). Toute erreur est rendue en JSON, jamais un plantage.
+ */
+export const STORE_UPDATE_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 -and
+    $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
+  } | Select-Object -First 1
+  $null = [Windows.Services.Store.StoreContext, Windows.Services.Store, ContentType = WindowsRuntime]
+  $context = [Windows.Services.Store.StoreContext]::GetDefault()
+  $operation = $context.GetAppAndOptionalStorePackageUpdatesAsync()
+  $listType = [System.Collections.Generic.IReadOnlyList[Windows.Services.Store.StorePackageUpdate]]
+  $task = $asTask.MakeGenericMethod($listType).Invoke($null, @($operation))
+  if (-not $task.Wait(60000)) { throw 'no answer from the Microsoft Store after 60 s' }
+  $versions = @($task.Result | ForEach-Object { $v = $_.Package.Id.Version; "$($v.Major).$($v.Minor).$($v.Build)" })
+  [pscustomobject]@{ updates = $versions } | ConvertTo-Json -Compress
+} catch {
+  $e = $_.Exception
+  while ($e.InnerException) { $e = $e.InnerException }
+  [pscustomobject]@{ error = $e.Message } | ConvertTo-Json -Compress
+}
+`
+
+type PowerShellRunner = (script: string, env?: NodeJS.ProcessEnv, idleMs?: number) => Promise<{ error: string | null; stdout: string }>
+
+/** Lit la réponse du script : `{"updates":[…]}` ou `{"error":"…"}` (dernière ligne JSON de la sortie). */
+export function parseStoreAnswer(stdout: string): { updates: string[] } | { error: string } | null {
+  const line = stdout.trim().split(/\r?\n/).reverse().find((l) => l.trim().startsWith('{'))
+  if (!line) return null
+  try {
+    const data = JSON.parse(line) as { updates?: unknown; error?: unknown }
+    if (typeof data.error === 'string') return { error: data.error }
+    if (data.updates === undefined || data.updates === null) return { updates: [] }
+    const list = Array.isArray(data.updates) ? data.updates : [data.updates]
+    return { updates: list.filter((v): v is string => typeof v === 'string') }
+  } catch {
+    return null
+  }
+}
+
+/** Version Store : ce que le Microsoft Store propose vraiment (jamais GitHub). */
+export async function checkStoreUpdate(run: PowerShellRunner = runPowerShellScript): Promise<{ status: AppVersionStatus | null; error: string | null }> {
+  const currentVersion = app.getVersion()
+  const currentParts = parseSemver(currentVersion) ?? [0, 0, 0]
+  const { error, stdout } = await run(STORE_UPDATE_SCRIPT, undefined, 90_000)
+  const answer = parseStoreAnswer(stdout)
+  if (error || !answer) return { status: null, error: t('upd.storeFailed', { error: error ?? (stdout.trim() || '?') }) }
+  if ('error' in answer) return { status: null, error: t('upd.storeFailed', { error: answer.error }) }
+  let latest = currentParts
+  for (const version of answer.updates) {
+    const parts = parseSemver(version)
+    if (parts && isNewer(parts, latest)) latest = parts
+  }
+  cachedDownloadUrl = null
+  cachedStatus = { current: currentVersion, latest: latest.join('.'), outdated: isNewer(latest, currentParts) }
+  return { status: cachedStatus, error: null }
+}
+
 export async function checkForUpdate(): Promise<{ status: AppVersionStatus | null; error: string | null }> {
+  if (process.windowsStore === true) return checkStoreUpdate()
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
@@ -109,8 +177,7 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
     const currentParts = parseSemver(currentVersion) ?? [0, 0, 0]
     const exeAsset = release.assets?.find((a) => a.name.endsWith('.exe'))
 
-    // Étape 491 : jamais d'installeur pour la version Store (updateApp la refuse de toute façon).
-    cachedDownloadUrl = process.windowsStore === true ? null : exeAsset?.browser_download_url ?? null
+    cachedDownloadUrl = exeAsset?.browser_download_url ?? null
     cachedStatus = {
       current: currentVersion,
       latest: latestParts.join('.'),

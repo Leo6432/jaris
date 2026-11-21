@@ -1274,6 +1274,7 @@ export const fr = {
   "dl.noBody": "Le serveur a répondu sans le moindre fichier à télécharger.",
   "dl.incomplete": "Téléchargement incomplet : {received} reçus sur {total} annoncés. Vérifie ta connexion internet, puis réessaie.",
   "upd.githubHttp": "GitHub a répondu HTTP {status}.",
+  "upd.storeFailed": "Le Microsoft Store n'a pas pu dire s'il a une mise à jour pour Jaris : {error}",
   "upd.githubUnexpected": "Réponse GitHub inattendue : aucune version reconnue.",
   "upd.none": "Aucune mise à jour disponible.",
   "upd.noInstaller": "Une nouvelle version ({version}) existe, mais aucun installeur n'est joint à sa Release GitHub.",

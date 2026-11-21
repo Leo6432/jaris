@@ -1285,6 +1285,7 @@
   "dl.noBody": "Serverul a răspuns fără niciun fișier de descărcat.",
   "dl.incomplete": "Descărcare incompletă: {received} primiți din {total} anunțați. Verifică-ți conexiunea la internet, apoi încearcă din nou.",
   "upd.githubHttp": "GitHub a răspuns HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store nu a putut spune dacă există o actualizare pentru Jaris: {error}",
   "upd.githubUnexpected": "Răspuns GitHub neașteptat: nicio versiune recunoscută.",
   "upd.none": "Nicio actualizare disponibilă.",
   "upd.noInstaller": "Există o versiune nouă ({version}), dar nu are niciun program de instalare atașat la Release-ul ei de pe GitHub.",

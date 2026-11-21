@@ -1264,6 +1264,7 @@
   "dl.noBody": "Server vastas ilma ühegi allalaaditava failita.",
   "dl.incomplete": "Allalaadimine on poolik: {received} saadud, {total} teatatud. Kontrolli oma internetiühendust ja proovi siis uuesti.",
   "upd.githubHttp": "GitHub vastas HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store ei suutnud öelda, kas Jarisele on uuendus: {error}",
   "upd.githubUnexpected": "Ootamatu GitHubi vastus: ühtegi versiooni ei tuvastatud.",
   "upd.none": "Värskendusi pole saadaval.",
   "upd.noInstaller": "Uus versioon ({version}) on olemas, kuid selle GitHubi väljalaskele pole installerit lisatud.",

@@ -1264,6 +1264,7 @@
   "dl.noBody": "De server antwoordde zonder enig bestand om te downloaden.",
   "dl.incomplete": "Onvolledige download: {received} ontvangen van de aangekondigde {total}. Controleer je internetverbinding en probeer het opnieuw.",
   "upd.githubHttp": "GitHub antwoordde HTTP {status}.",
+  "upd.storeFailed": "De Microsoft Store kon niet zeggen of er een update voor Jaris is: {error}",
   "upd.githubUnexpected": "Onverwacht antwoord van GitHub: geen versie herkend.",
   "upd.none": "Geen update beschikbaar.",
   "upd.noInstaller": "Er is een nieuwe versie ({version}), maar er is geen installatieprogramma bij de GitHub-release gevoegd.",

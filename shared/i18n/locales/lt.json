@@ -1285,6 +1285,7 @@
   "dl.noBody": "Serveris atsakė be jokio failo, kurį būtų galima atsisiųsti.",
   "dl.incomplete": "Atsisiuntimas nebaigtas: gauta {received} iš {total} nurodytų. Patikrink interneto ryšį ir bandyk dar kartą.",
   "upd.githubHttp": "„GitHub“ atsakė HTTP {status}.",
+  "upd.storeFailed": "„Microsoft Store“ negalėjo pasakyti, ar yra Jaris naujinys: {error}",
   "upd.githubUnexpected": "Netikėtas „GitHub“ atsakymas: neatpažinta jokia versija.",
   "upd.none": "Atnaujinimų nėra.",
   "upd.noInstaller": "Yra nauja versija ({version}), bet prie jos „GitHub“ leidimo nepridėta jokia diegimo programa.",

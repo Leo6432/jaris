@@ -1285,6 +1285,7 @@
   "dl.noBody": "Serveris atbildēja bez neviena lejupielādējama faila.",
   "dl.incomplete": "Nepilnīga lejupielāde: saņemts {received} no paziņotajiem {total}. Pārbaudi interneta savienojumu un mēģini vēlreiz.",
   "upd.githubHttp": "GitHub atbildēja HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store nevarēja pateikt, vai Jaris ir pieejams atjauninājums: {error}",
   "upd.githubUnexpected": "Neparedzēta GitHub atbilde: neviena versija netika atpazīta.",
   "upd.none": "Atjauninājumu nav.",
   "upd.noInstaller": "Ir jauna versija ({version}), bet tās GitHub laidienam nav pievienots instalētājs.",

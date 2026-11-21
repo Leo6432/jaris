@@ -1264,6 +1264,7 @@
   "dl.noBody": "Palvelin vastasi ilman ladattavaa tiedostoa.",
   "dl.incomplete": "Lataus jäi kesken: {received} vastaanotettu, {total} ilmoitettu. Tarkista internetyhteytesi ja yritä sitten uudelleen.",
   "upd.githubHttp": "GitHub vastasi HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store ei pystynyt kertomaan, onko Jarisille päivitystä: {error}",
   "upd.githubUnexpected": "Odottamaton vastaus GitHubilta: tunnistettavaa versiota ei ole.",
   "upd.none": "Päivityksiä ei ole saatavilla.",
   "upd.noInstaller": "Uusi versio ({version}) on olemassa, mutta sen GitHub-julkaisuun ei ole liitetty asennusohjelmaa.",

@@ -54,8 +54,19 @@ const electronApp = {
   handlers: {}
 }
 const spawned = []
+// Étape 512 : la version Store demande au Microsoft Store (script PowerShell) — réponse simulée ici.
+let storeRun = async () => ({ error: null, stdout: '{"updates":[]}' })
+const storeScripts = []
 
-const { checkForUpdate, updateApp } = loadModule('../electron/services/appUpdater.ts', (id) => {
+const { checkForUpdate, updateApp, parseStoreAnswer, STORE_UPDATE_SCRIPT } = loadModule('../electron/services/appUpdater.ts', (id) => {
+  if (id.endsWith('/inputControl')) {
+    return {
+      runPowerShellScript: (script, env, idleMs) => {
+        storeScripts.push({ script, idleMs })
+        return storeRun(script)
+      }
+    }
+  }
   if (id === 'electron') return { app: electronApp }
   if (id === 'child_process') {
     return {
@@ -183,6 +194,7 @@ test.after(() => rmSync(fakeTmp, { recursive: true, force: true }))
 test('étape 491/502 : version Microsoft Store — la nouvelle version s’annonce, mais aucune installation par Jaris', async () => {
   reset()
   process.windowsStore = true
+  storeRun = async () => ({ error: null, stdout: '{"updates":["0.9.0"]}' })
   try {
     const check = await checkForUpdate()
     assert.deepEqual(check.status, { current: '0.8.1', latest: '0.9.0', outdated: true }, 'la nouvelle version est annoncée')
@@ -194,6 +206,63 @@ test('étape 491/502 : version Microsoft Store — la nouvelle version s’annon
   } finally {
     delete process.windowsStore
   }
+})
+
+// Étape 512 (capture de Léo : « Jaris 0.75.3 est sorti… il arrive par le Microsoft Store » alors que Microsoft ne
+// l'avait pas encore validé) : la version Store ne lit plus GitHub, elle demande au Store lui-même.
+test('étape 512 : version Store — Release sur GitHub mais rien dans le Store = aucune annonce ; GitHub n’est jamais lu', async () => {
+  reset()
+  process.windowsStore = true
+  const realFetch = globalThis.fetch
+  let githubAsked = 0
+  globalThis.fetch = (url) => {
+    if (String(url).includes('api.github.com')) githubAsked++
+    return realFetch(url)
+  }
+  storeRun = async () => ({ error: null, stdout: '{"updates":[]}' })
+  storeScripts.length = 0
+  try {
+    const check = await checkForUpdate()
+    assert.deepEqual(check, { status: { current: '0.8.1', latest: '0.8.1', outdated: false }, error: null }, 'pas encore validée par Microsoft : rien à annoncer')
+    assert.equal(githubAsked, 0, 'la version Store ne demande jamais à GitHub')
+    assert.equal(storeScripts.length, 1)
+    assert.match(storeScripts[0].script, /GetAppAndOptionalStorePackageUpdatesAsync/)
+    assert.ok(storeScripts[0].idleMs >= 60_000, 'le Store peut mettre du temps à répondre : surveillance par inactivité large')
+    // Plusieurs paquets proposés (ex. un ancien et le dernier) : la plus récente, jamais une plus vieille que l'actuelle.
+    storeRun = async () => ({ error: null, stdout: 'bruit\r\n{"updates":["0.8.0","0.9.2","0.9.1"]}\r\n' })
+    assert.deepEqual((await checkForUpdate()).status, { current: '0.8.1', latest: '0.9.2', outdated: true })
+    // PowerShell 5.1 peut sérialiser un seul élément sans tableau.
+    storeRun = async () => ({ error: null, stdout: '{"updates":"0.9.0"}' })
+    assert.equal((await checkForUpdate()).status.latest, '0.9.0')
+    // Erreur du Store : le vrai message, jamais une annonce.
+    storeRun = async () => ({ error: null, stdout: '{"error":"Le service du Store est indisponible."}' })
+    const failed = await checkForUpdate()
+    assert.equal(failed.status, null)
+    assert.match(failed.error, /Microsoft Store.*Le service du Store est indisponible\./)
+    storeRun = async () => ({ error: 'PowerShell ne répond plus depuis 90 s.', stdout: '' })
+    assert.match((await checkForUpdate()).error, /PowerShell ne répond plus/)
+  } finally {
+    delete process.windowsStore
+    globalThis.fetch = realFetch
+  }
+})
+
+test('étape 512 : la réponse du Store est lue sans jamais planter', () => {
+  assert.deepEqual(parseStoreAnswer('{"updates":[]}'), { updates: [] })
+  assert.deepEqual(parseStoreAnswer('{"updates":null}'), { updates: [] })
+  assert.deepEqual(parseStoreAnswer('{"error":"x"}'), { error: 'x' })
+  assert.equal(parseStoreAnswer(''), null)
+  assert.equal(parseStoreAnswer('{pas du json'), null)
+})
+
+const powershellExe = process.platform === 'win32' ? 'powershell' : null
+test('étape 512 : sur Windows, le script du Store est du PowerShell valide et répond toujours en JSON (même hors paquet)', { skip: powershellExe ? false : 'Windows seulement (vérifié par la CI)' }, () => {
+  const out = nodeChildProcess.execFileSync(powershellExe, ['-NoProfile', '-NonInteractive', '-Command', STORE_UPDATE_SCRIPT], { encoding: 'utf8', timeout: 120_000 })
+  const answer = parseStoreAnswer(out)
+  assert.ok(answer, `réponse illisible : ${out}`)
+  // Hors du paquet (la CI), le Store répond en général par une erreur — rendue en JSON, jamais un plantage du script.
+  if ('error' in answer) assert.ok(answer.error.length > 0)
+  else assert.ok(Array.isArray(answer.updates))
 })
 
 test('étape 491 : la Release porte aussi le paquet du Store — la mise à jour habituelle prend toujours le .exe', async () => {

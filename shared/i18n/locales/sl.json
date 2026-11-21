@@ -1306,6 +1306,7 @@
   "dl.noBody": "Strežnik je odgovoril brez kakršne koli datoteke za prenos.",
   "dl.incomplete": "Nepopoln prenos: prejeto {received} od napovedanih {total}. Preveri internetno povezavo in poskusi znova.",
   "upd.githubHttp": "GitHub je odgovoril HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store ni mogel povedati, ali ima posodobitev za Jaris: {error}",
   "upd.githubUnexpected": "Nepričakovan odgovor GitHuba: nobena različica ni prepoznana.",
   "upd.none": "Ni razpoložljivih posodobitev.",
   "upd.noInstaller": "Obstaja nova različica ({version}), vendar njeni izdaji na GitHubu ni priložen noben namestitveni program.",

@@ -1306,6 +1306,7 @@
   "dl.noBody": "Serwer odpowiedział bez żadnego pliku do pobrania.",
   "dl.incomplete": "Niepełne pobieranie: odebrano {received} z zapowiedzianych {total}. Sprawdź połączenie z internetem i spróbuj ponownie.",
   "upd.githubHttp": "GitHub odpowiedział HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store nie mógł ustalić, czy jest aktualizacja Jarisa: {error}",
   "upd.githubUnexpected": "Nieoczekiwana odpowiedź GitHuba: nie rozpoznano żadnej wersji.",
   "upd.none": "Brak dostępnych aktualizacji.",
   "upd.noInstaller": "Istnieje nowa wersja ({version}), ale do jej wydania na GitHubie nie dołączono instalatora.",

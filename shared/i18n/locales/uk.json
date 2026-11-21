@@ -1306,6 +1306,7 @@
   "dl.noBody": "Сервер відповів без файлу для завантаження.",
   "dl.incomplete": "Неповне завантаження: отримано {received} із заявлених {total}. Перевір підключення до інтернету й спробуй знову.",
   "upd.githubHttp": "GitHub відповів HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store не зміг повідомити, чи є оновлення для Jaris: {error}",
   "upd.githubUnexpected": "Неочікувана відповідь GitHub: жодної версії не розпізнано.",
   "upd.none": "Оновлень немає.",
   "upd.noInstaller": "Є нова версія ({version}), але до її випуску на GitHub не додано інсталятор.",

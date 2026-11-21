@@ -1264,6 +1264,7 @@
   "dl.noBody": "Сървърът отговори без никакъв файл за изтегляне.",
   "dl.incomplete": "Непълно изтегляне: получени {received} от обявени {total}. Провери интернет връзката си, после опитай пак.",
   "upd.githubHttp": "GitHub отговори HTTP {status}.",
+  "upd.storeFailed": "Microsoft Store не можа да каже дали има актуализация за Jaris: {error}",
   "upd.githubUnexpected": "Неочакван отговор от GitHub: не е разпозната версия.",
   "upd.none": "Няма налична актуализация.",
   "upd.noInstaller": "Съществува нова версия ({version}), но към изданието ѝ в GitHub няма прикачен инсталатор.",

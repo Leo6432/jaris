@@ -12874,3 +12874,24 @@ d'outils passe par le modèle de discussion du GGUF, que Ollama lit lui-même.
   Ollama 0.40.17 utilise llama.cpp b12257 (10/11), d'avant l'architecture `inkling2` de llama.cpp ; Ollama met à jour
   sa copie de llama.cpp environ tous les 5 jours (35 fois de fin mai au 10/11). Suivi quotidien programmé.
 - Capture du Classement à 760 px montrée à Léo (onze colonnes visibles).
+
+## Étape 512 — Version Store : « nouvelle version » demandée au Microsoft Store, plus à GitHub
+
+Capture de Léo (version Store 0.73.0) : « Jaris 0.75.3 est sorti (tu as 0.73.0). Il arrive par le Microsoft Store :
+ouvre Options → Général pour aller le chercher tout de suite » — alors que sa soumission était encore en
+certification : le Store n'avait rien à installer. Cause : depuis l'étape 502, la version Store lisait la dernière
+Release GitHub, publiée des jours avant la validation de Microsoft. Question à choix : Léo a pris « Demander au Store ».
+- `checkForUpdate` (appUpdater.ts), version Store seulement : `checkStoreUpdate` lance `STORE_UPDATE_SCRIPT`
+  (PowerShell + WinRT `Windows.Services.Store.StoreContext.GetAppAndOptionalStorePackageUpdatesAsync`, attendu via
+  `WindowsRuntimeSystemExtensions.AsTask`). Un PowerShell lancé par une appli empaquetée « full trust » hérite de son
+  identité : le Store répond pour Jaris. Réponse `{"updates":[…]}` ou `{"error":"…"}` (erreur interne la plus
+  profonde), jamais un plantage ; surveillance par inactivité 90 s (`runPowerShellScript`). Plus aucune lecture de
+  GitHub dans la version Store. Erreur = vrai message (`upd.storeFailed`, 24 langues), jamais une annonce.
+- Tests (mordent : sans l'aiguillage Store, le test échoue) : test-app-updater — Release GitHub mais Store vide =
+  aucune annonce et GitHub jamais lu ; plusieurs versions proposées = la plus récente ; un seul élément sans tableau
+  (PowerShell 5.1) ; erreur du Store et PowerShell muet = vrai message. Sur la CI Windows : le script est exécuté hors
+  paquet et doit répondre en JSON.
+- **Non vérifié en usage réel** : seule une version Store INSTALLÉE DEPUIS LE STORE peut interroger le Store pour de
+  vrai, et seulement quand une version plus récente y est validée. Première vérification possible : quand cette
+  version sera dans le Store et qu'une suivante y sera validée. La soumission en cours (certification) a encore
+  l'ancien comportement.

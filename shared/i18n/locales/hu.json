@@ -1264,6 +1264,7 @@
   "dl.noBody": "A szerver letölthető fájl nélkül válaszolt.",
   "dl.incomplete": "Hiányos letöltés: {received} érkezett a bejelentett {total} helyett. Ellenőrizd az internetkapcsolatodat, majd próbáld újra.",
   "upd.githubHttp": "A GitHub válasza: HTTP {status}.",
+  "upd.storeFailed": "A Microsoft Store nem tudta megmondani, van-e frissítés a Jarishoz: {error}",
   "upd.githubUnexpected": "Váratlan GitHub-válasz: nem ismerhető fel verzió.",
   "upd.none": "Nincs elérhető frissítés.",
   "upd.noInstaller": "Van új verzió ({version}), de a GitHub-kiadásához nincs telepítő csatolva.",
