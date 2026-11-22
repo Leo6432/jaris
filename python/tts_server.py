@@ -35,6 +35,20 @@ def emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+def real_model_dir(default_dir: str) -> str | None:
+    """Étape 513 (journal de Léo, version Store : « Failed to download model from Supertone/supertonic-3 … Cannot call
+    rmtree on a symbolic link ») : Jaris range le modèle de la voix ailleurs par une jonction (~/.cache/supertonic3 ->
+    son dossier de données, étape 155). Supertonic 1.3.1 (loader.download_model) télécharge dans un dossier temporaire
+    voisin, puis EFFACE le dossier du modèle par shutil.rmtree avant de mettre le nouveau à sa place — et Python
+    (3.12+) refuse rmtree sur un lien ou une jonction : le téléchargement échouait à chaque démarrage, la voix ne
+    marchait jamais sur une installation neuve. On donne donc à Supertonic le VRAI dossier (cible de la jonction) :
+    mêmes fichiers, rien de retéléchargé, et un rmtree permis. `None` quand le dossier n'est pas un lien."""
+    real = os.path.realpath(default_dir)
+    if os.path.normcase(real) == os.path.normcase(os.path.abspath(default_dir)):
+        return None
+    return real
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--voice", default="M3")
@@ -48,7 +62,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        tts = TTS(auto_download=True)
+        from supertonic.config import DEFAULT_MODEL, get_model_cache_dir
+
+        tts = TTS(model_dir=real_model_dir(str(get_model_cache_dir(DEFAULT_MODEL))), auto_download=True)
         voice_styles = {args.voice: tts.get_voice_style(voice_name=args.voice)}
     except Exception as exc:
         emit({"event": "fatal", "message": f"échec de chargement de Supertonic : {exc}"})

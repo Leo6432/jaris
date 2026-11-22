@@ -12895,3 +12895,26 @@ Release GitHub, publiée des jours avant la validation de Microsoft. Question à
   vrai, et seulement quand une version plus récente y est validée. Première vérification possible : quand cette
   version sera dans le Store et qu'une suivante y sera validée. La soumission en cours (certification) a encore
   l'ancien comportement.
+
+## Étape 513 — La voix ne démarrait jamais sur une installation neuve : Supertonic efface son dossier, une jonction
+
+Léo (version Store mise à jour) : l'orbe « Jaris t'écoute… » ~30 s puis « Oups ». Le journal des demandes (étape 505)
+donne enfin la vraie raison : « Voix — lecture à voix haute impossible : échec de chargement de Supertonic : Failed to
+download model from Supertone/supertonic-3 … Error: Cannot call rmtree on a symbolic link ».
+- Cause, lue dans le code de supertonic==1.3.1 (roue téléchargée, `loader.download_model`) : le modèle est téléchargé
+  dans `~/.cache/.supertonic3.tmp`, puis `shutil.rmtree(~/.cache/supertonic3)` s'il existe, puis `shutil.move`. Or
+  Jaris remplace ce dossier par une jonction vers ses données (étape 155, `bricks()`), et Python refuse `rmtree` sur un
+  lien. Le modèle n'était donc JAMAIS téléchargé dès qu'il manquait : toute installation neuve (Store, ou nouveau PC)
+  restait sans voix. Chez Léo avant le Store, le modèle avait été téléchargé AVANT la jonction (déplacé ensuite).
+  Reproduit ici (rmtree sur un lien : même erreur).
+- Correctif (`python/tts_server.py`, `real_model_dir`) : Supertonic reçoit le VRAI dossier (`os.path.realpath`, cible
+  de la jonction) en `model_dir` : mêmes fichiers, rien de retéléchargé, et un `rmtree` permis. Sans jonction : rien
+  ne change.
+- Test (mord : sans le correctif, « Cannot call rmtree on a symbolic link ») : `test-tts-model-dir.mjs` lance le VRAI
+  tts_server.py avec un faux paquet supertonic qui reproduit à la ligne près `download_model` 1.3.1, derrière une vraie
+  jonction (Windows) ou un lien (Linux) ; garde-fou sur la version figée dans requirements.txt.
+- Leçon : remplacer un dossier d'un autre logiciel par une jonction suppose qu'il ne l'efface jamais lui-même — lire
+  son code de téléchargement (ici un « téléchargement atomique » qui efface puis déplace).
+- Même message de Léo : une demande « Write a short email to Alex for Friday off » (canal chat, 22/11 19:50) qu'il dit
+  ne pas avoir faite — pas une transcription de la voix (canal « chat », pas « voix »), introuvable dans le code de
+  Jaris. Question posée à Léo (Chat ou téléphone).
