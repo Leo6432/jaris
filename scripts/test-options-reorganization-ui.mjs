@@ -161,6 +161,10 @@ const overrides = {
     return new Promise((resolve) => (window.__finishSpeed = (result) => resolve(result ?? { tested: models.length })))
   },
   stopSpeedTest: async () => { window.__speedStopped = true },
+  exportSpeedResults: async () => {
+    window.__speedExported = (window.__speedExported ?? 0) + 1
+    return { saved: true, models: 1 }
+  },
   onSpeedTestEvent: (cb) => {
     window.__speedEvent = cb
     return () => {}
@@ -876,6 +880,27 @@ test('test de vitesse : « Choisir » coche n’importe quel modèle, même déj
     await page.waitForSelector(`${box} button:has-text("Nouveau test")`)
     assert.equal(await page.textContent(`${box} .options-menu__progress-label`), 'Test de vitesse terminé.')
   })
+})
+
+// Étape 516 : Léo m'envoie ses vitesses, publiées ensuite dans Jaris pour tout le monde (les utilisateurs ne testent rien).
+test('test de vitesse : « Préparer le fichier à m’envoyer » dès qu’une vitesse est mesurée', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    const box = '.options-menu__speed-test'
+    await page.waitForSelector(box)
+    await page.click(`${box} button:has-text("Préparer le fichier à m'envoyer")`)
+    await page.waitForFunction(() => window.__speedExported === 1)
+    assert.match(await page.textContent(`${box} .options-menu__unscored-export [role="status"]`), /^Fichier prêt — modèles mesurés : 1\. Envoie-le-moi pour que leurs vitesses soient ajoutées à Jaris pour tout le monde\.$/)
+  })
+})
+
+test('test de vitesse : aucune vitesse mesurée → pas de fichier à préparer', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    const box = '.options-menu__speed-test'
+    await page.waitForSelector(box)
+    assert.equal(await page.locator(`${box} button:has-text("Préparer le fichier à m'envoyer")`).count(), 0)
+  }, "window.__speedModels = [{ model: 'qwen3.5:4b', sizeGb: 3.4, installed: true, speed: null, testedAt: null }]")
 })
 
 test('test de vitesse : tout est mesuré → seulement « Choisir », jamais une liste vide', options, async () => {

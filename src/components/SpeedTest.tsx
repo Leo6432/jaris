@@ -23,6 +23,9 @@ export default function SpeedTest({ onTested }: { onTested?: () => void }): JSX.
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
+  // Étape 516 : le fichier des vitesses à m'envoyer (publiées ensuite dans Jaris pour tout le monde).
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<string | null>(null)
 
   const reload = (): Promise<void> =>
     window.jaris
@@ -88,6 +91,22 @@ export default function SpeedTest({ onTested }: { onTested?: () => void }): JSX.
       onTested?.()
     }
   }
+
+  const exportResults = async (): Promise<void> => {
+    setExporting(true)
+    setExported(null)
+    try {
+      const result = await window.jaris.exportSpeedResults()
+      if (result.empty) setExported(t('speed.exportEmpty'))
+      else if (result.saved) setExported(t('speed.exported', { models: result.models ?? 0 }))
+      else if (result.error) setExported(t('unscored.exportFailed', { error: result.error }))
+    } catch (err) {
+      setExported(t('unscored.exportFailed', { error: ipcErrorMessage(err) }))
+    } finally {
+      setExporting(false)
+    }
+  }
+  const measuredCount = models.filter((m) => m.speed !== null).length
 
   const stop = async (): Promise<void> => {
     setStopping(true)
@@ -222,6 +241,18 @@ export default function SpeedTest({ onTested }: { onTested?: () => void }): JSX.
               </button>
             )}
           </div>
+        </div>
+      )}
+      {measuredCount > 0 && phase !== 'running' && (
+        <div className="options-menu__unscored-export">
+          <button className="options-menu__action" onClick={() => void exportResults()} disabled={exporting}>
+            {exporting ? t('common.loading') : t('unscored.export')}
+          </button>
+          {exported && (
+            <p className="options-menu__unscored-text" role="status">
+              {exported}
+            </p>
+          )}
         </div>
       )}
     </div>

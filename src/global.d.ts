@@ -54,6 +54,7 @@ import type {
   WakeTestHeardPayload,
   ModelOverviewResult,
   ModelToTest,
+  SpeedExportResult,
   SpeedTestEvent,
   SpeedTestModel,
   ModelsLocationStatus,
@@ -149,6 +150,7 @@ declare global {
       getSpeedTestModels: () => Promise<SpeedTestModel[]>
       runSpeedTest: (models: string[]) => Promise<{ tested: number; stopped?: boolean }>
       stopSpeedTest: () => Promise<void>
+      exportSpeedResults: () => Promise<SpeedExportResult>
       onSpeedTestEvent: (cb: (event: SpeedTestEvent) => void) => () => void
       onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void
       getNewModels: () => Promise<string[]>

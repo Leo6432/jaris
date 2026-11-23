@@ -701,6 +701,15 @@ export interface TestResultsExportResult {
   error?: string
 }
 
+/** Étape 516 : fichier des vitesses enregistré (ou pourquoi pas). */
+export interface SpeedExportResult {
+  saved: boolean
+  /** Aucune vitesse mesurée : rien à envoyer. */
+  empty?: boolean
+  models?: number
+  error?: string
+}
+
 export interface DuelExportResult {
   saved: boolean
   /** Nombre de votes écrits dans le fichier. */
@@ -1384,6 +1393,8 @@ export const IPC_CHANNELS = {
   getSpeedTestModels: 'jaris:get-speed-test-models',
   runSpeedTest: 'jaris:run-speed-test',
   stopSpeedTest: 'jaris:stop-speed-test',
+  /** Étape 516 : le fichier des vitesses à m'envoyer (publiées ensuite dans Jaris pour tout le monde). */
+  exportSpeedResults: 'jaris:export-speed-results',
   speedTestEvent: 'jaris:speed-test-event',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',

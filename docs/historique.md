@@ -12971,3 +12971,20 @@ Capture de Léo (version Store, écran de bienvenue, prénom saisi) : « EXDEV: 
 - Question ouverte : la version Store devrait ranger ses données dans %USERPROFILE%\Jaris (étape 491), pas dans
   AppData\Roaming\jaris ; ici le profil y était encore — sans doute un repère ou des données de l'ancien Jaris relus
   (étape 496). À regarder si d'autres fichiers d'AppData posent problème.
+
+## Étape 516 — Les vitesses sont publiées pour tout le monde : le fichier à m'envoyer
+
+Léo : « mais il faut que tu comprennes que tout ce qu'on fait, c'est pour publier après » ; puis, à la question à choix
+(publier ses résultats, test automatique chez chacun, ou les deux) : « je vais te donner les résultats et personne ne va
+faire de test ; quand il installe, il voit tous les scores, de duel, de vitesse, de tout ; lui il ne fait rien,
+l'utilisateur — ChatGPT ne va pas me demander de faire des analyses, c'est pareil pour nous ».
+- **Règle générale (à garder) : l'utilisateur ne teste rien.** Tout ce que Léo mesure (scores, duels, vitesses) est
+  publié dans Jaris pour tout le monde ; les boutons de test servent à Léo.
+- Premier pas : « Préparer le fichier à m'envoyer » dans le bloc du test de vitesse (dès qu'une vitesse est mesurée).
+  Fichier JSON (`buildSpeedExport`, speedTest.ts ; canal `exportSpeedResults`, dialogue natif gardé) : vitesses et
+  dates, carte graphique, mémoire vidéo et RAM, version d'Ollama, de Jaris et du test — pour savoir sur QUELLE machine
+  elles ont été mesurées. 4 textes en 24 langues (sans pluriel : « modèles mesurés : N »).
+- À faire quand Léo enverra le fichier : publier ses vitesses dans Jaris (référence « mesurée sur RTX 3070 8 Go »), que
+  chaque utilisateur voie et que le choix des modèles utilise quand ce PC n'a pas fait le test.
+- Tests (mordent) : test-speed-test (contenu du fichier, rien sans mesure), test-options-reorganization-ui (bouton
+  présent dès une mesure, absent sans). Capture montrée à Léo.

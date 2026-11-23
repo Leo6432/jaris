@@ -57,7 +57,7 @@ import { engineModelsDir } from './services/ollamaEngine'
 import { Agent as UndiciAgent } from 'undici'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, waitForOllama } from './services/ollama'
 import { getMeasuredSpeeds, loadModelSpeeds } from './services/speedStore'
-import { getSpeedTestModels, isSpeedTestRunning, runSpeedTest, stopSpeedTest } from './services/speedTest'
+import { buildSpeedExport, getSpeedTestModels, isSpeedTestRunning, runSpeedTest, stopSpeedTest } from './services/speedTest'
 import { addCatalogServer, addMcpServers, cancelMcpSignIn, listMcpServers, mcpToolsFor, signInMcpServer, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
 import { setExtraToolSource } from './services/assistant'
 import { setMcpBrowserOpener, setMcpSecretBox } from './services/mcpAuth'
@@ -226,6 +226,7 @@ import {
   type SaveImageResult,
   type DuelExportResult,
   type TestResultsExportResult,
+  type SpeedExportResult,
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
@@ -2325,6 +2326,32 @@ app.whenReady().then(async () => {
     })
   })
   ipcMain.handle(IPC_CHANNELS.stopSpeedTest, () => stopSpeedTest())
+  // Étape 516 : le fichier des vitesses à m'envoyer, enregistré où Léo veut (dialogue natif gardé, comme les tests).
+  ipcMain.handle(IPC_CHANNELS.exportSpeedResults, async (): Promise<SpeedExportResult> => {
+    const built = await buildSpeedExport(app.getVersion())
+    if (!built) return { saved: false, empty: true }
+    const day = new Date().toISOString().slice(0, 10)
+    const dialogOptions = {
+      title: t('main.dialog.saveSpeeds'),
+      defaultPath: join(app.getPath('documents'), `jaris-vitesses-${day}.json`),
+      filters: [{ name: t('main.dialog.speedsFilter'), extensions: ['json'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await writeFile(/\.json$/i.test(target) ? target : `${target}.json`, built.json, 'utf-8')
+      return { saved: true, models: built.models }
+    } catch (err) {
+      return { saved: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
   // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test »).
   ipcMain.handle(IPC_CHANNELS.stopUnscoredTest, () => stopModelTestByUser())
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))

@@ -1,9 +1,10 @@
 import { config, runWithLocalOllama } from '../config'
-import { deleteModel, fitToModelContext, listInstalledModels, preloadModel, pullModelIfMissing, unloadOllamaModels } from './ollama'
-import { getAllCandidateSizes } from './hardwareScan'
+import { deleteModel, fetchOllamaVersion, fitToModelContext, listInstalledModels, preloadModel, pullModelIfMissing, unloadOllamaModels } from './ollama'
+import { detectGpu, getAllCandidateSizes } from './hardwareScan'
+import { detectRamGb } from './systemResources'
 import { getProfile } from './profileStore'
 import { getSpeedResults, saveSpeedResult } from './speedStore'
-import { SPEED_TEST_OPTIONS, SPEED_TEST_PROMPTS, median, speedKey, speedOfAnswer } from '../../shared/localSpeed'
+import { SPEED_TEST_OPTIONS, SPEED_TEST_PROMPTS, SPEED_TEST_VERSION, median, speedKey, speedOfAnswer } from '../../shared/localSpeed'
 import type { SpeedTestEvent, SpeedTestModel } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
 
@@ -201,4 +202,30 @@ export async function runSpeedTest(chosen: readonly string[], onEvent: (event: S
 /** Le bouton « Arrêter » : la question en cours est abandonnée, ce qui est déjà mesuré reste. */
 export function stopSpeedTest(): void {
   running?.abort()
+}
+
+/**
+ * Étape 516 (Léo : « je vais te donner les résultats et personne ne va faire de test : quand il installe, il voit tous
+ * les scores, de duel, de vitesse, de tout ; l'utilisateur ne fait rien ») : comme le fichier de l'analyse, le fichier
+ * des vitesses que Léo m'envoie, avec ce qui les rend lisibles ailleurs : la carte graphique, la mémoire, Ollama,
+ * Jaris, la version du test. `null` : aucune vitesse mesurée.
+ */
+export async function buildSpeedExport(appVersion: string): Promise<{ json: string; models: number } | null> {
+  const results = getSpeedResults()
+  const models = Object.keys(results).length
+  if (!models) return null
+  const gpu = await detectGpu().catch(() => ({ name: null, vramGb: null }))
+  const ollama = await runWithLocalOllama(() => fetchOllamaVersion()).catch(() => null)
+  const file = {
+    kind: 'jaris-speed-test',
+    testVersion: SPEED_TEST_VERSION,
+    jaris: appVersion,
+    ollama,
+    gpu: gpu.name,
+    vramGb: gpu.vramGb,
+    ramGb: detectRamGb(),
+    exportedAt: new Date().toISOString(),
+    results
+  }
+  return { json: JSON.stringify(file, null, 2), models }
 }

@@ -17,7 +17,7 @@ const CANDIDATES = [
   { model: 'utilise:8b', sizeGb: 5 }
 ]
 
-function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, refuseThink = [], stallOn = null } = {}) {
+function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, refuseThink = [], stallOn = null, stored = {} } = {}) {
   const calls = { pulled: [], deleted: [], preloaded: [], questions: [], unloaded: [], saved: [] }
   const ollama = {
     listInstalledModels: async () => [...installed],
@@ -37,10 +37,11 @@ function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, r
     },
     deleteModel: async (model) => {
       calls.deleted.push(model)
-    }
+    },
+    fetchOllamaVersion: async () => '0.40.17'
   }
   const store = {
-    getSpeedResults: () => ({}),
+    getSpeedResults: () => stored,
     saveSpeedResult: async (model, speed) => {
       calls.saved.push([model, speed])
     }
@@ -70,7 +71,8 @@ function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, r
   const runner = loadTsModule('electron/services/speedTest.ts', {
     '../config': { config: { ollama: { host: 'http://ollama.test' } }, runWithLocalOllama: (fn) => fn() },
     './ollama': ollama,
-    './hardwareScan': { getAllCandidateSizes: () => CANDIDATES },
+    './hardwareScan': { getAllCandidateSizes: () => CANDIDATES, detectGpu: async () => ({ name: 'NVIDIA GeForce RTX 3070', vramGb: 8 }) },
+    './systemResources': { detectRamGb: () => 32 },
     './profileStore': { getProfile: async () => ({ models: { flash: 'utilise:8b', medium: 'utilise:8b', large: 'utilise:8b' }, visionModel: 'utilise:8b' }) },
     './speedStore': store,
     '../../shared/localSpeed': localSpeed
@@ -196,6 +198,37 @@ test('étape 514 : la liste de l’écran — du plus petit au plus gros, instal
     assert.deepEqual(list.map((m) => m.model), ['petit:1b', 'moyen:4b', 'utilise:8b', 'gros:70b'])
     assert.deepEqual(list[0], { model: 'petit:1b', sizeGb: 1, installed: true, speed: null, testedAt: null })
     assert.equal(list[1].installed, false)
+  } finally {
+    restore()
+  }
+})
+
+// Étape 516 (Léo : « je vais te donner les résultats et personne ne va faire de test… l'utilisateur ne fait rien ») :
+// le fichier des vitesses à m'envoyer dit sur QUELLE machine elles ont été mesurées.
+test('étape 516 : le fichier à m’envoyer — vitesses, carte graphique, mémoire, Ollama, Jaris, version du test', async () => {
+  const stored = { 'petit:1b': { speed: 182.2, testedAt: '2026-11-23T10:00:00.000Z' } }
+  const { runner, restore } = setup({ stored })
+  try {
+    const built = await runner.buildSpeedExport('0.76.1')
+    assert.equal(built.models, 1)
+    const file = JSON.parse(built.json)
+    assert.equal(file.kind, 'jaris-speed-test')
+    assert.equal(file.testVersion, localSpeed.SPEED_TEST_VERSION)
+    assert.equal(file.jaris, '0.76.1')
+    assert.equal(file.ollama, '0.40.17')
+    assert.equal(file.gpu, 'NVIDIA GeForce RTX 3070')
+    assert.equal(file.vramGb, 8)
+    assert.equal(file.ramGb, 32)
+    assert.deepEqual(file.results, stored)
+  } finally {
+    restore()
+  }
+})
+
+test('étape 516 : aucune vitesse mesurée = rien à envoyer', async () => {
+  const { runner, restore } = setup()
+  try {
+    assert.equal(await runner.buildSpeedExport('0.76.1'), null)
   } finally {
     restore()
   }
