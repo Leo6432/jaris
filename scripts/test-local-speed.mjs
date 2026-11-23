@@ -184,3 +184,25 @@ test('étape 517 : sur une carte comme celle de la mesure, les vitesses publiée
   assert.equal(viaPublished.models.flash, viaMeasured.models.flash)
   assert.equal(viaPublished.models.medium, viaMeasured.models.medium)
 })
+
+// Étape 520 (audit) : sur un PC plus lent que la carte de mesure, tester UN modèle le comparait aux vitesses de l'autre
+// carte : il perdait Faible au profit d'un modèle en réalité plus lent encore. Les vitesses publiées sont remises à
+// l'échelle de CE PC (pcSpeedFactor) dès qu'un modèle y a été testé.
+test('étape 520 : tester un seul modèle sur un PC 2,5× plus lent ne lui fait pas perdre Faible', async () => {
+  const published = { speeds: PUBLISHED.PUBLISHED_SPEEDS, vramGb: 8 }
+  const base = await scan({}, 8192, published).pickBestModelsFromBenchmark()
+  const flash = base.models.flash
+  const ratio = 0.4
+  const one = await scan({ [flash]: published.speeds[flash] * ratio }, 8192, published).pickBestModelsFromBenchmark()
+  const all = await scan(Object.fromEntries(Object.entries(published.speeds).map(([m, v]) => [m, v * ratio])), 8192, published).pickBestModelsFromBenchmark()
+  assert.equal(all.models.flash, flash, 'tout mesuré au même rapport : Faible ne change pas')
+  assert.equal(one.models.flash, flash, 'un seul mesuré : même choix que tout mesuré')
+  assert.equal(speed.pcSpeedFactor({ [flash]: published.speeds[flash] * ratio }, published).toFixed(3), ratio.toFixed(3))
+  assert.equal(speed.pcSpeedFactor({ inconnu: 50 }, published), null, 'aucun modèle en commun : pas de rapport')
+  // L'écran montre toujours la vitesse publiée telle quelle (avec la carte de mesure) : seul le choix la remet à l'échelle.
+  const other = Object.keys(published.speeds).find((m) => m !== flash)
+  const resolved = speed.resolveSpeed(other, { [flash]: published.speeds[flash] * ratio }, published)
+  assert.equal(resolved.speed, published.speeds[other])
+  assert.equal(resolved.kind, 'published')
+  assert.equal(resolved.pcFactor.toFixed(3), ratio.toFixed(3))
+})

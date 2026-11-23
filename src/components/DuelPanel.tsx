@@ -97,6 +97,11 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
  * (d'abord celles pas encore jouées), « Autres tâches » pour en voir d'autres, et « Une tâche au hasard ».
  */
 type AgentLevel = 'all' | 'simple' | 'hard'
+/**
+ * Étape 520 (audit) : la difficulté choisie reste d'une manche à l'autre (AgentAsk est recréé à chaque manche,
+ * `key={round.number}` : avant, elle revenait à « Toutes » après chaque vote). Le temps que Jaris reste ouvert.
+ */
+let lastAgentLevel: AgentLevel = 'all'
 
 function AgentAsk({
   tasks,
@@ -111,7 +116,7 @@ function AgentAsk({
 }): JSX.Element {
   // Étape 518 (Léo : « ajoute dans Agentique des propositions simples et dures, avec plusieurs choses ») : choisir la
   // difficulté ; « Toutes » montre autant de tâches simples que difficiles.
-  const [level, setLevel] = useState<AgentLevel>('all')
+  const [level, setLevel] = useState<AgentLevel>(() => lastAgentLevel)
   const levelOf = (x: { level?: 'simple' | 'hard' }): 'simple' | 'hard' => x.level ?? 'simple'
   const ordered = (pool: typeof tasks, shown: readonly string[]): string[] => {
     const shuffled = [...pool].sort(() => Math.random() - 0.5)
@@ -132,6 +137,7 @@ function AgentAsk({
   const byId = new Map(tasks.map((x) => [x.id, x.text]))
   const texts = shown.map((id) => byId.get(id) ?? '').filter(Boolean)
   const chooseLevel = (next: AgentLevel): void => {
+    lastAgentLevel = next
     setLevel(next)
     setShown(pick([], next))
   }

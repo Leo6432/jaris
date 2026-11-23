@@ -253,6 +253,9 @@ test('étape 512 : la réponse du Store est lue sans jamais planter', () => {
   assert.deepEqual(parseStoreAnswer('{"error":"x"}'), { error: 'x' })
   assert.equal(parseStoreAnswer(''), null)
   assert.equal(parseStoreAnswer('{pas du json'), null)
+  // Étape 520 (audit) : PowerShell 5.1 emballe parfois le tableau ; la sortie est en UTF-8 (message d'erreur accentué).
+  assert.equal(JSON.stringify(parseStoreAnswer('{"updates":{"value":["0.78.0","0.77.2"],"Count":2}}')), '{"updates":["0.78.0","0.77.2"]}')
+  assert.match(STORE_UPDATE_SCRIPT, /\[Console\]::OutputEncoding = \[System\.Text\.Encoding\]::UTF8/)
 })
 
 const powershellExe = process.platform === 'win32' ? 'powershell' : null

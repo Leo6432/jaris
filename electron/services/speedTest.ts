@@ -1,6 +1,6 @@
 import { config, runWithLocalOllama } from '../config'
 import { deleteModel, fetchOllamaVersion, fitToModelContext, listInstalledModels, preloadModel, pullModelIfMissing, unloadOllamaModels } from './ollama'
-import { detectGpu, getAllCandidateSizes } from './hardwareScan'
+import { detectGpu, getAllCandidateSizes, modelsNeedingNewerOllama } from './hardwareScan'
 import { detectRamGb } from './systemResources'
 import { getProfile } from './profileStore'
 import { getSpeedResults, saveSpeedResult } from './speedStore'
@@ -24,6 +24,8 @@ const LOAD_TIMEOUT_MS = 15 * 60_000
 const THINK_REFUSED = /does not support thinking|thinking is not supported/i
 
 let running: AbortController | null = null
+/** Étape 520 (audit) : la fin du test en cours, nettoyage compris — attendue avant de quitter ou de déplacer les données. */
+let finished: Promise<unknown> = Promise.resolve()
 
 export function isSpeedTestRunning(): boolean {
   return running !== null
@@ -34,7 +36,11 @@ export async function getSpeedTestModels(): Promise<SpeedTestModel[]> {
   const installed = await runWithLocalOllama(() => listInstalledModels()).catch(() => [] as string[])
   const installedKeys = new Set(installed.map(speedKey))
   const results = getSpeedResults()
+  // Étape 520 (audit) : jamais proposer un modèle que cet Ollama ne sait pas charger (plusieurs Go téléchargés pour
+  // rien, puis « chargement impossible »).
+  const tooNew = modelsNeedingNewerOllama()
   return getAllCandidateSizes()
+    .filter(({ model }) => !tooNew.has(model))
     .map(({ model, sizeGb }) => {
       const result = results[speedKey(model)]
       return { model, sizeGb, installed: installedKeys.has(speedKey(model)), speed: result?.speed ?? null, testedAt: result?.testedAt ?? null }
@@ -90,6 +96,7 @@ async function ask(model: string, prompt: string, numCtx: number, signal: AbortS
     const decoder = new TextDecoder()
     let buffer = ''
     let last: { eval_count?: number; eval_duration?: number; error?: string } = {}
+    let ended = false
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
@@ -102,13 +109,22 @@ async function ask(model: string, prompt: string, numCtx: number, signal: AbortS
         if (!line) continue
         const data = JSON.parse(line) as typeof last & { done?: boolean }
         if (data.error) throw new Error(data.error)
-        if (data.done) last = data
+        if (data.done) {
+          last = data
+          ended = true
+        }
       }
     }
     if (buffer.trim()) {
       const data = JSON.parse(buffer) as typeof last & { done?: boolean }
-      if (data.done) last = data
+      if (data.error) throw new Error(data.error)
+      if (data.done) {
+        last = data
+        ended = true
+      }
     }
+    // Étape 520 (audit) : une réponse coupée (Ollama arrêté en route) n'est pas « trop courte » : on dit ce qui s'est passé.
+    if (!ended) throw new Error(t('speed.cutOff'))
     return { tokens: last.eval_count, ns: last.eval_duration }
   } catch (err) {
     if (idle.signal.aborted && !signal.aborted) throw new Error(t('speed.stalled', { seconds: Math.round(SPEED_IDLE_MS / 1000) }))
@@ -121,7 +137,9 @@ async function ask(model: string, prompt: string, numCtx: number, signal: AbortS
 /** La vitesse d'un modèle : chargé d'abord (jamais compté), puis les mêmes questions que pour tous les autres. */
 async function measure(model: string, signal: AbortSignal, onEvent: (event: SpeedTestEvent) => void): Promise<number> {
   const numCtx = await fitToModelContext(model, SPEED_TEST_OPTIONS.num_ctx)
-  if (!(await preloadModel(model, numCtx, LOAD_TIMEOUT_MS))) throw new Error(t('speed.loadFailed'))
+  const loaded = await preloadModel(model, numCtx, LOAD_TIMEOUT_MS, signal)
+  if (signal.aborted) throw new DOMException('stopped', 'AbortError')
+  if (!loaded) throw new Error(t('speed.loadFailed'))
   const speeds: number[] = []
   for (const [index, prompt] of SPEED_TEST_PROMPTS.entries()) {
     if (signal.aborted) throw new DOMException('stopped', 'AbortError')
@@ -154,12 +172,25 @@ export async function runSpeedTest(chosen: readonly string[], onEvent: (event: S
   const models = [...new Set(chosen)].filter((m) => known.has(m))
   const controller = new AbortController()
   running = controller
-  let tested = 0
+  const run = runModels(models, controller, onEvent)
+  finished = run.catch(() => undefined)
   try {
+    return await run
+  } finally {
+    if (running === controller) running = null
+  }
+}
+
+async function runModels(
+  models: readonly string[],
+  controller: AbortController,
+  onEvent: (event: SpeedTestEvent) => void
+): Promise<{ tested: number; stopped?: boolean }> {
+  let tested = 0
+  {
     return await runWithLocalOllama(async () => {
       // Une carte libre pour tout le monde : aucun autre modèle chargé ne fausse la mesure.
       await unloadOllamaModels()
-      const keep = await modelsInUse()
       for (const [index, model] of models.entries()) {
         if (controller.signal.aborted) break
         onEvent({ type: 'progress', done: index, total: models.length })
@@ -187,21 +218,26 @@ export async function runSpeedTest(chosen: readonly string[], onEvent: (event: S
         } finally {
           await unload(model)
           // Comme le test des modèles : un modèle téléchargé POUR le test, et qui ne sert à aucun rôle, est supprimé.
-          if (downloaded && !keep.has(speedKey(model))) await deleteModel(model).catch(() => undefined)
+          // Étape 520 (audit) : les rôles relus À CE MOMENT — le test dure des heures, et « Retester la configuration »
+          // a pu entre-temps choisir ce modèle déjà téléchargé (il était supprimé sous les pieds de Jaris).
+          if (downloaded && !(await modelsInUse()).has(speedKey(model))) await deleteModel(model).catch(() => undefined)
         }
       }
       if (controller.signal.aborted) return { tested, stopped: true }
       onEvent({ type: 'progress', done: models.length, total: models.length })
       return { tested }
     })
-  } finally {
-    if (running === controller) running = null
   }
 }
 
-/** Le bouton « Arrêter » : la question en cours est abandonnée, ce qui est déjà mesuré reste. */
-export function stopSpeedTest(): void {
+/**
+ * Le bouton « Arrêter » : la question en cours est abandonnée, ce qui est déjà mesuré reste. Résout quand le test est
+ * vraiment fini, nettoyage compris (étape 520 : quitter ou déplacer les données l'attend, sinon le modèle téléchargé
+ * pour le test restait sur le disque, Ollama déjà arrêté).
+ */
+export async function stopSpeedTest(): Promise<void> {
   running?.abort()
+  await finished
 }
 
 /**

@@ -1112,6 +1112,9 @@ function speedFor(model: string): number | undefined {
   if (resolved.kind === 'published') {
     const candidate = ALL_MODELS.find((c) => c.model === model)
     if (!candidate || resolved.referenceVramGb === undefined || memoryNeedGb(candidate) > resolved.referenceVramGb) return undefined
+    // Étape 520 (audit) : remise à l'échelle de CE PC dès qu'un modèle publié y a été testé (pcSpeedFactor) — sinon une
+    // mesure d'ici, comparée aux vitesses d'une autre carte, pénalisait le modèle testé.
+    return resolved.speed * (resolved.pcFactor ?? 1)
   }
   return resolved.speed
 }

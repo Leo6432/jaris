@@ -52,8 +52,13 @@ export function windowsToClose(windows: readonly OpenWindow[], appName: string, 
     return browser === null || ` ${wanted} `.includes(` ${browser} `)
   }
   const byTitle = candidates.filter((w) => ` ${comparable(w.title)} `.includes(` ${wanted} `) && namesBrowser(w.name.toLowerCase()))
-  const programs = new Set(byTitle.map((w) => w.name.toLowerCase()))
-  return programs.size > 1 ? { ambiguous: byTitle } : byTitle
+  // Étape 520 (audit) : le nom à la FIN du titre (« Rapport.docx - Word », « Calculatrice ») est celui de l'application,
+  // là où Windows le met. Ailleurs dans le titre, c'est un document qui en PARLE (« Discord tutorial.mp4 - VLC » pour
+  // « ferme Discord ») : jamais fermé d'office, on demande — avant, VLC était fermé.
+  const atEnd = byTitle.filter((w) => ` ${comparable(w.title)}`.endsWith(` ${wanted}`))
+  if (!atEnd.length) return byTitle.length ? { ambiguous: byTitle } : []
+  const programs = new Set(atEnd.map((w) => w.name.toLowerCase()))
+  return programs.size > 1 ? { ambiguous: atEnd } : atEnd
 }
 
 /** Lit la sortie JSON de LIST_WINDOWS (un seul objet ou un tableau) ; tout ce qui n'y ressemble pas est ignoré. */
@@ -91,9 +96,15 @@ export async function appWindow(action: string, appName: string): Promise<string
   const listed = await runPowerShellScript(LIST_WINDOWS)
   if (listed.error) return t('pc.windowsFailed', { error: listed.error })
   const windows = parseWindows(listed.stdout)
-  const chosen = action === 'close' ? windowsToClose(windows, name) : matchingWindows(windows, name).slice(0, 1)
+  // Étape 520 (audit) : « remets X devant » suit la même règle que « ferme X » (le programme, sinon le nom en fin de
+  // titre) — « edge » ne désigne plus la fenêtre « knowledge… ».
+  const found = windowsToClose(windows, name)
+  const chosen = Array.isArray(found) && action === 'focus' ? found.slice(0, 1) : found
   if (!Array.isArray(chosen)) {
-    return `Plusieurs applications correspondent, laquelle fermer ?\n${chosen.ambiguous.map((w, i) => `${i + 1}. ${w.title}`).join('\n')}`
+    if (chosen.ambiguous.length === 1) {
+      return `Aucune application « ${name} » n'est ouverte ; seule cette fenêtre en parle : ${chosen.ambiguous[0].title}. Demande à l'utilisateur si c'est bien elle avant de ${action === 'close' ? 'la fermer' : 'la remettre devant'} (avec son titre complet).`
+    }
+    return `Plusieurs applications correspondent, laquelle ${action === 'close' ? 'fermer' : 'remettre devant'} ?\n${chosen.ambiguous.map((w, i) => `${i + 1}. ${w.title}`).join('\n')}`
   }
   if (!chosen.length) return t('pc.appNotOpen', { app: name })
   for (const target of chosen) {
@@ -146,7 +157,8 @@ public static class JarisVolume {
 `
 
 export async function setVolume(percent: unknown): Promise<string> {
-  const value = Number(percent)
+  // Étape 520 (audit) : Number(null) et Number("") valent 0 — un pourcentage absent coupait le son au lieu d'être refusé.
+  const value = percent === null || percent === undefined || String(percent).trim() === '' ? Number.NaN : Number(percent)
   if (!Number.isFinite(value)) return 'Pourcentage de volume invalide : un nombre de 0 à 100.'
   const level = Math.min(100, Math.max(0, Math.round(value)))
   const done = await runPowerShellScript(
@@ -188,6 +200,10 @@ export const SET_DARK_MODE =
   'Set-ItemProperty -Path $k -Name AppsUseLightTheme -Value $v -Type DWord -ErrorAction Stop; ' +
   'Set-ItemProperty -Path $k -Name SystemUsesLightTheme -Value $v -Type DWord -ErrorAction Stop'
 
+const plainWord = (text: string): string => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ')
+const DARK_ON = new Set(['true', 'on', 'oui', 'yes', '1', 'sombre', 'dark', 'mode sombre', 'dark mode', 'active', 'activer', 'enable', 'enabled'])
+const DARK_OFF = new Set(['false', 'off', 'non', 'no', '0', 'clair', 'light', 'mode clair', 'light mode', 'desactive', 'desactiver', 'disable', 'disabled'])
+
 /**
  * Un réglage de Windows : la luminosité (écrans de portable), le mode sombre, ou l'ouverture d'une page de Paramètres
  * (Wi-Fi, Bluetooth… : Léo y change lui-même ce qu'il veut). Le mode sombre de la version Store ouvre la page
@@ -205,7 +221,11 @@ export async function windowsSetting(setting: string, value: unknown, store: boo
       return `Luminosité réglée à ${percent} %.`
     }
     case 'dark_mode': {
-      const dark = value === true || /^(true|on|oui|sombre|dark|1)$/i.test(String(value ?? '').trim())
+      // Étape 520 (audit) : toute valeur non reconnue passait en mode CLAIR (« activé », « yes »…) — le contraire de la
+      // demande. Les deux listes sont explicites ; le reste est refusé.
+      const said = plainWord(String(value ?? ''))
+      const dark = value === true || DARK_ON.has(said) ? true : value === false || DARK_OFF.has(said) ? false : null
+      if (dark === null) return `Valeur "${String(value ?? '')}" inconnue pour le mode sombre : true (sombre) ou false (clair).`
       if (store) {
         await shell.openExternal(SETTINGS_PAGES.colors)
         return t('pc.darkModeStore')
@@ -214,7 +234,9 @@ export async function windowsSetting(setting: string, value: unknown, store: boo
       return done.error ? t('pc.settingFailed', { error: done.error }) : dark ? 'Mode sombre activé.' : 'Mode clair activé.'
     }
     case 'open_page': {
-      const page = SETTINGS_PAGES[String(value ?? '').trim().toLowerCase()]
+      const key = String(value ?? '').trim().toLowerCase()
+      // Étape 520 (audit) : « constructor », « __proto__ »… ne sont pas des pages.
+      const page = Object.hasOwn(SETTINGS_PAGES, key) ? SETTINGS_PAGES[key] : undefined
       if (!page) return `Page "${String(value ?? '')}" inconnue. Pages disponibles : ${Object.keys(SETTINGS_PAGES).join(', ')}.`
       await shell.openExternal(page)
       return `Page de Paramètres ouverte : ${String(value)}.`

@@ -6,7 +6,7 @@ import { cancelReminder, listReminders, scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWebDetailed } from './webSearch'
 import { readWebPage } from './webPage'
-import { clickMouse, mediaKey, pressKey, scrollWheel, typeText, waitForForegroundApp } from './inputControl'
+import { clickMouse, keyPolicy, mediaKey, pressKey, scrollWheel, typeText, waitForForegroundApp } from './inputControl'
 import { appWindow, setVolume, windowsSetting } from './pcControl'
 import { filesTool } from './fileTools'
 import { getSystemStatsText, shutdownPc } from './systemControl'
@@ -408,11 +408,17 @@ export function createToolExecutor(
   onLog?: LogHandler,
   signal?: AbortSignal,
   onImage?: ImageHandler,
-  onWebActivity?: WebActivityHandler
+  onWebActivity?: WebActivityHandler,
+  /** Étape 520 : en duel ou depuis le téléphone, toute touche pressée (press_key ET pilotage de l'écran) est seule. */
+  options: { singleKeysOnly?: boolean } = {}
 ) {
   // Étape 346 : l'application ouverte pendant CETTE demande, tant qu'aucun texte n'y a été tapé.
   let openedApp: string | undefined
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+    if (options.singleKeysOnly) return keyPolicy.run({ singleKeysOnly: true }, () => runOne(name, args))
+    return runOne(name, args)
+  }
+  async function runOne(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
       case 'open_app': {
         const result = await openApp(String(args.app_name ?? ''))

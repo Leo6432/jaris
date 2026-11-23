@@ -99,6 +99,7 @@ export const STORE_UPDATES_URL = 'ms-windows-store://downloadsandupdates'
  */
 export const STORE_UPDATE_SCRIPT = `
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 try {
   Add-Type -AssemblyName System.Runtime.WindowsRuntime
   $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
@@ -130,7 +131,10 @@ export function parseStoreAnswer(stdout: string): { updates: string[] } | { erro
     const data = JSON.parse(line) as { updates?: unknown; error?: unknown }
     if (typeof data.error === 'string') return { error: data.error }
     if (data.updates === undefined || data.updates === null) return { updates: [] }
-    const list = Array.isArray(data.updates) ? data.updates : [data.updates]
+    // Étape 520 (audit) : PowerShell 5.1 emballe parfois un tableau en {"value":[…],"Count":n} (ConvertTo-Json).
+    const wrapped = data.updates as { value?: unknown }
+    const updates = !Array.isArray(data.updates) && typeof data.updates === 'object' && 'value' in wrapped ? wrapped.value : data.updates
+    const list = Array.isArray(updates) ? updates : [updates]
     return { updates: list.filter((v): v is string => typeof v === 'string') }
   } catch {
     return null

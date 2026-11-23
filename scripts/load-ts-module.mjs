@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import vm from 'node:vm'
 import ts from 'typescript'
 
@@ -18,6 +19,8 @@ export function loadTsModule(relativePath, modules = {}) {
     if (name in modules) return modules[name]
     const i18n = i18nModules()
     if (name in i18n) return i18n[name]
+    // Étape 520 : module de Node sans effet de bord (inputControl.ts, keyPolicy) — fourni d'office, comme le traducteur.
+    if (name === 'async_hooks') return { AsyncLocalStorage }
     throw new Error(`Import non fourni au test : ${name} (${relativePath})`)
   }
   vm.runInThisContext(`(function (exports, require, module) {${source}\n})`)(module.exports, require, module)

@@ -55,8 +55,8 @@ function frozenPowerShell() {
   const child_process = {
     spawn: () => {
       const proc = new EventEmitter()
-      proc.stdout = new EventEmitter()
-      proc.stderr = new EventEmitter()
+      proc.stdout = Object.assign(new EventEmitter(), { setEncoding: () => {} })
+      proc.stderr = Object.assign(new EventEmitter(), { setEncoding: () => {} })
       proc.pid = 4321 + spawned.length
       proc.killed = false
       proc.kill = () => {

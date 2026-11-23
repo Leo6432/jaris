@@ -509,7 +509,7 @@ export async function waitForOllama(timeoutMs: number, intervalMs = 500): Promis
  * que la première question n'attende pas son chargement. `numCtx` doit être EXACTEMENT celui des vraies demandes :
  * une autre valeur ferait recharger le modèle à la première question, préchargement perdu. `true` si chargé.
  */
-export async function preloadModel(model: string, numCtx?: number, timeoutMs = 120_000): Promise<boolean> {
+export async function preloadModel(model: string, numCtx?: number, timeoutMs = 120_000, signal?: AbortSignal): Promise<boolean> {
   try {
     // La même fenêtre que les vraies demandes (requestChat) : sinon Ollama rechargerait le modèle.
     const fitted = numCtx === undefined ? await autoContextFor(model) : await fitToModelContext(model, numCtx)
@@ -518,7 +518,8 @@ export async function preloadModel(model: string, numCtx?: number, timeoutMs = 1
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, prompt: '', options: { num_ctx: fitted } }),
-      signal: AbortSignal.timeout(timeoutMs)
+      // Étape 520 (audit) : « Arrêter » n'attend plus la fin d'un chargement (jusqu'à 15 min pour un gros modèle).
+      signal: signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs)
     })
     if (!response.ok) return false
     await response.json().catch(() => null)
@@ -795,9 +796,10 @@ export async function pullModelIfMissing(
     onProgress?.(null)
     onStatus?.(t('ollama.pull.hfFallback', { model }))
     try {
-      await importHuggingFaceModel(model, onStatus)
+      await importHuggingFaceModel(model, onStatus, signal)
       return true
     } catch (importErr) {
+      if (signal?.aborted) throw importErr
       if (importErr instanceof ModelTooLargeError || importErr instanceof DiskFullError) throw importErr
       // Les deux voies ont échoué : on remonte l'erreur d'ORIGINE (celle d'Ollama, que runQuickSetup sait
       // reconnaître pour retomber sur le modèle suivant), complétée de la raison du second échec.

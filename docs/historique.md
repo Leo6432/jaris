@@ -13050,3 +13050,65 @@ thinking ; « Text input ») : « à la place d'avoir — mets des croix dans Du
   (`models.vision.none`) — un tel modèle ne peut JAMAIS entrer dans un duel Vision, ce n'est pas « pas encore de
   duel ». Aussi sur les lignes des futurs modèles. Un modèle qui lit les images garde « — » sans duel.
 - Test (mord) : test-options-reorganization-ui (croix, « — », futurs modèles). Capture à 760 px montrée à Léo.
+
+## Étape 520 — Audit : une vingtaine de défauts corrigés (sécurité, outils du PC, test de vitesse, version Store)
+
+Léo : « fais un audit pour trouver des bugs ». Trois relectures (outils du PC et fichiers ; test de vitesse et choix
+des modèles ; version Store, voix, agentique), chaque défaut vérifié dans le code avant correction.
+
+**Sécurité (fuite d'un fichier lu)**
+- Une recherche SANS résultat reprenait la requête (« Aucun résultat pour « https://pirate…?d=<contenu> » ») : l'adresse
+  passait pour « trouvée par la recherche », et `read_web_page` l'ouvrait. Une adresse écrite dans la requête n'est
+  plus jamais ajoutée aux adresses connues (assistant.ts).
+- Après un fichier lu, `computer_use_task` (qui mène le vrai navigateur à n'importe quelle adresse) est refusé, comme
+  les autres sorties.
+- Duel (vrai PC) et téléphone : seul `press_key` refusait les raccourcis ; le pilotage de l'écran appuyait encore sur
+  ctrl+w, alt+tab… Règle posée dans `pressKey` (inputControl.ts, `keyPolicy`, AsyncLocalStorage), par où passent
+  TOUTES les touches ; tools.ts ouvre la portée (`createToolExecutor(..., { singleKeysOnly })`), assistant.ts la demande
+  dès qu'il y a des restrictions. Message vrai : « je n'appuie que sur une touche seule, jamais sur un raccourci »
+  (avant : « outil bloqué »). Nouveau texte `input.comboRefused`, 24 langues.
+- Chercher un fichier listait les noms des données de Jaris (rangées dans les Documents après « Déplacer ») et des
+  dossiers AppData : exclus comme pour lire et ouvrir (fileTools.ts).
+
+**Outils du PC**
+- « Ferme Discord » fermait VLC qui lisait « Discord tutorial.mp4 » : seul le nom à la FIN du titre (là où Windows met
+  l'application) ferme d'office ; ailleurs dans le titre, on demande (« seule cette fenêtre en parle… »). « Remets X
+  devant » suit la même règle (avant : n'importe quel titre contenant le mot).
+- Mode sombre : toute valeur inconnue (« activé », « yes »…) passait en mode CLAIR. Deux listes explicites, le reste
+  refusé avec un vrai message. Pages de Paramètres : `Object.hasOwn` (« constructor » n'est pas une page).
+- Volume : `Number(null)` = 0, un pourcentage absent coupait le son. Refusé.
+- Rappels : « le 2 », « n°2 », « numéro 2 » désignent le rappel 2 ; les mots se comparent au début des MOTS du message
+  (« man » ne trouve plus « maman »), mots vides ignorés (« le rappel de la cantine »).
+- Sortie de PowerShell lue en UTF-8 (`setEncoding`) : un « é » coupé entre deux morceaux restait abîmé (titres de fenêtres).
+
+**Test de vitesse et choix des modèles**
+- Sur un PC 2,5× plus lent que la RTX 3070 de mesure, tester UN modèle le comparait aux vitesses publiées de l'autre
+  carte : il perdait Faible pour un modèle en réalité plus lent. `pcSpeedFactor` (shared/localSpeed.ts) : médiane du
+  rapport « ici / là-bas » des modèles testés aux deux endroits ; hardwareScan remet les vitesses publiées à l'échelle
+  de CE PC pour le CHOIX (l'écran les montre toujours telles quelles, avec la carte de mesure).
+- Le test supprimait à la fin un modèle téléchargé pour lui, même si « Retester la configuration » venait de le
+  choisir : rôles relus au moment de supprimer ; « Retester la configuration » refusé pendant le test.
+- « Arrêter » attendait la fin d'un chargement (jusqu'à 15 min) ou d'un import Hugging Face : `preloadModel` et
+  `importHuggingFaceModel` prennent le signal d'arrêt.
+- « Déplacer » arrêtait Ollama AVANT la fin du test : le modèle téléchargé pour le test restait sur le disque.
+  `stopSpeedTest()` rend la main quand le nettoyage est fait, attendu avant d'arrêter Ollama (1 min au plus). À la
+  fermeture de Jaris, l'arrêt reste non attendu (limite connue).
+- Les modèles que cet Ollama ne sait pas charger ne sont plus proposés au test (plusieurs Go pour rien).
+- Réponse coupée (Ollama arrêté en route) : « La réponse s'est arrêtée avant la fin », plus « réponses trop courtes »
+  (`speed.cutOff`, 24 langues).
+- Noté, pas changé : les vitesses publiées de 3 modèles à 7,7–7,9 Go ont pu déborder un peu sur la RAM de la 3070
+  (Jaris garde 1 Go de carte libre) ; aucune différence de choix trouvée sur la grille de machines.
+
+**Version Store**
+- La recopie EXDEV (étape 515) était moins sûre que le renommage remplacé : forcée sur le disque (fsync), réessayée sur
+  un refus passager, temporaire effacé si elle échoue, source impossible à effacer ≠ échec. Mise de côté d'un fichier
+  abîmé (`setAsideDamagedFile`) et des conversations du mode Code (`renameWithRetriesSync`) : même recopie.
+- Recherche de mise à jour : sortie PowerShell en UTF-8 ; tableau emballé par PowerShell 5.1 (`{value, Count}`) lu.
+
+**Écran**
+- Agentique : la difficulté choisie (Simples / Difficiles) restait « Toutes » après chaque vote (`key={round.number}`) :
+  gardée tant que Jaris est ouvert.
+
+Tests (chacun mord, vérifié en réintroduisant le défaut) : test-assistant-history, test-new-tools, test-local-speed,
+test-speed-test, test-data-files, test-app-updater, test-duel-panel-ui. `load-ts-module.mjs` fournit `async_hooks`
+d'office (comme le traducteur) ; faux processus : `setEncoding`.

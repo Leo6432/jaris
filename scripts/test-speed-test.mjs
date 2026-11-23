@@ -17,14 +17,16 @@ const CANDIDATES = [
   { model: 'utilise:8b', sizeGb: 5 }
 ]
 
-function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, refuseThink = [], stallOn = null, stored = {} } = {}) {
+function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, refuseThink = [], stallOn = null, stored = {}, tooNew = [], profile = null, stallLoad = null, cutOff = [] } = {}) {
   const calls = { pulled: [], deleted: [], preloaded: [], questions: [], unloaded: [], saved: [] }
   const ollama = {
     listInstalledModels: async () => [...installed],
     unloadOllamaModels: async () => [],
     fitToModelContext: async (_model, numCtx) => numCtx,
-    preloadModel: async (model, numCtx) => {
+    preloadModel: async (model, numCtx, _timeout, signal) => {
       calls.preloaded.push([model, numCtx])
+      // Un chargement qui n'en finit pas (gros modèle sur disque dur) : seul l'arrêt y met fin, comme le vrai fetch.
+      if (stallLoad === model) return new Promise((resolve) => signal.addEventListener('abort', () => resolve(false)))
       return true
     },
     pullModelIfMissing: async (model, _status, onProgress) => {
@@ -61,6 +63,7 @@ function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, r
       // Ne répond jamais : seul le chien de garde (inactivité) ou l'arrêt y met fin.
       return new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
     }
+    if (cutOff.includes(body.model)) return new Response(JSON.stringify({ response: 'Il était', done: false }) + '\n', { status: 200 })
     const tokensPerSecond = speeds[body.model] ?? 50
     const lines = [
       JSON.stringify({ response: 'Il était', done: false }),
@@ -71,9 +74,15 @@ function setup({ installed = ['petit:1b'], tooBig = ['gros:70b'], speeds = {}, r
   const runner = loadTsModule('electron/services/speedTest.ts', {
     '../config': { config: { ollama: { host: 'http://ollama.test' } }, runWithLocalOllama: (fn) => fn() },
     './ollama': ollama,
-    './hardwareScan': { getAllCandidateSizes: () => CANDIDATES, detectGpu: async () => ({ name: 'NVIDIA GeForce RTX 3070', vramGb: 8 }) },
+    './hardwareScan': {
+      getAllCandidateSizes: () => CANDIDATES,
+      modelsNeedingNewerOllama: () => new Set(tooNew),
+      detectGpu: async () => ({ name: 'NVIDIA GeForce RTX 3070', vramGb: 8 })
+    },
     './systemResources': { detectRamGb: () => 32 },
-    './profileStore': { getProfile: async () => ({ models: { flash: 'utilise:8b', medium: 'utilise:8b', large: 'utilise:8b' }, visionModel: 'utilise:8b' }) },
+    './profileStore': {
+      getProfile: async () => profile?.current ?? { models: { flash: 'utilise:8b', medium: 'utilise:8b', large: 'utilise:8b' }, visionModel: 'utilise:8b' }
+    },
     './speedStore': store,
     '../../shared/localSpeed': localSpeed
   })
@@ -229,6 +238,58 @@ test('étape 516 : aucune vitesse mesurée = rien à envoyer', async () => {
   const { runner, restore } = setup()
   try {
     assert.equal(await runner.buildSpeedExport('0.76.1'), null)
+  } finally {
+    restore()
+  }
+})
+
+// Étape 520 (audit).
+test('étape 520 : un modèle que cet Ollama ne sait pas charger n’est jamais proposé (plusieurs Go téléchargés pour rien)', async () => {
+  const { runner, restore } = setup({ tooNew: ['moyen:4b'] })
+  try {
+    assert.deepEqual((await runner.getSpeedTestModels()).map((m) => m.model), ['petit:1b', 'utilise:8b', 'gros:70b'])
+  } finally {
+    restore()
+  }
+})
+
+test('étape 520 : les rôles sont relus AVANT de supprimer — un modèle choisi pendant le test (« Retester la configuration ») reste', async () => {
+  const profile = { current: { models: { flash: 'petit:1b' } } }
+  const { runner, calls, restore } = setup({ installed: [], profile })
+  try {
+    const events = []
+    await runner.runSpeedTest(['moyen:4b'], (e) => {
+      events.push(e)
+      // Pendant la mesure, le choix des modèles prend moyen:4b (déjà téléchargé par le test).
+      if (e.type === 'measuring') profile.current = { models: { flash: 'petit:1b', medium: 'moyen:4b' } }
+    })
+    assert.deepEqual(calls.pulled, ['moyen:4b'])
+    assert.deepEqual(calls.deleted, [], 'il sert maintenant à Moyen : jamais supprimé')
+  } finally {
+    restore()
+  }
+})
+
+test('étape 520 : « Arrêter » pendant le chargement d’un modèle arrête tout de suite, nettoyage compris (attendu par stopSpeedTest)', async () => {
+  const { runner, calls, restore } = setup({ installed: [], stallLoad: 'moyen:4b' })
+  try {
+    const done = runner.runSpeedTest(['moyen:4b', 'petit:1b'], () => {})
+    while (calls.preloaded.length === 0) await new Promise((r) => setTimeout(r, 5))
+    await runner.stopSpeedTest()
+    assert.deepEqual(calls.deleted, ['moyen:4b'], 'le modèle téléchargé pour le test est supprimé AVANT que stopSpeedTest rende la main')
+    assert.deepEqual(await done, { tested: 0, stopped: true })
+    assert.equal(calls.questions.length, 0)
+  } finally {
+    restore()
+  }
+})
+
+test('étape 520 : une réponse coupée (Ollama arrêté en route) le dit — pas « réponses trop courtes »', async () => {
+  const { runner, restore } = setup({ cutOff: ['petit:1b'] })
+  try {
+    const events = []
+    await runner.runSpeedTest(['petit:1b'], (e) => events.push(e))
+    assert.equal(events.find((e) => e.type === 'skipped').reason, "La réponse s'est arrêtée avant la fin (Ollama s'est peut-être arrêté).")
   } finally {
     restore()
   }

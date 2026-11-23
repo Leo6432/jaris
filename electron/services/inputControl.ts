@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks'
 import { execFile, spawn } from 'child_process'
 import { t } from '../../shared/i18n'
 
@@ -257,6 +258,9 @@ export function runPowerShellScript(script: string, env?: NodeJS.ProcessEnv, idl
     }
     alive()
     let stderr = ''
+    // Étape 520 (audit) : un caractère accentué coupé entre deux morceaux reste entier (titres de fenêtres).
+    proc.stdout?.setEncoding('utf8')
+    proc.stderr?.setEncoding('utf8')
     proc.stdout?.on('data', (chunk) => {
       stdout += chunk.toString()
       alive()
@@ -417,11 +421,19 @@ const ALLOWED_SIGNATURES = new Set(
 )
 
 /** Appuie sur une touche spéciale nommée (entrée, tab, échap...) ou un raccourci (ctrl+c, alt+tab...), listes fixes. */
+/**
+ * Étape 520 (audit) : en duel (vrai PC) ou depuis le téléphone, une touche seule, jamais un raccourci (ctrl+w, alt+tab…).
+ * La règle était posée sur l'outil press_key seulement ; le pilotage de l'écran (computer_use_task) appuie aussi sur des
+ * touches, par pressKey. Posée ICI, au seul point par où passent toutes les touches : tools.ts ouvre cette portée.
+ */
+export const keyPolicy = new AsyncLocalStorage<{ singleKeysOnly: boolean }>()
+
 export async function pressKey(key: string): Promise<string> {
   const parsed = parseKeys(key)
   if (!parsed) {
     return `Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(', ')}, F1 à F12 ; raccourcis permis : ${ALLOWED_SHORTCUTS.join(', ')}.`
   }
+  if (parsed.modifiers.length && keyPolicy.getStore()?.singleKeysOnly) return t('input.comboRefused', { key })
   const invocation = parsed.modifiers.length
     ? `[JarisInput]::KeyCombo([uint16[]]@(${parsed.modifiers.join(',')}), ${parsed.vk})`
     : `[JarisInput]::KeyPress(${parsed.vk})`

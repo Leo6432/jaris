@@ -28,9 +28,18 @@ const errno = (code) => Object.assign(new Error(`${code}: simulé`), { code })
  * prochaine écriture ouverte n'écrit que la moitié du contenu, puis échoue : une coupure de courant).
  */
 function faultyFsPromises() {
-  const faults = { busy: new Set(), refuseRename: new Map(), cutWrite: false, crossDevice: new Set() }
+  const faults = { busy: new Set(), refuseRename: new Map(), cutWrite: false, crossDevice: new Set(), refuseCopy: new Map(), synced: [] }
   const fsPromises = {
     ...realFsPromises,
+    // Étape 520 : la recopie de la version Store peut, elle aussi, être refusée un instant (antivirus).
+    copyFile: async (from, to) => {
+      const left = faults.refuseCopy.get(to) ?? 0
+      if (left > 0) {
+        faults.refuseCopy.set(to, left - 1)
+        throw errno('EBUSY')
+      }
+      return realFsPromises.copyFile(from, to)
+    },
     readFile: async (path, ...rest) => {
       if (faults.busy.has(path)) throw errno('EBUSY')
       return realFsPromises.readFile(path, ...rest)
@@ -55,6 +64,9 @@ function faultyFsPromises() {
     },
     open: async (path, flags) => {
       const handle = await realFsPromises.open(path, flags)
+      if (flags === 'r+') {
+        return { sync: async () => { faults.synced.push(path); await handle.sync() }, close: () => handle.close() }
+      }
       if (!faults.cutWrite) return handle
       faults.cutWrite = false
       return {
@@ -161,6 +173,54 @@ test('version Store : même chose pour l’écriture synchrone (repère d’empl
   atomicFile.writeFileAtomicSync(file, '{"root":"C:\\\\Users\\\\x\\\\Jaris"}', { sleep: () => {} })
   assert.equal(readFileSync(file, 'utf8'), '{"root":"C:\\\\Users\\\\x\\\\Jaris"}')
   assert.deepEqual(readdirSync(dir), ['storage-location.json'])
+})
+
+// Étape 520 (audit) : la recopie de l'étape 515 était moins sûre que le renommage qu'elle remplace.
+test('étape 520 : version Store — la recopie est forcée sur le disque, réessayée sur un refus passager ; un échec ne laisse aucun temporaire', async (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'profile.json')
+  const { faults, fsPromises } = faultyFsPromises()
+  const atomicFile = loadAtomicFile(fsPromises)
+  writeFileSync(file, '{"name":"ancien"}')
+  faults.crossDevice.add(file)
+  faults.refuseCopy.set(file, 2)
+  await atomicFile.writeFileAtomic(file, '{"name":"Tom"}')
+  assert.equal(readFileSync(file, 'utf8'), '{"name":"Tom"}')
+  assert.deepEqual(faults.synced, [file], 'la copie est forcée sur le disque')
+  assert.deepEqual(readdirSync(dir), ['profile.json'])
+  // Refus qui dure : erreur remontée, fichier intact, aucun temporaire.
+  faults.refuseCopy.set(file, Infinity)
+  await assert.rejects(atomicFile.writeFileAtomic(file, '{"name":"Max"}'), /EBUSY/)
+  assert.equal(readFileSync(file, 'utf8'), '{"name":"Tom"}')
+  assert.deepEqual(readdirSync(dir), ['profile.json'])
+})
+
+test('étape 520 : version Store, écriture synchrone — une source impossible à effacer ne fait pas échouer une copie réussie', (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'storage-location.json')
+  writeFileSync(file, '{}')
+  const atomicFile = loadTsModule('electron/services/atomicFile.ts', {
+    fs: { ...realFs, renameSync: () => { throw errno('EXDEV') }, rmSync: () => { throw errno('EPERM') } },
+    'fs/promises': realFsPromises,
+    path: nodePath
+  })
+  atomicFile.writeFileAtomicSync(file, '{"root":"D"}', { sleep: () => {} })
+  assert.equal(readFileSync(file, 'utf8'), '{"root":"D"}')
+})
+
+test('étape 520 : version Store — un fichier abîmé est mis de côté par recopie quand le renommage est refusé (EXDEV)', async (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'profile.json')
+  const aside = join(dir, 'fichiers-illisibles')
+  const { faults, fsPromises } = faultyFsPromises()
+  const atomicFile = loadAtomicFile(fsPromises)
+  writeFileSync(file, '{abîmé')
+  const name = atomicFile.unreadableCopyName('profil', '.json', 0)
+  faults.crossDevice.add(join(aside, name))
+  const moved = await atomicFile.setAsideDamagedFile(file, aside, 'profil', 0)
+  assert.equal(moved, join(aside, name))
+  assert.equal(readFileSync(moved, 'utf8'), '{abîmé')
+  assert.equal(existsSync(file), false, 'l’original est retiré')
 })
 
 test('écritures simultanées d’un même fichier : l’une après l’autre, la dernière demandée reste, jamais un mélange', async (t) => {

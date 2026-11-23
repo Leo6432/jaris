@@ -112,12 +112,20 @@ function excludedDirs(): string[] {
 }
 
 /** Cherche par nom (tous les mots demandés dans le nom), dossiers compris ; les plus récents d'abord. */
-export async function findFiles(query: string, roots: readonly string[]): Promise<string> {
+export async function findFiles(query: string, roots: readonly string[], excluded: readonly string[] = excludedDirs()): Promise<string> {
   const words = plain(query).split(' ').filter((w) => w.length >= 2)
   if (!words.length) return 'Dis le nom (ou une partie du nom) du fichier à chercher.'
+  // Étape 520 (audit) : comme pour lire et ouvrir (insideRoots), jamais les données de Jaris (rangées dans les Documents
+  // après « Déplacer ») ni un dossier AppData — la recherche en listait les noms (conversations, réglages).
+  const forbidden = await Promise.all(excluded.flatMap((dir) => [Promise.resolve(resolve(dir)), realpath(dir).catch(() => resolve(dir))]))
+  const isForbidden = async (dir: string): Promise<boolean> => {
+    const real = await realpath(dir).catch(() => resolve(dir))
+    return forbidden.some((f) => within(f, real) || within(f, resolve(dir)))
+  }
   const found: { path: string; dir: boolean; mtime: number }[] = []
   let visited = 0
-  const queue: { dir: string; depth: number }[] = roots.map((dir) => ({ dir, depth: 0 }))
+  const queue: { dir: string; depth: number }[] = []
+  for (const dir of roots) if (!(await isForbidden(dir))) queue.push({ dir, depth: 0 })
   while (queue.length && visited < FIND_MAX_ENTRIES) {
     const { dir, depth } = queue.shift() as { dir: string; depth: number }
     let entries
@@ -137,7 +145,7 @@ export async function findFiles(query: string, roots: readonly string[]): Promis
         if (!(await insideRoots(full, roots))) continue
         isDir = (await stat(full).catch(() => null))?.isDirectory() ?? false
       }
-      if (isDir && SKIPPED_DIRS.has(entry.name.toLowerCase())) continue
+      if (isDir && (SKIPPED_DIRS.has(entry.name.toLowerCase()) || entry.name.toLowerCase() === 'appdata' || (await isForbidden(full)))) continue
       const name = plain(entry.name)
       if (words.every((w) => name.includes(w))) {
         const info = await stat(full).catch(() => null)

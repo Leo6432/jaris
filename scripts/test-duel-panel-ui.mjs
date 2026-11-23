@@ -1991,6 +1991,12 @@ test('étape 518 : Agentique — « Toutes » montre 2 simples et 2 difficiles ;
       await page.click('.duel-agent-start__actions .duel-btn--primary')
       await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'ask'))
       assert.match((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask')[1], /^h\d$/)
+      // Étape 520 (audit) : la manche suivante garde la difficulté choisie (avant : retour à « Toutes » après chaque vote).
+      const idle = { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }
+      await page.evaluate(({ round, tasks }) => window.__emit({ ...window.__ready(round), category: 'agent', agentTasks: tasks }), { round: { number: 2, prompt: null, a: idle, b: idle }, tasks })
+      await page.waitForFunction(() => document.querySelectorAll('.duel-agent-start__levels [role="radio"]')[2]?.getAttribute('aria-checked') === 'true')
+      const next = await page.locator('.duel-agent-start .empty-state__suggestion').allTextContents()
+      assert.ok(next.length > 0 && next.every((x) => hard.includes(x)), next.join(' | '))
     },
     `window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', agentTasks: ${JSON.stringify(tasks)}, phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };`,
     { width: 760, height: 900 }

@@ -114,9 +114,13 @@ async function streamBlobToOllama(
   repo: string,
   layer: ManifestLayer,
   label: string,
-  onStatus?: (message: string) => void
+  onStatus?: (message: string) => void,
+  outer?: AbortSignal
 ): Promise<void> {
   const controller = new AbortController()
+  // Étape 520 (audit) : « Arrêter » (test de vitesse, duel) arrête aussi ce téléchargement — avant, il allait au bout.
+  const stopFromOutside = (): void => controller.abort()
+  outer?.addEventListener('abort', stopFromOutside, { once: true })
   let stallTimer: ReturnType<typeof setTimeout> | undefined
   const armStall = (): void => {
     if (stallTimer) clearTimeout(stallTimer)
@@ -148,11 +152,13 @@ async function streamBlobToOllama(
       )
     }
   } catch (err) {
+    if (outer?.aborted) throw err
     if (controller.signal.aborted) throw new Error(t('hf.stalled', { label }))
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : ''
     throw new Error(t('hf.interrupted', { label, error: `${err instanceof Error ? err.message : String(err)}${cause ? ` : ${cause}` : ''}` }))
   } finally {
     if (stallTimer) clearTimeout(stallTimer)
+    outer?.removeEventListener('abort', stopFromOutside)
   }
 }
 
@@ -160,12 +166,12 @@ async function streamBlobToOllama(
  * Installe un modèle `hf.co/...` sans passer par `ollama pull`. Mêmes garde-fous que pullModelIfMissing
  * (VRAM+RAM, disque) AVANT de télécharger quoi que ce soit.
  */
-export async function importHuggingFaceModel(model: string, onStatus?: (message: string) => void): Promise<void> {
+export async function importHuggingFaceModel(model: string, onStatus?: (message: string) => void, signal?: AbortSignal): Promise<void> {
   const parsed = parseHuggingFaceModel(model)
   if (!parsed) throw new Error(t('hf.notImportable', { model }))
   const { repo, tag } = parsed
 
-  const manifestResponse = await fetch(`${HF_REGISTRY}/${repo}/manifests/${tag}`, { headers: { Accept: MANIFEST_ACCEPT } })
+  const manifestResponse = await fetch(`${HF_REGISTRY}/${repo}/manifests/${tag}`, { headers: { Accept: MANIFEST_ACCEPT }, signal })
   if (!manifestResponse.ok) throw new Error(t('hf.manifestStatus', { status: manifestResponse.status, model }))
   const manifest = (await manifestResponse.json()) as Manifest
 
@@ -189,7 +195,8 @@ export async function importHuggingFaceModel(model: string, onStatus?: (message:
   for (const layer of ggufLayers) {
     const isProjector = layer.mediaType === 'application/vnd.ollama.image.projector'
     const label = isProjector ? `${model} (vision)` : model
-    if (!(await blobExists(layer.digest))) await streamBlobToOllama(repo, layer, label, onStatus)
+    signal?.throwIfAborted()
+    if (!(await blobExists(layer.digest))) await streamBlobToOllama(repo, layer, label, onStatus, signal)
     files[isProjector ? 'projector.gguf' : 'model.gguf'] = layer.digest
   }
 
@@ -200,6 +207,7 @@ export async function importHuggingFaceModel(model: string, onStatus?: (message:
   const template = templateLayer ? await fetchText(`${HF_REGISTRY}/${repo}/blobs/${templateLayer.digest}`) : undefined
   const parameters = paramsLayer ? (JSON.parse(await fetchText(`${HF_REGISTRY}/${repo}/blobs/${paramsLayer.digest}`)) as Record<string, unknown>) : undefined
 
+  signal?.throwIfAborted()
   onStatus?.(t('hf.installing', { model }))
   const create = await fetch(`${config.ollama.host}/api/create`, {
     method: 'POST',

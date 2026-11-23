@@ -66,17 +66,54 @@ export function isCrossDeviceError(err: unknown): boolean {
   return (err as NodeJS.ErrnoException | undefined)?.code === 'EXDEV'
 }
 
-/** `renameSync` réessayé sur un refus passager. Toute autre erreur, ou un refus qui dure, remonte telle quelle. */
+/**
+ * Étape 520 (audit) : la recopie de l'étape 515, aussi sûre que le renommage qu'elle remplace — forcée sur le disque
+ * (sinon, après une coupure, le fichier peut rester vide), et la source effacée sans jamais faire échouer une copie
+ * réussie (un temporaire qui traîne est simplement réécrit à la prochaine écriture).
+ */
+function copyOverSync(from: string, to: string): void {
+  copyFileSync(from, to)
+  const fd = openSync(to, 'r+')
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  try {
+    rmSync(from, { force: true })
+  } catch {
+    // copie faite : la source restante ne gêne pas
+  }
+}
+
+async function copyOver(from: string, to: string): Promise<void> {
+  await copyFile(from, to)
+  const handle = await open(to, 'r+')
+  try {
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+  await rm(from, { force: true }).catch(() => {})
+}
+
+/**
+ * `renameSync` réessayé sur un refus passager. Toute autre erreur, ou un refus qui dure, remonte telle quelle.
+ * Étape 520 (audit) : la recopie de la version Store (EXDEV) est réessayée de la même façon (fichier tenu un instant par
+ * l'antivirus).
+ */
 export function renameWithRetriesSync(from: string, to: string, wait: (ms: number) => void = sleepSync): void {
+  let crossDevice = false
   for (let attempt = 0; ; attempt++) {
     try {
-      renameSync(from, to)
+      if (crossDevice) copyOverSync(from, to)
+      else renameSync(from, to)
       return
     } catch (err) {
-      if (isCrossDeviceError(err)) {
-        copyFileSync(from, to)
-        rmSync(from, { force: true })
-        return
+      if (!crossDevice && isCrossDeviceError(err)) {
+        crossDevice = true
+        attempt--
+        continue
       }
       if (!isTransientFsError(err) || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
       wait(RENAME_RETRY_DELAYS_MS[attempt])
@@ -136,16 +173,19 @@ async function writeNow(file: string, content: string | Uint8Array): Promise<voi
   } finally {
     await handle.close()
   }
+  let crossDevice = false
   for (let attempt = 0; ; attempt++) {
     try {
-      await rename(temporary, file)
+      // Étape 515 : temporaire et fichier séparés par la virtualisation d'AppData (version Store) : recopie — étape 520,
+      // forcée sur le disque et réessayée comme le renommage ; un échec efface aussi le temporaire.
+      if (crossDevice) await copyOver(temporary, file)
+      else await rename(temporary, file)
       return
     } catch (err) {
-      // Étape 515 : temporaire et fichier séparés par la virtualisation d'AppData (version Store) : recopie.
-      if (isCrossDeviceError(err)) {
-        await copyFile(temporary, file)
-        await rm(temporary, { force: true }).catch(() => {})
-        return
+      if (!crossDevice && isCrossDeviceError(err)) {
+        crossDevice = true
+        attempt--
+        continue
       }
       if (!isTransientFsError(err) || attempt >= ASYNC_RENAME_RETRY_DELAYS_MS.length) {
         // `file` est intact (le remplacement n'a pas eu lieu) : le temporaire ne traîne pas à côté.
@@ -267,13 +307,21 @@ export async function setAsideDamagedFile(file: string, asideDir: string, label:
     for (let index = 1; ; index++) {
       const candidate = join(asideDir, index === 1 ? name : `${base}-${index}${extension}`)
       if (await exists(candidate)) continue
+      let crossDevice = false
       for (let attempt = 0; ; attempt++) {
         try {
-          await rename(file, candidate)
+          // Étape 520 (audit) : version Store, même séparation qu'à l'écriture (EXDEV) — recopié puis effacé.
+          if (crossDevice) await copyOver(file, candidate)
+          else await rename(file, candidate)
           console.error(`[jaris] ${basename(file)} abîmé, mis de côté dans ${candidate}`)
           return candidate
         } catch (err) {
           if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+          if (!crossDevice && isCrossDeviceError(err)) {
+            crossDevice = true
+            attempt--
+            continue
+          }
           if (!isTransientFsError(err) || attempt >= ASYNC_RENAME_RETRY_DELAYS_MS.length) throw err
           await sleep(ASYNC_RENAME_RETRY_DELAYS_MS[attempt])
         }

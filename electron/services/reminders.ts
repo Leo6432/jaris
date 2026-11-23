@@ -120,18 +120,29 @@ export async function listReminders(now: number = Date.now()): Promise<string> {
  * Étape 508 : annule un rappel, désigné par son numéro dans listReminders ou par des mots de son message. Plusieurs
  * rappels correspondent : rien n'est annulé, la liste revient au modèle pour qu'il demande lequel.
  */
+/** Mots qui ne désignent aucun rappel en particulier (« annule le rappel du dentiste »). */
+const CANCEL_STOPWORDS = new Set(['le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'au', 'aux', 'mon', 'ma', 'mes', 'ce', 'cet', 'cette', 'celui', 'pour', 'rappel', 'rappels', 'annule', 'annuler', 'the', 'my', 'of', 'for', 'reminder', 'reminders', 'cancel'])
+
 export async function cancelReminder(which: string, now: number = Date.now()): Promise<string> {
   const wanted = which.trim()
   if (!wanted) return 'Dis quel rappel annuler (son numéro ou quelques mots de son message).'
   return exclusive(async () => {
     const reminders = (await readReminders()).sort((a, b) => a.fireAt.localeCompare(b.fireAt))
     if (!reminders.length) return 'Aucun rappel programmé.'
-    const index = /^\d+$/.test(wanted) ? Number(wanted) - 1 : -1
-    const words = plain(wanted).split(' ').filter((w) => w.length >= 2)
+    // Étape 520 (audit) : « le 2 », « n°2 », « numéro 2 », « #2 » désignent aussi le rappel 2 (avant : cherchés comme des
+    // mots, jamais trouvés).
+    const number = /^(?:n[°o]\s*|num[eé]ro\s*|le\s+|la\s+|#)?(\d+)$/i.exec(wanted)
+    const index = number ? Number(number[1]) - 1 : -1
+    // Étape 520 (audit) : des mots ENTIERS (ou leur début) du message, hors mots vides — « dent » ne trouve plus
+    // « accident », et « le rappel du dentiste » trouve « dentiste ».
+    const words = plain(wanted)
+      .split(' ')
+      .filter((w) => w.length >= 2 && !CANCEL_STOPWORDS.has(w))
+    const startsWord = (message: string, word: string): boolean => plain(message).split(' ').some((m) => m.startsWith(word))
     const matches =
       index >= 0 && index < reminders.length
         ? [reminders[index]]
-        : reminders.filter((r) => words.length > 0 && words.every((w) => plain(r.message).includes(w)))
+        : reminders.filter((r) => words.length > 0 && words.every((w) => startsWord(r.message, w)))
     if (!matches.length) return `Aucun rappel ne correspond à « ${wanted} ». Rappels programmés :\n` + reminders.map((r, i) => `${i + 1}. ${r.message} — ${whenText(r.fireAt, now)}`).join('\n')
     if (matches.length > 1) return `Plusieurs rappels correspondent, lequel annuler ?\n` + matches.map((r) => `${reminders.indexOf(r) + 1}. ${r.message} — ${whenText(r.fireAt, now)}`).join('\n')
     const target = matches[0]

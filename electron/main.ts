@@ -2174,13 +2174,15 @@ app.whenReady().then(async () => {
     const phoneStudioStopped = phoneAccess?.stopStudioJobs().catch(() => {})
     pipeline?.stop()
     ttsClient.stop()
+    // Étape 514 : le test de vitesse s'arrête aussi (il télécharge et enregistre des vitesses dans les données).
+    // Étape 520 (audit) : attendu AVANT d'arrêter Ollama — son nettoyage supprime le modèle téléchargé pour le test, ce
+    // qui échouait en silence une fois Ollama arrêté (plusieurs Go laissés sur le disque). Une minute au plus.
+    await Promise.race([stopSpeedTest(), new Promise((resolve) => setTimeout(resolve, 60_000))])
     await stopOllamaCompletely()
     // Même raison pour ce qui écrit dans les données pendant la copie : l'accès téléphone (identité Tailscale,
     // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic). Attendus
     // jusqu'à leur sortie : sous Windows, un fichier encore ouvert ne s'efface pas de l'ancien dossier.
     await stopModelTest()
-    // Étape 514 : le test de vitesse aussi (il télécharge et enregistre des vitesses dans les données).
-    stopSpeedTest()
     // Étape 355 : un duel en cours s'arrête aussi (les modèles écrivent sur le PC, et un téléchargement remplit le disque).
     abortDuel()
     await phoneStudioStopped
@@ -2404,6 +2406,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setThinkChoice, (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => saveThinkChoice(mode, think))
   ipcMain.handle(IPC_CHANNELS.setModelChoice, (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => saveModelChoice(mode, model))
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
+    // Étape 520 (audit) : jamais pendant le test de vitesse — il supprime à la fin les modèles téléchargés pour lui, et
+    // le choix aurait pu en prendre un ; ses chargements fausseraient aussi la mesure.
+    if (isSpeedTestRunning()) throw new Error(t('speed.running'))
     const onLine = (line: string): void => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line)
     // Ollama peut s'être arrêté depuis le démarrage de Jaris (ou ne pas avoir encore fini de démarrer) : relancé
     // ici plutôt que de télécharger vers un serveur absent (« fetch failed », Léo sur un autre PC).
@@ -2906,7 +2911,7 @@ async function readProfileAtStartup(): Promise<Profile | null | undefined> {
 app.on('before-quit', () => {
   // Étape 230 : un test de modèles (des heures) ne doit jamais continuer après Jaris : il reprendra au relancement.
   stopModelTest()
-  stopSpeedTest()
+  void stopSpeedTest()
   // Étape 355 : un duel en cours s'arrête avec Jaris ; aucun vote n'est donné à la place de Léo.
   abortDuel()
   stopOllamaIfStartedByJaris()

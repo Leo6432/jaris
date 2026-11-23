@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, renameSync } from 'fs'
+import { mkdirSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { RENAME_RETRY_DELAYS_MS as RETRY_DELAYS_MS, sleepSync, writeFileAtomicSync } from './atomicFile'
+import { RENAME_RETRY_DELAYS_MS as RETRY_DELAYS_MS, renameWithRetriesSync, sleepSync, writeFileAtomicSync } from './atomicFile'
 import {
   CODE_CONVERSATIONS_ASIDE_DIR,
   MAX_CODE_REPOS,
@@ -177,7 +177,8 @@ export class CodeConversationsStore {
     const aside = asidePathFor(this.filePath, this.now())
     try {
       mkdirSync(dirname(aside), { recursive: true })
-      renameSync(this.filePath, aside)
+      // Étape 520 (audit) : réessayé sur un refus passager, et recopié si la version Store sépare les deux (EXDEV).
+      renameWithRetriesSync(this.filePath, aside)
       console.error(`[code] Conversations du mode Code abîmées, mises de côté dans ${aside}`)
     } catch (err) {
       // Ni lisible ni déplaçable : on n'écrit rien, et on réessaiera au prochain accès.

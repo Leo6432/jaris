@@ -22,8 +22,8 @@ const spawned = []
 function fakeSpawn(_cmd, args, opts) {
   const { EventEmitter } = nodeRequire('node:events')
   const proc = new EventEmitter()
-  proc.stdout = new EventEmitter()
-  proc.stderr = new EventEmitter()
+  proc.stdout = Object.assign(new EventEmitter(), { setEncoding: () => {} })
+  proc.stderr = Object.assign(new EventEmitter(), { setEncoding: () => {} })
   spawned.push({ script: args.at(-1), env: opts?.env ?? {} })
   setImmediate(() => proc.emit('close', 0))
   return proc
@@ -57,6 +57,43 @@ test('un raccourci part en une combinaison (modificateurs enfoncés puis relâch
   assert.match(spawned[1].script, /\[JarisInput\]::KeyPress\(13\)$/)
   assert.match(await input.pressKey('win+r'), /^Touche "win\+r" inconnue/)
   assert.equal(spawned.length, 2, 'rien d’envoyé pour un raccourci refusé')
+})
+
+// Étape 520 (audit) : en duel et depuis le téléphone, le pilotage de l'écran appuyait encore sur des raccourcis (la règle
+// n'était posée que sur l'outil press_key). Posée dans pressKey, par où passent toutes les touches.
+test('étape 520 : dans la portée « une seule touche », un raccourci est refusé — même venu du pilotage de l’écran', async () => {
+  spawned.length = 0
+  const refused = await input.keyPolicy.run({ singleKeysOnly: true }, () => input.pressKey('ctrl+w'))
+  assert.equal(refused, 'Par sécurité, ici je n\'appuie que sur une touche seule, jamais sur un raccourci (ctrl+w).')
+  assert.equal(spawned.length, 0, 'rien d’envoyé')
+  assert.equal(await input.keyPolicy.run({ singleKeysOnly: true }, () => input.pressKey('entrée')), 'Touche "entrée" pressée.')
+  assert.equal(await input.pressKey('ctrl+w'), 'Touche "ctrl+w" pressée.', 'hors de la portée : permis comme avant')
+  // tools.ts ouvre la portée pour TOUTE l'exécution d'un outil (computer_use_task compris), assistant.ts la demande
+  // en duel et depuis le téléphone.
+  const tools = read('electron/services/tools.ts')
+  assert.match(tools, /if \(options\.singleKeysOnly\) return keyPolicy\.run\(\{ singleKeysOnly: true \}, \(\) => runOne\(name, args\)\)/)
+  assert.match(read('electron/services/assistant.ts'), /singleKeysOnly: Boolean\(restrictions\)/)
+})
+
+test('étape 520 : la sortie de PowerShell est lue en UTF-8 — un « é » coupé entre deux morceaux reste entier', async () => {
+  const { PassThrough } = nodeRequire('node:stream')
+  const { EventEmitter } = nodeRequire('node:events')
+  const spawn = () => {
+    const proc = new EventEmitter()
+    proc.stdout = new PassThrough()
+    proc.stderr = new PassThrough()
+    const bytes = Buffer.from('Créer', 'utf8')
+    setImmediate(() => {
+      proc.stdout.write(bytes.subarray(0, 3))
+      setImmediate(() => {
+        proc.stdout.end(bytes.subarray(3))
+        proc.stdout.on('end', () => proc.emit('close', 0))
+      })
+    })
+    return proc
+  }
+  const local = loadTsModule('electron/services/inputControl.ts', { child_process: { spawn, execFile: () => {} } })
+  assert.deepEqual(await local.runPowerShellScript('x'), { error: null, stdout: 'Créer' })
 })
 
 test('défiler : vers le bas = crans négatifs, borné de 1 à 20, 3 par défaut', async () => {
@@ -173,6 +210,8 @@ test('rappels : la liste dans l’ordre où ils sonnent ; annuler par numéro ou
   assert.equal(await reminders.cancelReminder('garage'), 'Rappel annulé : Appeler le garage.')
   assert.equal(await reminders.cancelReminder('2'), 'Rappel annulé : Sortir le chien.')
   assert.match(await reminders.cancelReminder('dentiste'), /^Aucun rappel ne correspond à « dentiste »\. Rappels programmés :\n1\. Appeler maman/)
+  // Étape 520 (audit) : des mots entiers (ou leur début) — « man » ne trouve pas « maman ».
+  assert.match(await reminders.cancelReminder('man'), /^Aucun rappel ne correspond/)
   // Un rappel annulé ne sonne plus, et n'est plus dans le fichier.
   t.mock.timers.tick(121 * 60_000)
   assert.deepEqual(fired, ['Appeler maman'])
@@ -182,6 +221,21 @@ test('rappels : la liste dans l’ordre où ils sonnent ; annuler par numéro ou
   t.mock.timers.reset()
   for (const end = Date.now() + 2000; saved().length && Date.now() < end; ) await new Promise((done) => setTimeout(done, 20))
   assert.deepEqual(saved(), [])
+})
+
+test('étape 520 : annuler « le 2 », « n°2 », « numéro 1 » ; « le rappel du garage » trouve « garage »', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-rappels-520-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const reminders = loadReminders(dir)
+  for (const [message, minutes] of [['Sortir le chien', 30], ['Appeler le garage', 40], ['Arroser les plantes', 50], ['Payer la cantine', 60]]) {
+    await reminders.scheduleReminder(message, minutes, () => {})
+  }
+  assert.equal(await reminders.cancelReminder('le 2'), 'Rappel annulé : Appeler le garage.')
+  assert.equal(await reminders.cancelReminder('n°2'), 'Rappel annulé : Arroser les plantes.')
+  assert.equal(await reminders.cancelReminder('numéro 1'), 'Rappel annulé : Sortir le chien.')
+  assert.equal(await reminders.cancelReminder('le rappel de la cantine'), 'Rappel annulé : Payer la cantine.')
+  t.mock.timers.reset()
 })
 
 // --- Fichiers (fileTools.ts), sur le vrai disque.
@@ -258,6 +312,22 @@ test('fichiers : chercher par nom (tous les mots, sans accents), dossiers compri
   assert.match(await files.findFiles('candidatures', [docs]), /^\[dossier\] .*Candidatures/)
   assert.match(await files.findFiles('facture', [docs]), /^Aucun fichier ni dossier dont le nom contient « facture »/)
   assert.equal(await files.findFiles('  ', [docs]), 'Dis le nom (ou une partie du nom) du fichier à chercher.')
+})
+
+test('étape 520 : chercher ne liste jamais les données de Jaris (rangées dans les Documents) ni un dossier AppData', async (t) => {
+  const docs = mkdtempSync(join(tmpdir(), 'jaris-cherche-520-'))
+  t.after(() => rmSync(docs, { recursive: true, force: true }))
+  const data = join(docs, 'Jaris')
+  mkdirSync(join(data, 'conversations'), { recursive: true })
+  writeFileSync(join(data, 'conversations', 'secret-banque.json'), '{}')
+  mkdirSync(join(docs, 'AppData', 'Roaming'), { recursive: true })
+  writeFileSync(join(docs, 'AppData', 'Roaming', 'secret-jeton.txt'), 'x')
+  writeFileSync(join(docs, 'secret-recette.txt'), 'x')
+  const files = loadFiles()
+  const found = await files.findFiles('secret', [docs], [data])
+  assert.match(found, /secret-recette\.txt/)
+  assert.doesNotMatch(found, /banque|jeton/)
+  assert.match(await files.findFiles('conversations', [data], [data]), /^Aucun fichier ni dossier/, 'un dossier de recherche DANS les données : rien')
 })
 
 test('les nouveaux outils sont branchés : interdits en duel Discussion (vrai PC) et depuis le téléphone, sauf les rappels', () => {
@@ -343,6 +413,41 @@ test('relecture adverse : « ferme X » vise le programme X — jamais un onglet
   const asked = loadPc({ windows: [a, b] })
   assert.match(await asked.pc.appWindow('close', 'Rapport annuel'), /^Plusieurs applications correspondent, laquelle fermer \?\n1\. Rapport annuel - Bloc-notes/)
   assert.equal(asked.calls.filter((c) => c.script.includes('CloseMainWindow')).length, 0)
+})
+
+// Étape 520 (audit).
+test('étape 520 : un titre qui PARLE de l’application n’est pas l’application — on demande, rien n’est fermé', async () => {
+  const pc = loadPc().pc
+  const close = (windows, name) => pc.windowsToClose(windows, name, 1)
+  const vlc = { id: 71, name: 'vlc', title: 'Discord tutorial.mp4 - VLC media player' }
+  assert.deepEqual(close([vlc], 'Discord'), { ambiguous: [vlc] })
+  const word = { id: 72, name: 'WINWORD', title: 'Document1 - Word' }
+  assert.deepEqual(close([word], 'Word'), [word], 'nom à la fin du titre : l’application')
+  const asked = loadPc({ windows: [vlc] })
+  assert.match(await asked.pc.appWindow('close', 'Discord'), /^Aucune application « Discord » n'est ouverte ; seule cette fenêtre en parle : Discord tutorial\.mp4 - VLC media player\./)
+  assert.equal(asked.calls.filter((c) => c.script.includes('CloseMainWindow')).length, 0)
+  // Remettre devant suit la même règle : « edge » ne désigne pas la fenêtre « Knowledge edge… ».
+  const notes = { id: 73, name: 'notepad', title: 'knowledge edge notes - Bloc-notes' }
+  const focus = loadPc({ windows: [notes] })
+  assert.match(await focus.pc.appWindow('focus', 'edge'), /^Aucune application « edge »/)
+  assert.equal(focus.calls.filter((c) => c.script.includes('AppActivate')).length, 0)
+})
+
+test('étape 520 : volume absent = refusé (avant : 0 %, le son coupé) ; mode sombre : une valeur inconnue n’allume jamais le mode clair', async () => {
+  const { pc, calls } = loadPc()
+  for (const value of [null, undefined, '', '  ']) assert.equal(await pc.setVolume(value), 'Pourcentage de volume invalide : un nombre de 0 à 100.')
+  assert.equal(calls.length, 0)
+  const exe = loadPc()
+  assert.equal(await exe.pc.windowsSetting('dark_mode', 'activé', false), 'Mode sombre activé.')
+  assert.equal(await exe.pc.windowsSetting('dark_mode', 'yes', false), 'Mode sombre activé.')
+  assert.equal(await exe.pc.windowsSetting('dark_mode', 'Clair', false), 'Mode clair activé.')
+  assert.equal(await exe.pc.windowsSetting('dark_mode', false, false), 'Mode clair activé.')
+  assert.deepEqual(exe.calls.map((c) => c.env.JARIS_LIGHT), ['0', '0', '1', '1'])
+  assert.match(await exe.pc.windowsSetting('dark_mode', 'peut-être', false), /^Valeur "peut-être" inconnue pour le mode sombre/)
+  assert.equal(exe.calls.length, 4, 'rien d’écrit pour une valeur inconnue')
+  const pages = loadPc()
+  assert.match(await pages.pc.windowsSetting('open_page', 'constructor', false), /^Page "constructor" inconnue/)
+  assert.equal(pages.opened.length, 0)
 })
 
 test('relecture adverse : « exit 3 » dit en clair ; une fenêtre que Windows n’a pas mise devant n’est jamais dite « au premier plan »', async () => {

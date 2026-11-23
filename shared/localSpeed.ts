@@ -58,6 +58,11 @@ export interface ResolvedSpeed {
   kind: SpeedKind | null
   /** Vitesse publiée : mémoire vidéo de la carte qui l'a mesurée (un modèle plus gros y débordait sur la RAM). */
   referenceVramGb?: number
+  /**
+   * Étape 520 (audit) : vitesse publiée — combien CE PC va plus vite (ou moins) que la carte de mesure, d'après les
+   * modèles testés aux deux endroits (médiane). Absent tant qu'aucun modèle publié n'a été testé ici.
+   */
+  pcFactor?: number
 }
 
 /** Étape 517 : les vitesses publiées et la mémoire vidéo de la carte qui les a mesurées (shared/publishedSpeeds.ts). */
@@ -114,5 +119,23 @@ export function resolveSpeed(model: string, measured: Record<string, number>, pu
   const own = measured[speedKey(model)]
   if (own !== undefined) return { speed: own, kind: 'measured' }
   const shared = published?.speeds[speedKey(model)]
-  return shared === undefined ? { speed: null, kind: null } : { speed: shared, kind: 'published', referenceVramGb: published?.vramGb }
+  if (shared === undefined || !published) return { speed: null, kind: null }
+  const factor = pcSpeedFactor(measured, published)
+  return { speed: shared, kind: 'published', referenceVramGb: published.vramGb, ...(factor === null ? {} : { pcFactor: factor }) }
+}
+
+/**
+ * Étape 520 (audit) : sur un PC 2,5 fois plus lent que la carte de mesure, tester UN modèle le faisait paraître 2,5 fois
+ * plus lent que les autres (mesure d'ici contre vitesses publiées de là-bas) : il perdait Faible pour un modèle en réalité
+ * plus lent encore. Le rapport « ici / là-bas » des modèles testés aux deux endroits (médiane) remet les vitesses
+ * publiées à l'échelle de CE PC pour le choix. `null` : aucun modèle en commun.
+ */
+export function pcSpeedFactor(measured: Record<string, number>, published: PublishedSpeeds): number | null {
+  const ratios = Object.entries(measured)
+    .map(([model, speed]) => {
+      const reference = published.speeds[speedKey(model)]
+      return reference && reference > 0 && speed > 0 ? speed / reference : null
+    })
+    .filter((ratio): ratio is number => ratio !== null && Number.isFinite(ratio))
+  return median(ratios)
 }
