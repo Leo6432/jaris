@@ -833,6 +833,25 @@ test('Classement : la colonne Vitesse dit d’où vient chaque vitesse (publiée
   }, "window.__overviewEntries = [{ model: 'ministral-3:3b', vramGb: 3, category: 'Rapide', usedIn: [], toolCalling: '6/6', intelligence: null, localSpeed: 88.2, localSpeedKind: 'published' }, { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', usedIn: [], toolCalling: null, intelligence: null, localSpeed: 160, localSpeedKind: 'measured' }]")
 })
 
+// Étape 519 (Léo : « à la place d'avoir — mets des croix dans Duels Vision ») : un modèle qui ne lit pas les images a une
+// croix en Duels Vision (il ne peut jamais y entrer), un modèle qui les lit garde « — » tant qu'il n'a pas de duel.
+test('Classement : croix en Duels Vision pour un modèle sans vision, « — » pour un modèle vision sans duel', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+    const duelVision = (model) => page.$eval(`.options-page--models tbody tr:has(.options-menu__model-name[title="${model}"]) td:nth-child(10)`, (td) => ({ text: td.textContent.trim(), title: td.querySelector('[title]')?.getAttribute('title') ?? null }))
+    const header = await page.$eval('.options-page--models thead th:nth-child(10)', (th) => th.textContent.trim())
+    assert.match(header, /^Duels\s*Vision/)
+    const cross = await duelVision('qwen3:1.7b')
+    assert.equal(cross.text, '✕')
+    assert.match(cross.title, /^Ne lit pas les images\s*:\s*ne peut pas servir de modèle Vision$/)
+    assert.deepEqual(await duelVision('ministral-3:3b'), { text: '—', title: null })
+    // Même règle sur les lignes des futurs modèles.
+    assert.equal((await duelVision('exemple-sans-taille')).text, '✕')
+    assert.equal((await duelVision('exemple-futur:8b')).text, '—')
+  })
+})
+
 // Étape 514 (Léo : « un bouton pour tester la vitesse de tous les modèles, choisir ceux que je veux ou tout, les mêmes
 // questions pour tout le monde… comme l'analyse »).
 test('test de vitesse : les modèles jamais mesurés, la taille à télécharger, puis le suivi modèle par modèle', options, async () => {

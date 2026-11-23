@@ -13041,3 +13041,12 @@ choses ».
   difficiles ; « Une tâche au hasard » respecte la difficulté choisie. 4 textes en 24 langues.
 - Tests (mordent) : test-duel-agent-tasks (cas juste et cas qui oublie UNE action, pour chaque tâche ; au moins 3 actions
   par tâche difficile), test-duel-panel-ui (2 + 2, filtre, hasard filtré). Capture montrée à Léo.
+
+## Étape 519 — Classement : une croix dans « Duels Vision » pour les modèles qui ne lisent pas les images
+
+Léo (à propos de LFM3 1.7B, texte seulement — vérifié dans le registre d'Ollama : capacités completion, tools,
+thinking ; « Text input ») : « à la place d'avoir — mets des croix dans Duels Vision ».
+- `DuelCell` (AllModelsOverview.tsx) : `noVision` → la même croix ✕ que la colonne Vision, avec la même infobulle
+  (`models.vision.none`) — un tel modèle ne peut JAMAIS entrer dans un duel Vision, ce n'est pas « pas encore de
+  duel ». Aussi sur les lignes des futurs modèles. Un modèle qui lit les images garde « — » sans duel.
+- Test (mord) : test-options-reorganization-ui (croix, « — », futurs modèles). Capture à 760 px montrée à Léo.

@@ -176,7 +176,18 @@ function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
 }
 
 /** Points de duel façon Arena (étape 358) : « 0 », « +120 », « -45 » ; « — » pour un modèle jamais passé en duel. */
-function DuelCell({ cell }: { cell: { points: number; duels: number } | undefined }): JSX.Element {
+function DuelCell({ cell, noVision = false }: { cell: { points: number; duels: number } | undefined; noVision?: boolean }): JSX.Element {
+  // Étape 519 (Léo : « à la place d'avoir — mets des croix dans Duels Vision ») : un modèle qui ne lit pas les images ne
+  // peut jamais entrer dans un duel Vision — la même croix que la colonne Vision, pas un « pas encore de duel ».
+  if (noVision) {
+    return (
+      <td className="options-menu__col-num">
+        <span className="options-menu__no-vision" role="img" aria-label={t('models.vision.none')} title={t('models.vision.none')}>
+          ✕
+        </span>
+      </td>
+    )
+  }
   if (!cell) return <td className="options-menu__col-num">—</td>
   const rounded = Math.round(cell.points)
   // Étape 378 : la note passe du rouge (très peu de duels, encore incertaine) au vert (assez de duels pour être sûre).
@@ -428,7 +439,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                 <DuelCell cell={entry.duels?.agent} />
                                 <DuelCell cell={entry.duels?.code} />
                                 {/* Étape 475 : le Duel Vision, seulement pour les modèles qui lisent une image. */}
-                                <DuelCell cell={entry.duels?.vision} />
+                                <DuelCell cell={entry.duels?.vision} noVision={!entry.readsImages} />
                                 <SpeedCell entry={entry} />
                               </tr>
                             ))}
@@ -458,11 +469,12 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={null} />
                                 </td>
-                                {/* Quatre duels (Conversation, Code, Vocal, Vision — étape 475) et la vitesse : une case chacun. */}
+                                {/* Quatre duels (Discussion, Agentique, Code, Vision — étape 475) et la vitesse : une case chacun. Étape 519 :
+                                    une croix en Duels Vision pour un modèle qui ne lit pas les images, comme les autres lignes. */}
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
                                 <td className="options-menu__col-num">—</td>
-                                <td className="options-menu__col-num">—</td>
+                                <DuelCell cell={undefined} noVision={!entry.readsImages} />
                                 <td className="options-menu__col-num">—</td>
                               </tr>
                             ))}
