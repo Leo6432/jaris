@@ -12988,3 +12988,21 @@ l'utilisateur — ChatGPT ne va pas me demander de faire des analyses, c'est par
   chaque utilisateur voie et que le choix des modèles utilise quand ce PC n'a pas fait le test.
 - Tests (mordent) : test-speed-test (contenu du fichier, rien sans mesure), test-options-reorganization-ui (bouton
   présent dès une mesure, absent sans). Capture montrée à Léo.
+
+## Notes — Mode Code : ce qu'il faudra ajouter plus tard (comparaison avec OpenClaude, 23/11/2026)
+
+Léo : « nous vs OpenClaude pour le code », puis « il faut qu'on ajoute après les sous-agents etc… mets dans les notes ».
+OpenClaude (github.com/Gitlawb/openclaude) : agent de code en ligne de commande, issu d'une copie de Claude Code, pour
+modèles du cloud et locaux (Ollama) ; outils bash, lecture/écriture de fichiers, grep, glob, sous-agents, tâches, MCP,
+web. **Rien n'est commencé** ; à faire quand Léo le demandera, dans cet ordre conseillé (du plus sûr au plus risqué) :
+1. **Chercher dans le code** (grep / glob) pour l'agent de dépôt (`repoAgent.ts`, aujourd'hui : list_files, read_file,
+   edit_file, write_file, delete_file, finish) : trouver où une fonction est utilisée sans tout lire. Sans risque.
+2. **Sous-agents** : l'agent de dépôt confie une sous-tâche (chercher, relire, écrire un test) à un second agent avec sa
+   propre mémoire, et ne reçoit que le résultat — utile avec la petite fenêtre de contexte des modèles locaux.
+3. **Liste de tâches** visible pendant un gros travail (ce qui est fait, ce qui reste).
+4. **Outils MCP et recherche web dans le mode Code** (déjà dans le Chat : `mcpHub.ts`, `webSearch.ts`).
+5. **Lancer des commandes** (tests, compilation) — seulement avec l'accord de Léo à chaque commande, dans un dossier
+   isolé, jamais de shell avec une donnée non vérifiée (règle de sécurité de CLAUDE.md).
+6. **Travailler sur un dossier du PC**, pas seulement sur un dépôt GitHub.
+Ce que Jaris a et pas OpenClaude, à garder : interface sans terminal, aperçu en direct des applis générées, rien
+d'enregistré sans le clic « Enregistrer sur GitHub », 100 % local.
