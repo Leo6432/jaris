@@ -150,6 +150,21 @@ const overrides = {
     window.__testedModels = models ?? null
     return new Promise((resolve) => (window.__finishTest = () => resolve({ models: [], resultsPath: 'x' })))
   },
+  // Étape 514 : test de vitesse — deux modèles jamais mesurés (dont un à télécharger), un déjà mesuré.
+  getSpeedTestModels: async () => window.__speedModels ?? [
+    { model: 'lfm3:1.7b', sizeGb: 1.2, installed: true, speed: 182.2, testedAt: '2026-11-23T10:00:00Z' },
+    { model: 'qwen3.5:4b', sizeGb: 3.4, installed: true, speed: null, testedAt: null },
+    { model: 'gemma4:12b', sizeGb: 8.1, installed: false, speed: null, testedAt: null }
+  ],
+  runSpeedTest: (models) => {
+    window.__speedTested = models
+    return new Promise((resolve) => (window.__finishSpeed = (result) => resolve(result ?? { tested: models.length })))
+  },
+  stopSpeedTest: async () => { window.__speedStopped = true },
+  onSpeedTestEvent: (cb) => {
+    window.__speedEvent = cb
+    return () => {}
+  },
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
@@ -719,49 +734,49 @@ test('« Retester la configuration » : la même barre et la taille que l’écr
 test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le test modèle par modèle', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
-    await page.waitForSelector('.options-menu__unscored')
-    const title = await page.textContent('.options-menu__unscored-title')
+    await page.waitForSelector('.options-menu__unscored:not(.options-menu__speed-test)')
+    const title = await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-title')
     assert.match(title, /\(2\)/)
     // Étape 431 : chaque modèle dit ce qui lui manque.
-    const list = await page.locator('.options-menu__unscored-list li').allTextContents()
+    const list = await page.locator('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-list li').allTextContents()
     assert.equal(list.length, 2)
     // Étape 433 : avec sa durée estimée (arrondie aux 5 min au-delà de 10 min), puis le total.
     assert.match(list[0], /qwen2\.5-coder:14b.* : outils, vision — environ 1 h 35$/i)
     assert.match(list[1], /lightning.* : outils \(quelques questions à refaire\) — environ 7 min$/i)
-    assert.match(await page.textContent('.options-menu__unscored-total'), /^Durée estimée en tout : environ 1 h 40, sans les téléchargements/)
+    assert.match(await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-total'), /^Durée estimée en tout : environ 1 h 40, sans les téléchargements/)
 
     // Rien ne démarre avant la confirmation, et Annuler ne lance rien.
-    await page.click('.options-menu__unscored button:has-text("Tester ces modèles")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Tester ces modèles")')
     // Étape 230 : la durée réelle (plusieurs heures) et la reprise après coupure sont annoncées AVANT de lancer.
-    const confirm = await page.textContent('.options-menu__unscored-confirm')
+    const confirm = await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-confirm')
     assert.match(confirm, /plusieurs heures/)
     assert.match(confirm, /40 demandes complètes, dont 8 rejouées/)
     assert.match(confirm, /Microsoft Edge/)
     assert.match(confirm, /reprend/)
-    await page.click('.options-menu__unscored button:has-text("Annuler")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Annuler")')
     assert.equal(await page.evaluate(() => window.__testCalls ?? 0), 0)
 
-    await page.click('.options-menu__unscored button:has-text("Tester ces modèles")')
-    await page.click('.options-menu__unscored button:has-text("Lancer le test")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Tester ces modèles")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Lancer le test")')
     await page.waitForFunction(() => window.__testCalls === 1 && typeof window.__benchLine === 'function')
     await page.evaluate(() => {
       window.__benchLine('##PULL_MODEL_PROGRESS## nemotron-3.5-lightning:30b 40')
       window.__benchLine('##PROGRESS## 5 10')
     })
-    await page.waitForSelector('.options-menu__unscored .options-menu__progress-label:has-text("40 %")')
-    const width = await page.$eval('.options-menu__unscored .options-menu__progress-bar-fill', (el) => el.style.width)
+    await page.waitForSelector('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__progress-label:has-text("40 %")')
+    const width = await page.$eval('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__progress-bar-fill', (el) => el.style.width)
     assert.equal(width, '50%')
     await page.evaluate(() => {
       window.__benchLine('##MODEL_DONE## nemotron-3.5-lightning:30b 76 78')
       window.__benchLine('##MODEL_SKIPPED## qwen2.5-coder:14b téléchargement impossible : pull model manifest: file does not exist')
       window.__finishTest()
     })
-    await page.waitForSelector('.options-menu__unscored button:has-text("Ouvrir le fichier des résultats")')
-    const results = await page.textContent('.options-menu__unscored-results')
+    await page.waitForSelector('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Ouvrir le fichier des résultats")')
+    const results = await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-results')
     assert.match(results, /76\/78/)
     assert.match(results, /sauté — téléchargement impossible : pull model manifest: file does not exist/)
     // Habillé par le CSS de Jaris (carte), pas du texte nu.
-    assert.equal(await page.$eval('.options-menu__unscored', (el) => getComputedStyle(el).borderStyle), 'solid')
+    assert.equal(await page.$eval('.options-menu__unscored:not(.options-menu__speed-test)', (el) => getComputedStyle(el).borderStyle), 'solid')
     assert.equal(await page.evaluate(() => window.__testedModels), null, '« Tout tester » : aucune sélection envoyée')
   })
 })
@@ -771,32 +786,107 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
 test('« Choisir les modèles » : cases à cocher avec la durée, total de la sélection, seule la sélection est testée', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
-    await page.waitForSelector('.options-menu__unscored')
-    const modes = page.locator('.options-menu__unscored-mode [role="radio"]')
+    await page.waitForSelector('.options-menu__unscored:not(.options-menu__speed-test)')
+    const modes = page.locator('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-mode [role="radio"]')
     assert.deepEqual(await modes.allTextContents(), ['Tout tester', 'Choisir les modèles'])
-    assert.equal(await page.getAttribute('.options-menu__unscored-mode [role="radio"]:has-text("Tout tester")', 'aria-checked'), 'true', 'par défaut : tout, comme avant')
-    await page.click('.options-menu__unscored-mode [role="radio"]:has-text("Choisir les modèles")')
+    assert.equal(await page.getAttribute('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-mode [role="radio"]:has-text("Tout tester")', 'aria-checked'), 'true', 'par défaut : tout, comme avant')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-mode [role="radio"]:has-text("Choisir les modèles")')
 
-    const picks = page.locator('.options-menu__unscored-picks [role="checkbox"]')
+    const picks = page.locator('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-picks [role="checkbox"]')
     assert.equal(await picks.count(), 2)
     assert.match(await picks.nth(0).textContent(), /qwen2\.5-coder:14b.*outils, vision — environ 1 h 35/i)
-    assert.equal(await page.locator('.options-menu__unscored-picks [aria-checked="true"]').count(), 0, 'rien de coché au départ')
-    assert.match(await page.textContent('.options-menu__unscored-total'), /^Modèles choisis : 0$/)
-    assert.equal(await page.isDisabled('.options-menu__unscored button:has-text("Tester la sélection")'), true, 'rien de coché : rien à lancer')
+    assert.equal(await page.locator('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-picks [aria-checked="true"]').count(), 0, 'rien de coché au départ')
+    assert.match(await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-total'), /^Modèles choisis : 0$/)
+    assert.equal(await page.isDisabled('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Tester la sélection")'), true, 'rien de coché : rien à lancer')
 
     // Peu de temps : seulement le petit.
     await picks.nth(1).click()
     assert.equal(await picks.nth(1).getAttribute('aria-checked'), 'true')
-    assert.match(await page.textContent('.options-menu__unscored-total'), /^Modèles choisis : 1 — environ 7 min$/)
+    assert.match(await page.textContent('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-total'), /^Modèles choisis : 1 — environ 7 min$/)
     // Les cases du duel, habillées par le CSS de Jaris (pas des boutons nus du navigateur).
     assert.equal(await picks.nth(1).evaluate((el) => getComputedStyle(el.querySelector('.duel-pick__box')).borderStyle), 'solid')
 
-    await page.click('.options-menu__unscored button:has-text("Tester la sélection")')
-    await page.click('.options-menu__unscored button:has-text("Lancer le test")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Tester la sélection")')
+    await page.click('.options-menu__unscored:not(.options-menu__speed-test) button:has-text("Lancer le test")')
     await page.waitForFunction(() => Array.isArray(window.__testedModels))
     assert.deepEqual(await page.evaluate(() => window.__testedModels), ['nemotron-3.5-lightning:30b'])
     await page.evaluate(() => window.__finishTest())
   })
+})
+
+// Étape 514 (Léo : « un bouton pour tester la vitesse de tous les modèles, choisir ceux que je veux ou tout, les mêmes
+// questions pour tout le monde… comme l'analyse »).
+test('test de vitesse : les modèles jamais mesurés, la taille à télécharger, puis le suivi modèle par modèle', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-menu__speed-test')
+    const box = '.options-menu__speed-test'
+    assert.match(await page.textContent(`${box} .options-menu__unscored-title`), /^Vitesse à mesurer \(2\) :$/)
+    const lines = await page.locator(`${box} .options-menu__unscored-list li`).allTextContents()
+    assert.equal(lines.length, 2, 'seulement les modèles jamais mesurés')
+    assert.match(lines[0], /qwen3\.5:4b.*installé/)
+    assert.match(lines[1], /gemma4:12b.*à télécharger \(≈ 8,1 Go\)/)
+    assert.match(await page.textContent(`${box} .options-menu__unscored-total`), /^Modèles choisis : 2 — 8,1 Go à télécharger$/)
+    assert.match(await page.textContent(box), /les 3 mêmes questions, avec les mêmes réglages/)
+    // Trouvable : le bouton est là, avec son nom.
+    await page.click(`${box} button:has-text("Tester la vitesse")`)
+    assert.match(await page.textContent(`${box} .options-menu__unscored-confirm`), /téléchargés \(≈ 8,1 Go\), puis supprimés après le test/)
+    await page.click(`${box} button:has-text("Lancer le test")`)
+    await page.waitForFunction(() => Array.isArray(window.__speedTested))
+    assert.deepEqual(await page.evaluate(() => window.__speedTested), ['qwen3.5:4b', 'gemma4:12b'])
+    await page.evaluate(() => {
+      window.__speedEvent({ type: 'progress', done: 0, total: 2 })
+      window.__speedEvent({ type: 'measuring', model: 'qwen3.5:4b', question: 2, total: 3 })
+    })
+    assert.match(await page.textContent(`${box} .options-menu__progress-label`), /^Mesure de qwen3\.5:4b : question 2 sur 3…$/)
+    await page.evaluate(() => {
+      window.__speedEvent({ type: 'done', model: 'qwen3.5:4b', speed: 61.25 })
+      window.__speedEvent({ type: 'downloading', model: 'gemma4:12b', percent: 42 })
+    })
+    assert.match(await page.textContent(`${box} .options-menu__progress-label`), /^Téléchargement de gemma4:12b… 42 %$/)
+    await page.evaluate(() => window.__speedEvent({ type: 'skipped', model: 'gemma4:12b', reason: 'trop gros pour ce PC' }))
+    const results = await page.locator(`${box} .options-menu__unscored-results li`).allTextContents()
+    assert.deepEqual(results, ['qwen3.5:4b : 61,3 tokens/s', 'gemma4:12b : sauté — trop gros pour ce PC'])
+    // Arrêt possible pendant tout le test.
+    await page.click(`${box} button:has-text("Arrêter le test")`)
+    await page.waitForFunction(() => window.__speedStopped === true)
+    await page.evaluate(() => window.__finishSpeed({ tested: 1, stopped: true }))
+    await page.waitForSelector(`${box} button:has-text("Nouveau test")`)
+    assert.match(await page.textContent(`${box} .options-menu__progress-label`), /^Test de vitesse arrêté/)
+  })
+})
+
+test('test de vitesse : « Choisir » coche n’importe quel modèle, même déjà mesuré, pour le remesurer', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    const box = '.options-menu__speed-test'
+    await page.waitForSelector(box)
+    await page.click(`${box} [role="radio"]:has-text("Choisir les modèles")`)
+    const picks = page.locator(`${box} .options-menu__unscored-picks [role="checkbox"]`)
+    assert.equal(await picks.count(), 3, 'tous les modèles, mesurés compris')
+    assert.match(await picks.nth(0).textContent(), /lfm3:1\.7b.*installé · 182,2 tokens\/s/)
+    assert.equal(await page.isDisabled(`${box} button:has-text("Tester la vitesse")`), true, 'rien de coché : rien à lancer')
+    await picks.nth(0).click()
+    assert.match(await page.textContent(`${box} .options-menu__unscored-total`), /^Modèles choisis : 1$/)
+    await page.click(`${box} button:has-text("Tester la vitesse")`)
+    await page.click(`${box} button:has-text("Lancer le test")`)
+    await page.waitForFunction(() => Array.isArray(window.__speedTested))
+    assert.deepEqual(await page.evaluate(() => window.__speedTested), ['lfm3:1.7b'])
+    await page.evaluate(() => window.__finishSpeed())
+    await page.waitForSelector(`${box} button:has-text("Nouveau test")`)
+    assert.equal(await page.textContent(`${box} .options-menu__progress-label`), 'Test de vitesse terminé.')
+  })
+})
+
+test('test de vitesse : tout est mesuré → seulement « Choisir », jamais une liste vide', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    const box = '.options-menu__speed-test'
+    await page.waitForSelector(box)
+    assert.equal(await page.locator(`${box} [role="radio"]`).count(), 0)
+    assert.equal(await page.locator(`${box} .options-menu__unscored-picks [role="checkbox"]`).count(), 1)
+    assert.match(await page.textContent(`${box} .options-menu__unscored-title`), /tous les modèles sont mesurés/)
+  }, "window.__speedModels = [{ model: 'lfm3:1.7b', sizeGb: 1.2, installed: true, speed: 182.2, testedAt: 'x' }]")
 })
 
 // Léo, étape 129, sur la première version où SEULS les titres de colonne étaient cliquables : "je voit pas

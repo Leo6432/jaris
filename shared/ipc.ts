@@ -384,6 +384,26 @@ export interface CapacityScanResult {
  * additionnées), pour la barre de progression de la configuration (CapacityScan.tsx). `null` = ce téléchargement
  * est fini (réussi ou non) : la barre disparaît.
  */
+/**
+ * Étape 514 : un modèle proposé au test de vitesse (speedTest.ts) — taille approximative (poids), déjà téléchargé ou
+ * non, et sa vitesse actuelle sur ce PC (`null` si jamais testé).
+ */
+export interface SpeedTestModel {
+  model: string
+  sizeGb: number
+  installed: boolean
+  speed: number | null
+  testedAt: string | null
+}
+
+/** Étape 514 : l'avancement du test de vitesse, au fil de l'eau. */
+export type SpeedTestEvent =
+  | { type: 'progress'; done: number; total: number }
+  | { type: 'downloading'; model: string; percent: number }
+  | { type: 'measuring'; model: string; question: number; total: number }
+  | { type: 'done'; model: string; speed: number }
+  | { type: 'skipped'; model: string; reason: string }
+
 export interface ModelPullProgress {
   model: string
   completed: number
@@ -471,8 +491,8 @@ export interface ModelOverviewEntry {
    */
   demands?: string | null
   /**
-   * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen, mesurée à la
-   * fin de chaque réponse (`localSpeedKind` = `measured`). `null` si elle n'a pas encore été mesurée ici. Étape 498 :
+   * Étape 367 : vitesse (tokens/s) de ce modèle sur CE PC — celle qui sert au choix de Faible et Moyen, mesurée par le
+   * test de vitesse depuis l'étape 514 (`localSpeedKind` = `measured`). `null` si elle n'a pas encore été mesurée ici. Étape 498 :
    * plus aucune mesure publiée (Artificial Analysis : intelligence, vitesse, Omniscience, Terminal-Bench) dans Jaris.
    * Voir shared/localSpeed.ts.
    */
@@ -1360,6 +1380,11 @@ export const IPC_CHANNELS = {
   stopUnscoredTest: 'jaris:stop-unscored-test',
   /** renderer -> main : montre le fichier de résultats de ce test dans l'Explorateur. */
   showUnscoredResults: 'jaris:show-unscored-results',
+  /** Étape 514 : test de vitesse — modèles proposés, lancement (résout à la fin), arrêt, avancement (main -> renderer). */
+  getSpeedTestModels: 'jaris:get-speed-test-models',
+  runSpeedTest: 'jaris:run-speed-test',
+  stopSpeedTest: 'jaris:stop-speed-test',
+  speedTestEvent: 'jaris:speed-test-event',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
   /** main -> renderer : octets reçus d'un modèle en cours de téléchargement (ModelPullProgress), `null` à la fin. */

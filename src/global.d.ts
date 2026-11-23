@@ -54,6 +54,8 @@ import type {
   WakeTestHeardPayload,
   ModelOverviewResult,
   ModelToTest,
+  SpeedTestEvent,
+  SpeedTestModel,
   ModelsLocationStatus,
   OllamaVersionStatus,
   PickedImageFile,
@@ -144,6 +146,10 @@ declare global {
       stopUnscoredTest: () => Promise<void>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
+      getSpeedTestModels: () => Promise<SpeedTestModel[]>
+      runSpeedTest: (models: string[]) => Promise<{ tested: number; stopped?: boolean }>
+      stopSpeedTest: () => Promise<void>
+      onSpeedTestEvent: (cb: (event: SpeedTestEvent) => void) => () => void
       onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>

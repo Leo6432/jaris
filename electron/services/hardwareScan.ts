@@ -597,6 +597,11 @@ export function modelCategory(vramGb: number): ModelCategory {
  * depuis (nouvelle version de Jaris) et prévenir l'utilisateur au lieu d'attendre qu'il relance l'analyse
  * de lui-même.
  */
+/** Étape 514 : chaque modèle de Jaris et sa taille approximative (poids), pour le test de vitesse. */
+export function getAllCandidateSizes(): { model: string; sizeGb: number }[] {
+  return ALL_MODELS.map((c) => ({ model: c.model, sizeGb: c.vramGb }))
+}
+
 export function getAllCandidateModelIds(): string[] {
   return ALL_MODELS.map((c) => c.model)
 }

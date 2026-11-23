@@ -3,6 +3,7 @@ import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
+import SpeedTest from './SpeedTest'
 import { filterModels } from '../lib/filterModels'
 import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
@@ -289,6 +290,8 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
   const [query, setQuery] = useState('')
   // La liste illisible (Ollama, fichier de scores…) se dit avec son vrai message, au lieu d'une page vide.
   const [error, setError] = useState<string | null>(null)
+  // Étape 514 : relu après un test de vitesse (colonne « Vitesse sur ton PC »).
+  const [refresh, setRefresh] = useState(0)
 
   useEffect(() => {
     if (!active) return
@@ -309,7 +312,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
     return () => {
       cancelled = true
     }
-  }, [active])
+  }, [active, refresh])
 
   const toggleSort = (key: SortKey): void => {
     setSort((current) => {
@@ -343,6 +346,7 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                   )}
 
                   {overview && <UnscoredModelsTest />}
+                  {overview && <SpeedTest onTested={() => setRefresh((n) => n + 1)} />}
                   {overview && (
                     <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} query={query} onQuery={setQuery} />
                   )}

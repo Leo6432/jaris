@@ -12918,3 +12918,56 @@ download model from Supertone/supertonic-3 … Error: Cannot call rmtree on a sy
 - Même message de Léo : une demande « Write a short email to Alex for Friday off » (canal chat, 22/11 19:50) qu'il dit
   ne pas avoir faite — pas une transcription de la voix (canal « chat », pas « voix »), introuvable dans le code de
   Jaris. Question posée à Léo (Chat ou téléphone).
+
+## Étape 514 — Test de vitesse : les mêmes questions pour tous les modèles, fini les mesures d'usage
+
+Léo : « tu peux ajouter un bouton pour que je teste la vitesse de tous les modèles ? et pouvoir choisir les modèles
+que je veux ou tout, et c'est les mêmes questions pour tout le monde, car si on fait comme LFM chaque modèle ne va pas
+avoir les mêmes questions, ça veut dire enlève, et on va faire un peu comme l'analyse mais pour la vitesse ». Questions à
+choix : « Tous, même à télécharger » ; anciennes mesures : « la vitesse ne vient QUE du test » ; bouton « comme dans
+l'analyse quand on a un nouveau modèle ».
+- Avant : la vitesse (colonne « Vitesse sur ton PC », choix de Faible et Moyen) était la médiane des 10 dernières
+  réponses de l'usage (étape 367) : des questions et des longueurs différentes pour chaque modèle (182,2 pour LFM3 =
+  ses réponses du Chat et de la voix), donc pas comparables.
+- `shared/localSpeed.ts` : SPEED_TEST_PROMPTS (3 questions longues en français, figées), SPEED_TEST_OPTIONS
+  (température 0, seed 42, 256 tokens, fenêtre 16384 = celle des conversations), `think: false`, SPEED_TEST_VERSION
+  (un fichier d'une autre version n'est pas relu). Ne jamais changer questions ni réglages sans remesurer tout le monde.
+- `electron/services/speedTest.ts` : sur CE PC (runWithLocalOllama), tous les modèles déchargés d'abord ; pour chaque
+  modèle choisi (seulement des modèles de Jaris, revérifié côté main) : téléchargé s'il manque (pullModelIfMissing :
+  trop gros / disque plein = sauté avec le vrai message), chargé (preloadModel, jamais compté), 3 questions en flux
+  avec chien de garde d'inactivité (180 s), vitesse = médiane des eval_count/eval_duration, enregistrée tout de suite,
+  modèle déchargé, puis supprimé s'il a été téléchargé pour le test et ne sert à aucun rôle (profil). « think » refusé
+  = même question sans lui. Arrêt : la question en cours est abandonnée, rien d'enregistré pour ce modèle. Jamais en
+  même temps que le test des modèles (refus des deux côtés, main.ts) ; arrêté à « Déplacer » et à la fermeture.
+- `speedStore.ts` : même fichier `model-speeds.json` (OWNED_ENTRIES inchangé), format `{version, results:{modèle:
+  {speed, testedAt}}}` ; l'ancien format (mesures d'usage) est remplacé par un fichier vide au premier démarrage.
+  `ollama.ts`/`main.ts` : plus aucune vitesse enregistrée pendant l'usage (speedRecorder retiré).
+- Écran (`SpeedTest.tsx`, Classement, sous « Tester ces modèles », mêmes classes) : « Vitesse à mesurer (N) » avec les
+  modèles jamais mesurés (installé / à télécharger ≈ X Go) ; « Choisir les modèles » coche n'importe lequel, mesurés
+  compris (vitesse actuelle affichée) ; total à télécharger ; confirmation (téléchargé puis supprimé ; ne pas utiliser
+  Jaris ni un jeu pendant le test) ; progression « Téléchargement de X… 42 % » / « Mesure de X : question 2 sur 3… » ;
+  résultats « X : 61,3 tokens/s » ou « sauté — raison » ; « Arrêter le test » ; le tableau se relit à la fin.
+  25 textes en 24 langues.
+- Tests (mordent) : test-speed-test (mêmes questions et réglages pour tous, médiane, téléchargé puis supprimé sauf s'il
+  sert, trop gros sauté, nom étranger ignoré, « think » refusé, arrêt, double lancement, inactivité),
+  test-local-speed (format, ancien fichier effacé, plus de mesure d'usage), test-options-reorganization-ui (3 tests
+  d'écran). Non vérifié en usage réel : pas de Windows ni de carte graphique ici.
+- Captures montrées à Léo (760 px : liste, « Choisir les modèles », pendant le test) : « je valide » — en précisant que
+  la vraie liste contient TOUS les modèles sans vitesse (les captures n'en montraient que deux, exemples du test).
+
+## Étape 515 — Version Store : « EXDEV: cross-device link not permitted » à l'enregistrement du prénom
+
+Capture de Léo (version Store, écran de bienvenue, prénom saisi) : « EXDEV: cross-device link not permitted, rename
+'C:\Users\happy\AppData\Roaming\jaris\profile.json.tmp' -> '…\profile.json' ».
+- Cause : appli empaquetée (MSIX) — Windows range tout NOUVEAU fichier d'AppData dans un dossier privé du paquet, alors
+  que le fichier déjà présent (écrit par l'ancien Jaris hors Store) reste dans le vrai AppData. Le temporaire
+  (atomicFile.ts : écrire à côté puis remplacer d'un seul geste) et le fichier sont alors vus sur deux « emplacements »
+  différents : le renommage est refusé en EXDEV. Même famille que l'étape 491 (écritures HKCU virtualisées).
+- Correctif (`atomicFile.ts`, `isCrossDeviceError`) : seulement sur EXDEV, le temporaire est RECOPIÉ sur le fichier
+  (Windows en fait lui-même la copie privée), puis effacé — en asynchrone (magasins) comme en synchrone (repères au
+  démarrage). Toute autre erreur et tous les autres cas : remplacement d'un seul geste, inchangé.
+- Tests (mordent) : test-data-files, EXDEV simulé en asynchrone et en synchrone : contenu écrit, aucun temporaire
+  laissé. Non vérifié en usage réel (pas de Windows ici).
+- Question ouverte : la version Store devrait ranger ses données dans %USERPROFILE%\Jaris (étape 491), pas dans
+  AppData\Roaming\jaris ; ici le profil y était encore — sans doute un repère ou des données de l'ancien Jaris relus
+  (étape 496). À regarder si d'autres fichiers d'AppData posent problème.

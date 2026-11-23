@@ -20,21 +20,25 @@ import { loadTsModule } from './load-ts-module.mjs'
  */
 const speed = loadTsModule('shared/localSpeed.ts')
 
-test('une réponse trop courte ou sans durée ne mesure rien', () => {
-  assert.equal(speed.sampleSpeed(10, 1000), null)
-  assert.equal(speed.sampleSpeed(100, 0), null)
-  assert.equal(speed.sampleSpeed(undefined, 1000), null)
-  assert.equal(speed.sampleSpeed(100, 2000), 50)
+test('étape 514 : la vitesse d’une réponse du test (eval_count / eval_duration en nanosecondes) ; trop courte = rien', () => {
+  assert.equal(speed.speedOfAnswer(10, 1e9), null)
+  assert.equal(speed.speedOfAnswer(100, 0), null)
+  assert.equal(speed.speedOfAnswer(undefined, 1e9), null)
+  assert.equal(speed.speedOfAnswer(100, 2e9), 50)
 })
 
-test('les 10 dernières mesures, la médiane : une mesure faussée ne compte pas', () => {
-  let samples = {}
-  for (let i = 0; i < 12; i++) samples = speed.addSpeedSample(samples, 'm:latest', 40)
-  samples = speed.addSpeedSample(samples, 'm', 2) // un autre modèle occupait la carte
-  assert.equal(samples.m.length, 10, 'jamais plus de 10 mesures, et « :latest » = sans tag')
-  assert.equal(speed.measuredSpeeds(samples).m, 40)
-  assert.deepEqual(speed.parseSpeedSamples({ m: [40, 'x', -3, 41], vide: [] }), { m: [40, 41] })
-  assert.equal(speed.parseSpeedSamples([1, 2]), null)
+test('étape 514 : les mêmes questions et réglages pour tous — pas de hasard, pas de réflexion cachée', () => {
+  assert.equal(speed.SPEED_TEST_PROMPTS.length, 3)
+  assert.deepEqual({ ...speed.SPEED_TEST_OPTIONS }, { temperature: 0, seed: 42, num_predict: 256, num_ctx: 16384 })
+})
+
+test('étape 514 : seul le fichier du test (version actuelle) est relu — jamais les anciennes mesures d’usage', () => {
+  const ok = { version: speed.SPEED_TEST_VERSION, results: { 'm:latest': { speed: 40, testedAt: 't' }, bad: { speed: -1, testedAt: 't' }, nodate: { speed: 3 } } }
+  assert.deepEqual(speed.parseSpeedTestFile(ok), { m: { speed: 40, testedAt: 't' } }, '« :latest » = sans tag ; valeurs invalides ignorées')
+  assert.equal(speed.parseSpeedTestFile({ m: [40, 41] }), null, 'ancien format (étape 367) : ignoré')
+  assert.equal(speed.parseSpeedTestFile({ version: 999, results: {} }), null, 'autre version des questions : pas comparable')
+  assert.equal(speed.parseSpeedTestFile([1, 2]), null)
+  assert.deepEqual(speed.speedsOf({ a: { speed: 12, testedAt: 't' } }), { a: 12 })
 })
 
 test('vitesse retenue : mesurée sur ce PC, sinon inconnue — jamais une vitesse venue d’ailleurs (étape 498)', () => {
@@ -45,8 +49,10 @@ test('vitesse retenue : mesurée sur ce PC, sinon inconnue — jamais une vitess
   assert.equal(speed.localToPublishedRatio, undefined, 'plus de rapport avec une vitesse publiée')
 })
 
-test('le magasin garde les mesures sur le disque et les relit après un redémarrage', async () => {
+test('étape 514 : le magasin garde les vitesses du test ; l’ancien fichier de mesures d’usage est effacé au démarrage', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'jaris-speed-'))
+  const file = path.join(root, 'model-speeds.json')
+  fs.writeFileSync(file, JSON.stringify({ 'lfm3:1.7b': [182.2, 190] }))
   const nodeModules = { fs, 'fs/promises': fsp, path }
   const load = () => {
     const atomic = loadTsModule('electron/services/atomicFile.ts', nodeModules)
@@ -59,64 +65,20 @@ test('le magasin garde les mesures sur le disque et les relit après un redémar
   }
   const store = load()
   await store.loadModelSpeeds()
-  await store.recordModelSpeed('qwen3.5:4b', 300, 10_000)
-  await store.recordModelSpeed('qwen3.5:4b', 5, 100) // trop courte
-  assert.deepEqual(store.getMeasuredSpeeds(), { 'qwen3.5:4b': 30 })
-  assert.deepEqual(JSON.parse(readFileSync(path.join(root, 'model-speeds.json'), 'utf8')), { 'qwen3.5:4b': [30] })
+  assert.deepEqual(store.getMeasuredSpeeds(), {}, 'anciennes mesures (questions différentes) : jamais relues')
+  assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { version: speed.SPEED_TEST_VERSION, results: {} }, 'et effacées')
+  await store.saveSpeedResult('qwen3.5:4b', 61.5, '2026-11-23T10:00:00.000Z')
+  assert.deepEqual(store.getMeasuredSpeeds(), { 'qwen3.5:4b': 61.5 })
   const after = load()
   await after.loadModelSpeeds()
-  assert.deepEqual(after.getMeasuredSpeeds(), { 'qwen3.5:4b': 30 })
+  assert.deepEqual(after.getSpeedResults(), { 'qwen3.5:4b': { speed: 61.5, testedAt: '2026-11-23T10:00:00.000Z' } })
 })
 
-test('chaque réponse d’Ollama donne sa vitesse (modèle, tokens écrits, durée)', async () => {
-  const realFetch = globalThis.fetch
-  globalThis.fetch = async (url) => {
-    if (String(url).endsWith('/api/show')) return new Response('{}', { status: 200 })
-    const line = { message: { role: 'assistant', content: 'ok' }, done: true, eval_count: 120, eval_duration: 3e9 }
-    return new Response(JSON.stringify(line) + '\n', { status: 200 })
-  }
-  try {
-    const ollama = loadTsModule('electron/services/ollama.ts', {
-      '../config': { config: { ollama: { host: 'http://ollama.test', model: 'x', numCtx: 8192 } } },
-      '../../shared/effort': { parseModelThinking: () => null },
-      './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
-      './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
-    })
-    const seen = []
-    ollama.setSpeedRecorder((model, tokens, ms) => seen.push([model, tokens, ms]))
-    await ollama.chatWithOllama([{ role: 'user', content: 'salut' }], undefined, 'qwen3.5:4b', 'low')
-    await ollama.chatWithOllama([{ role: 'user', content: 'salut' }], undefined, 'qwen3.5:4b', 'low', undefined, () => {})
-    assert.deepEqual(seen, [['qwen3.5:4b', 120, 3000], ['qwen3.5:4b', 120, 3000]], 'sans relais et en relais')
-    ollama.setSpeedRecorder(() => {
-      throw new Error('disque plein')
-    })
-    assert.equal((await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'qwen3.5:4b', 'low')).content, 'ok', 'une mesure perdue ne fait jamais échouer une réponse')
-  } finally {
-    globalThis.fetch = realFetch
-  }
-})
-
-test('étape 377 : une réponse d’un Ollama d’une autre machine (duel sur une carte louée) ne mesure rien pour CE PC', async () => {
-  const realFetch = globalThis.fetch
-  globalThis.fetch = async (url) => {
-    if (String(url).endsWith('/api/show')) return new Response('{}', { status: 200 })
-    const line = { message: { role: 'assistant', content: 'ok' }, done: true, eval_count: 120, eval_duration: 3e9 }
-    return new Response(JSON.stringify(line) + '\n', { status: 200 })
-  }
-  try {
-    const ollama = loadTsModule('electron/services/ollama.ts', {
-      '../config': { config: { ollama: { host: 'https://pod-11434.proxy.runpod.net', model: 'x', numCtx: 8192, remote: true } } },
-      '../../shared/effort': { parseModelThinking: () => null },
-      './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => null, getDownloadBudgetGb: async () => null },
-      './huggingFaceImport': { importHuggingFaceModel: async () => undefined }
-    })
-    const seen = []
-    ollama.setSpeedRecorder((model, tokens, ms) => seen.push([model, tokens, ms]))
-    await ollama.chatWithOllama([{ role: 'user', content: 'salut' }], undefined, 'qwen3.5:4b', 'low', undefined, () => {})
-    assert.deepEqual(seen, [])
-  } finally {
-    globalThis.fetch = realFetch
-  }
+test('étape 514 : plus aucune vitesse enregistrée pendant l’usage (des questions différentes pour chaque modèle)', () => {
+  const ollama = readFileSync(new URL('../electron/services/ollama.ts', import.meta.url), 'utf8')
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(ollama, /speedRecorder|setSpeedRecorder/)
+  assert.doesNotMatch(main, /setSpeedRecorder|recordModelSpeed/)
 })
 
 // Choix des modèles, sur les VRAIS scores du dépôt et la machine de Léo (8 Go, 32 Go).

@@ -28,7 +28,7 @@ const errno = (code) => Object.assign(new Error(`${code}: simulé`), { code })
  * prochaine écriture ouverte n'écrit que la moitié du contenu, puis échoue : une coupure de courant).
  */
 function faultyFsPromises() {
-  const faults = { busy: new Set(), refuseRename: new Map(), cutWrite: false }
+  const faults = { busy: new Set(), refuseRename: new Map(), cutWrite: false, crossDevice: new Set() }
   const fsPromises = {
     ...realFsPromises,
     readFile: async (path, ...rest) => {
@@ -36,6 +36,8 @@ function faultyFsPromises() {
       return realFsPromises.readFile(path, ...rest)
     },
     rename: async (from, to) => {
+      // Étape 515 : version Store (MSIX), le temporaire neuf et le fichier déjà là ne sont pas au même « endroit ».
+      if (faults.crossDevice.has(to)) throw errno('EXDEV')
       const left = faults.refuseRename.get(to) ?? 0
       if (left > 0) {
         faults.refuseRename.set(to, left - 1)
@@ -131,6 +133,34 @@ test('écriture d’un seul tenant : un renommage refusé un instant est réessa
   await assert.rejects(atomicFile.writeFileAtomic(file, '[2]'), /EPERM/)
   assert.equal(readFileSync(file, 'utf8'), '[1]', 'un remplacement refusé a touché le fichier')
   assert.deepEqual(readdirSync(dir), ['reminders.json'], 'temporaire laissé derrière')
+})
+
+// Étape 515 (capture de Léo, version Store : « EXDEV: cross-device link not permitted, rename …profile.json.tmp ->
+// …profile.json » sur l'écran de bienvenue) : le prénom n'était jamais enregistré.
+test('version Store : un remplacement refusé en EXDEV (AppData virtualisé) recopie le contenu, sans temporaire qui traîne', async (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'profile.json')
+  const { faults, fsPromises } = faultyFsPromises()
+  const atomicFile = loadAtomicFile(fsPromises)
+  writeFileSync(file, '{"name":"ancien"}')
+  faults.crossDevice.add(file)
+  await atomicFile.writeFileAtomic(file, '{"name":"Tom"}')
+  assert.equal(readFileSync(file, 'utf8'), '{"name":"Tom"}')
+  assert.deepEqual(readdirSync(dir), ['profile.json'], 'temporaire laissé derrière')
+})
+
+test('version Store : même chose pour l’écriture synchrone (repère d’emplacement, au démarrage)', (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'storage-location.json')
+  writeFileSync(file, '{}')
+  const atomicFile = loadTsModule('electron/services/atomicFile.ts', {
+    fs: { ...realFs, renameSync: () => { throw errno('EXDEV') } },
+    'fs/promises': realFsPromises,
+    path: nodePath
+  })
+  atomicFile.writeFileAtomicSync(file, '{"root":"C:\\\\Users\\\\x\\\\Jaris"}', { sleep: () => {} })
+  assert.equal(readFileSync(file, 'utf8'), '{"root":"C:\\\\Users\\\\x\\\\Jaris"}')
+  assert.deepEqual(readdirSync(dir), ['storage-location.json'])
 })
 
 test('écritures simultanées d’un même fichier : l’une après l’autre, la dernière demandée reste, jamais un mélange', async (t) => {

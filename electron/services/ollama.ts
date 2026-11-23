@@ -59,13 +59,6 @@ export interface ChatMetrics {
 }
 
 /**
- * Étape 367 : chaque réponse donne la vitesse du modèle sur ce PC (tokens par seconde). Branché par main.ts
- * (speedStore.ts) plutôt qu'importé, comme les autres sources de ce genre : ce module est chargé par beaucoup de tests.
- */
-export type SpeedRecorder = (model: string, outputTokens: number | undefined, outputMs: number | undefined) => void
-let speedRecorder: SpeedRecorder | null = null
-
-/**
  * Étape 389 : Ollama n'envoie les en-têtes d'une réponse qu'avec son PREMIER fragment. Une demande qui attend son tour
  * (modèle en cours de chargement, toutes les places parallèles prises — 6 modèles sur une seule carte pendant une série
  * de duels) ne reçoit donc rien pendant de longues minutes, et le fetch de Node l'abandonnait au bout de 5 minutes
@@ -76,17 +69,10 @@ let chatDispatcher: object | undefined
 export function setChatDispatcher(dispatcher: object | undefined): void {
   chatDispatcher = dispatcher
 }
-export function setSpeedRecorder(recorder: SpeedRecorder | null): void {
-  speedRecorder = recorder
-}
 
-function reportMetrics(model: string, metrics: ChatMetrics, onMetrics?: (metrics: ChatMetrics) => void): void {
-  try {
-    // Étape 377 : une réponse d'une autre machine (duel sur une carte louée) ne dit rien de la vitesse de CE PC.
-    if (!config.ollama.remote) speedRecorder?.(model, metrics.outputTokens, metrics.outputMs)
-  } catch {
-    // une mesure perdue ne fait jamais échouer une réponse
-  }
+function reportMetrics(metrics: ChatMetrics, onMetrics?: (metrics: ChatMetrics) => void): void {
+  // Étape 514 : plus aucune vitesse enregistrée pendant l'usage (des questions différentes pour chaque modèle) : seul le
+  // test de vitesse (speedTest.ts) en donne une.
   onMetrics?.(metrics)
 }
 
@@ -302,7 +288,7 @@ async function requestChatWith(
       throw new ContextFullError(model, numCtx)
     }
     if (!data.message) throw new EmptyReplyError(model)
-    reportMetrics(model, metricsOf(data, data.message.thinking?.length ?? 0), onMetrics)
+    reportMetrics(metricsOf(data, data.message.thinking?.length ?? 0), onMetrics)
     return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
   }
 
@@ -374,7 +360,7 @@ async function requestChatWith(
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new EmptyReplyError(model)
   }
-  if (finalChunk) reportMetrics(model, metricsOf(finalChunk, thinking.length), onMetrics)
+  if (finalChunk) reportMetrics(metricsOf(finalChunk, thinking.length), onMetrics)
   // Sans relais (voix, mémoire), la forme d'avant le flux : la réflexion reste jointe au message, comme une réponse
   // d'un bloc — le canal voix la garde entre deux appels d'outils (étape 233).
   return { role, content, tool_calls: toolCalls, ...(!relays && thinking ? { thinking } : {}) }

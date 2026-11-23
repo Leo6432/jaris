@@ -55,8 +55,9 @@ import {
 } from './services/dependencyServices'
 import { engineModelsDir } from './services/ollamaEngine'
 import { Agent as UndiciAgent } from 'undici'
-import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, setSpeedRecorder, waitForOllama } from './services/ollama'
-import { getMeasuredSpeeds, loadModelSpeeds, recordModelSpeed } from './services/speedStore'
+import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, waitForOllama } from './services/ollama'
+import { getMeasuredSpeeds, loadModelSpeeds } from './services/speedStore'
+import { getSpeedTestModels, isSpeedTestRunning, runSpeedTest, stopSpeedTest } from './services/speedTest'
 import { addCatalogServer, addMcpServers, cancelMcpSignIn, listMcpServers, mcpToolsFor, signInMcpServer, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
 import { setExtraToolSource } from './services/assistant'
 import { setMcpBrowserOpener, setMcpSecretBox } from './services/mcpAuth'
@@ -287,9 +288,8 @@ setDuelProbability((pool, challenger, incumbent) => {
   }
   return switchCache.results.get(key) ?? null
 })
-// Étape 367 : chaque réponse d'Ollama mesure la vitesse du modèle sur ce PC ; c'est la seule vitesse que Faible et
-// Moyen regardent (étape 498 : plus de vitesse publiée).
-setSpeedRecorder((model, tokens, ms) => void recordModelSpeed(model, tokens, ms))
+// Étape 514 : la vitesse d'un modèle vient du test de vitesse (speedTest.ts, mêmes questions pour tous), plus de
+// chaque réponse ; c'est la seule vitesse que Faible et Moyen regardent (étape 498 : plus de vitesse publiée).
 // Étape 389 : aucune limite d'attente du premier fragment (voir setChatDispatcher). Une heure, pas l'infini : un Ollama
 // distant disparu sans fermer la connexion ne bloque pas une demande pour toujours. Le reste du flux garde la limite
 // d'undici (5 minutes sans le moindre fragment), toujours atteinte par une vraie panne, jamais par un modèle qui écrit.
@@ -2174,6 +2174,8 @@ app.whenReady().then(async () => {
     // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic). Attendus
     // jusqu'à leur sortie : sous Windows, un fichier encore ouvert ne s'efface pas de l'ancien dossier.
     await stopModelTest()
+    // Étape 514 : le test de vitesse aussi (il télécharge et enregistre des vitesses dans les données).
+    stopSpeedTest()
     // Étape 355 : un duel en cours s'arrête aussi (les modèles écrivent sur le PC, et un téléchargement remplit le disque).
     abortDuel()
     await phoneStudioStopped
@@ -2304,12 +2306,25 @@ app.whenReady().then(async () => {
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
   ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTestDetails())
   // Étape 436 : une sélection de modèles venue de l'écran, revérifiée (des noms, rien d'autre ; filtrés par testUnscoredModels).
-  ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event, chosen?: unknown) =>
-    testUnscoredModels(
+  ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event, chosen?: unknown) => {
+    // Étape 514 : jamais en même temps que le test de vitesse (les deux chargent des modèles, la vitesse serait faussée).
+    if (isSpeedTestRunning()) throw new Error(t('speed.running'))
+    return testUnscoredModels(
       (line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line),
       Array.isArray(chosen) ? chosen.filter((m): m is string => typeof m === 'string') : undefined
     )
-  )
+  })
+  // Étape 514 (Léo : « un bouton pour tester la vitesse de tous les modèles… les mêmes questions pour tout le monde ») :
+  // le test de vitesse (speedTest.ts). Sélection venue de l'écran revérifiée (des noms ; filtrés par runSpeedTest).
+  ipcMain.handle(IPC_CHANNELS.getSpeedTestModels, () => getSpeedTestModels())
+  ipcMain.handle(IPC_CHANNELS.runSpeedTest, (event, chosen?: unknown) => {
+    if (isModelTestRunning()) throw new Error(t('bench.testRunning'))
+    const models = Array.isArray(chosen) ? chosen.filter((m): m is string => typeof m === 'string') : []
+    return runSpeedTest(models, (progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.speedTestEvent, progress)
+    })
+  })
+  ipcMain.handle(IPC_CHANNELS.stopSpeedTest, () => stopSpeedTest())
   // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test »).
   ipcMain.handle(IPC_CHANNELS.stopUnscoredTest, () => stopModelTestByUser())
   ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
@@ -2860,6 +2875,7 @@ async function readProfileAtStartup(): Promise<Profile | null | undefined> {
 app.on('before-quit', () => {
   // Étape 230 : un test de modèles (des heures) ne doit jamais continuer après Jaris : il reprendra au relancement.
   stopModelTest()
+  stopSpeedTest()
   // Étape 355 : un duel en cours s'arrête avec Jaris ; aucun vote n'est donné à la place de Léo.
   abortDuel()
   stopOllamaIfStartedByJaris()

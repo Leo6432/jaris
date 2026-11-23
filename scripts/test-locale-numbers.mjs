@@ -89,7 +89,8 @@ test('aucun format de nombre figé en français ni de toFixed dans ce qui est af
     'shared/videoModel.ts',
     'src/components/MyModelPicks.tsx',
     'src/components/CapacityScan.tsx',
-    'src/components/AllModelsOverview.tsx'
+    'src/components/AllModelsOverview.tsx',
+    'src/components/SpeedTest.tsx'
   ]) {
     assert.doesNotMatch(codeOf(file), /'fr-FR'|toFixed\(/, file)
   }

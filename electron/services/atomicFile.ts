@@ -1,5 +1,5 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
-import { mkdir, open, readFile, rename, rm, stat } from 'fs/promises'
+import { closeSync, copyFileSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
+import { copyFile, mkdir, open, readFile, rename, rm, stat } from 'fs/promises'
 import { basename, dirname, extname, join } from 'path'
 import { t } from '../../shared/i18n'
 
@@ -54,6 +54,18 @@ export const sleepSync = (ms: number): void => {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Étape 515 (capture de Léo, version Microsoft Store : « EXDEV: cross-device link not permitted, rename
+ * '…\\AppData\\Roaming\\jaris\\profile.json.tmp' -> '…\\profile.json' » sur l'écran de bienvenue) : dans une appli empaquetée
+ * (MSIX), Windows range tout NOUVEAU fichier d'AppData dans un dossier privé du paquet, alors que le fichier déjà là (écrit
+ * par l'ancien Jaris hors Store) reste dans le vrai AppData : le temporaire et le fichier sont alors sur deux
+ * « emplacements » différents, et Windows refuse de remplacer l'un par l'autre. Seulement dans ce cas, le contenu est
+ * recopié sur le fichier (Windows en fait lui-même une copie privée) : jamais une panne là où un remplacement direct marche.
+ */
+export function isCrossDeviceError(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException | undefined)?.code === 'EXDEV'
+}
+
 /** `renameSync` réessayé sur un refus passager. Toute autre erreur, ou un refus qui dure, remonte telle quelle. */
 export function renameWithRetriesSync(from: string, to: string, wait: (ms: number) => void = sleepSync): void {
   for (let attempt = 0; ; attempt++) {
@@ -61,6 +73,11 @@ export function renameWithRetriesSync(from: string, to: string, wait: (ms: numbe
       renameSync(from, to)
       return
     } catch (err) {
+      if (isCrossDeviceError(err)) {
+        copyFileSync(from, to)
+        rmSync(from, { force: true })
+        return
+      }
       if (!isTransientFsError(err) || attempt >= RENAME_RETRY_DELAYS_MS.length) throw err
       wait(RENAME_RETRY_DELAYS_MS[attempt])
     }
@@ -124,6 +141,12 @@ async function writeNow(file: string, content: string | Uint8Array): Promise<voi
       await rename(temporary, file)
       return
     } catch (err) {
+      // Étape 515 : temporaire et fichier séparés par la virtualisation d'AppData (version Store) : recopie.
+      if (isCrossDeviceError(err)) {
+        await copyFile(temporary, file)
+        await rm(temporary, { force: true }).catch(() => {})
+        return
+      }
       if (!isTransientFsError(err) || attempt >= ASYNC_RENAME_RETRY_DELAYS_MS.length) {
         // `file` est intact (le remplacement n'a pas eu lieu) : le temporaire ne traîne pas à côté.
         await rm(temporary, { force: true }).catch(() => {})
