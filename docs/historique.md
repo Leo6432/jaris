@@ -13006,3 +13006,38 @@ web. **Rien n'est commencé** ; à faire quand Léo le demandera, dans cet ordre
 6. **Travailler sur un dossier du PC**, pas seulement sur un dépôt GitHub.
 Ce que Jaris a et pas OpenClaude, à garder : interface sans terminal, aperçu en direct des applis générées, rien
 d'enregistré sans le clic « Enregistrer sur GitHub », 100 % local.
+
+## Étape 517 — Les vitesses de Léo publiées pour tout le monde
+
+Fichier envoyé par Léo (`jaris-vitesses-2026-11-23.json`, bouton de l'étape 516) : 41 modèles mesurés avec le test de
+vitesse sur sa RTX 3070 (8 Go), 63 Go de RAM, Ollama 0.40.16, Jaris 0.76.1, test v1.
+- `shared/publishedSpeeds.ts` : ces vitesses (arrondies au dixième) et la machine de mesure
+  (`PUBLISHED_SPEED_REFERENCE`), seule source. `resolveSpeed` (shared/localSpeed.ts) : le test sur CE PC d'abord
+  (`measured`), sinon la vitesse publiée (`published`, avec la mémoire vidéo de la carte de mesure) ; main.ts passe
+  les vitesses publiées au résolveur (hardwareScan.ts n'importe rien de plus : ses tests chargent ses dépendances
+  par une liste fixe — un nouvel import en cassait 90, vu et corrigé).
+- **Règle de choix (hardwareScan.ts, `speedFor`)** : une vitesse publiée ne compte que si le modèle TENAIT dans la carte
+  de mesure (`memoryNeedGb` ≤ 8 Go). Au-delà, il y débordait sur la RAM (3,3 tokens/s pour qwen3.5:27b) : chiffre sans
+  rapport avec un PC à grosse carte, qui écarterait à tort les gros modèles de Moyen sur 24 Go. L'écran les montre
+  toutes. Test (mord) : sur 24 Go, choix identique avec ou sans les vitesses des modèles trop gros pour 8 Go.
+- Écran : colonne « Vitesse » (titre complet « Vitesse de génération (tokens/s) » en infobulle : « Vitesse (tokens/s) »
+  élargissait le tableau, onze colonnes plus visibles à 760 px — test visuel), infobulle par case : « Mesurée par Jaris sur une RTX 3070 (8 Go), avec le
+  test de vitesse » ou « Mesurée sur ton PC (test de vitesse) » (`speedSourceLabel`, src/lib/shownSpeed.ts ; carte
+  lue du fichier publié). Mêmes infobulles dans Mes modèles et les duels « Les plus rapides ». Textes corrigés (ils
+  disaient « mesurée sur ton PC à chaque réponse », faux depuis l'étape 514) : légende de Mes modèles, aide du
+  Classement, « il faut N modèles de vitesse connue ». 24 langues.
+- À vérifier un jour : granite4.1:8b (13,8) deux fois plus lent que granite4.2:8b (25,1) pour une taille voisine.
+
+## Étape 518 — Agentique : propositions simples et difficiles (plusieurs actions)
+
+Léo : « et en même temps que tu pushes ça, ajoute dans Agentique des propositions simples et dures, avec plusieurs
+choses ».
+- 8 tâches difficiles (`duel-dur-*`, famille « Plusieurs actions », `level: 'hard'`) : 3 ou 4 actions d'outils
+  différents à enchaîner (Spotify + volume + rappel ; mode sombre + luminosité + fermer Discord ; bloc-notes + écrire +
+  enregistrer + rappel ; voir + annuler + créer un rappel ; ouvrir le CV + lire la liste ; fermer deux applis +
+  premier plan + couper le son ; retenir + deux rappels ; luminosité + volume + page Bluetooth). Une action oubliée = tâche
+  ratée. Difficile aussi : toute tâche en plusieurs messages (`agentTaskLevel`, duelAgent.ts) — 15 difficiles sur 89.
+- Écran (« Quelle tâche ? ») : Toutes / Simples / Difficiles (plusieurs actions) ; « Toutes » montre 2 simples et 2
+  difficiles ; « Une tâche au hasard » respecte la difficulté choisie. 4 textes en 24 langues.
+- Tests (mordent) : test-duel-agent-tasks (cas juste et cas qui oublie UNE action, pour chaque tâche ; au moins 3 actions
+  par tâche difficile), test-duel-panel-ui (2 + 2, filtre, hasard filtré). Capture montrée à Léo.

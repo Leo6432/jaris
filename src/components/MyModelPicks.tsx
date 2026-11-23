@@ -5,7 +5,7 @@ import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { formatDecimal, formatPercent, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
-import { shownSpeed } from '../lib/shownSpeed'
+import { shownSpeed, speedSourceLabel } from '../lib/shownSpeed'
 import { imageDownloadGb } from '../../shared/imageModel'
 
 interface MyModelPicksProps {
@@ -157,7 +157,7 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                         deux lignes par rôle (il n'y a plus de colonne pour lui donner un sens, voir index.css). */}
                     <td
                       className={`capacity-scan__tier-speed${shownSpeed(entry).value === null ? EMPTY : ''}`}
-                      title={shownSpeed(entry).kind ? `${t('picks.speed.title')} — ${t('speed.kind.measured')}` : t('picks.speed.title')}
+                      title={shownSpeed(entry).kind ? `${t('picks.speed.title')} — ${speedSourceLabel(shownSpeed(entry).kind)}` : t('picks.speed.title')}
                     >
                       {formatSpeed(entry)}
                     </td>

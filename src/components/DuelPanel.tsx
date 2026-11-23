@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { speedSourceLabel } from '../lib/shownSpeed'
 import { useReportActivity } from '@/lib/useReportActivity'
 import { CodeSource } from '@/components/CodeBrowser'
 import Composer from '@/components/Composer'
@@ -95,29 +96,51 @@ const SUGGESTIONS: Record<DuelCategory, MessageKey[]> = {
  * Étape 506 (Léo : « ajoute plein de propositions agentique ») : le début d'un duel Agentique — 4 tâches proposées
  * (d'abord celles pas encore jouées), « Autres tâches » pour en voir d'autres, et « Une tâche au hasard ».
  */
+type AgentLevel = 'all' | 'simple' | 'hard'
+
 function AgentAsk({
   tasks,
   busy,
   loading,
   onPick
 }: {
-  tasks: { id: string; text: string; played: boolean }[]
+  tasks: { id: string; text: string; played: boolean; level?: 'simple' | 'hard' }[]
   busy: boolean
   loading: boolean
   onPick: (taskId?: string) => void
 }): JSX.Element {
-  const pick = (shown: readonly string[]): string[] => {
-    const shuffled = [...tasks].sort(() => Math.random() - 0.5)
-    const order = [
+  // Étape 518 (Léo : « ajoute dans Agentique des propositions simples et dures, avec plusieurs choses ») : choisir la
+  // difficulté ; « Toutes » montre autant de tâches simples que difficiles.
+  const [level, setLevel] = useState<AgentLevel>('all')
+  const levelOf = (x: { level?: 'simple' | 'hard' }): 'simple' | 'hard' => x.level ?? 'simple'
+  const ordered = (pool: typeof tasks, shown: readonly string[]): string[] => {
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    return [
       ...shuffled.filter((x) => !x.played && !shown.includes(x.id)),
       ...shuffled.filter((x) => x.played && !shown.includes(x.id)),
       ...shuffled.filter((x) => shown.includes(x.id))
-    ]
-    return order.slice(0, IDEAS_SHOWN).map((x) => x.id)
+    ].map((x) => x.id)
+  }
+  const pick = (shown: readonly string[], wanted: AgentLevel = level): string[] => {
+    if (wanted !== 'all') return ordered(tasks.filter((x) => levelOf(x) === wanted), shown).slice(0, IDEAS_SHOWN)
+    const half = Math.ceil(IDEAS_SHOWN / 2)
+    const hard = ordered(tasks.filter((x) => levelOf(x) === 'hard'), shown).slice(0, half)
+    const simple = ordered(tasks.filter((x) => levelOf(x) === 'simple'), shown).slice(0, IDEAS_SHOWN - hard.length)
+    return [...simple, ...hard]
   }
   const [shown, setShown] = useState<string[]>(() => pick([]))
   const byId = new Map(tasks.map((x) => [x.id, x.text]))
   const texts = shown.map((id) => byId.get(id) ?? '').filter(Boolean)
+  const chooseLevel = (next: AgentLevel): void => {
+    setLevel(next)
+    setShown(pick([], next))
+  }
+  // « Une tâche au hasard » respecte la difficulté choisie (d'abord une pas encore jouée).
+  const random = (): void => {
+    if (level === 'all') return onPick()
+    const [first] = ordered(tasks.filter((x) => levelOf(x) === level), [])
+    onPick(first)
+  }
   return (
     <div className="duel-agent-start">
       <EmptyState
@@ -130,11 +153,26 @@ function AgentAsk({
           if (id) onPick(id)
         }}
       >
+        <div className="duel-sizes duel-agent-start__levels" role="radiogroup" aria-label={t('duel.agent.level.label')}>
+          {(['all', 'simple', 'hard'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={level === value}
+              className={`duel-size${level === value ? ' duel-size--selected' : ''}`}
+              onClick={() => chooseLevel(value)}
+              disabled={busy}
+            >
+              {t(value === 'all' ? 'duel.agent.level.all' : value === 'simple' ? 'duel.agent.level.simple' : 'duel.agent.level.hard')}
+            </button>
+          ))}
+        </div>
         <div className="duel-agent-start__actions">
           <button type="button" className="empty-state__more" onClick={() => setShown(pick(shown))} disabled={busy}>
             {t('duel.agent.more')}
           </button>
-          <button type="button" className="duel-btn duel-btn--primary" onClick={() => onPick()} disabled={busy}>
+          <button type="button" className="duel-btn duel-btn--primary" onClick={random} disabled={busy}>
             {loading ? t('common.loading') : t('duel.agent.start')}
           </button>
         </div>
@@ -698,7 +736,7 @@ function formatSpeed(option: DuelModelOption): string {
 }
 
 function speedTitle(option: DuelModelOption): string | undefined {
-  return option.speedKind ? t('speed.kind.measured') : undefined
+  return speedSourceLabel(option.speedKind)
 }
 
 /**

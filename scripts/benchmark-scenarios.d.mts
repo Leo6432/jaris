@@ -20,6 +20,8 @@ export interface Scenario {
   turns: string[]
   repeat?: boolean
   history?: { role: string; content: string }[]
+  /** Étape 518 : tâche du duel Agentique à plusieurs actions (« difficile »). */
+  level?: 'simple' | 'hard'
 }
 export interface ScenarioEvent {
   kind: 'requete' | 'reponse' | 'outil'

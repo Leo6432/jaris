@@ -497,7 +497,7 @@ export interface ModelOverviewEntry {
    * Voir shared/localSpeed.ts.
    */
   localSpeed: number | null
-  localSpeedKind: 'measured' | null
+  localSpeedKind: 'measured' | 'published' | null
   /** Étape 331 : version compressée téléchargée (« Q4_K_M », « Q8_0 », « MXFP4 »), voir MODEL_QUANTIZATION. */
   quantization?: string | null
   /**
@@ -1055,7 +1055,7 @@ export interface DuelModelOption {
    * inconnue ou si les modèles tournent sur une autre machine (la vitesse de ce PC n'y dirait rien).
    */
   speed?: number | null
-  speedKind?: 'measured' | null
+  speedKind?: 'measured' | 'published' | null
 }
 
 export interface DuelPlan {
@@ -1171,7 +1171,7 @@ export interface DuelSessionView {
    * Étape 506 (Léo : « ajoute plein de propositions agentique ») : en Agentique, les tâches que Léo peut choisir (le
    * premier message de chacune) ; `played` : déjà jouée dans cette session.
    */
-  agentTasks?: { id: string; text: string; played: boolean }[]
+  agentTasks?: { id: string; text: string; played: boolean; level?: 'simple' | 'hard' }[]
   phase: 'preparing' | 'ready' | 'ended'
   /** Étape 377 : les modèles de la session tournent sur une autre machine (téléchargés là-bas, pas sur ce PC). */
   remote?: boolean

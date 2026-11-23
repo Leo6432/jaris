@@ -867,7 +867,7 @@ test('étape 414 : « Les plus rapides » — Jaris prend les N modèles les plu
     assert.ok(!rows.some((r) => r.includes('≈')))
     assert.match(rows[4], /12 tok\/s/)
     assert.ok(!rows.some((r) => /phi4|Phi/i.test(r) || /devstral/i.test(r)))
-    assert.match(await page.getAttribute('.duel-fast__item .duel-pick__speed', 'title'), /Mesurée sur ton PC/)
+    assert.match(await page.getAttribute('.duel-fast__item .duel-pick__speed', 'title'), /Mesurée sur ton PC \(test de vitesse\)/)
     // Pas de 6 : seulement 5 modèles ont une vitesse connue.
     const six = page.locator('.duel-home [role=radiogroup][aria-label="Les plus rapides"] [role=radio]', { hasText: '6' })
     assert.equal(await six.isDisabled(), true)
@@ -906,7 +906,7 @@ test('étape 414 : « Les plus rapides » sans assez de vitesses connues, ou sur
     await page.waitForSelector('.duel-pickmode')
     await page.getByRole('radio', { name: 'Les plus rapides' }).click()
     await page.waitForSelector('.duel-home__note--warn')
-    assert.match(await page.textContent('.duel-home'), /au moins 4 modèles dont la vitesse est connue sur ton PC \(ici : 2\)/)
+    assert.match(await page.textContent('.duel-home'), /au moins 4 modèles dont la vitesse est connue \(ici : 2\)/)
     assert.equal(await page.locator('.duel-home__start').isDisabled(), true)
   }, few)
   // Exactement 4 vitesses connues alors que 5 était choisi : c'est 4 qui est coché (jamais un nombre grisé coché), et ça part.
@@ -1965,6 +1965,35 @@ test('étape 504 : duel Agentique — un bouton lance la tâche, pas de champ ; 
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/504-agentique-vote.png`, fullPage: true })
     },
     "window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', agentTasks: [{ id: 't1', text: 'Ouvre la calculatrice.', played: false }, { id: 't2', text: 'Coupe le son.', played: false }, { id: 't3', text: 'Mets la musique en pause.', played: false }, { id: 't4', text: 'Dessine un chat astronaute.', played: false }, { id: 't5', text: 'Retiens que le code du portail est 4821.', played: false }, { id: 't6', text: 'Lance Steam puis Discord.', played: true }], phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };"
+  )
+})
+
+// Étape 518 (Léo : « ajoute dans Agentique des propositions simples et dures, avec plusieurs choses »).
+test('étape 518 : Agentique — « Toutes » montre 2 simples et 2 difficiles ; « Difficiles » ne montre que celles à plusieurs actions', options, async () => {
+  const easy = ['Ouvre la calculatrice.', 'Coupe le son.', 'Mets la musique en pause.', 'Ferme Spotify.']
+  const hard = ['Lance Spotify, mets le son à 30 % et rappelle-moi de partir dans 20 minutes.', 'Passe Windows en mode sombre, mets la luminosité à 40 % et ferme Discord.', 'Ferme Spotify et Discord, remets Chrome au premier plan, puis coupe le son.']
+  const tasks = [...easy.map((text, i) => ({ id: `s${i}`, text, played: false, level: 'simple' })), ...hard.map((text, i) => ({ id: `h${i}`, text, played: false, level: 'hard' }))]
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.duel-agent-start__levels')
+      const radios = page.locator('.duel-agent-start__levels [role="radio"]')
+      assert.deepEqual(await radios.allTextContents(), ['Toutes', 'Simples', 'Difficiles (plusieurs actions)'])
+      assert.equal(await radios.nth(0).getAttribute('aria-checked'), 'true')
+      const shown = await page.locator('.duel-agent-start .empty-state__suggestion').allTextContents()
+      assert.equal(shown.length, 4)
+      assert.equal(shown.filter((x) => hard.includes(x)).length, 2, 'deux difficiles')
+      assert.equal(shown.filter((x) => easy.includes(x)).length, 2, 'deux simples')
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/518-agentique-niveaux.png`, fullPage: true })
+      await radios.nth(2).click()
+      const onlyHard = await page.locator('.duel-agent-start .empty-state__suggestion').allTextContents()
+      assert.ok(onlyHard.length === 3 && onlyHard.every((x) => hard.includes(x)), onlyHard.join(' | '))
+      // « Une tâche au hasard » respecte la difficulté choisie.
+      await page.click('.duel-agent-start__actions .duel-btn--primary')
+      await page.waitForFunction(() => window.__calls.some((c) => c[0] === 'ask'))
+      assert.match((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'ask')[1], /^h\d$/)
+    },
+    `window.__category = 'agent'; window.__view = { id: 'session-1', category: 'agent', agentTasks: ${JSON.stringify(tasks)}, phase: 'ready', modelCount: 4, preparing: null, dropped: 0, votes: 0, error: null, round: { number: 1, prompt: null, a: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null }, b: { status: 'idle', text: '', activity: null, startedAt: null, durationMs: null, actions: [], previewUrl: null, audio: false, audioError: null, error: null, trouble: null } } };`,
+    { width: 760, height: 900 }
   )
 })
 

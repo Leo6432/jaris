@@ -465,6 +465,116 @@ export const DUEL_AGENT_TASKS = [
     check: (ctx) => (ctx.state.settings.some((x) => x.setting === 'open_page' && x.value === 'wifi') ? null : 'la page Wi-Fi des Paramètres n’a pas été ouverte')
   },
 
+  // --- Plusieurs actions à la suite (étape 518, Léo : « ajoute dans Agentique des propositions simples et dures, avec
+  // plusieurs choses ») : chaque tâche demande 3 ou 4 actions d'outils différents ; une seule oubliée = échec. ---
+  {
+    id: 'duel-dur-matin-musique',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ['Lance Spotify, mets le son à 30 % et rappelle-moi de partir dans 20 minutes.'],
+    allow: ['open_app', 'media_control', 'set_reminder'],
+    check: (ctx) => {
+      if (!opened(ctx, 'Spotify')) return 'Spotify jamais ouvert'
+      if (ctx.state.volume !== 30) return 'le volume n’a pas été réglé à 30 %'
+      return ctx.state.reminders.some((r) => r.delay === 20 && has(r.message, /partir/)) ? null : 'pas de rappel « partir » dans 20 minutes'
+    }
+  },
+  {
+    id: 'duel-dur-soiree-ecran',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ['Passe Windows en mode sombre, mets la luminosité à 40 % et ferme Discord.'],
+    allow: ['windows_setting', 'app_window'],
+    setup: { windows: ['Discord', 'Google Chrome'] },
+    check: (ctx) => {
+      if (!ctx.state.settings.some((x) => x.setting === 'dark_mode' && x.value === true)) return 'le mode sombre n’a pas été activé'
+      if (!ctx.state.settings.some((x) => x.setting === 'brightness' && x.value === 40)) return 'la luminosité n’a pas été réglée à 40 %'
+      if (ctx.state.closed.some((c) => c.app === 'Google Chrome')) return 'a fermé Chrome, qui n’était pas demandé'
+      return ctx.state.closed.some((c) => c.app === 'Discord') ? null : 'Discord n’a pas été fermé'
+    }
+  },
+  {
+    id: 'duel-dur-note-courses',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ["Ouvre le bloc-notes, écris « pain, lait, beurre », enregistre, puis rappelle-moi d'aller faire les courses dans une heure."],
+    allow: ['open_app', 'type_text', 'press_key', 'set_reminder'],
+    check: (ctx) => {
+      if (!opened(ctx, 'Bloc-notes')) return 'le bloc-notes n’a jamais été ouvert'
+      const typed = ctx.state.typed.map((t) => String(t.text).toLowerCase()).join(' ')
+      if (!/pain/.test(typed) || !/lait/.test(typed) || !/beurre/.test(typed)) return 'la liste (pain, lait, beurre) n’a pas été écrite en entier'
+      if (!ctx.state.keys.some((k) => k.key === 'ctrl+s')) return 'le document n’a pas été enregistré (ctrl+s)'
+      return ctx.state.reminders.some((r) => r.delay === 60 && has(r.message, /course/)) ? null : 'pas de rappel « courses » dans une heure'
+    }
+  },
+  {
+    id: 'duel-dur-rappels-menage',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ["Dis-moi mes rappels, annule celui du garage, puis rappelle-moi d'appeler le dentiste dans 2 heures."],
+    allow: ['manage_reminders', 'set_reminder'],
+    setup: { reminders: [{ message: 'Appeler le garage', delay: 45 }, { message: 'Sortir le chien', delay: 120 }] },
+    check: (ctx) => {
+      if (!ctx.state.remindersListed) return 'n’a pas regardé les rappels'
+      if (ctx.state.cancelled.some((r) => /chien/i.test(r.message))) return 'a annulé le mauvais rappel (le chien)'
+      if (!ctx.state.cancelled.some((r) => /garage/i.test(r.message))) return 'le rappel du garage n’a pas été annulé'
+      return ctx.state.reminders.some((r) => r.delay === 120 && has(r.message, /dentiste/)) ? null : 'pas de rappel « dentiste » dans 2 heures'
+    }
+  },
+  {
+    id: 'duel-dur-cv-courses',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ["Ouvre mon CV, puis dis-moi ce qu'il y a dans ma liste de courses."],
+    allow: ['files'],
+    setup: { files: { 'C:\\Users\\leo\\Documents\\CV Léo 2026.pdf': '', 'C:\\Users\\leo\\Documents\\Courses.txt': 'pain, beurre, tomates' } },
+    check: (ctx) => {
+      if (!ctx.state.filesOpened.some((f) => /CV Léo 2026\.pdf$/.test(f.path))) return 'le CV n’a pas été ouvert'
+      if (!ctx.state.filesRead.length) return 'la liste n’a pas été lue'
+      const reply = replyOf(ctx)
+      return /beurre/.test(reply) && /tomates?/.test(reply) ? null : 'le contenu de la liste n’est pas dans la réponse'
+    }
+  },
+  {
+    id: 'duel-dur-ranger-apps',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ['Ferme Spotify et Discord, remets Chrome au premier plan, puis coupe le son.'],
+    allow: ['app_window', 'media_control'],
+    setup: { windows: ['Spotify', 'Discord', 'Google Chrome'] },
+    check: (ctx) => {
+      if (ctx.state.closed.some((c) => c.app === 'Google Chrome')) return 'a fermé Chrome au lieu de le remettre devant'
+      if (!ctx.state.closed.some((c) => c.app === 'Spotify')) return 'Spotify n’a pas été fermé'
+      if (!ctx.state.closed.some((c) => c.app === 'Discord')) return 'Discord n’a pas été fermé'
+      if (!ctx.state.focused.some((f) => f.app === 'Google Chrome')) return 'Chrome n’a pas été remis au premier plan'
+      return ctx.state.media.some((m) => m.action === 'mute') ? null : 'le son n’a pas été coupé'
+    }
+  },
+  {
+    id: 'duel-dur-portail-rappel',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ["Retiens que le code du portail est 4821, puis rappelle-moi d'ouvrir le portail dans 10 minutes et de le refermer dans 30 minutes."],
+    allow: ['set_reminder'],
+    check: (ctx) => {
+      if (!callsOf(ctx, 'remember').some((c) => /4821/.test(String(c.args.content ?? '') + String(c.args.title ?? '')))) return 'le code 4821 n’a pas été noté'
+      if (!ctx.state.reminders.some((r) => r.delay === 10 && has(r.message, /portail/))) return 'pas de rappel « ouvrir le portail » dans 10 minutes'
+      return ctx.state.reminders.some((r) => r.delay === 30 && has(r.message, /portail|referm/)) ? null : 'pas de rappel « refermer » dans 30 minutes'
+    }
+  },
+  {
+    id: 'duel-dur-reglages-bluetooth',
+    family: 'Plusieurs actions',
+    level: 'hard',
+    turns: ['Mets la luminosité à 70 %, le son à 50 %, puis ouvre les réglages Bluetooth.'],
+    allow: ['windows_setting', 'media_control'],
+    check: (ctx) => {
+      if (!ctx.state.settings.some((x) => x.setting === 'brightness' && x.value === 70)) return 'la luminosité n’a pas été réglée à 70 %'
+      if (ctx.state.volume !== 50) return 'le volume n’a pas été réglé à 50 %'
+      return ctx.state.settings.some((x) => x.setting === 'open_page' && x.value === 'bluetooth') ? null : 'la page Bluetooth des Paramètres n’a pas été ouverte'
+    }
+  },
+
   // --- Calcul ---
   {
     id: 'duel-pourboire',

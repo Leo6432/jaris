@@ -33,13 +33,23 @@ const toTask = (scenario: Scenario, random: () => number): AgentTask => ({
   variant: scenario.repeat ? Math.floor(random() * 2) : 0
 })
 
+/**
+ * Étape 518 (Léo : « ajoute dans Agentique des propositions simples et dures, avec plusieurs choses ») : difficile =
+ * une tâche marquée comme telle (plusieurs actions d'outils différents à enchaîner) ou en plusieurs messages (une
+ * correction au deuxième) ; sinon simple.
+ */
+export function agentTaskLevel(scenario: Scenario): 'simple' | 'hard' {
+  return scenario.level === 'hard' || scenario.turns.length > 1 ? 'hard' : 'simple'
+}
+
 /** Étape 506 : les tâches proposées à l'écran (le premier message de chacune), pour que Léo en choisisse une. */
 export interface AgentTaskChoice {
   id: string
   text: string
+  level: 'simple' | 'hard'
 }
 export function agentTaskChoices(): AgentTaskChoice[] {
-  return AGENT_SCENARIOS.map((s) => ({ id: s.id, text: s.turns[0] }))
+  return AGENT_SCENARIOS.map((s) => ({ id: s.id, text: s.turns[0], level: agentTaskLevel(s) }))
 }
 
 /** Étape 506 : la tâche choisie par Léo (son identifiant), avec un jeu de résultats ; `null` si elle n'existe pas. */

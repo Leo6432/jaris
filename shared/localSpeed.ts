@@ -47,15 +47,23 @@ export interface SpeedTestResult {
 export type SpeedTestResults = Record<string, SpeedTestResult>
 
 /**
- * Où vient la vitesse affichée et utilisée : `measured`, mesurée sur ce PC. Étape 498 (Léo : « supprime toutes les
- * vitesses, tous les trucs d'Artificial Analysis, on va les mesurer sur le PC ») : plus de vitesse publiée ni de
- * vitesse « estimée » à partir d'elle — sans mesure ici, la vitesse est inconnue (`null`).
+ * Où vient la vitesse affichée et utilisée : `measured`, mesurée par le test de vitesse sur CE PC ; `published`
+ * (étape 517), mesurée par Léo et publiée dans Jaris pour tout le monde (shared/publishedSpeeds.ts). Sans l'une ni
+ * l'autre, la vitesse est inconnue (`null`).
  */
-export type SpeedKind = 'measured'
+export type SpeedKind = 'measured' | 'published'
 
 export interface ResolvedSpeed {
   speed: number | null
   kind: SpeedKind | null
+  /** Vitesse publiée : mémoire vidéo de la carte qui l'a mesurée (un modèle plus gros y débordait sur la RAM). */
+  referenceVramGb?: number
+}
+
+/** Étape 517 : les vitesses publiées et la mémoire vidéo de la carte qui les a mesurées (shared/publishedSpeeds.ts). */
+export interface PublishedSpeeds {
+  speeds: Record<string, number>
+  vramGb: number
 }
 
 /** Ollama liste un modèle sans tag sous `:latest` : les deux noms désignent la même mesure. */
@@ -98,8 +106,13 @@ export function speedsOf(results: SpeedTestResults): Record<string, number> {
   return Object.fromEntries(Object.entries(results).map(([model, r]) => [model, r.speed]))
 }
 
-/** La vitesse d'un modèle pour CE PC : sa mesure ici, sinon inconnue — jamais une vitesse venue d'ailleurs. */
-export function resolveSpeed(model: string, measured: Record<string, number>): ResolvedSpeed {
+/**
+ * La vitesse d'un modèle pour CE PC : son test ici d'abord, sinon la vitesse publiée (étape 517 ; main.ts passe celles
+ * de Léo, shared/publishedSpeeds.ts) — jamais une valeur inventée.
+ */
+export function resolveSpeed(model: string, measured: Record<string, number>, published?: PublishedSpeeds): ResolvedSpeed {
   const own = measured[speedKey(model)]
-  return own === undefined ? { speed: null, kind: null } : { speed: own, kind: 'measured' }
+  if (own !== undefined) return { speed: own, kind: 'measured' }
+  const shared = published?.speeds[speedKey(model)]
+  return shared === undefined ? { speed: null, kind: null } : { speed: shared, kind: 'published', referenceVramGb: published?.vramGb }
 }

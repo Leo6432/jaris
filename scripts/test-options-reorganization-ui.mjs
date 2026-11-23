@@ -818,6 +818,21 @@ test('« Choisir les modèles » : cases à cocher avec la durée, total de la s
   })
 })
 
+// Étape 517 (Léo : « personne ne va faire de test : quand il installe, il voit tous les scores, de vitesse, de tout ») :
+// une vitesse publiée par Jaris dit sur quelle carte elle a été mesurée ; une vitesse du test sur ce PC le dit aussi.
+test('Classement : la colonne Vitesse dit d’où vient chaque vitesse (publiée sur RTX 3070, ou mesurée sur ce PC)', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+    const cell = (model) => page.$eval(`.options-page--models tbody tr:has(.options-menu__model-name[title="${model}"]) td:nth-child(11)`, (td) => ({ text: td.textContent.trim(), title: td.getAttribute('title') }))
+    assert.deepEqual(await cell('ministral-3:3b'), { text: '88,2', title: 'Mesurée par Jaris sur une RTX 3070 (8 Go), avec le test de vitesse' })
+    assert.deepEqual(await cell('qwen3:1.7b'), { text: '160', title: 'Mesurée sur ton PC (test de vitesse)' })
+    const header = await page.$eval('.options-page--models thead th:nth-child(11)', (th) => th.textContent.trim())
+    assert.match(header, /^Vitesse/)
+    assert.equal(await page.getAttribute('.options-page--models thead th:nth-child(11)', 'title'), 'Vitesse de génération (tokens/s)')
+  }, "window.__overviewEntries = [{ model: 'ministral-3:3b', vramGb: 3, category: 'Rapide', usedIn: [], toolCalling: '6/6', intelligence: null, localSpeed: 88.2, localSpeedKind: 'published' }, { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', usedIn: [], toolCalling: null, intelligence: null, localSpeed: 160, localSpeedKind: 'measured' }]")
+})
+
 // Étape 514 (Léo : « un bouton pour tester la vitesse de tous les modèles, choisir ceux que je veux ou tout, les mêmes
 // questions pour tout le monde… comme l'analyse »).
 test('test de vitesse : les modèles jamais mesurés, la taille à télécharger, puis le suivi modèle par modèle', options, async () => {

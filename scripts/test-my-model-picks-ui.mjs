@@ -180,10 +180,12 @@ test('les nombres suivent la langue : « 17.7 » et « 7.8 GB » en anglais, « 
 
 // Étape 367 : la vitesse est celle mesurée sur CE PC ; la légende le dit. Étape 498 : plus de « ≈ » (vitesse estimée à
 // partir d'une vitesse publiée) ni d'Artificial Analysis pour Vision, qui suit ses propres duels.
-test('la légende dit que la vitesse est mesurée sur ce PC', options, async () => {
+// Étape 517 : la vitesse vient du test de vitesse (mêmes questions pour tous), publiée par Jaris ou mesurée ici.
+test('la légende dit d’où vient la vitesse : le test de vitesse, mêmes questions pour tous', options, async () => {
   await withPreview(async (page) => {
     const legend = await page.$eval('.capacity-scan__tier-legend', (el) => el.textContent ?? '')
-    assert.match(legend, /Vitesse : mesurée sur ton PC à chaque réponse\.$/)
+    assert.match(legend, /Vitesse : mesurée par Jaris avec le test de vitesse \(les mêmes questions pour tous les modèles\)\.$/)
+    assert.doesNotMatch(legend, /à chaque réponse/, 'plus aucune mesure pendant l’usage (étape 514)')
     assert.match(legend, /Vision prend la meilleure note parmi ceux qui lisent les images \(ses propres duels\)/)
     assert.doesNotMatch(legend, /≈|Artificial Analysis/)
   })

@@ -207,6 +207,39 @@ const CASES = {
     good: [calls(['windows_setting', { setting: 'open_page', value: 'wifi' }]), text('Les réglages du Wi-Fi sont ouverts.')],
     bad: [calls(['windows_setting', { setting: 'open_page', value: 'bluetooth' }]), text('Les réglages du Wi-Fi sont ouverts.')]
   },
+  // Étape 518 : plusieurs actions à la suite — le cas faux en oublie UNE (la dernière, la plus facile à oublier).
+  'duel-dur-matin-musique': {
+    good: [calls(['open_app', { app_name: 'Spotify' }], ['media_control', { action: 'set_volume', percent: 30 }], ['set_reminder', { message: 'Partir', delay_minutes: 20 }]), text('C’est fait.')],
+    bad: [calls(['open_app', { app_name: 'Spotify' }], ['media_control', { action: 'set_volume', percent: 30 }]), text('C’est fait, et je te rappelle de partir dans 20 minutes.')]
+  },
+  'duel-dur-soiree-ecran': {
+    good: [calls(['windows_setting', { setting: 'dark_mode', value: true }], ['windows_setting', { setting: 'brightness', value: 40 }], ['app_window', { action: 'close', app_name: 'Discord' }]), text('C’est fait.')],
+    bad: [calls(['windows_setting', { setting: 'dark_mode', value: true }], ['windows_setting', { setting: 'brightness', value: 40 }]), text('C’est fait, Discord est fermé.')]
+  },
+  'duel-dur-note-courses': {
+    good: [calls(['open_app', { app_name: 'bloc-notes' }], ['type_text', { text: 'pain, lait, beurre' }], ['press_key', { key: 'ctrl+s' }], ['set_reminder', { message: 'Faire les courses', delay_minutes: 60 }]), text('C’est fait.')],
+    bad: [calls(['open_app', { app_name: 'bloc-notes' }], ['type_text', { text: 'pain, lait, beurre' }], ['set_reminder', { message: 'Faire les courses', delay_minutes: 60 }]), text('C’est écrit, enregistré, et le rappel est mis.')]
+  },
+  'duel-dur-rappels-menage': {
+    good: [calls(['manage_reminders', { action: 'list' }]), calls(['manage_reminders', { action: 'cancel', which: 'garage' }], ['set_reminder', { message: 'Appeler le dentiste', delay_minutes: 120 }]), text('Tu avais le garage et le chien ; le garage est annulé et le dentiste est programmé.')],
+    bad: [calls(['manage_reminders', { action: 'list' }]), calls(['set_reminder', { message: 'Appeler le dentiste', delay_minutes: 120 }]), text('Le garage est annulé et le dentiste est programmé.')]
+  },
+  'duel-dur-cv-courses': {
+    good: [calls(['files', { action: 'find', name: 'CV' }]), calls(['files', { action: 'open', path: 'C:\\Users\\leo\\Documents\\CV Léo 2026.pdf' }], ['files', { action: 'read', path: 'C:\\Users\\leo\\Documents\\Courses.txt' }]), text('Ton CV est ouvert. Sur ta liste : pain, beurre et tomates.')],
+    bad: [calls(['files', { action: 'find', name: 'CV' }]), calls(['files', { action: 'read', path: 'C:\\Users\\leo\\Documents\\Courses.txt' }]), text('Ton CV est ouvert. Sur ta liste : pain, beurre et tomates.')]
+  },
+  'duel-dur-ranger-apps': {
+    good: [calls(['app_window', { action: 'close', app_name: 'Spotify' }], ['app_window', { action: 'close', app_name: 'Discord' }], ['app_window', { action: 'focus', app_name: 'Chrome' }], ['media_control', { action: 'mute' }]), text('C’est fait.')],
+    bad: [calls(['app_window', { action: 'close', app_name: 'Spotify' }], ['app_window', { action: 'close', app_name: 'Discord' }], ['app_window', { action: 'focus', app_name: 'Chrome' }]), text('C’est fait, le son est coupé.')]
+  },
+  'duel-dur-portail-rappel': {
+    good: [calls(['remember', { title: 'Portail', content: 'Le code du portail est 4821.' }], ['set_reminder', { message: 'Ouvrir le portail', delay_minutes: 10 }], ['set_reminder', { message: 'Refermer le portail', delay_minutes: 30 }]), text('C’est noté, avec deux rappels.')],
+    bad: [calls(['remember', { title: 'Portail', content: 'Le code du portail est 4821.' }], ['set_reminder', { message: 'Ouvrir le portail', delay_minutes: 10 }]), text('C’est noté, avec deux rappels.')]
+  },
+  'duel-dur-reglages-bluetooth': {
+    good: [calls(['windows_setting', { setting: 'brightness', value: 70 }], ['media_control', { action: 'set_volume', percent: 50 }], ['windows_setting', { setting: 'open_page', value: 'bluetooth' }]), text('C’est fait.')],
+    bad: [calls(['windows_setting', { setting: 'brightness', value: 70 }], ['media_control', { action: 'set_volume', percent: 50 }]), text('C’est fait, les réglages Bluetooth sont ouverts.')]
+  },
   'duel-pourboire': {
     good: [text('15 % de 48 euros, cela fait 7,20 euros.')],
     bad: [text('15 % de 48 euros, cela fait 7 euros.')]
@@ -236,3 +269,14 @@ for (const task of DUEL_AGENT_TASKS) {
     assert.equal(bad.ok, false, 'mauvaise façon acceptée')
   })
 }
+
+// Étape 518 (Léo : « des propositions simples et dures, avec plusieurs choses ») : les tâches difficiles demandent
+// plusieurs actions — leur cas faux, qui en oublie UNE seule, échoue (vérifié tâche par tâche ci-dessus).
+test('étape 518 : au moins 8 tâches difficiles, chacune demandant au moins 3 actions dans son cas juste', () => {
+  const hard = DUEL_AGENT_TASKS.filter((t) => t.level === 'hard')
+  assert.ok(hard.length >= 8, `${hard.length} tâches difficiles`)
+  for (const task of hard) {
+    const actions = CASES[task.id].good.reduce((n, step) => n + (step.calls?.length ?? 0), 0)
+    assert.ok(actions >= 3, `${task.id} : ${actions} action(s) seulement`)
+  }
+})

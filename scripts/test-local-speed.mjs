@@ -88,7 +88,7 @@ const scanSource = ts.transpileModule(readFileSync(new URL('../electron/services
 }).outputText
 const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
 
-function scan(measured, vramMib = 8192) {
+function scan(measured, vramMib = 8192, published) {
   const exec = (_cmd, opts, cb) => (typeof opts === 'function' ? opts : cb)(null, `Fake GPU, ${vramMib}\n`, '')
   exec[promisify.custom] = () => Promise.resolve({ stdout: `Fake GPU, ${vramMib}\n`, stderr: '' })
   const modules = {
@@ -107,7 +107,7 @@ function scan(measured, vramMib = 8192) {
   const exports = {}
   vm.runInNewContext(scanSource, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   exports.setOllamaVersionSource(() => '0.40.10')
-  if (measured) exports.setLocalSpeedResolver((model) => speed.resolveSpeed(model, measured))
+  if (measured) exports.setLocalSpeedResolver((model) => speed.resolveSpeed(model, measured, published))
   return exports
 }
 
@@ -147,4 +147,40 @@ test('étape 414 : la liste des modèles du Duel dit la vitesse mesurée sur CE 
   assert.ok(list.filter((o) => o.model !== 'granite4.2:8b').every((o) => o.speed === null && o.speedKind === null), 'les autres : pas encore mesurés (étape 498 : plus d’estimation)')
   const away = await exports.getDuelModelList('conversation', null, { vramGb: 288, ramGb: 188, ollamaVersion: '0.40.10' })
   assert.ok(away.every((o) => o.speed === null && o.speedKind === null), 'autre machine : la vitesse de ce PC ne dit rien')
+})
+
+// Étape 517 (Léo : « personne ne va faire de test : quand il installe, il voit tous les scores, de vitesse, de tout ») :
+// les vitesses mesurées par Léo (RTX 3070, 8 Go) sont publiées pour tout le monde.
+const PUBLISHED = loadTsModule('shared/publishedSpeeds.ts')
+
+test('étape 517 : sans test sur ce PC, la vitesse publiée ; un test ici passe toujours avant', () => {
+  const published = { speeds: { a: 150 }, vramGb: 8 }
+  assert.deepEqual(speed.resolveSpeed('a', {}, published), { speed: 150, kind: 'published', referenceVramGb: 8 })
+  assert.deepEqual(speed.resolveSpeed('a', { a: 90 }, published), { speed: 90, kind: 'measured' })
+  assert.deepEqual(speed.resolveSpeed('b', {}, published), { speed: null, kind: null })
+  assert.equal(PUBLISHED.PUBLISHED_SPEED_REFERENCE.vramGb, 8)
+  assert.equal(PUBLISHED.PUBLISHED_SPEEDS['lfm3:1.7b'], 150)
+})
+
+test('étape 517 : une vitesse publiée d’un modèle qui DÉBORDAIT de la carte de mesure ne fait pas perdre Moyen sur 24 Go', async () => {
+  const published = { speeds: PUBLISHED.PUBLISHED_SPEEDS, vramGb: PUBLISHED.PUBLISHED_SPEED_REFERENCE.vramGb }
+  const overview = await scan(null, 24 * 1024).getModelOverview()
+  const need = new Map(overview.entries.map((e) => [e.model, e.vramGb]))
+  // Les mêmes vitesses publiées, sans celles des modèles trop gros pour 8 Go (mesurées en débordant sur la RAM).
+  const fitting = { speeds: Object.fromEntries(Object.entries(published.speeds).filter(([m]) => (need.get(m) ?? 99) <= 8)), vramGb: 8 }
+  const withAll = await scan({}, 24 * 1024, published).pickBestModelsFromBenchmark()
+  const withFitting = await scan({}, 24 * 1024, fitting).pickBestModelsFromBenchmark()
+  assert.equal(JSON.stringify(withAll.models), JSON.stringify(withFitting.models), '3 tokens/s d’un 27B sur une carte de 8 Go ne dit rien d’une carte de 24 Go')
+  // Mais la colonne de l’écran les montre toutes.
+  const shown = new Map((await scan({}, 24 * 1024, published).getModelOverview()).entries.map((e) => [e.model, e]))
+  assert.equal(shown.get('qwen3.5:27b').localSpeed, 3.3)
+  assert.equal(shown.get('qwen3.5:27b').localSpeedKind, 'published')
+})
+
+test('étape 517 : sur une carte comme celle de la mesure, les vitesses publiées choisissent comme des vitesses mesurées ici', async () => {
+  const published = { speeds: PUBLISHED.PUBLISHED_SPEEDS, vramGb: 8 }
+  const viaPublished = await scan({}, 8192, published).pickBestModelsFromBenchmark()
+  const viaMeasured = await scan({ ...PUBLISHED.PUBLISHED_SPEEDS }, 8192).pickBestModelsFromBenchmark()
+  assert.equal(viaPublished.models.flash, viaMeasured.models.flash)
+  assert.equal(viaPublished.models.medium, viaMeasured.models.medium)
 })

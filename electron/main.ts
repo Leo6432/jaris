@@ -57,6 +57,7 @@ import { engineModelsDir } from './services/ollamaEngine'
 import { Agent as UndiciAgent } from 'undici'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setChatDispatcher, setModelsViewRepair, waitForOllama } from './services/ollama'
 import { getMeasuredSpeeds, loadModelSpeeds } from './services/speedStore'
+import { PUBLISHED_SPEED_REFERENCE, PUBLISHED_SPEEDS } from '../shared/publishedSpeeds'
 import { buildSpeedExport, getSpeedTestModels, isSpeedTestRunning, runSpeedTest, stopSpeedTest } from './services/speedTest'
 import { addCatalogServer, addMcpServers, cancelMcpSignIn, listMcpServers, mcpToolsFor, signInMcpServer, removeMcpServer, restartMcpServer, setMcpChangeListener, setMcpServerEnabled, setMcpToolEnabled, startMcpHub, stopMcpHub } from './services/mcpHub'
 import { setExtraToolSource } from './services/assistant'
@@ -295,7 +296,10 @@ setDuelProbability((pool, challenger, incumbent) => {
 // distant disparu sans fermer la connexion ne bloque pas une demande pour toujours. Le reste du flux garde la limite
 // d'undici (5 minutes sans le moindre fragment), toujours atteinte par une vraie panne, jamais par un modèle qui écrit.
 setChatDispatcher(new UndiciAgent({ headersTimeout: 60 * 60_000 }))
-setLocalSpeedResolver((model) => resolveSpeed(model, getMeasuredSpeeds()))
+// Étape 517 : sans test sur ce PC, la vitesse mesurée par Léo et publiée pour tout le monde (shared/publishedSpeeds.ts).
+setLocalSpeedResolver((model) =>
+  resolveSpeed(model, getMeasuredSpeeds(), { speeds: PUBLISHED_SPEEDS, vramGb: PUBLISHED_SPEED_REFERENCE.vramGb })
+)
 // Étape 346 : le filet de téléchargement lit la même carte que le choix des modèles (registre pour AMD et Intel).
 setVramSource(() => detectGpu().then((gpu) => gpu.vramGb))
 // Étape 346 : la place libre se mesure sur le disque qui reçoit vraiment les modèles (celui de l'Ollama de Jaris).

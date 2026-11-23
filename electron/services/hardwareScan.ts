@@ -1099,9 +1099,21 @@ export function localSpeedOf(model: string): ResolvedSpeed {
   return localSpeedResolver ? localSpeedResolver(model) : { speed: null, kind: null }
 }
 
-/** La vitesse utilisée pour choisir les modèles, `undefined` si elle est inconnue (même convention qu'avant). */
+/**
+ * La vitesse utilisée pour choisir les modèles, `undefined` si elle est inconnue (même convention qu'avant).
+ * Étape 517 : une vitesse PUBLIÉE (mesurée par Léo sur sa carte, shared/publishedSpeeds.ts) ne compte que si le modèle
+ * tenait entièrement dans cette carte : au-delà, il débordait sur la RAM là-bas (3 tokens/s pour un 27B sur 8 Go), ce
+ * qui ne dit rien d'un PC à grosse carte — compter ce chiffre écarterait à tort les gros modèles de Moyen sur 24 Go.
+ * L'écran, lui, les montre toutes, avec la machine de mesure.
+ */
 function speedFor(model: string): number | undefined {
-  return localSpeedOf(model).speed ?? undefined
+  const resolved = localSpeedOf(model)
+  if (resolved.speed === null) return undefined
+  if (resolved.kind === 'published') {
+    const candidate = ALL_MODELS.find((c) => c.model === model)
+    if (!candidate || resolved.referenceVramGb === undefined || memoryNeedGb(candidate) > resolved.referenceVramGb) return undefined
+  }
+  return resolved.speed
 }
 
 /**

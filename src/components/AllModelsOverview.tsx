@@ -9,7 +9,7 @@ import { formatDecimal, t } from '@/lib/i18n'
 import type { MessageKey } from '../../shared/i18n'
 import { FUTURE_MODELS } from '../../shared/futureModels'
 import { DUEL_RELIABLE_COUNT, duelConfidence } from '../../shared/duel'
-import { shownSpeed } from '../lib/shownSpeed'
+import { shownSpeed, speedSourceLabel } from '../lib/shownSpeed'
 import { ipcErrorMessage } from '@/lib/ipcError'
 
 
@@ -125,12 +125,12 @@ function toolScoreValue(toolCalling: string | null): number | null {
   return Number.isFinite(total) && total > 0 ? correct / total : correct
 }
 
-/** Étape 367 : vitesse mesurée sur CE PC (étape 498 : plus de vitesse publiée ni estimée) ; « — » sans mesure. */
+/** Étape 367 : vitesse du test sur CE PC, sinon (étape 517) celle publiée par Jaris ; « — » sans l'une ni l'autre. */
 function SpeedCell({ entry }: { entry: ModelOverviewEntry }) {
   const speed = shownSpeed(entry)
   if (speed.value === null) return <td className="options-menu__col-num">—</td>
   return (
-    <td className="options-menu__col-num" title={t('speed.kind.measured')}>
+    <td className="options-menu__col-num" title={speedSourceLabel(speed.kind)}>
       {formatDecimal(speed.value)}
     </td>
   )
