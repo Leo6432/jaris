@@ -295,7 +295,9 @@ const MIN_OLLAMA_VERSION = {
   'hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M': '0.40.5',
   'nemotron-3.5-bolt:e4b': '0.40.10',
   // Étape 501 : voir MIN_OLLAMA_VERSION dans hardwareScan.ts.
-  'lfm3:1.7b': '0.40.13'
+  'lfm3:1.7b': '0.40.13',
+  // Étape 521 : voir MIN_OLLAMA_VERSION dans hardwareScan.ts.
+  'inkling-2-mini:26b-a5b-iq4_NL': '0.40.18'
 }
 
 /** Même lecture que Jaris : « 0.40.4-rc1 » compte comme 0.40.4 (la pré-version charge déjà K2 Horizon). */
@@ -364,6 +366,8 @@ const RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:27b',
   'qwen3.8:27b',
   'muse-glimmer:30b',
+  'inkling-2-mini:26b-a5b-iq4_NL',
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',
@@ -462,6 +466,9 @@ const MODELS = [
   // ollama.com/library/qwen3.8 (tag 27b, 18 Go).
   'qwen3.8:27b',
   'muse-glimmer:30b',
+  // Étape 521 : Inkling 2 Mini et Nanbeige4.3-33B — voir LARGE_CANDIDATES dans hardwareScan.ts.
+  'inkling-2-mini:26b-a5b-iq4_NL',
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M',
   // Candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM que la
   // config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
   'qwen3.6:27b',
@@ -510,6 +517,7 @@ const VISION_CANDIDATES = [
   { model: 'gemma4:26b', vramGb: 18.7 },
   { model: 'qwen3.8:27b', vramGb: 17.7 },
   { model: 'muse-glimmer:30b', vramGb: 18.2 },
+  { model: 'inkling-2-mini:26b-a5b-iq4_NL', vramGb: 18.3 },
   { model: 'ornith-1.5:35b', vramGb: 22.6 },
   { model: 'ornith-1.5:9b', vramGb: 6.6 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
@@ -607,6 +615,8 @@ const MODEL_SIZE_HINTS = {
   'qwen3.5:27b': 17.5,
   'qwen3.8:27b': 17.7,
   'muse-glimmer:30b': 18.2,
+  'inkling-2-mini:26b-a5b-iq4_NL': 18.3,
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M': 20.8,
   'qwen3.6:27b': 17.8,
   'granite4.2:30b': 17.7,
   'gemma4:26b': 18.7,
@@ -673,6 +683,8 @@ const LARGE_TIER_MODELS = new Set([
   'qwen3.5:27b',
   'qwen3.8:27b',
   'muse-glimmer:30b',
+  'inkling-2-mini:26b-a5b-iq4_NL',
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',

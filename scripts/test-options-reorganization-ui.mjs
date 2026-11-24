@@ -613,8 +613,8 @@ test('étape 331 : la version compressée s’affiche en entier sous chaque nom,
         assert.equal(row.badge, undefined)
         continue
       }
-      // Étape 510 : NVFP4, la version d'Inkling 2 Mini (futur modèle).
-      assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0|Q2_0|NVFP4)$/, `${row.title} : version absente`)
+      // Étape 521 : IQ4_NL, la version PC d'Inkling 2 Mini (son NVFP4 était la version Mac, quand il était « futur »).
+      assert.match(row.badge ?? '', /^(Q4_K_M|Q8_0|Q2_0|IQ4_NL)$/, `${row.title} : version absente`)
       assert.ok(row.inside, `${row.title} : version coupée ou cachée`)
       assert.equal(row.border, 'solid', `${row.title} : badge non habillé par le CSS`)
     }
@@ -1059,16 +1059,15 @@ test('« Tous les modèles » : un futur modèle reste en bas, rayé, « Futur m
 // Étape 495 (Léo : « mets-le dans futur modèle », Olala mini d'OVHcloud, pas encore sur Ollama) : taille inconnue = « — »,
 // jamais un chiffre deviné ; et la ligne rayée a autant de cases que l'en-tête (il en manquait une depuis le Duel Vision).
 // Étape 510 : Olala mini retiré (Léo) ; le cas est gardé par un faux modèle du test, et Inkling 2 Mini vérifié.
-test('« Tous les modèles » : futur modèle sans taille inventée, aligné sur les colonnes ; Inkling 2 Mini avec sa taille du registre', options, async () => {
+// Étape 521 : Inkling 2 Mini et Nanbeige4.3 ne sont plus des futurs modèles (vrais candidats : test-hardwarescan-inkling).
+test('« Tous les modèles » : futur modèle sans taille inventée, aligné sur les colonnes ; Inkling et Nanbeige plus rayés', options, async () => {
   await withOptions(async (page) => {
     await openRanking(page)
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const row = await page.$$eval('.options-page--models tbody tr.options-menu__model-row--future', (rows) => {
       const tr = rows.find((r) => r.querySelector('.options-menu__model-name')?.title === 'exemple-sans-taille')
-      const ink = rows.find((r) => r.querySelector('.options-menu__model-name')?.title === 'inkling-2-mini:26b-a5b')
-      return tr && ink && {
-        inkSize: ink.children[1].textContent.trim(),
-        inkQuant: ink.querySelector('.options-menu__quant')?.textContent,
+      return tr && {
+        oldFuture: rows.some((r) => /inkling|nanbeige/i.test(r.querySelector('.options-menu__model-name')?.title ?? '')),
         olala: rows.some((r) => /olala/i.test(r.textContent)),
         cells: tr.children.length,
         header: document.querySelectorAll('.options-page--models thead th').length,
@@ -1077,9 +1076,8 @@ test('« Tous les modèles » : futur modèle sans taille inventée, aligné sur
         badge: tr.querySelector('.options-menu__future-badge')?.textContent
       }
     })
-    assert.ok(row, 'futur modèle sans taille et Inkling 2 Mini attendus')
-    assert.equal(row.inkSize, '20,2 Go')
-    assert.equal(row.inkQuant, 'NVFP4')
+    assert.ok(row, 'futur modèle sans taille attendu')
+    assert.equal(row.oldFuture, false, 'Inkling et Nanbeige ne sont plus des futurs modèles')
     assert.equal(row.olala, false, 'Olala mini retiré')
     assert.equal(row.cells, row.header, `${row.cells} cases pour ${row.header} colonnes`)
     assert.equal(row.size, '—')

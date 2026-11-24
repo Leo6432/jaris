@@ -256,6 +256,18 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // registre d'Ollama (muse-glimmer:30b = :latest, Q4_K_M, 18,2 Go réels : modèle 16,76 + projecteur 1,40 ;
   // tools + thinking + vision, Ollama 0.32.8 minimum). Sans score d'appel d'outils tant que Léo ne l'a pas testé.
   { model: 'muse-glimmer:30b', vramGb: 18.2 },
+  // Étape 521 (Léo : « Inkling 2 Mini est dingue », puis « oui fais-le ») : sortis de « Futurs modèles » le jour où Ollama
+  // les fait tourner sur PC. Vérifiés dans les registres :
+  // - Inkling 2 Mini (Thinking Machines, Apache 2.0, MoE 26 Md / 5,4 Md actifs, couches en boucle) : tag OFFICIEL
+  //   d'Ollama `inkling-2-mini:26b-a5b-iq4_NL` (GGUF, architecture `inkling2_loop`, « requires 0.40.18 » ; outils + réflexion
+  //   + lecture d'images), 18,27 Go (modèle 17,63 + lecteur d'images 0,64). Les autres tags (`26b-a5b`, `latest`,
+  //   `nvfp4`) sont au format MLX : Mac seulement. Ollama 0.40.18 contient llama.cpp b12651, qui a Inkling (#32694).
+  // - Nanbeige4.3-33B (Nanbeige, Apache 2.0, dense, texte seulement) : GGUF de bartowski (pas de GGUF du créateur),
+  //   architecture llama, 20,79 Go. Ajouté EN MÊME TEMPS qu'Inkling, comme Léo l'avait demandé (étape 511).
+  // Mémoire chargée mesurée avec Ollama 0.40.18 (MODEL_MEMORY_16K_GB). Trop gros pour être essayés ici (15 Go de RAM) :
+  // sans score tant que Léo ne les a pas analysés — jamais choisis avant.
+  { model: 'inkling-2-mini:26b-a5b-iq4_NL', vramGb: 18.3 },
+  { model: 'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M', vramGb: 20.8 },
   // Trois candidats supplémentaires dans la même tranche (17-19 Go), utiles pour les machines avec plus de
   // VRAM que la config de développement (8 Go) — pas retenus faute de "trop lourd" mais parce qu'un candidat
   // de plus dans cette tranche ne changeait rien pour Léo ; ajoutés maintenant pour ceux qui ont la VRAM.
@@ -324,6 +336,8 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:27b',
   'qwen3.8:27b',
   'muse-glimmer:30b',
+  'inkling-2-mini:26b-a5b-iq4_NL',
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M',
   'qwen3.6:27b',
   'granite4.2:30b',
   'gemma4:26b',
@@ -376,6 +390,8 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.8:27b', vramGb: 17.7 },
   // Muse Glimmer : vision native (voir LARGE_CANDIDATES).
   { model: 'muse-glimmer:30b', vramGb: 18.2 },
+  // Étape 521 : Inkling 2 Mini lit les images (voir LARGE_CANDIDATES).
+  { model: 'inkling-2-mini:26b-a5b-iq4_NL', vramGb: 18.3 },
   // Ornith 1.5 : lecteur d'images inclus (voir MEDIUM_CANDIDATES et LARGE_CANDIDATES).
   { model: 'ornith-1.5:35b', vramGb: 22.6 },
   { model: 'ornith-1.5:9b', vramGb: 6.6 },
@@ -540,7 +556,10 @@ export const MIN_OLLAMA_VERSION: Record<string, string> = {
   'nemotron-3.5-bolt:e4b': '0.40.10',
   // Étape 501 (test de Léo arrêté « code 1 ») : LFM3 déclare lui-même « requires 0.40.13 » dans sa configuration
   // Ollama (lue dans le registre). Mesuré ici avec 0.40.16 : rien ne disait qu'un Ollama plus ancien ne le charge pas.
-  'lfm3:1.7b': '0.40.13'
+  'lfm3:1.7b': '0.40.13',
+  // Étape 521 : Inkling 2 Mini déclare « requires 0.40.18 » (configuration du tag dans le registre) : son architecture
+  // n'est dans llama.cpp d'Ollama que depuis cette version.
+  'inkling-2-mini:26b-a5b-iq4_NL': '0.40.18'
 }
 
 /** Version d'Ollama installée, branchée par main.ts sur le dernier contrôle (dependencyServices.ts). */
@@ -1189,6 +1208,8 @@ export const MODEL_QUANTIZATION: Record<string, string> = {
   'north-mini-code-1.0': 'Q4_K_M',
   'qwen3.8:27b': 'Q4_K_M',
   'muse-glimmer:30b': 'Q4_K_M',
+  'inkling-2-mini:26b-a5b-iq4_NL': 'IQ4_NL',
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M': 'Q4_K_M',
   'qwen3.6:27b': 'Q4_K_M',
   'granite4.2:30b': 'Q4_K_M',
   'qwen3.5:27b': 'Q4_K_M',
@@ -1296,9 +1317,12 @@ export const MODEL_MEMORY_16K_GB: Record<string, number> = {
   'qwen3.5:35b': 22.9,
   'qwen3.6:35b': 22.9,
   'qwen3.6:35b-a3b': 22.9,
+  // Étape 521 : mesuré avec measure-model-memory.py et Ollama 0.40.18 (23,09 Go ; 25,29 Go pour Nanbeige).
+  'inkling-2-mini:26b-a5b-iq4_NL': 23.1,
   'gemma4:31b': 24.0,
   'qwen2.5-coder:32b': 24.6,
   'nemotron-3.5-lightning:30b': 24.7,
+  'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M': 25.3,
   'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 25.8
 }
 

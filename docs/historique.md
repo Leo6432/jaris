@@ -13112,3 +13112,25 @@ des modèles ; version Store, voix, agentique), chaque défaut vérifié dans le
 Tests (chacun mord, vérifié en réintroduisant le défaut) : test-assistant-history, test-new-tools, test-local-speed,
 test-speed-test, test-data-files, test-app-updater, test-duel-panel-ui. `load-ts-module.mjs` fournit `async_hooks`
 d'office (comme le traducteur) ; faux processus : `setEncoding`.
+
+## Étape 521 — Inkling 2 Mini et Nanbeige4.3-33B deviennent de vrais candidats (à analyser par Léo)
+
+Suivi quotidien (étape 510) : Ollama 0.40.18 (version stable, celle que `releases/latest` sert) contient llama.cpp
+b12651, qui a Inkling 2 Mini (llama.cpp #32694, #32704, #32799, #32833). Ollama a publié un tag GGUF pour PC :
+`inkling-2-mini:26b-a5b-iq4_NL` (configuration : `model_format gguf`, architecture `inkling2_loop`, `requires 0.40.18`,
+outils + réflexion + lecture d'images ; 18,27 Go = modèle 17,63 + lecteur d'images 0,64 ; licence Apache 2.0). Les
+tags `26b-a5b`/`latest`/`nvfp4` restent au format MLX (Mac). Léo : « oui fais-le, et ajoute l'analyse pour que je la
+fasse ».
+- hardwareScan.ts (+ copies de benchmark-models.mjs) : Inkling dans LARGE_CANDIDATES, LARGE_RAM_OFFLOAD_MODELS et
+  VISION_CANDIDATES ; MIN_OLLAMA_VERSION 0.40.18 ; version IQ4_NL. Nanbeige4.3-33B (bartowski, Q4_K_M, 20,79 Go,
+  architecture llama), ajouté EN MÊME TEMPS comme Léo l'avait demandé (étape 511) : LARGE_CANDIDATES et débordement.
+  Tous deux retirés de « Futurs modèles » (liste vide).
+- Mémoire chargée (contexte 16 384) mesurée avec measure-model-memory.py et le vrai llama-server d'Ollama 0.40.18
+  Linux (archive officielle, empreinte vérifiée) : Inkling 23,1 Go, Nanbeige 25,3 Go. Les deux en-têtes se chargent
+  sans erreur (architecture reconnue).
+- Pas essayés pour de vrai ici (15 Go de RAM, trop peu) : sans score, jamais choisis — proposés dans « Tester ces
+  modèles » et dans le test de vitesse. Inkling n'est proposé qu'avec Ollama 0.40.18 (bouton « Mettre à jour Ollama »).
+- Question de Léo (« il perd pas d'intelligence ? le q4 Mac est le même que Windows ? ») : même modèle, deux
+  compressions 4 bits différentes (NVFP4 pour Mac, IQ4_NL pour PC) ; aucune comparaison publiée — l'analyse le mesure.
+- Tests : test-hardwarescan-min-ollama (proposés, jamais choisis sans score, 0.40.17 = Inkling pas proposé, taille et
+  version), test-options-reorganization-ui (plus de ligne rayée pour eux).

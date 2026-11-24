@@ -131,7 +131,7 @@ test('étape 331 : chaque modèle de Jaris a sa version compressée, et « Tous 
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry]))
   // Un modèle ajouté plus tard sans sa version ferait échouer ce test, au lieu d'afficher un badge vide.
   for (const model of m.getAllCandidateModelIds()) {
-    assert.match(m.MODEL_QUANTIZATION[model] ?? '', /^(Q4_K_M|Q8_0|MXFP4)$/, `${model} : version manquante`)
+    assert.match(m.MODEL_QUANTIZATION[model] ?? '', /^(Q4_K_M|Q8_0|MXFP4|IQ4_NL)$/, `${model} : version manquante`)
     assert.equal(byModel.get(model)?.quantization, m.MODEL_QUANTIZATION[model], `${model} : version absente de l'écran`)
   }
   // Relevé du registre le 19/10/2026 : les seules exceptions au Q4_K_M.
@@ -139,4 +139,6 @@ test('étape 331 : chaque modèle de Jaris a sa version compressée, et « Tous 
   assert.equal(m.MODEL_QUANTIZATION['qwen3.5:2b'], 'Q8_0')
   assert.equal(m.MODEL_QUANTIZATION['gpt-oss:20b'], 'MXFP4')
   assert.equal(m.MODEL_QUANTIZATION['hf.co/bartowski/ai9stars_G9v3-3B-GGUF'], 'Q4_K_M')
+  // Étape 521 : le seul tag PC d'Inkling 2 Mini (configuration du registre : file_type IQ4_NL).
+  assert.equal(m.MODEL_QUANTIZATION['inkling-2-mini:26b-a5b-iq4_NL'], 'IQ4_NL')
 })

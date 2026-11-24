@@ -35,8 +35,7 @@ export interface FutureModel {
  * texte seulement, outils documentés, 512K de contexte). Pas dans la bibliothèque d'Ollama ; pas de GGUF du créateur
  * (safetensors, FP8, INT4) : GGUF de bartowski, Q4_K_M = 20 788 825 216 octets (API Hugging Face). Architecture llama :
  * Ollama sait la charger. Volontairement en « futur » : à tester et ajouter EN MÊME TEMPS qu'Inkling 2 Mini.
+ * Étape 521 (Léo : « oui fais-le ») : Ollama 0.40.18 fait tourner Inkling 2 Mini sur PC (tag GGUF `26b-a5b-iq4_NL`) —
+ * Inkling et Nanbeige4.3-33B deviennent de vrais candidats (hardwareScan.ts), à analyser par Léo.
  */
-export const FUTURE_MODELS: FutureModel[] = [
-  { model: 'inkling-2-mini:26b-a5b', vramGb: 20.2, readsImages: true, quantization: 'NVFP4' },
-  { model: 'hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M', vramGb: 20.8, readsImages: false, quantization: 'Q4_K_M' }
-]
+export const FUTURE_MODELS: FutureModel[] = []
