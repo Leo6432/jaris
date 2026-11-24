@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} Fall wiederholt",
   "unscored.replayed_other": "{count} Fälle wiederholt",
   "unscored.skipped": "übersprungen — {reason}",
+  "unscored.codeSkipped": "Codetest auf diesem PC nicht möglich: {reason}. Die anderen Tests laufen weiter; der Codetest steht noch aus.",
   "unscored.unknownReason": "unbekannter Grund",
   "unscored.openResults": "Ergebnisdatei öffnen",
   "unscored.resumeButton": "Test fortsetzen",

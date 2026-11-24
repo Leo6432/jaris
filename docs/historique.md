@@ -13147,3 +13147,20 @@ gardait Inkling caché pour toute la session.
 - Test (mord) : test-options-reorganization-ui (annonce d'une nouvelle version, Classement ouvert : Inkling apparaît
   dans les deux listes). Faux pont d'Options : plusieurs abonnés à la version d'Ollama ; test-unscored-models-ui aussi.
 - Contournement immédiat pour Léo en 0.78.0 : quitter complètement Jaris et le rouvrir.
+
+## Étape 523 — Analyse : un navigateur qui ne démarre pas n'arrête plus tout ; sa raison est dite (0.78.2)
+
+Capture de Léo (0.78.0, analyse d'Inkling 2 Mini) : « Le test s'est arrêté avant la fin (code 1) : … Test de code
+impossible sur ce PC : Le navigateur ne démarre plus (le navigateur s'est fermé dès son lancement) : le test s'arrête ».
+Rien téléchargé, rien testé : la vérification du navigateur (Edge, étape 232) bloquait TOUTE l'analyse, et ne disait pas
+pourquoi Edge se fermait (sortie ignorée). La campagne de code du 11/11 marchait sur ce PC (version .exe) : cause pas
+encore connue (piste : Jaris lancé depuis le paquet du Store — non vérifié, pas de Windows ici).
+- benchmark-browser.mjs : code de sortie et deux dernières lignes écrites par le navigateur dans le message
+  (« le navigateur s'est fermé dès son lancement (code 7 : …) »).
+- benchmark-models.mjs : la vérification se fait AVANT de choisir quoi télécharger. Navigateur impossible : le test de code
+  est mis de côté (jamais un faux 0, le code reste à faire), les autres épreuves continuent ; annoncé par
+  `##CODE_SKIPPED## <raison>`, affiché par l'écran (`unscored.codeSkipped`, 24 langues). Seul le code à faire : arrêt
+  comme avant, avec la raison du navigateur elle-même.
+- Tests (mordent) : test-benchmark-cases (faux navigateur qui écrit une erreur et sort en code 7 : questions jouées,
+  aucun test de code, raison exacte ; code seul : arrêt), test-unscored-models-ui (raison affichée, test qui continue).
+- À faire : lire la raison affichée chez Léo au prochain essai, puis corriger la vraie cause.

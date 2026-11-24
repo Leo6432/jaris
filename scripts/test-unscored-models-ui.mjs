@@ -98,6 +98,29 @@ test('le rejeu des cas coupés se voit dans le suivi, sans passer pour un score'
   }
 })
 
+// Étape 523 (Léo : Inkling bloqué par le navigateur) : le test de code impossible est DIT, et le test continue.
+test('étape 523 : test de code impossible — la raison s’affiche, le test continue et finit normalement', options, async () => {
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    await page.evaluate(() => window.__line('##CODE_SKIPPED## le navigateur s’est fermé dès son lancement (code 7)'))
+    await page.waitForSelector('.options-menu__error')
+    assert.equal(
+      await page.textContent('.options-menu__error'),
+      'Test de code impossible sur ce PC : le navigateur s’est fermé dès son lancement (code 7). Les autres épreuves continuent ; le code reste à faire.'
+    )
+    assert.equal(await page.locator('button >> text=Arrêter le test').count(), 1, 'le test continue')
+    await page.evaluate(() => window.__finish())
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent === 'Test terminé.')
+    assert.equal(await page.locator('.options-menu__error').count(), 1, 'la raison reste visible à la fin')
+  } finally {
+    await browser.close()
+  }
+})
+
 test('étape 314 : une réponse de plusieurs minutes affiche depuis combien de temps le modèle répond', options, async () => {
   // Léo a quitté un test qu'il croyait bloqué : la 32B mettait 8 à 15 minutes par application, sans rien afficher.
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })

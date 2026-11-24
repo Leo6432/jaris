@@ -52,6 +52,8 @@ export default function UnscoredModelsTest({ reloadKey = 0 }: { reloadKey?: numb
   const [picked, setPicked] = useState<string[]>([])
   // Étape 441 (Léo : « ajoute pouvoir arrêter les tests, là je dois quitter l'application pour arrêter le test »).
   const [stopping, setStopping] = useState(false)
+  // Étape 523 : navigateur impossible à lancer — le test de code est mis de côté, les autres épreuves continuent.
+  const [codeSkipped, setCodeSkipped] = useState<string | null>(null)
 
   // Étape 437 : la machine louée connectée (ou non) change où le test se fera — et donc ses durées estimées.
   const [machineHost, setMachineHost] = useState<string | null>(null)
@@ -120,6 +122,8 @@ export default function UnscoredModelsTest({ reloadKey = 0 }: { reloadKey?: numb
       } else if (marker === '##REPLAY_DONE##') {
         // Cas refaits (délai dépassé, plantage) : un nombre de cas, pas un score.
         upsert({ model: args[0], status: 'replayed', total: Number(args[1]) })
+      } else if (marker === '##CODE_SKIPPED##') {
+        setCodeSkipped(args.join(' ') || t('unscored.unknownReason'))
       } else if (marker === '##MODEL_SKIPPED##') {
         // Étape 169 : la vraie raison, jamais un « trop gros ou téléchargement impossible » générique.
         upsert({ model: args[0], status: 'skipped', reason: args.slice(1).join(' ') || undefined })
@@ -174,6 +178,7 @@ export default function UnscoredModelsTest({ reloadKey = 0 }: { reloadKey?: numb
     setPhase('running')
     setPercent(0)
     setRows([])
+    setCodeSkipped(null)
     setError(null)
     setStopping(false)
     try {
@@ -361,6 +366,7 @@ export default function UnscoredModelsTest({ reloadKey = 0 }: { reloadKey?: numb
               ))}
             </ul>
           )}
+          {codeSkipped && <p className="options-menu__error">{t('unscored.codeSkipped', { reason: codeSkipped })}</p>}
           {phase === 'error' && error && <p className="options-menu__error">{error}</p>}
           {phase === 'running' && <div className="options-menu__unscored-actions">{stopButton}</div>}
           {phase === 'error' && error === t('bench.testRunning') && <div className="options-menu__unscored-actions">{stopButton}</div>}

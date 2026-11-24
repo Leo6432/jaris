@@ -760,6 +760,7 @@
   "unscored.replayed_few": "{count} slučaja ponovljena",
   "unscored.replayed_other": "{count} slučajeva ponovljeno",
   "unscored.skipped": "preskočeno — {reason}",
+  "unscored.codeSkipped": "Test koda nije moguć na ovom računalu: {reason}. Ostali testovi se nastavljaju; test koda još treba napraviti.",
   "unscored.unknownReason": "nepoznat razlog",
   "unscored.openResults": "Otvori datoteku s rezultatima",
   "unscored.resumeButton": "Nastavi test",

@@ -773,6 +773,7 @@
   "unscored.replayed_few": "{count} primeri ponovljeni",
   "unscored.replayed_other": "{count} primerov ponovljenih",
   "unscored.skipped": "preskočeno — {reason}",
+  "unscored.codeSkipped": "Preizkus kode na tem računalniku ni mogoč: {reason}. Drugi preizkusi se nadaljujejo; preizkus kode še čaka.",
   "unscored.unknownReason": "neznan razlog",
   "unscored.openResults": "Odpri datoteko z rezultati",
   "unscored.resumeButton": "Nadaljuj preizkus",

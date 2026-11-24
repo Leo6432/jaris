@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} eset újrajátszva",
   "unscored.replayed_other": "{count} eset újrajátszva",
   "unscored.skipped": "kihagyva — {reason}",
+  "unscored.codeSkipped": "A kódteszt nem lehetséges ezen a gépen: {reason}. A többi teszt folytatódik; a kódteszt még hátravan.",
   "unscored.unknownReason": "ismeretlen ok",
   "unscored.openResults": "Eredményfájl megnyitása",
   "unscored.resumeButton": "Teszt folytatása",

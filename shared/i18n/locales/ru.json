@@ -773,6 +773,7 @@
   "unscored.replayed_many": "{count} случаев повторено",
   "unscored.replayed_other": "{count} случаев повторено",
   "unscored.skipped": "пропущено — {reason}",
+  "unscored.codeSkipped": "Тест кода на этом ПК невозможен: {reason}. Остальные тесты продолжаются; тест кода ещё предстоит.",
   "unscored.unknownReason": "неизвестная причина",
   "unscored.openResults": "Открыть файл с результатами",
   "unscored.resumeButton": "Продолжить тест",

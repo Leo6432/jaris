@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} περίπτωση επαναλήφθηκε",
   "unscored.replayed_other": "{count} περιπτώσεις επαναλήφθηκαν",
   "unscored.skipped": "παραλείφθηκε — {reason}",
+  "unscored.codeSkipped": "Το τεστ κώδικα δεν είναι δυνατό σε αυτόν τον υπολογιστή: {reason}. Τα άλλα τεστ συνεχίζονται· το τεστ κώδικα μένει να γίνει.",
   "unscored.unknownReason": "άγνωστος λόγος",
   "unscored.openResults": "Άνοιγμα του αρχείου αποτελεσμάτων",
   "unscored.resumeButton": "Συνέχιση δοκιμής",

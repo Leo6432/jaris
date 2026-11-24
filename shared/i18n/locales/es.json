@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} caso repetido",
   "unscored.replayed_other": "{count} casos repetidos",
   "unscored.skipped": "omitido: {reason}",
+  "unscored.codeSkipped": "Prueba de código imposible en este PC: {reason}. Las demás pruebas continúan; la de código queda pendiente.",
   "unscored.unknownReason": "motivo desconocido",
   "unscored.openResults": "Abrir el archivo de resultados",
   "unscored.resumeButton": "Reanudar la prueba",

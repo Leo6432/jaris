@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} tapaus ajettu uudelleen",
   "unscored.replayed_other": "{count} tapausta ajettu uudelleen",
   "unscored.skipped": "ohitettu — {reason}",
+  "unscored.codeSkipped": "Kooditesti ei onnistu tällä tietokoneella: {reason}. Muut testit jatkuvat; kooditesti on vielä tekemättä.",
   "unscored.unknownReason": "tuntematon syy",
   "unscored.openResults": "Avaa tulostiedosto",
   "unscored.resumeButton": "Jatka testiä",

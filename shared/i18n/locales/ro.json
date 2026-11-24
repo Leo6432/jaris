@@ -760,6 +760,7 @@
   "unscored.replayed_few": "{count} cazuri reluate",
   "unscored.replayed_other": "{count} de cazuri reluate",
   "unscored.skipped": "sărit — {reason}",
+  "unscored.codeSkipped": "Testul de cod nu e posibil pe acest PC: {reason}. Celelalte teste continuă; testul de cod rămâne de făcut.",
   "unscored.unknownReason": "motiv necunoscut",
   "unscored.openResults": "Deschide fișierul cu rezultate",
   "unscored.resumeButton": "Reia testul",

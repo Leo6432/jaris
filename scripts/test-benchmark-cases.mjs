@@ -1145,6 +1145,49 @@ test('vision de bout en bout : 10 lectures et 7 visées × 2, les consignes de J
   }
 })
 
+// Étape 523 (Léo, 0.78.0 : Inkling 2 Mini bloqué par « le navigateur s'est fermé dès son lancement », sans raison) :
+// la raison du navigateur est dite (code de sortie, ce qu'il a écrit), et les autres épreuves continuent sans le code.
+test(
+  'étape 523 : navigateur qui se ferme au lancement — sa raison est dite, les autres épreuves continuent, le code reste à faire',
+  { skip: process.platform !== 'win32' ? false : 'il faut un shell Unix pour simuler le navigateur' },
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+    const wrapper = join(dir, 'navigateur.sh')
+    writeFileSync(wrapper, '#!/bin/sh\necho "[1124:ERROR] profil impossible a creer" >&2\nexit 7\n', { mode: 0o755 })
+    const fake = await startFakeOllama({ installed: ['ministral-3:3b'], answer: () => ({ content: 'Je ne sais pas.' }) })
+    try {
+      const resultsPath = join(dir, 'benchmark-results.md')
+      const { code, out } = await runScript({
+        OLLAMA_HOST: fake.host,
+        JARIS_RESULTS_PATH: resultsPath,
+        JARIS_ANALYSIS_SCOPE: 'all',
+        JARIS_ONLY_MODELS: 'ministral-3:3b',
+        JARIS_BROWSER_PATH: wrapper,
+        JARIS_RETEST_ALL: '1'
+      })
+      assert.equal(code, 0, out)
+      assert.match(out, /^##CODE_SKIPPED## le navigateur s’est fermé dès son lancement \(code 7 : \[1124:ERROR\] profil impossible a creer\)$/m)
+      const traces = readFileSync(join(dir, 'benchmark-results.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+      assert.ok(traces.some((t) => t.type === 'question' && t.model === 'ministral-3:3b'), 'les questions ont été jouées')
+      assert.ok(!traces.some((t) => t.type === 'code' || t.type === 'code-generation'), 'aucun test de code')
+      // Rien d'autre à faire que le code : arrêt, comme avant (rien téléchargé, la raison dite).
+      const onlyCode = await runScript({
+        OLLAMA_HOST: fake.host,
+        JARIS_RESULTS_PATH: join(dir, 'code.md'),
+        JARIS_ANALYSIS_SCOPE: 'code',
+        JARIS_ONLY_MODELS: 'ministral-3:3b',
+        JARIS_BROWSER_PATH: wrapper,
+        JARIS_RETEST_ALL: '1'
+      })
+      assert.equal(onlyCode.code, 1, onlyCode.out)
+      assert.match(onlyCode.out, /Test de code impossible sur ce PC : le navigateur s’est fermé dès son lancement \(code 7 : [^)]*\)\. Rien n'a été téléchargé\./)
+    } finally {
+      fake.server.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
+
 // Relecture ChatGPT (v0.28.2) : le HTML généré n'était écrit qu'APRÈS la vérification dans le navigateur. Une panne du
 // navigateur (qui arrête le test) faisait perdre une génération de plusieurs minutes. Il est maintenant écrit avant.
 test(

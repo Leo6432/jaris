@@ -757,6 +757,7 @@ export const fr = {
   "unscored.replayed_one": "{count} cas refait",
   "unscored.replayed_other": "{count} cas refaits",
   "unscored.skipped": "sauté — {reason}",
+  "unscored.codeSkipped": "Test de code impossible sur ce PC : {reason}. Les autres épreuves continuent ; le code reste à faire.",
   "unscored.unknownReason": "raison inconnue",
   "unscored.openResults": "Ouvrir le fichier des résultats",
   "unscored.resumeButton": "Reprendre le test",

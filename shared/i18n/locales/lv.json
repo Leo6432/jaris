@@ -760,6 +760,7 @@
   "unscored.replayed_one": "{count} gadījums atkārtots",
   "unscored.replayed_other": "{count} gadījumi atkārtoti",
   "unscored.skipped": "izlaists — {reason}",
+  "unscored.codeSkipped": "Koda tests šajā datorā nav iespējams: {reason}. Pārējie testi turpinās; koda tests vēl jāveic.",
   "unscored.unknownReason": "nezināms iemesls",
   "unscored.openResults": "Atvērt rezultātu failu",
   "unscored.resumeButton": "Turpināt testu",

@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} geval opnieuw gedaan",
   "unscored.replayed_other": "{count} gevallen opnieuw gedaan",
   "unscored.skipped": "overgeslagen — {reason}",
+  "unscored.codeSkipped": "Codetest niet mogelijk op deze pc: {reason}. De andere tests gaan door; de codetest moet nog gebeuren.",
   "unscored.unknownReason": "onbekende reden",
   "unscored.openResults": "Resultatenbestand openen",
   "unscored.resumeButton": "Test hervatten",

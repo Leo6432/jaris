@@ -773,6 +773,7 @@
   "unscored.replayed_many": "{count} przypadków powtórzonych",
   "unscored.replayed_other": "{count} przypadków powtórzonych",
   "unscored.skipped": "pominięto — {reason}",
+  "unscored.codeSkipped": "Test kodu niemożliwy na tym komputerze: {reason}. Pozostałe testy trwają dalej; test kodu jest jeszcze do zrobienia.",
   "unscored.unknownReason": "nieznany powód",
   "unscored.openResults": "Otwórz plik z wynikami",
   "unscored.resumeButton": "Wznów test",

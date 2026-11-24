@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} caso refeito",
   "unscored.replayed_other": "{count} casos refeitos",
   "unscored.skipped": "pulado — {reason}",
+  "unscored.codeSkipped": "Teste de código impossível neste PC: {reason}. Os outros testes continuam; o de código fica para depois.",
   "unscored.unknownReason": "motivo desconhecido",
   "unscored.openResults": "Abrir o arquivo de resultados",
   "unscored.resumeButton": "Retomar o teste",

@@ -1658,7 +1658,7 @@ async function checkInBrowser(testCase, html, journal = null) {
   try {
     session = await openBrowser(BROWSER_PATH)
   } catch (err) {
-    throw new BrowserDownError(`Le navigateur ne démarre plus (${err.message}) : le test s'arrête. Relance-le, il reprendra où il en était.`)
+    throw new BrowserDownError(`Le navigateur ne démarre plus (${err.message}) : le test s'arrête. Relance-le, il reprendra où il en était.`, { cause: err })
   }
   try {
     return await checkGeneratedApp(session.page, testCase, html, journal)
@@ -2016,12 +2016,39 @@ async function main() {
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
   // propres candidats, jamais les autres — la barre de progression (OptionsMenu.tsx) n'a pas besoin de les
   // distinguer, seulement combien reste à installer au total pour CE run.
-  const allInstallable = [
+  // Étape 232 : le test de code a besoin d'un navigateur (Edge, installé avec Windows). Vérifié MAINTENANT, sur une
+  // application connue, avant le moindre téléchargement : un souci de navigateur se voit en quelques secondes,
+  // jamais après des heures de test.
+  // Étape 523 (Léo, 0.78.0 : Inkling 2 Mini bloqué par « le navigateur s'est fermé dès son lancement ») : un
+  // navigateur qui ne démarre pas n'arrête plus TOUT — les autres épreuves continuent, le code reste à faire (jamais
+  // un faux 0), et la vraie raison est annoncée à l'écran (##CODE_SKIPPED##). Seul le code à faire : arrêt, comme avant.
+  const codeWork = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code'))
+  const otherWork = [
     ...SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation')),
     ...SCOPED_SCENARIO_MODELS.filter((m) => !alreadyDone(m, 'scenarios')),
-    ...SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision')),
-    ...SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code'))
+    ...SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision'))
   ]
+  let codeUnavailable = null
+  if (codeWork.length) {
+    codeUnavailable = !BROWSER_PATH
+      ? 'Microsoft Edge (ou Google Chrome) est introuvable'
+      : await checkInBrowser(CODE_TEST_CASES[0], PREFLIGHT_APP).then(
+          (r) => (r ? `une application de contrôle n'a pas passé la vérification (${r})` : null),
+          // La raison du navigateur elle-même (pas « le test s'arrête », faux ici : les autres épreuves continuent).
+          (err) => (err instanceof BrowserDownError && err.cause instanceof Error ? err.cause.message : err.message)
+        )
+    if (codeUnavailable && !otherWork.length) {
+      console.log(`\nTest de code impossible sur ce PC : ${codeUnavailable}. Rien n'a été téléchargé.`)
+      process.exit(1)
+    }
+    if (codeUnavailable) {
+      console.log(`##CODE_SKIPPED## ${codeUnavailable}`)
+      console.log(`\nTest de code impossible sur ce PC : ${codeUnavailable}. Les autres épreuves continuent ; le code reste à faire.\n`)
+    } else {
+      console.log(`Navigateur pour le test de code : ${BROWSER_PATH} — vérifié sur une application de contrôle.\n`)
+    }
+  }
+  const allInstallable = [...otherWork, ...(codeUnavailable ? [] : codeWork)]
   if (RESUME) {
     const resumedCount =
       SCOPED_MODELS.filter((m) => alreadyDone(m, 'conversation')).length +
@@ -2107,7 +2134,7 @@ async function main() {
   // Les deux épreuves de conversation se jouent à la suite pour un même modèle, chargé une seule fois.
   const conversationPhase = CONVERSATION_SCOPE.filter((m) => toRun.includes(m) || scenarioToRun.includes(m))
   const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision') && runnable(m))
-  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code') && runnable(m))
+  const codeToRun = codeUnavailable ? [] : SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code') && runnable(m))
   // Étape 453 : plusieurs modèles en même temps sur une machine louée assez grande (voir testSlotsFor).
   const TEST_SLOTS = testSlotsFor(vramGb)
   serializeLoads = TEST_SLOTS > 1
@@ -2379,23 +2406,6 @@ async function main() {
     const replayed = await replayTimedOut()
     console.log(replayed ? 'Tests rejoués : rien d\'autre à tester.' : 'Aucun des modèles à tester n\'a pu être installé.')
     return
-  }
-
-  // Étape 232 : le test de code a besoin d'un navigateur (Edge, installé avec Windows). Vérifié MAINTENANT, sur une
-  // application connue, avant le moindre téléchargement : un souci de navigateur se voit en quelques secondes,
-  // jamais après des heures de test.
-  if (codeToRun.length) {
-    const reason = !BROWSER_PATH
-      ? 'Microsoft Edge (ou Google Chrome) est introuvable'
-      : await checkInBrowser(CODE_TEST_CASES[0], PREFLIGHT_APP).then(
-          (r) => (r ? `une application de contrôle n'a pas passé la vérification (${r})` : null),
-          (err) => err.message
-        )
-    if (reason) {
-      console.log(`\nTest de code impossible sur ce PC : ${reason}. Rien n'a été téléchargé.`)
-      process.exit(1)
-    }
-    console.log(`Navigateur pour le test de code : ${BROWSER_PATH} — vérifié sur une application de contrôle.\n`)
   }
 
   // Poids total de TOUT le travail de cette analyse (Go à télécharger + poids de test, même unité que

@@ -760,6 +760,7 @@
   "unscored.replayed_few": "{count} případy zopakovány",
   "unscored.replayed_other": "{count} případů zopakováno",
   "unscored.skipped": "přeskočeno — {reason}",
+  "unscored.codeSkipped": "Test kódu na tomto PC nejde: {reason}. Ostatní testy pokračují; test kódu zbývá udělat.",
   "unscored.unknownReason": "neznámý důvod",
   "unscored.openResults": "Otevřít soubor s výsledky",
   "unscored.resumeButton": "Pokračovat v testu",

@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} fall omgjort",
   "unscored.replayed_other": "{count} fall omgjorda",
   "unscored.skipped": "hoppades över — {reason}",
+  "unscored.codeSkipped": "Kodtestet går inte på den här datorn: {reason}. De andra testerna fortsätter; kodtestet återstår.",
   "unscored.unknownReason": "okänd orsak",
   "unscored.openResults": "Öppna resultatfilen",
   "unscored.resumeButton": "Återuppta testet",

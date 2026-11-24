@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} повторен случай",
   "unscored.replayed_other": "{count} повторени случая",
   "unscored.skipped": "пропуснат — {reason}",
+  "unscored.codeSkipped": "Тестът на код е невъзможен на този компютър: {reason}. Другите тестове продължават; тестът на код остава за по-късно.",
   "unscored.unknownReason": "неизвестна причина",
   "unscored.openResults": "Отвори файла с резултатите",
   "unscored.resumeButton": "Продължи теста",

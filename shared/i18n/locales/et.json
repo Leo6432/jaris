@@ -747,6 +747,7 @@
   "unscored.replayed_one": "{count} juhtum korratud",
   "unscored.replayed_other": "{count} juhtumit korratud",
   "unscored.skipped": "vahele jäetud — {reason}",
+  "unscored.codeSkipped": "Koodi test pole selles arvutis võimalik: {reason}. Teised testid jätkuvad; koodi test on veel tegemata.",
   "unscored.unknownReason": "tundmatu põhjus",
   "unscored.openResults": "Ava tulemuste fail",
   "unscored.resumeButton": "Jätka testi",

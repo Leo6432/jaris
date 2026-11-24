@@ -71,11 +71,29 @@ export async function openBrowser(browserPath) {
       ...(process.platform !== 'win32' && process.getuid?.() === 0 ? ['--no-sandbox'] : []),
       'about:blank'
     ],
-    { stdio: 'ignore', windowsHide: true }
+    { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true }
   )
   let exited = false
-  proc.on('exit', () => (exited = true))
-  proc.on('error', () => (exited = true))
+  // Étape 523 (Léo, 0.78.0 : « le navigateur s'est fermé dès son lancement », sans rien de plus) : le code de sortie et
+  // la fin de ce que le navigateur a écrit disent POURQUOI — jamais un arrêt muet.
+  let exitInfo = ''
+  let stderrTail = ''
+  proc.stderr?.setEncoding('utf8')
+  proc.stderr?.on('data', (chunk) => {
+    stderrTail = (stderrTail + chunk).slice(-4000)
+  })
+  proc.on('exit', (code, signal) => {
+    exited = true
+    exitInfo = signal ? `signal ${signal}` : `code ${code}`
+  })
+  proc.on('error', (err) => {
+    exited = true
+    exitInfo = err.message
+  })
+  const why = () => {
+    const lines = stderrTail.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-2).join(' / ')
+    return [exitInfo, lines.slice(0, 300)].filter(Boolean).join(' : ')
+  }
 
   const close = async () => {
     try {
@@ -114,7 +132,11 @@ export async function openBrowser(browserPath) {
     const deadline = Date.now() + 30000
     let content = readPortFile()
     while (!content.includes('\n')) {
-      if (exited) throw new Error('le navigateur s’est fermé dès son lancement')
+      if (exited) {
+        // Laisse arriver le code de sortie et les derniers messages (ils suivent la fin du processus de peu).
+        await sleep(200)
+        throw new Error(`le navigateur s’est fermé dès son lancement${why() ? ` (${why()})` : ''}`)
+      }
       if (Date.now() > deadline) throw new Error('le navigateur n’a pas démarré en 30 s')
       await sleep(100)
       content = readPortFile()

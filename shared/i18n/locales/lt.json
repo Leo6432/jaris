@@ -760,6 +760,7 @@
   "unscored.replayed_few": "{count} atvejai pakartoti",
   "unscored.replayed_other": "{count} atvejų pakartota",
   "unscored.skipped": "praleista — {reason}",
+  "unscored.codeSkipped": "Kodo testas šiame kompiuteryje neįmanomas: {reason}. Kiti testai tęsiasi; kodo testas dar laukia.",
   "unscored.unknownReason": "nežinoma priežastis",
   "unscored.openResults": "Atidaryti rezultatų failą",
   "unscored.resumeButton": "Tęsti testą",
