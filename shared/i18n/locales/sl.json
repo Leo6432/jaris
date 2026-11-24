@@ -813,7 +813,7 @@
   "unscored.send": "Klikni »Pripravi datoteko, ki mi jo pošlješ« in mi pošlji to datoteko: vsebuje samo še neposlane rezultate, stisnjene.",
   "unscored.export": "Pripravi datoteko, ki mi jo pošlješ",
   "unscored.exported": "Datoteka pripravljena: {rows} rezultatov iz {models} modelov ({size} KB). Pošlji mi jo, da se rezultati dodajo v Jaris.",
-  "unscored.exportEmpty": "Nič novega za pošiljanje: vsi rezultati so že pripravljeni.",
+  "unscored.exportEmpty": "Ni česa poslati: noben preizkus še ni bil narejen.",
   "unscored.exportFailed": "Datoteka ni shranjena: {error}",
   "main.dialog.saveTests": "Shrani rezultate testov",
   "main.dialog.testsFilter": "Rezultati testov (stisnjeni)",

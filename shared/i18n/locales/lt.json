@@ -800,7 +800,7 @@
   "unscored.send": "Spustelėk „Paruošti failą, kurį man atsiųsi“ ir atsiųsk man tą failą: jame tik dar neišsiųsti rezultatai, suglaudinti.",
   "unscored.export": "Paruošti failą, kurį man atsiųsi",
   "unscored.exported": "Failas paruoštas: {rows} rezultatai iš {models} modelių ({size} KB). Atsiųsk jį man, kad balai būtų įtraukti į Jaris.",
-  "unscored.exportEmpty": "Nėra nieko naujo siųsti: visi rezultatai jau paruošti.",
+  "unscored.exportEmpty": "Nėra ką siųsti: dar nebuvo atlikta nė vieno testo.",
   "unscored.exportFailed": "Failas neišsaugotas: {error}",
   "main.dialog.saveTests": "Išsaugoti testų rezultatus",
   "main.dialog.testsFilter": "Testų rezultatai (suglaudinti)",

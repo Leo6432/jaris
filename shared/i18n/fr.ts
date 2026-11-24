@@ -797,7 +797,7 @@ export const fr = {
   "unscored.send": "Clique sur « Préparer le fichier à m'envoyer » et envoie-moi ce fichier : il ne contient que les résultats pas encore envoyés, compressés.",
   "unscored.export": "Préparer le fichier à m'envoyer",
   "unscored.exported": "Fichier prêt : {rows} résultats de {models} modèles ({size} Ko). Envoie-le-moi pour que les scores soient ajoutés à Jaris.",
-  "unscored.exportEmpty": "Rien de nouveau à envoyer : tous les résultats ont déjà été préparés.",
+  "unscored.exportEmpty": "Rien à envoyer : aucun test n'a encore été fait.",
   "unscored.exportFailed": "Fichier non enregistré : {error}",
   "main.dialog.saveTests": "Enregistrer les résultats des tests",
   "main.dialog.testsFilter": "Résultats des tests (compressés)",

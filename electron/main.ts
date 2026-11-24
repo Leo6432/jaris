@@ -126,7 +126,7 @@ import { inDuelPool, isDuelCategory, isDuelOutcome, isDuelSeriesCount, rankDuels
 import { setModelsDirSource, setVramSource } from './services/systemResources'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, markTestResultsSent, runQuickSetup, stopModelTest, stopModelTestByUser, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { buildTestResultsExport, getModelsToTestDetails, isModelTestRunning, runQuickSetup, stopModelTest, stopModelTestByUser, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { connectMachine, disconnectMachine, loadMachineView, onMachineChanged, setMachineBusySource } from './services/remoteMachine'
 import { config, runWithLocalOllama } from './config'
 import { chatSession } from './services/chatSession'
@@ -2382,8 +2382,6 @@ app.whenReady().then(async () => {
     if (!target) return { saved: false }
     try {
       await writeFile(/\.gz$/i.test(target) ? target : `${target}.gz`, built.data)
-      // Retenu seulement une fois le fichier écrit : un envoi raté se refait en entier.
-      if (built.lastAt) await markTestResultsSent(built.lastAt)
       return { saved: true, rows: built.rows, models: built.models.length, sizeKb: Math.max(1, Math.round(built.data.length / 1024)) }
     } catch (err) {
       return { saved: false, error: err instanceof Error ? err.message : String(err) }

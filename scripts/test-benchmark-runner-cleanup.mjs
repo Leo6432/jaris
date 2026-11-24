@@ -577,7 +577,8 @@ test('étape 438 : l’extrait des résultats ne garde que le nouveau, chaque r�
   const { buildTestResultsExport } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'zlib') return realZlib
     if (id === 'path') return { join: (...parts) => parts.join('/') }
-    if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
+    // Étape 524 : un ancien repère « déjà envoyé » sur le disque ne doit plus rien retirer du fichier.
+    if (id === 'fs') return { readFileSync: (path) => { if (String(path).includes('envoye')) return JSON.stringify({ lastAt: '2026-11-07T12:54:00.000Z' }); throw new Error('ENOENT') } }
     return new Proxy({}, { get: () => () => {} })
   })
   const big = 'x'.repeat(5000)
@@ -592,6 +593,10 @@ test('étape 438 : l’extrait des résultats ne garde que le nouveau, chaque r�
   ].map((r) => JSON.stringify(r)).join('\n')
   const first = buildTestResultsExport(traces, null)
   assert.equal(first.rows, 3, 'la première fois : tout (sauf le suivi en cours)')
+  // Étape 524 (Léo : « je veux que dans le fichier il y ait tout, et tu vérifies toutes les analyses ») : par défaut,
+  // TOUTES les analyses partent, même celles déjà envoyées.
+  assert.equal(buildTestResultsExport(traces).rows, 3, 'par défaut : tout')
+  assert.deepEqual(buildTestResultsExport(traces).models, ['old:1b', 'granite4.2:8b', 'qwen2.5-coder:7b'])
   const since = buildTestResultsExport(traces, '2026-11-06T23:59:00.000Z')
   assert.equal(since.rows, 2)
   assert.deepEqual(since.models, ['granite4.2:8b', 'qwen2.5-coder:7b'])

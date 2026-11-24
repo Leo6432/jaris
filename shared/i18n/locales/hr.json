@@ -800,7 +800,7 @@
   "unscored.send": "Klikni „Pripremi datoteku za slanje” i pošalji mi tu datoteku: sadrži samo još neposlane rezultate, sažete.",
   "unscored.export": "Pripremi datoteku za slanje",
   "unscored.exported": "Datoteka spremna: {rows} rezultata iz {models} modela ({size} KB). Pošalji mi je da se rezultati dodaju u Jaris.",
-  "unscored.exportEmpty": "Ništa novo za slanje: svi rezultati su već pripremljeni.",
+  "unscored.exportEmpty": "Nema se što poslati: još nije napravljen nijedan test.",
   "unscored.exportFailed": "Datoteka nije spremljena: {error}",
   "main.dialog.saveTests": "Spremi rezultate testova",
   "main.dialog.testsFilter": "Rezultati testova (sažeti)",

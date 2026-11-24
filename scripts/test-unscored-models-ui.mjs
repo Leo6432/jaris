@@ -173,7 +173,7 @@ test('étape 453 : plusieurs modèles en même temps sur la machine louée — t
   }
 })
 
-test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a préparé, ou qu’il n’y a rien de nouveau', options, async () => {
+test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a préparé, ou qu’il n’y a rien à envoyer', options, async () => {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
@@ -183,7 +183,7 @@ test('étape 438 : « Préparer le fichier à m’envoyer » dit ce qu’il a pr
     assert.match(await page.textContent('.options-menu__unscored-export [role="status"]'), /Fichier prêt : 42 résultats de 3 modèles \(180 Ko\)/)
     await page.evaluate(() => { window.__exportResult = { saved: false, empty: true } })
     await page.click('button >> text=Préparer le fichier à m\'envoyer')
-    await page.waitForFunction(() => document.querySelector('.options-menu__unscored-export [role="status"]')?.textContent.startsWith('Rien de nouveau'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__unscored-export [role="status"]')?.textContent.startsWith('Rien à envoyer : aucun test'))
     assert.equal(await page.evaluate(() => window.__exportCalls), 2)
   } finally {
     await browser.close()

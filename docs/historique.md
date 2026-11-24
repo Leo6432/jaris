@@ -13164,3 +13164,17 @@ encore connue (piste : Jaris lancé depuis le paquet du Store — non vérifié,
 - Tests (mordent) : test-benchmark-cases (faux navigateur qui écrit une erreur et sort en code 7 : questions jouées,
   aucun test de code, raison exacte ; code seul : arrêt), test-unscored-models-ui (raison affichée, test qui continue).
 - À faire : lire la raison affichée chez Léo au prochain essai, puis corriger la vraie cause.
+
+## Étape 524 — « Préparer le fichier à m'envoyer » : TOUTES les analyses (0.78.3)
+
+Léo, après l'explication de la notation (« un modèle qui met d'abord en mémoire puis le rappel est compté faux aux 78
+questions ? ») : « je veux que dans le fichier il y ait tout, et tu vérifies toutes les analyses pour être sûr ». Demande
+récente qui l'emporte sur l'étape 438 (seulement ce qui a suivi le dernier envoi, fichier brut de 48 Mo trop lourd).
+- `buildTestResultsExport` : toutes les lignes, chaque réponse entière, compressé (gzip) — toujours sans le suivi en
+  cours de demande ni la liste des outils. Le repère « déjà envoyé » n'est plus lu ni écrit (gardé dans OWNED_ENTRIES
+  pour qu'un ancien fichier suive « Déplacer »). Texte « rien à envoyer » corrigé (24 langues).
+- À faire à réception : relire TOUTES les réponses de TOUS les modèles, et compter les questions ratées parce que le
+  modèle a commencé par un outil sans danger (mémoire, recherche) avant le bon outil, dans la même réponse : si c'est
+  fréquent, la règle des 78 questions sera revue (recalcul possible depuis les réponses enregistrées).
+- Tests (mordent) : test-benchmark-runner-cleanup (un ancien repère sur le disque ne retire plus rien),
+  test-unscored-models-ui (nouveau texte).

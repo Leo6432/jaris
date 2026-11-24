@@ -800,7 +800,7 @@
   "unscored.send": "Klikni na „Připravit soubor k odeslání“ a pošli mi ten soubor: obsahuje jen dosud neodeslané výsledky, komprimované.",
   "unscored.export": "Připravit soubor k odeslání",
   "unscored.exported": "Soubor připraven: {rows} výsledků z {models} modelů ({size} KB). Pošli mi ho, aby se skóre přidala do Jarise.",
-  "unscored.exportEmpty": "Nic nového k odeslání: všechny výsledky už jsou připravené.",
+  "unscored.exportEmpty": "Není co poslat: zatím neproběhl žádný test.",
   "unscored.exportFailed": "Soubor nebyl uložen: {error}",
   "main.dialog.saveTests": "Uložit výsledky testů",
   "main.dialog.testsFilter": "Výsledky testů (komprimované)",

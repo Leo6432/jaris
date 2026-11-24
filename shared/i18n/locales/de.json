@@ -787,7 +787,7 @@
   "unscored.send": "Klicke auf „Datei zum Senden vorbereiten“ und schick mir diese Datei: Sie enthält nur die noch nicht gesendeten Ergebnisse, komprimiert.",
   "unscored.export": "Datei zum Senden vorbereiten",
   "unscored.exported": "Datei bereit: {rows} Ergebnisse von {models} Modellen ({size} KB). Schick sie mir, damit die Punktzahlen in Jaris aufgenommen werden.",
-  "unscored.exportEmpty": "Nichts Neues zu senden: Alle Ergebnisse wurden bereits vorbereitet.",
+  "unscored.exportEmpty": "Nichts zu senden: Es wurde noch kein Test durchgeführt.",
   "unscored.exportFailed": "Datei nicht gespeichert: {error}",
   "main.dialog.saveTests": "Testergebnisse speichern",
   "main.dialog.testsFilter": "Testergebnisse (komprimiert)",

@@ -787,7 +787,7 @@
   "unscored.send": "Clique em “Preparar o arquivo para me enviar” e me envie esse arquivo: ele só contém os resultados ainda não enviados, compactados.",
   "unscored.export": "Preparar o arquivo para me enviar",
   "unscored.exported": "Arquivo pronto: {rows} resultados de {models} modelos ({size} KB). Me envie para que as pontuações sejam adicionadas ao Jaris.",
-  "unscored.exportEmpty": "Nada de novo para enviar: todos os resultados já foram preparados.",
+  "unscored.exportEmpty": "Nada para enviar: nenhum teste foi feito ainda.",
   "unscored.exportFailed": "Arquivo não salvo: {error}",
   "main.dialog.saveTests": "Salvar os resultados dos testes",
   "main.dialog.testsFilter": "Resultados dos testes (compactados)",

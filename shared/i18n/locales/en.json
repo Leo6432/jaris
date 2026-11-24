@@ -787,7 +787,7 @@
   "unscored.send": "Click “Prepare the file to send me” and send me that file: it only contains the results not sent yet, compressed.",
   "unscored.export": "Prepare the file to send me",
   "unscored.exported": "File ready: {rows} results from {models} models ({size} KB). Send it to me so the scores can be added to Jaris.",
-  "unscored.exportEmpty": "Nothing new to send: all results have already been prepared.",
+  "unscored.exportEmpty": "Nothing to send: no test has been run yet.",
   "unscored.exportFailed": "File not saved: {error}",
   "main.dialog.saveTests": "Save the test results",
   "main.dialog.testsFilter": "Test results (compressed)",

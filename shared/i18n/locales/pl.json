@@ -813,7 +813,7 @@
   "unscored.send": "Kliknij „Przygotuj plik do wysłania mi” i wyślij mi ten plik: zawiera tylko jeszcze niewysłane wyniki, skompresowane.",
   "unscored.export": "Przygotuj plik do wysłania mi",
   "unscored.exported": "Plik gotowy: {rows} wyników z {models} modeli ({size} KB). Wyślij mi go, żeby wyniki trafiły do Jarisa.",
-  "unscored.exportEmpty": "Nic nowego do wysłania: wszystkie wyniki zostały już przygotowane.",
+  "unscored.exportEmpty": "Nic do wysłania: nie wykonano jeszcze żadnego testu.",
   "unscored.exportFailed": "Plik nie został zapisany: {error}",
   "main.dialog.saveTests": "Zapisz wyniki testów",
   "main.dialog.testsFilter": "Wyniki testów (skompresowane)",

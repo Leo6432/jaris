@@ -787,7 +787,7 @@
   "unscored.send": "Klõpsa „Valmista mulle saadetav fail“ ja saada see fail mulle: see sisaldab ainult veel saatmata tulemusi, kokkupakituna.",
   "unscored.export": "Valmista mulle saadetav fail",
   "unscored.exported": "Fail valmis: {rows} tulemust {models} mudelilt ({size} KB). Saada see mulle, et tulemused Jarisesse lisada.",
-  "unscored.exportEmpty": "Pole midagi uut saata: kõik tulemused on juba valmistatud.",
+  "unscored.exportEmpty": "Pole midagi saata: ühtegi testi pole veel tehtud.",
   "unscored.exportFailed": "Faili ei salvestatud: {error}",
   "main.dialog.saveTests": "Salvesta testitulemused",
   "main.dialog.testsFilter": "Testitulemused (pakitud)",

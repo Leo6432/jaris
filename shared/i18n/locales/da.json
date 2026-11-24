@@ -787,7 +787,7 @@
   "unscored.send": "Klik på »Forbered filen, du skal sende mig« og send mig filen: den indeholder kun de resultater, der ikke er sendt endnu, komprimeret.",
   "unscored.export": "Forbered filen, du skal sende mig",
   "unscored.exported": "Filen er klar: {rows} resultater fra {models} modeller ({size} KB). Send den til mig, så pointene kan føjes til Jaris.",
-  "unscored.exportEmpty": "Intet nyt at sende: alle resultater er allerede forberedt.",
+  "unscored.exportEmpty": "Intet at sende: der er endnu ikke kørt nogen test.",
   "unscored.exportFailed": "Filen blev ikke gemt: {error}",
   "main.dialog.saveTests": "Gem testresultaterne",
   "main.dialog.testsFilter": "Testresultater (komprimeret)",

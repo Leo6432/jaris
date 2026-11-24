@@ -800,7 +800,7 @@
   "unscored.send": "Noklikšķini “Sagatavot failu, ko man nosūtīt” un nosūti man šo failu: tajā ir tikai vēl nenosūtītie rezultāti, saspiesti.",
   "unscored.export": "Sagatavot failu, ko man nosūtīt",
   "unscored.exported": "Fails gatavs: {rows} rezultāti no {models} modeļiem ({size} KB). Nosūti to man, lai rezultātus pievienotu Jaris.",
-  "unscored.exportEmpty": "Nav nekā jauna, ko sūtīt: visi rezultāti jau sagatavoti.",
+  "unscored.exportEmpty": "Nav ko sūtīt: vēl nav veikts neviens tests.",
   "unscored.exportFailed": "Fails nav saglabāts: {error}",
   "main.dialog.saveTests": "Saglabāt testu rezultātus",
   "main.dialog.testsFilter": "Testu rezultāti (saspiesti)",

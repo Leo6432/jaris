@@ -6,7 +6,6 @@ import { join } from 'path'
 import { config, runWithLocalOllama } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
-import { writeFileAtomic } from './atomicFile'
 import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
 import { MACHINE_DISK_RESERVED_GB, connectedMachine } from './remoteMachine'
 import { campaignCompletion, caseTimesFromTraces, describeModelsToTest, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
@@ -269,10 +268,6 @@ function readCampaignTraces(): string {
  * demande en cours (« demande-requete »…, chaque tour avec toute la conversation, déjà dans la ligne finale) et la
  * liste des outils de l'en-tête de campagne (dans le code de la même version). Le fichier brut n'est jamais touché.
  */
-export function sentMarkerPath(): string {
-  return join(getDataRoot(), 'benchmark-nouveaux-modeles.envoye.json')
-}
-
 export interface TestResultsExport {
   /** Contenu compressé (gzip) du fichier à envoyer. */
   data: Buffer
@@ -283,16 +278,12 @@ export interface TestResultsExport {
   lastAt: string | null
 }
 
-function readSentMarker(): string | null {
-  try {
-    const value = (JSON.parse(readFileSync(sentMarkerPath(), 'utf8')) as { lastAt?: unknown }).lastAt
-    return typeof value === 'string' && value ? value : null
-  } catch {
-    return null
-  }
-}
-
-export function buildTestResultsExport(tracesText = readCampaignTraces(), since: string | null = readSentMarker()): TestResultsExport {
+/**
+ * Étape 524 (Léo : « je veux que dans le fichier il y ait tout, et tu vérifies toutes les analyses pour être sûr ») :
+ * TOUTES les analyses partent désormais, plus seulement ce qui a suivi le dernier envoi (étape 438) — compressé, chaque
+ * réponse entière, pour relire chaque score. `since` ne sert plus qu'aux tests.
+ */
+export function buildTestResultsExport(tracesText = readCampaignTraces(), since: string | null = null): TestResultsExport {
   const out: string[] = []
   const models = new Set<string>()
   let campaign: string | null = null
@@ -326,11 +317,6 @@ export function buildTestResultsExport(tracesText = readCampaignTraces(), since:
     if (at && (!lastAt || at > lastAt)) lastAt = at
   }
   return { data: gzipSync(Buffer.from(out.join('\n') + (out.length ? '\n' : ''), 'utf8')), rows, models: [...models], lastAt }
-}
-
-/** Retient jusqu'où les résultats ont été préparés : le prochain fichier ne reprendra que la suite. */
-export async function markTestResultsSent(lastAt: string): Promise<void> {
-  await writeFileAtomic(sentMarkerPath(), JSON.stringify({ lastAt }))
 }
 
 function currentCampaign(): ReturnType<typeof campaignCompletion> {

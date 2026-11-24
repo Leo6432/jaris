@@ -787,7 +787,7 @@
   "unscored.send": "Klik op ‘Bestand voorbereiden om mij te sturen’ en stuur me dat bestand: het bevat alleen de nog niet verstuurde resultaten, gecomprimeerd.",
   "unscored.export": "Bestand voorbereiden om mij te sturen",
   "unscored.exported": "Bestand klaar: {rows} resultaten van {models} modellen ({size} KB). Stuur het me zodat de scores aan Jaris worden toegevoegd.",
-  "unscored.exportEmpty": "Niets nieuws om te sturen: alle resultaten zijn al voorbereid.",
+  "unscored.exportEmpty": "Niets te versturen: er is nog geen test gedaan.",
   "unscored.exportFailed": "Bestand niet opgeslagen: {error}",
   "main.dialog.saveTests": "Testresultaten opslaan",
   "main.dialog.testsFilter": "Testresultaten (gecomprimeerd)",

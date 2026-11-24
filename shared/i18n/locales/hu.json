@@ -787,7 +787,7 @@
   "unscored.send": "Kattints „A nekem küldendő fájl előkészítése” gombra, és küldd el nekem a fájlt: csak a még el nem küldött eredményeket tartalmazza, tömörítve.",
   "unscored.export": "A nekem küldendő fájl előkészítése",
   "unscored.exported": "A fájl kész: {rows} eredmény {models} modellből ({size} KB). Küldd el nekem, hogy a pontszámok bekerüljenek a Jarisba.",
-  "unscored.exportEmpty": "Nincs új küldenivaló: minden eredmény már elő van készítve.",
+  "unscored.exportEmpty": "Nincs mit elküldeni: még nem futott le egyetlen teszt sem.",
   "unscored.exportFailed": "A fájl nincs mentve: {error}",
   "main.dialog.saveTests": "A teszteredmények mentése",
   "main.dialog.testsFilter": "Teszteredmények (tömörítve)",
