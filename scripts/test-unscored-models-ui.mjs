@@ -27,6 +27,8 @@ import UnscoredModelsTest from './src/components/UnscoredModelsTest'
 import { t } from '@/lib/i18n'
 
 window.jaris = {
+  // Étape 522 : le Classement relit ses listes quand la version d'Ollama change.
+  onOllamaVersionStatus: () => () => {},
   getUnscoredModels: () => Promise.resolve([{ model: 'ministral-3:14b', needs: [{ test: 'tools', reason: 'redo' }] }, { model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }] }]),
   onModelBenchmarkLine: (cb) => { window.__line = cb; return () => {} },
   // Étape 437 : où se fera le test (ce PC ici).

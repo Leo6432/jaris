@@ -69,9 +69,13 @@ const overrides = {
   getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
   // Étape 336 : l'installation de l'Ollama de Jaris dure ; le test décide quand elle se termine.
   updateOllama: () => new Promise((resolve) => { window.__finishOllama = resolve }),
+  // Étape 522 : Options ET le Classement écoutent la version d'Ollama — tous les abonnés reçoivent chaque annonce.
   onOllamaVersionStatus: (cb) => {
-    window.__emitOllamaStatus = cb
-    return () => {}
+    window.__ollamaListeners = [...(window.__ollamaListeners ?? []), cb]
+    window.__emitOllamaStatus = (status) => window.__ollamaListeners.forEach((listener) => listener(status))
+    return () => {
+      window.__ollamaListeners = window.__ollamaListeners.filter((listener) => listener !== cb)
+    }
   },
   getAppVersionStatus: async () => window.__appStatus ?? { current: '0.13.0', latest: '0.13.0', outdated: false },
   checkForUpdate: async () => ({ status: window.__appStatus ?? { current: '0.13.0', latest: '0.13.0', outdated: false }, error: null }),
@@ -134,7 +138,7 @@ const overrides = {
   },
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: window.__ramGb ?? 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'Z-Image-Turbo Q6', quality: 'q6', reason: null, installed: false }, video: window.__videoPick ?? { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
-  getUnscoredModels: async () => [{ model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }], estimatedMs: 95 * 60_000 }, { model: 'nemotron-3.5-lightning:30b', needs: [{ test: 'tools', reason: 'redo' }], estimatedMs: 7 * 60_000 }],
+  getUnscoredModels: async () => window.__unscored ?? [{ model: 'qwen2.5-coder:14b', needs: [{ test: 'tools', reason: 'missing' }, { test: 'vision', reason: 'missing' }], estimatedMs: 95 * 60_000 }, { model: 'nemotron-3.5-lightning:30b', needs: [{ test: 'tools', reason: 'redo' }], estimatedMs: 7 * 60_000 }],
   onModelBenchmarkLine: (cb) => {
     window.__benchLine = cb
     return () => {}
@@ -1437,5 +1441,34 @@ test('étape 486 : dernière ligne du tableau — chaque nombre de duels sous SA
       await page.locator('.options-menu__totals-row').scrollIntoViewIfNeeded()
       await page.screenshot({ path: `${process.env.SHOTS}/totaux-duels-sombre-760.png` })
     }
+  })
+})
+
+// Étape 522 (capture de Léo : Ollama mis à jour en 0.40.18, Inkling 2 Mini absent de « Modèles à tester » et de « Vitesse
+// à mesurer ») : les deux listes n'étaient lues qu'une fois. Une nouvelle version d'Ollama les fait relire.
+test('étape 522 : Ollama mis à jour, Classement ouvert — « Modèles à tester » et « Vitesse à mesurer » relues', options, async () => {
+  await withOptions(async (page) => {
+    await openRanking(page)
+    await page.waitForSelector('.options-menu__speed-test')
+    await page.waitForSelector('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-list li')
+    const lists = () =>
+      page.evaluate(() => ({
+        unscored: [...document.querySelectorAll('.options-menu__unscored:not(.options-menu__speed-test) .options-menu__unscored-list li')].map((li) => li.textContent),
+        speed: [...document.querySelectorAll('.options-menu__speed-test .options-menu__unscored-list li')].map((li) => li.textContent)
+      }))
+    const before = await lists()
+    assert.ok(!before.unscored.some((x) => /inkling/i.test(x)) && !before.speed.some((x) => /inkling/i.test(x)))
+    await page.evaluate(() => {
+      const ink = 'inkling-2-mini:26b-a5b-iq4_NL'
+      window.__unscored = [{ model: ink, needs: [{ test: 'tools', reason: 'missing' }], estimatedMs: 60 * 60_000 }]
+      window.__speedModels = [{ model: ink, sizeGb: 18.3, installed: false, speed: null, testedAt: null }]
+      window.__emitOllamaStatus({ current: '0.40.18', latest: '0.40.18', outdated: false, embedded: true })
+    })
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('.options-menu__unscored-list li')].filter((li) => /inkling/i.test(li.textContent)).length === 2
+    )
+    const after = await lists()
+    assert.ok(after.unscored.some((x) => /inkling/i.test(x)), after.unscored.join(' | '))
+    assert.ok(after.speed.some((x) => /inkling/i.test(x)), after.speed.join(' | '))
   })
 })

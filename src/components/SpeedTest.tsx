@@ -13,7 +13,7 @@ import type { SpeedTestEvent, SpeedTestModel } from '../../shared/ipc'
 type Row = { model: string; speed?: number; reason?: string }
 type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error' | 'stopped'
 
-export default function SpeedTest({ onTested }: { onTested?: () => void }): JSX.Element | null {
+export default function SpeedTest({ onTested, reloadKey = 0 }: { onTested?: () => void; reloadKey?: number }): JSX.Element | null {
   const [models, setModels] = useState<SpeedTestModel[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [choosing, setChoosing] = useState(false)
@@ -33,9 +33,10 @@ export default function SpeedTest({ onTested }: { onTested?: () => void }): JSX.
       .then(setModels)
       .catch(() => setModels([]))
 
+  // Étape 522 : relue quand le Classement l'est (version d'Ollama changée, etc.), jamais pendant un test.
   useEffect(() => {
-    void reload()
-  }, [])
+    if (phase !== 'running') void reload()
+  }, [reloadKey])
 
   useEffect(() => {
     if (phase !== 'running') return undefined

@@ -303,6 +303,12 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
   const [error, setError] = useState<string | null>(null)
   // Étape 514 : relu après un test de vitesse (colonne « Vitesse sur ton PC »).
   const [refresh, setRefresh] = useState(0)
+  // Étape 522 (capture de Léo : Ollama mis à jour en 0.40.18, Inkling 2 Mini absent des deux listes) : « Modèles à
+  // tester » et « Vitesse à mesurer » n'étaient lues qu'une fois, à l'ouverture de l'écran (souvent avant qu'Ollama ait
+  // répondu, donc version inconnue). Relues à chaque lecture du tableau : visite de la page, test de vitesse, et
+  // changement de version d'Ollama.
+  const [listsKey, setListsKey] = useState(0)
+  useEffect(() => window.jaris.onOllamaVersionStatus(() => setRefresh((n) => n + 1)), [])
 
   useEffect(() => {
     if (!active) return
@@ -312,7 +318,9 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
     window.jaris
       .getModelOverview()
       .then((result) => {
-        if (!cancelled) setOverview(result)
+        if (cancelled) return
+        setOverview(result)
+        setListsKey((n) => n + 1)
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(ipcErrorMessage(err))
@@ -356,8 +364,8 @@ export default function ModelsRanking({ active = true }: { active?: boolean }): 
                     </p>
                   )}
 
-                  {overview && <UnscoredModelsTest />}
-                  {overview && <SpeedTest onTested={() => setRefresh((n) => n + 1)} />}
+                  {overview && <UnscoredModelsTest reloadKey={listsKey} />}
+                  {overview && <SpeedTest reloadKey={listsKey} onTested={() => setRefresh((n) => n + 1)} />}
                   {overview && (
                     <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} query={query} onQuery={setQuery} />
                   )}

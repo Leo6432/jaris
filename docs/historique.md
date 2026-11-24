@@ -13134,3 +13134,16 @@ fasse ».
   compressions 4 bits différentes (NVFP4 pour Mac, IQ4_NL pour PC) ; aucune comparaison publiée — l'analyse le mesure.
 - Tests : test-hardwarescan-min-ollama (proposés, jamais choisis sans score, 0.40.17 = Inkling pas proposé, taille et
   version), test-options-reorganization-ui (plus de ligne rayée pour eux).
+
+## Étape 522 — Classement : « Modèles à tester » et « Vitesse à mesurer » relues quand Ollama change (0.78.1)
+
+Capture de Léo (0.78.0) : Ollama 0.40.18 « à jour » dans Options, mais Inkling 2 Mini absent des DEUX listes du
+Classement (Nanbeige4.3 présent). Seul filtre commun aux deux : la version d'Ollama (`modelsNeedingNewerOllama`). Cause :
+les deux blocs (`UnscoredModelsTest`, `SpeedTest`) ne lisaient leur liste qu'au montage — l'écran reste monté
+(KeepAlive) ; lue avant la mise à jour d'Ollama (ou au démarrage, avant qu'Ollama réponde : version inconnue), la liste
+gardait Inkling caché pour toute la session.
+- `ModelsRanking` (AllModelsOverview.tsx) écoute `onOllamaVersionStatus` et relit le tableau ; chaque lecture du tableau
+  (visite de la page, test de vitesse, version d'Ollama) fait relire les deux listes (`reloadKey`), jamais pendant un test.
+- Test (mord) : test-options-reorganization-ui (annonce d'une nouvelle version, Classement ouvert : Inkling apparaît
+  dans les deux listes). Faux pont d'Options : plusieurs abonnés à la version d'Ollama ; test-unscored-models-ui aussi.
+- Contournement immédiat pour Léo en 0.78.0 : quitter complètement Jaris et le rouvrir.

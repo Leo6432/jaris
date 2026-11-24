@@ -36,7 +36,7 @@ export function formatEstimate(ms: number): string {
   return t('duration.hours', { h: Math.floor(minutes / 60), m: String(minutes % 60).padStart(2, '0') })
 }
 
-export default function UnscoredModelsTest(): JSX.Element | null {
+export default function UnscoredModelsTest({ reloadKey = 0 }: { reloadKey?: number }): JSX.Element | null {
   const [models, setModels] = useState<ModelToTest[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [percent, setPercent] = useState(0)
@@ -75,6 +75,16 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       stop()
     }
   }, [])
+
+  // Étape 522 : relue quand le Classement l'est (Ollama mis à jour : Inkling 2 Mini devient testable), jamais pendant un test.
+  useEffect(() => {
+    if (reloadKey === 0 || phase === 'running') return undefined
+    let alive = true
+    void window.jaris.getUnscoredModels().then((list) => alive && setModels(list))
+    return () => {
+      alive = false
+    }
+  }, [reloadKey])
 
   useEffect(() => {
     if (phase !== 'running') return undefined
