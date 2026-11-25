@@ -235,17 +235,17 @@ jobs:
             if ("$new".Trim() -ne '0') { throw "pip échoue aussi hors d'AppData dans le paquet (code $new) : le correctif de l'étape 500 ne suffit pas." }
           }
           # Étape 525 (Léo, version Store : test de code impossible, Edge « fermé dès son lancement (code 0) ») : le
-          # navigateur du test de code ouvert DANS le paquet, avec le Node et le module de Jaris — profil dans le
-          # dossier temporaire (ancien chemin, informatif) puis dans le dossier de données (nouveau, doit marcher).
+          # navigateur du test de code ouvert DANS le paquet (même conteneur que Jaris : -PreventBreakaway), avec le
+          # module de test de ce commit — profil dans le dossier temporaire (ancien chemin, informatif) puis dans le
+          # dossier de données (nouveau, doit marcher). Node de la CI : Windows refuse de lancer Jaris.exe par son
+          # chemin dans WindowsApps (1er essai), et c'est le CONTENEUR qui compte pour Edge, pas le Node qui le lance.
           $browserOut = "$env:RUNNER_TEMP\browser-probe"
           New-Item -ItemType Directory -Force $browserOut | Out-Null
           $browserCmd = "$env:RUNNER_TEMP\browser-probe.cmd"
-          $jarisExe = Join-Path $pkg.InstallLocation 'Jaris.exe'
-          $browserModule = Join-Path $pkg.InstallLocation 'resources\scripts\benchmark-browser.mjs'
+          $nodeExe = (Get-Command node).Source
           Set-Content -Path $browserCmd -Encoding ascii -Value @(
             '@echo off',
-            'set ELECTRON_RUN_AS_NODE=1',
-            "`"$jarisExe`" `"$env:GITHUB_WORKSPACE\scripts\ci-browser-probe.mjs`" `"$browserOut`" `"$browserModule`" > `"$browserOut\browser.log`" 2>&1",
+            "`"$nodeExe`" `"$env:GITHUB_WORKSPACE\scripts\ci-browser-probe.mjs`" `"$browserOut`" `"$env:GITHUB_WORKSPACE\scripts\benchmark-browser.mjs`" > `"$browserOut\browser.log`" 2>&1",
             "echo done> `"$browserOut\done.txt`""
           )
           $edgeBefore = @(Get-Process msedge -ErrorAction SilentlyContinue).Count

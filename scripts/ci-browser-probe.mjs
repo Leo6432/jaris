@@ -1,11 +1,11 @@
 /**
  * Étape 525 (Léo, version Store : « le navigateur s'est fermé dès son lancement (code 0) », test de code impossible) :
- * lancé par la CI DANS le contexte du paquet du Store (Invoke-CommandInDesktopPackage), avec le Node de Jaris
- * (ELECTRON_RUN_AS_NODE) et le module du paquet — exactement le chemin du test de code chez Léo. Ouvre une page dans
- * Edge avec le profil dans le dossier temporaire (l'ancien chemin) puis dans le dossier de données (le nouveau), et écrit
- * ce qui s'est passé dans <dossier>/browser.json.
+ * lancé par la CI DANS le contexte du paquet du Store (Invoke-CommandInDesktopPackage, même conteneur que Jaris), avec
+ * le module de test de ce commit — le chemin du test de code chez Léo. Ouvre une page dans Edge avec le profil dans le
+ * dossier temporaire (l'ancien chemin) puis dans le dossier de données (le nouveau), et écrit ce qui s'est passé dans
+ * <dossier>/browser.json.
  *
- * Usage : Jaris.exe (ELECTRON_RUN_AS_NODE=1) ci-browser-probe.mjs <dossier de sortie> <benchmark-browser.mjs du paquet>
+ * Usage : node ci-browser-probe.mjs <dossier de sortie> <benchmark-browser.mjs>
  */
 import { writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
