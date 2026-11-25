@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatModelName } from '../lib/formatModelName'
 import { ipcErrorMessage } from '../lib/ipcError'
 import { formatDecimal, t } from '@/lib/i18n'
@@ -38,9 +38,13 @@ export default function SpeedTest({ onTested, reloadKey = 0 }: { onTested?: () =
     if (phase !== 'running') void reload()
   }, [reloadKey])
 
+  // Étape 526 (test qui échouait sous la charge : « Préparation… » au lieu de « Mesure de… ») : l'écoute était posée
+  // APRÈS l'affichage de « en cours », donc parfois après les premiers évènements du test, perdus. Elle est posée dès
+  // l'ouverture ; seuls les évènements d'un test lancé d'ici comptent.
+  const listening = useRef(false)
   useEffect(() => {
-    if (phase !== 'running') return undefined
     return window.jaris.onSpeedTestEvent((event: SpeedTestEvent) => {
+      if (!listening.current) return
       if (event.type === 'progress') {
         if (event.total > 0) setPercent(Math.min(100, Math.round((event.done / event.total) * 100)))
       } else if (event.type === 'downloading') {
@@ -53,7 +57,7 @@ export default function SpeedTest({ onTested, reloadKey = 0 }: { onTested?: () =
         setRows((prev) => [...prev.filter((r) => r.model !== event.model), { model: event.model, reason: event.reason }])
       }
     })
-  }, [phase])
+  }, [])
 
   if (!models || models.length === 0) return null
   const untested = models.filter((m) => m.speed === null)
@@ -70,6 +74,7 @@ export default function SpeedTest({ onTested, reloadKey = 0 }: { onTested?: () =
   }
 
   const run = async (): Promise<void> => {
+    listening.current = true
     setPhase('running')
     setPercent(0)
     setRows([])
@@ -87,6 +92,7 @@ export default function SpeedTest({ onTested, reloadKey = 0 }: { onTested?: () =
       setError(ipcErrorMessage(err))
       setPhase('error')
     } finally {
+      listening.current = false
       setStopping(false)
       await reload()
       onTested?.()

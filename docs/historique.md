@@ -13178,3 +13178,53 @@ récente qui l'emporte sur l'étape 438 (seulement ce qui a suivi le dernier env
   fréquent, la règle des 78 questions sera revue (recalcul possible depuis les réponses enregistrées).
 - Tests (mordent) : test-benchmark-runner-cleanup (un ancien repère sur le disque ne retire plus rien),
   test-unscored-models-ui (nouveau texte).
+
+## Étape 525 — Test de code de la version Store : Edge qui passe la main (« code 0 ») ; IP seule = port d'Ollama (0.78.4)
+
+Capture de Léo (0.78.3, version Store, analyse d'Inkling sur sa machine louée OVH) : « Test de code impossible sur ce
+PC : le navigateur s'est fermé dès son lancement (code 0) ». Léo : version Store, et jamais ce défaut avec l'installeur.
+- benchmark-browser.mjs : une sortie en code 0 n'est plus un échec — le navigateur a passé la main à un autre processus ;
+  on attend son port de contrôle (30 s), puis on le ferme par ce port (`Browser.close`, il n'est pas notre processus).
+  Profil du navigateur : `profileRoot` (JARIS_BROWSER_PROFILE_ROOT) ; la version Store le met dans le dossier de données
+  (`navigateur-test`, BROWSER_TEST_DIR, dans OWNED_ENTRIES), hors d'AppData que Windows range à part dans un paquet.
+- Essai de la CI DANS le paquet (Invoke-CommandInDesktopPackage -PreventBreakaway, scripts/ci-browser-probe.mjs) :
+  Jaris.exe ne se lance pas par son chemin WindowsApps (1er essai : rien appris) ; avec le Node de la CI, Edge marche
+  avec le profil temporaire comme dans les données, sans Edge ouvert comme « avec » (mais l'Edge lancé en fond ne
+  restait pas ouvert sur la CI : 0 processus). **Le défaut de Léo n'est PAS reproduit** : la correction vise son
+  symptôme exact (code 0) ; à confirmer chez lui. Si elle ne suffit pas, le message dit maintenant « a passé la main à
+  un autre processus (code 0), qui n'a pas ouvert son port de contrôle en 30 s ».
+- Page Machine : Léo avait collé « 135.125.95.208 » sans port (« la machine ne répond pas ») : une IP seule, sans
+  « http:// » ni port, reçoit celui d'Ollama (11434) (`normalizeRemoteOllamaHost`). Une adresse déjà enregistrée est
+  inchangée. Pour OVH, la bonne méthode reste le tunnel SSH (`ssh -N -L 11500:127.0.0.1:11434 ubuntu@IP`, adresse
+  `127.0.0.1:11500`) — jamais Ollama ouvert à Internet (consigne erronée donnée puis retirée dans la conversation).
+- Tests (mordent) : test-benchmark-code (faux lanceur qui passe la main au vrai navigateur et sort en code 0 : la page
+  marche, le navigateur est fermé, le profil est dans le dossier donné), test-benchmark-runner-cleanup, test-duel-remote,
+  test-machine.
+
+## Étape 526 — Scores d'Inkling 2 Mini et de Nanbeige4.3-33B ; deux erreurs du test corrigées (0.78.4)
+
+Fichier de Léo du 25/11/2026 (« Préparer le fichier à m'envoyer », étape 524) : seulement les analyses depuis le 20/11
+(LFM3, Inkling, Nanbeige) — les plus anciennes ne sont pas dans les données de la version Store. Toutes les réponses
+relues (justes comprises).
+- **Inkling 2 Mini** (`inkling-2-mini:26b-a5b-iq4_NL`, machine louée) : conversation 78/78, demandes 48/48, vision
+  34/34. Code : à faire (Edge, étape 525).
+- **Nanbeige4.3-33B** : conversation 78/78, demandes 28/48. Après un outil, sa réponse s'arrête net sur « <think> » :
+  son fichier Hugging Face (bartowski) met « <think> » parmi les mots d'arrêt ; et 3 demandes à plusieurs tours refusées
+  par son gabarit (« System message must be at the beginning »). Jaris aurait les mêmes défauts : échecs gardés.
+- Erreur du test 1 (78 questions) : la réflexion fuitée avant « </think> » n'était pas retirée (elle l'est dans Jaris,
+  `stripLeakedThinking`, et dans les demandes) — à « Je vais éteindre mon PC ce soir », le test lisait la réflexion de
+  Nanbeige, qui recopie la phrase, et la comptait comme une annonce d'extinction. `isCorrectAnswer` la retire désormais
+  (copie unique dans benchmark-cases.mjs, réexportée par benchmark-scenarios.mjs). Nanbeige 76 → 78. Recalcul fait sur
+  toutes les réponses du fichier : aucun autre changement (LFM3 74, Inkling 78). Les anciens scores de modèles qui
+  fuient leur réflexion (K2 Horizon) ont pu être un peu bas : leurs réponses ne sont pas dans ce fichier.
+- Erreur du test 2 (demande « rappel-corrige ») : « Non, plutôt dans 30 minutes » — annuler le rappel de 20 minutes
+  avant d'en créer un de 30 (Inkling : list, cancel, set) est le BON geste ; la demande, écrite avant manage_reminders
+  (étape 508), le refusait. Permis désormais. Inkling 47 → 48.
+- Question de Léo (« s'il commence par la mémoire avant le bon outil, c'est faux ? ») : sur ce fichier, aucune réponse
+  ratée pour cette raison (LFM3 « search_web » pour « Va sur YouTube » est une vraie erreur).
+- Tests (mordent) : test-benchmark-scenarios (geste d'Inkling accepté ; réflexion de Nanbeige retirée ; vraie annonce
+  d'extinction toujours fausse), test-hardwarescan-min-ollama et single-pool (il ne leur manque que le code),
+  test-verified-scores (15 en vision, 54 en demandes).
+- Au passage (suite complète sous charge) : le bloc « test de vitesse » posait son écoute des évènements APRÈS
+  l'affichage de « en cours » — les premiers évènements pouvaient être perdus (« Préparation… » figé). Écoute posée dès
+  l'ouverture, seuls les évènements d'un test lancé d'ici comptent (SpeedTest.tsx).

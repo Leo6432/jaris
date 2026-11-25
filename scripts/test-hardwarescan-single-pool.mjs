@@ -240,9 +240,10 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 473 : Qwen3.5-0.8B corrigé, ajouté (469), noté (472) puis retiré — plus aucun modèle n'attend le test de Léo.
 // Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, attend d'être remesuré sur le PC de Léo — mais il exige
 // Ollama 0.40.13 (étape 501) : avec une version inconnue (ces tests), il n'est jamais proposé.
-// Étape 521 : Nanbeige4.3-33B, nouveau candidat que Léo doit encore analyser (Inkling 2 Mini aussi, mais il exige Ollama
-// 0.40.18 : jamais proposé ici, où la version d'Ollama est inconnue).
-const AWAITING = ['hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M']
+const AWAITING = []
+// Étape 526 : Nanbeige4.3-33B a ses scores (analyse de Léo du 25/11), sauf le code — test de code impossible chez Léo
+// ce jour-là (Edge dans la version Store). Inkling 2 Mini aussi, mais il exige Ollama 0.40.18 : exclu ici (version inconnue).
+const CODE_AWAITING = ['hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M']
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
@@ -599,8 +600,8 @@ test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont
   const tooNew = scan.modelsNeedingNewerOllama(null)
   const withoutCode = ALL_CANDIDATE_MODELS.filter((m) => !codeSection.includes(`| ${m} |`) && !tooNew.has(m))
   // Étape 466 : 25 modèles ont depuis leur score de code. Étape 470 : les 12 rejoués aussi. Plus aucun modèle sans
-  // score de code. Étape 521 : sauf les nouveaux candidats que Léo doit encore analyser.
-  assert.deepEqual(withoutCode, AWAITING)
+  // score de code. Étapes 521 et 526 : sauf les nouveaux candidats dont le code reste à mesurer.
+  assert.deepEqual(withoutCode, CODE_AWAITING)
   for (const model of withoutCode) {
     const entry = described.find((m) => m.model === model)
     assert.ok(entry?.needs.some((n) => n.test === 'code' && n.reason === 'missing'), `${model} : test de code à faire`)

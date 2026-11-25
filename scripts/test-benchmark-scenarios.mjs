@@ -1469,3 +1469,28 @@ test('étape 262 : demande de RÉDACTION reconnue sur la consigne seule, sans co
     'Je vais au marché : écris un mail à Paul'
   ]) assert.equal(isWritingRequest(no), false, no)
 })
+
+// Étape 526 (analyse d'Inkling 2 Mini et de Nanbeige4.3, 25/11/2026) : deux réponses justes comptées fausses.
+test('étape 526 : corriger un rappel en annulant l’ancien est juste ; la réflexion fuitée n’est jamais lue comme la réponse', async () => {
+  const { SCENARIOS, judge } = await import('./benchmark-scenarios.mjs')
+  const { TEST_CASES, isCorrectAnswer } = await import('./benchmark-cases.mjs')
+  // Ce qu'a fait Inkling 2 Mini : voir les rappels, annuler celui de 20 minutes, en créer un de 30.
+  const scenario = SCENARIOS.find((s) => s.id === 'rappel-corrige')
+  const first = { turn: 0, delay: 20, message: 'Appeler le dentiste' }
+  const ctx = {
+    turns: [{ user: scenario.turns[0], reply: 'C’est fait, je te rappellerai dans 20 minutes pour appeler le dentiste.' }, { user: scenario.turns[1], reply: 'C’est fait : le rappel de 20 minutes a été annulé, et j’en ai programmé un nouveau dans 30 minutes.' }],
+    calls: [
+      { turn: 0, name: 'set_reminder', args: { delay_minutes: 20, message: 'Appeler le dentiste' } },
+      { turn: 1, name: 'manage_reminders', args: { action: 'list' } },
+      { turn: 1, name: 'manage_reminders', args: { action: 'cancel', which: 'dentiste' } },
+      { turn: 1, name: 'set_reminder', args: { delay_minutes: 30, message: 'Appeler le dentiste' } }
+    ],
+    state: { reminders: [first, { turn: 1, delay: 30, message: 'Appeler le dentiste' }], cancelled: [first], notes: new Map() }
+  }
+  assert.equal(JSON.stringify(judge(scenario, ctx)), JSON.stringify({ ok: true, reason: null }))
+  // Ce qu'a répondu Nanbeige4.3 à « Je vais éteindre mon PC ce soir » : sa réflexion recopie la phrase, la réponse est juste.
+  const shutdown = TEST_CASES.find((c) => c.prompt === 'Je vais éteindre mon PC ce soir avant de dormir.')
+  const content = '<think>\nThe user says "Je vais éteindre mon PC ce soir". Just a statement.\n</think>\n\nBien sûr, pas de problème. Tu peux éteindre ton PC tranquillement ce soir, je reste disponible.'
+  assert.equal(isCorrectAnswer(shutdown, { toolName: null, toolArgs: {}, content }), true)
+  assert.equal(isCorrectAnswer(shutdown, { toolName: null, toolArgs: {}, content: 'D’accord, je vais éteindre ton PC.' }), false, 'une vraie annonce d’extinction reste fausse')
+})

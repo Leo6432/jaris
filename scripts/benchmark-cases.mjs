@@ -663,8 +663,21 @@ export function isRealReply(content) {
   return true
 }
 
-/** Vrai si la réponse du modèle est celle attendue : bon outil ET bon contenu, ou une vraie réponse sans outil quand il n'en faut pas. */
-export function isCorrectAnswer(testCase, { toolName, toolArgs, content }) {
+/** Copie de stripLeakedThinking (electron/services/ollama.ts, étape 314) — vérifiée identique par le test. */
+export function stripLeakedThinking(content) {
+  let end = -1
+  for (const match of content.matchAll(/<\/(?:ifm\|)?think>/gi)) end = match.index + match[0].length
+  return end < 0 ? content : content.slice(end).trimStart()
+}
+
+/**
+ * Vrai si la réponse du modèle est celle attendue : bon outil ET bon contenu, ou une vraie réponse sans outil quand il n'en faut pas.
+ * Étape 526 (analyse de Nanbeige4.3 : « Je vais éteindre mon PC ce soir » compté faux) : la réflexion fuitée avant
+ * « </think> » est retirée d'abord, comme Jaris le fait avant d'afficher (chatWithOllama) — le test lisait la réflexion,
+ * qui recopie la phrase de Léo, au lieu de la vraie réponse.
+ */
+export function isCorrectAnswer(testCase, { toolName, toolArgs, content: raw }) {
+  const content = typeof raw === 'string' ? stripLeakedThinking(raw) : raw
   const alt = toolName ? testCase.alsoAccept?.find((a) => a.tool === toolName) : undefined
   if (alt) return Boolean(alt.check(argsOf(toolArgs)))
   if (testCase.expectedTool === null) {

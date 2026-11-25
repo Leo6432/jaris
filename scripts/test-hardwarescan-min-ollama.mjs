@@ -131,12 +131,15 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
 // Étape 521 (Léo : « oui fais-le, et ajoute l'analyse pour que je la fasse ») : Inkling 2 Mini et Nanbeige4.3-33B sortent
 // des futurs modèles. Proposés à l'analyse (Inkling seulement avec Ollama 0.40.18, sinon la vraie raison), jamais
 // choisis tant qu'ils n'ont pas de score, même sur une carte où ils tiennent.
-test('étape 521 : Inkling 2 Mini et Nanbeige4.3 proposés à l’analyse, jamais choisis sans score ; Inkling exige Ollama 0.40.18', async () => {
+test('étape 521 : Inkling 2 Mini et Nanbeige4.3 proposés à l’analyse (le code reste à faire) ; Inkling exige Ollama 0.40.18', async () => {
   const recent = setup({ scores: REAL_SCORES, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.18' })
   const offered = [...recent.getUnscoredModels()]
   assert.ok(offered.includes(INKLING) && offered.includes(NANBEIGE), offered.join(' | '))
-  const chosen = picked(await recent.pickBestModelsFromBenchmark())
-  assert.ok(!chosen.includes(INKLING) && !chosen.includes(NANBEIGE), chosen.join(' | '))
+  // Étape 526 : scores de Léo du 25/11 recopiés — il ne leur manque plus que le test de code.
+  for (const model of [INKLING, NANBEIGE]) {
+    const needs = recent.describeModelsToTest().find((m) => m.model === model)?.needs.map((n) => n.test)
+    assert.equal(JSON.stringify(needs), JSON.stringify(['code']), model)
+  }
   const old = setup({ scores: REAL_SCORES, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.17' })
   assert.ok(![...old.getUnscoredModels()].includes(INKLING), 'pas proposé : cet Ollama ne le charge pas')
   assert.ok([...old.getUnscoredModels()].includes(NANBEIGE), 'architecture llama : proposé')
@@ -161,8 +164,8 @@ test('Ollama 0.40.10 : Bolt E4B proposé au test (Spark-X2.6 tout noté), aucun 
   // qwen3.6:35b-a3b aussi. Étape 449 : devstral-small-2:24b aussi. Étape 454 : qwen3-coder:30b aussi.
   // Étape 462 : GLM-4.6V-Flash retiré de Jaris.
   // Étape 497 : LFM3 1.7B est « À remesurer » — mais il exige Ollama 0.40.13 (étape 501) : pas proposé avec 0.40.10.
-  // Étape 521 : Nanbeige4.3-33B, nouveau candidat sans score (architecture llama : aucune version minimale).
-  const visionAndCode = [NANBEIGE]
+  // Étape 526 : Nanbeige4.3-33B a ses scores (sauf le code, donné à tous ici).
+  const visionAndCode = []
   assert.deepEqual(offered.sort(), [BOLT, ...visionAndCode].sort())
   // Avec les vrais scores, Bolt n'a plus rien à passer : il n'est plus proposé.
   const now = [...setup({ scores: withCodeForAll(REAL_SCORES), vramMib: 8192, ollamaVersion: '0.40.10' }).getUnscoredModels()]

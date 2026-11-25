@@ -18,7 +18,7 @@
  * Seuls les raccourcis de Jaris (« ouvre X » seul, Bloc-notes, « salut ») ne sont pas joués : la réponse y
  * viendrait du code, pas du modèle — aucune demande ci-dessous n'y passe (vérifié par le test).
  */
-import { TOOLS, buildBenchmarkSystemPrompt, isRealReply, withDateTimeNote } from './benchmark-cases.mjs'
+import { TOOLS, buildBenchmarkSystemPrompt, isRealReply, stripLeakedThinking, withDateTimeNote } from './benchmark-cases.mjs'
 
 /** À augmenter à chaque changement des demandes ou de leurs jugements : un ancien score est alors refait. */
 export const SCENARIO_TEST_VERSION = 3
@@ -228,12 +228,8 @@ function leakPattern(name, english) {
   return `(?:\`${name}\`|"${name}"|\\b${name}\\s*\\()`
 }
 
-/** Copie de stripLeakedThinking (electron/services/ollama.ts, étape 314) — vérifiée identique par le test. */
-export function stripLeakedThinking(content) {
-  let end = -1
-  for (const match of content.matchAll(/<\/(?:ifm\|)?think>/gi)) end = match.index + match[0].length
-  return end < 0 ? content : content.slice(end).trimStart()
-}
+// Étape 526 : stripLeakedThinking vit dans benchmark-cases.mjs (les 78 questions s'en servent aussi) ; réexportée ici.
+export { stripLeakedThinking }
 
 function stripMarkdownForVoice(text) {
   return text
@@ -1276,7 +1272,9 @@ export const SCENARIOS = [
     id: 'rappel-corrige',
     family: 'Plusieurs tours',
     turns: ["Rappelle-moi d'appeler le dentiste dans 20 minutes.", 'Non, plutôt dans 30 minutes.'],
-    allow: ['set_reminder'],
+    // Étape 526 (analyse d'Inkling 2 Mini) : annuler le rappel de 20 minutes avant d'en créer un de 30 est le BON geste
+    // (sinon deux rappels sonnent) — l'outil manage_reminders (étape 508) est venu après cette demande, qui le refusait.
+    allow: ['set_reminder', 'manage_reminders'],
     check: (ctx) => {
       if (!ctx.state.reminders.some((r) => r.turn === 0 && r.delay === 20)) return 'premier rappel (20 minutes) jamais créé'
       return ctx.state.reminders.some((r) => r.turn === 1 && r.delay === 30 && has(r.message, /dentiste/))

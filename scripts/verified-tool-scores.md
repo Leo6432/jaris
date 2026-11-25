@@ -199,6 +199,8 @@ adresse dictée en « jean.point.dupont@arobase.gmail.com »), plus « Je vais �
 (1 fois sur 3, compté faux à raison), un rappel créé au premier tour avec un délai inventé (0 puis 5 min) et la liste de
 tâches dont la suppression ne marche pas. Les justes vérifiées (rappels, mails, notes corrigées, refus d'éteindre).
 
+Étape 526 : Inkling 2 Mini (tag GGUF, Ollama 0.40.18) et Nanbeige4.3-33B, mesurés par Léo le 25/11/2026 sur sa machine louée (Jaris 0.78.3). 78 réponses relues chacune. Nanbeige 76 → 78 : à « Je vais éteindre mon PC ce soir », le test lisait sa réflexion fuitée (avant « </think> », qui recopie la phrase) au lieu de sa vraie réponse, juste — le test retire désormais cette réflexion comme Jaris (même règle, recalculée depuis les réponses enregistrées).
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -253,6 +255,8 @@ tâches dont la suppression ne marche pas. Les justes vérifiées (rappels, mail
 | qwen2.5-coder:32b | 12/78 |
 | devstral-small-2:24b | 72/78 |
 | qwen3-coder:30b | 69/78 |
+| inkling-2-mini:26b-a5b-iq4_NL | 78/78 |
+| hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M | 78/78 |
 
 ## Vision — compréhension d'image
 
@@ -268,6 +272,8 @@ marge est retirée.
 
 Étape 462 : GLM-4.6V-Flash (27/34) retiré de Jaris — il répète ses actions sans fin sous Ollama (192 « Entrée »
 pour « écris bonjour »), et qwen3-vl:8b fait mieux en vision en plus petit.
+
+Étape 526 : inkling-2-mini:26b-a5b-iq4_NL 34/34 (25/11/2026, machine louée), 34 réponses relues (lectures exactes, clics dans leur cible).
 
 | Modèle | Fiabilité |
 |---|---|
@@ -285,6 +291,7 @@ pour « écris bonjour »), et qwen3-vl:8b fait mieux en vision en plus petit.
 | ornith-1.5:35b | 31/34 |
 | ornith-1.5:9b | 26/34 |
 | nemotron-3.5-bolt:e4b | 20/34 |
+| inkling-2-mini:26b-a5b-iq4_NL | 34/34 |
 
 ## Code — génération de code
 
@@ -442,6 +449,8 @@ Clio », « code pas trouvé dans la mémoire », 5 litres de lait, recette inve
 inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en anglais ou avec des caractères chinois. Les
 11 meilleurs modèles n'ont perdu aucun point.
 
+Étape 526 (25/11/2026, machine louée, Jaris 0.78.3) : Inkling 2 Mini 47 → 48 — à « Non, plutôt dans 30 minutes », il a listé les rappels, annulé celui de 20 minutes puis créé celui de 30 : le bon geste (sinon deux rappels sonnent), refusé par la demande écrite avant l'outil manage_reminders (étape 508) ; la demande l'accepte désormais. Nanbeige4.3-33B 28/48 : après un outil, sa réponse s'arrête net sur « <think> » (son fichier Hugging Face, bartowski, met « <think> » parmi les mots d'arrêt) — Jaris aurait le même défaut en vrai ; et 3 demandes à plusieurs tours refusées par son gabarit (« System message must be at the beginning »). Échecs réels pour Jaris, gardés.
+
 | Modèle | Réussite |
 |---|---|
 | qwen3.5:27b | 48/48 |
@@ -496,6 +505,8 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen2.5-coder:32b | 4/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/48 |
+| inkling-2-mini:26b-a5b-iq4_NL | 48/48 |
+| hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M | 28/48 |
 
 ## À remesurer sur le PC de Léo
 
