@@ -266,7 +266,8 @@ export async function openBrowser(browserPath, { profileRoot = process.env.JARIS
         await sleep(250)
       }
     }
-    return { page, close }
+    // Étape 525 : dit si le navigateur a passé la main (lu par l'essai de la CI dans la version Store).
+    return { page, close, handedOff }
   } catch (err) {
     await close()
     throw err

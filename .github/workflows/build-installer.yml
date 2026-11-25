@@ -243,24 +243,32 @@ jobs:
           New-Item -ItemType Directory -Force $browserOut | Out-Null
           $browserCmd = "$env:RUNNER_TEMP\browser-probe.cmd"
           $nodeExe = (Get-Command node).Source
-          Set-Content -Path $browserCmd -Encoding ascii -Value @(
-            '@echo off',
-            "`"$nodeExe`" `"$env:GITHUB_WORKSPACE\scripts\ci-browser-probe.mjs`" `"$browserOut`" `"$env:GITHUB_WORKSPACE\scripts\benchmark-browser.mjs`" > `"$browserOut\browser.log`" 2>&1",
-            "echo done> `"$browserOut\done.txt`""
-          )
-          $edgeBefore = @(Get-Process msedge -ErrorAction SilentlyContinue).Count
-          try {
-            Invoke-CommandInDesktopPackage -PackageFamilyName $pkg.PackageFamilyName -AppId Jaris -Command 'cmd.exe' -Args "/c `"$browserCmd`"" -PreventBreakaway
-            $deadline = (Get-Date).AddMinutes(4)
-            while (-not (Test-Path "$browserOut\done.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
-            Get-Content "$browserOut\browser.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Host $_ }
-            $result = Get-Content "$browserOut\browser.json" -Raw -ErrorAction SilentlyContinue
-            Write-Host "--- navigateur du test de code dans le paquet ---"
-            Write-Host $result
-            Write-Host "Processus Edge avant : $edgeBefore ; après : $(@(Get-Process msedge -ErrorAction SilentlyContinue).Count)"
-          } catch {
-            Write-Warning "Essai du navigateur dans le paquet impossible : $($_.Exception.Message)"
+          # 2e essai : avec Edge DÉJÀ ouvert en arrière-plan (« démarrage rapide » de Windows, comme sur un PC ordinaire).
+          foreach ($label in 'sans-edge', 'edge-ouvert') {
+            Remove-Item "$browserOut\done.txt" -ErrorAction SilentlyContinue
+            Set-Content -Path $browserCmd -Encoding ascii -Value @(
+              '@echo off',
+              "`"$nodeExe`" `"$env:GITHUB_WORKSPACE\scripts\ci-browser-probe.mjs`" `"$browserOut`" `"$env:GITHUB_WORKSPACE\scripts\benchmark-browser.mjs`" $label > `"$browserOut\$label.log`" 2>&1",
+              "echo done> `"$browserOut\done.txt`""
+            )
+            if ($label -eq 'edge-ouvert') {
+              Start-Process 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' -ArgumentList '--no-startup-window', '--win-session-start'
+              Start-Sleep -Seconds 8
+            }
+            $edgeBefore = @(Get-Process msedge -ErrorAction SilentlyContinue).Count
+            try {
+              Invoke-CommandInDesktopPackage -PackageFamilyName $pkg.PackageFamilyName -AppId Jaris -Command 'cmd.exe' -Args "/c `"$browserCmd`"" -PreventBreakaway
+              $deadline = (Get-Date).AddMinutes(4)
+              while (-not (Test-Path "$browserOut\done.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
+              Get-Content "$browserOut\$label.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Host $_ }
+              Write-Host "--- navigateur du test de code dans le paquet : $label ---"
+              Write-Host (Get-Content "$browserOut\$label.json" -Raw -ErrorAction SilentlyContinue)
+              Write-Host "Processus Edge avant : $edgeBefore ; après : $(@(Get-Process msedge -ErrorAction SilentlyContinue).Count)"
+            } catch {
+              Write-Warning "Essai du navigateur dans le paquet impossible : $($_.Exception.Message)"
+            }
           }
+          Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           $proc | Stop-Process -Force
           Start-Sleep -Seconds 2
           Remove-AppxPackage -Package $pkg.PackageFullName

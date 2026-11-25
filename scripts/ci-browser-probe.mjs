@@ -5,14 +5,14 @@
  * dossier temporaire (l'ancien chemin) puis dans le dossier de données (le nouveau), et écrit ce qui s'est passé dans
  * <dossier>/browser.json.
  *
- * Usage : node ci-browser-probe.mjs <dossier de sortie> <benchmark-browser.mjs>
+ * Usage : node ci-browser-probe.mjs <dossier de sortie> <benchmark-browser.mjs> [nom du résultat]
  */
 import { writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const [outDir, modulePath] = process.argv.slice(2)
+const [outDir, modulePath, label = 'browser'] = process.argv.slice(2)
 const { findBrowser, openBrowser } = await import(pathToFileURL(modulePath).href)
 const browser = findBrowser()
 const results = { browser }
@@ -26,9 +26,9 @@ for (const [name, root] of [
     await session.page.loadHtml('<p id="x">ok</p>')
     const text = await session.page.evaluate("document.getElementById('x').textContent")
     await session.close()
-    results[name] = { ok: text === 'ok', ms: Date.now() - started }
+    results[name] = { ok: text === 'ok', handedOff: session.handedOff, ms: Date.now() - started }
   } catch (err) {
     results[name] = { ok: false, error: err instanceof Error ? err.message : String(err), ms: Date.now() - started }
   }
 }
-writeFileSync(join(outDir, 'browser.json'), JSON.stringify(results, null, 2))
+writeFileSync(join(outDir, `${label}.json`), JSON.stringify(results, null, 2))
