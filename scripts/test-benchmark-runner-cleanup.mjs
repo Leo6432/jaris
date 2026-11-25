@@ -612,3 +612,17 @@ test('étape 438 : l’extrait des résultats ne garde que le nouveau, chaque r�
   assert.ok(since.data.length < 1000, `bien plus petit que le fichier brut (${since.data.length} octets)`)
   assert.equal(buildTestResultsExport(traces, '2026-11-07T12:54:00.000Z').rows, 0, 'rien de nouveau : rien à envoyer')
 })
+
+// Étape 525 (Léo, version Store : Edge « fermé dès son lancement (code 0) ») : le profil du navigateur du test de code
+// va dans le dossier de données (hors d'AppData, rangé à part par Windows dans un paquet du Store) — et ce dossier suit
+// « Déplacer » (OWNED_ENTRIES).
+test('étape 525 : version Store — le profil du navigateur du test de code dans les données, suivi par « Déplacer »', () => {
+  const runner = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8')
+  const dir = runner.match(/export const BROWSER_TEST_DIR = '([^']+)'/)?.[1]
+  assert.ok(dir, 'BROWSER_TEST_DIR')
+  assert.match(runner, /process\.windowsStore === true \? \{ JARIS_BROWSER_PROFILE_ROOT: join\(getDataRoot\(\), BROWSER_TEST_DIR\) \} : \{\}/)
+  const storage = readFileSync(new URL('../electron/services/storageRoot.ts', import.meta.url), 'utf8')
+  assert.ok(storage.includes(`'${dir}'`), `${dir} dans OWNED_ENTRIES`)
+  const browser = readFileSync(new URL('./benchmark-browser.mjs', import.meta.url), 'utf8')
+  assert.match(browser, /profileRoot = process\.env\.JARIS_BROWSER_PROFILE_ROOT \|\| tmpdir\(\)/)
+})

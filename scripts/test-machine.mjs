@@ -51,7 +51,9 @@ test('réglages de la machine : revérifiés, et l’ancienne adresse du Duel re
   assert.equal(old.host, 'https://abc-11434.proxy.runpod.net')
   assert.equal(old.diskGb, 100)
   const saved = machine.savedRemoteMachine({ remoteMachine: { host: '1.2.3.4', vramGb: 24, ramGb: 32, diskGb: 200 }, duelRemote: { host: 'https://x.y', vramGb: 1, ramGb: 1 } })
-  assert.equal(saved.host, 'http://1.2.3.4', 'la page Machine prime')
+  // Étape 525 : une IP seule reçoit le port d'Ollama (une adresse déjà enregistrée, avec « http:// », reste telle quelle).
+  assert.equal(saved.host, 'http://1.2.3.4:11434', 'la page Machine prime')
+  assert.equal(machine.savedRemoteMachine({ remoteMachine: { host: 'http://1.2.3.4', vramGb: 24, ramGb: 32, diskGb: 200 } }).host, 'http://1.2.3.4')
 })
 
 function loadService({ reachable = true, onVersion = null } = {}) {

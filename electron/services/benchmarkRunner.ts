@@ -327,6 +327,9 @@ export function getModelsToTest(): string[] {
   return getUnscoredModels(currentCampaign())
 }
 
+/** Étape 525 : profils temporaires du navigateur du test de code (version Store), dans les données — dans OWNED_ENTRIES. */
+export const BROWSER_TEST_DIR = 'navigateur-test'
+
 /** La même liste, avec ce qui manque à chaque modèle (écran « Tous les modèles », étape 431). */
 export function getModelsToTestDetails(): ModelToTest[] {
   // Étape 433 : le même fichier donne aussi les temps mesurés sur ce PC, pour estimer la durée de chaque modèle.
@@ -445,6 +448,9 @@ export async function testUnscoredModels(
         JARIS_RAM_SAFETY_MARGIN_GB: machine ? '4' : '12',
         // Étape 233 : écrite dans les traces, pour savoir quelle version de Jaris a produit chaque score.
         JARIS_APP_VERSION: app.getVersion(),
+        // Étape 525 (Léo, version Store : Edge « fermé dès son lancement (code 0) ») : le profil du navigateur du test de
+        // code dans le dossier de données (hors d'AppData, que Windows range à part dans un paquet du Store).
+        ...(process.windowsStore === true ? { JARIS_BROWSER_PROFILE_ROOT: join(getDataRoot(), BROWSER_TEST_DIR) } : {}),
         ...(machine
           ? {
               JARIS_MACHINE: machine.host,

@@ -12,7 +12,7 @@
  * application qui confirme une action par une alerte ne montre RIEN à Léo, elle est donc comptée fausse.
  */
 import { spawn, execFile } from 'child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -51,9 +51,19 @@ export const PREVIEW_MEMORY_STORAGE_SOURCE =
   "['localStorage','sessionStorage'].forEach(function(n){try{window[n].getItem('jaris')}catch(e){" +
   'try{Object.defineProperty(window,n,{configurable:true,value:m()})}catch(e2){}}})})();'
 
-/** Lance le navigateur invisible et renvoie une page pilotable. Toujours appeler close(). */
-export async function openBrowser(browserPath) {
-  const profile = mkdtempSync(join(tmpdir(), 'jaris-navigateur-'))
+/**
+ * Lance le navigateur invisible et renvoie une page pilotable. Toujours appeler close().
+ *
+ * Étape 525 (Léo, version Store : « le navigateur s'est fermé dès son lancement (code 0) », test de code impossible) :
+ * dans un paquet du Store, Windows range à part ce que Jaris écrit dans AppData — le dossier temporaire compris — et
+ * Edge, lancé depuis le paquet, peut passer la main à un autre processus (sortie « code 0 ») qui ne voit pas ce dossier
+ * rangé à part. D'où : `profileRoot` (JARIS_BROWSER_PROFILE_ROOT, donné par Jaris : son dossier de données, hors
+ * d'AppData, dans la version Store), et une sortie « code 0 » qui n'est plus un échec : on attend le port de contrôle
+ * du navigateur qui a pris la suite, puis on le ferme par ce port (il n'est pas notre processus).
+ */
+export async function openBrowser(browserPath, { profileRoot = process.env.JARIS_BROWSER_PROFILE_ROOT || tmpdir() } = {}) {
+  mkdirSync(profileRoot, { recursive: true })
+  const profile = mkdtempSync(join(profileRoot, 'jaris-navigateur-'))
   const proc = spawn(
     browserPath,
     [
@@ -95,12 +105,33 @@ export async function openBrowser(browserPath) {
     return [exitInfo, lines.slice(0, 300)].filter(Boolean).join(' : ')
   }
 
+  let port = null
+  let handedOff = false
+  /** Ferme le navigateur par son port de contrôle (« Browser.close ») : celui qui a pris la suite n'est pas notre processus. */
+  const closeThroughPort = async () => {
+    if (!port) return
+    try {
+      const version = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(2000) })).json()
+      const browserSocket = new WebSocket(version.webSocketDebuggerUrl)
+      await new Promise((resolve, reject) => {
+        browserSocket.onopen = resolve
+        browserSocket.onerror = reject
+        setTimeout(reject, 2000)
+      })
+      browserSocket.send(JSON.stringify({ id: 1, method: 'Browser.close' }))
+      await sleep(500)
+      browserSocket.close()
+    } catch {
+      /* déjà fermé */
+    }
+  }
   const close = async () => {
     try {
       socket?.close()
     } catch {
       /* déjà fermé */
     }
+    if (handedOff) await closeThroughPort()
     if (!exited) {
       // Sous Windows, Edge lance des sous-processus : on arrête tout l'arbre.
       if (process.platform === 'win32') await new Promise((r) => execFile('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => r()))
@@ -132,16 +163,20 @@ export async function openBrowser(browserPath) {
     const deadline = Date.now() + 30000
     let content = readPortFile()
     while (!content.includes('\n')) {
-      if (exited) {
+      if (exited && !handedOff) {
         // Laisse arriver le code de sortie et les derniers messages (ils suivent la fin du processus de peu).
         await sleep(200)
-        throw new Error(`le navigateur s’est fermé dès son lancement${why() ? ` (${why()})` : ''}`)
+        // Étape 525 : « code 0 » = passé la main à un autre processus du navigateur — on attend son port de contrôle.
+        if (exitInfo === 'code 0') handedOff = true
+        else throw new Error(`le navigateur s’est fermé dès son lancement${why() ? ` (${why()})` : ''}`)
       }
-      if (Date.now() > deadline) throw new Error('le navigateur n’a pas démarré en 30 s')
+      if (Date.now() > deadline) {
+        throw new Error(handedOff ? 'le navigateur a passé la main à un autre processus (code 0), qui n’a pas ouvert son port de contrôle en 30 s' : 'le navigateur n’a pas démarré en 30 s')
+      }
       await sleep(100)
       content = readPortFile()
     }
-    const port = Number(content.split('\n')[0])
+    port = Number(content.split('\n')[0])
     let pageWs
     for (let i = 0; i < 50 && !pageWs; i++) {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()

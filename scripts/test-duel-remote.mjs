@@ -233,6 +233,12 @@ test('l’adresse d’une autre machine : origine seule, https par défaut pour 
   assert.equal(n('pod123-11434.proxy.runpod.net'), POD, 'collée sans « https:// »')
   assert.equal(n('https://pod123-11434.proxy.runpod.net/api/tags'), POD, 'un chemin collé en trop est retiré')
   assert.equal(n('203.0.113.7:11434'), 'http://203.0.113.7:11434')
+  // Étape 525 (Léo, OVH : « 135.125.95.208 » seul ne répondait pas) : l'IP seule reçoit le port d'Ollama ; un port ou
+  // « http:// » écrits par la personne sont gardés tels quels.
+  assert.equal(n('135.125.95.208'), 'http://135.125.95.208:11434')
+  assert.equal(n('localhost'), 'http://localhost:11434')
+  assert.equal(n('http://135.125.95.208'), 'http://135.125.95.208')
+  assert.equal(n('135.125.95.208:8080'), 'http://135.125.95.208:8080')
   assert.equal(n('http://localhost:11500'), 'http://localhost:11500')
   for (const bad of ['', 'pas une adresse', 'ftp://exemple.com', 'https://moi:secret@exemple.com', 'http://0.0.0.0:11434', 'file:///C:/x']) {
     assert.equal(n(bad), null, bad)

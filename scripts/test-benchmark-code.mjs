@@ -256,3 +256,47 @@ test('journal des gestes : chaque clic, saisie et lecture est noté, réussite c
     await c()
   }
 })
+
+// Étape 525 (Léo, version Store : « le navigateur s'est fermé dès son lancement (code 0) ») : un navigateur qui passe la
+// main à un autre processus (le lanceur sort en code 0) n'est plus un échec ; celui qui a pris la suite est fermé par son
+// port de contrôle (il n'est pas notre processus). Et le profil va dans le dossier donné par Jaris (hors d'AppData).
+test(
+  'étape 525 : navigateur qui passe la main (code 0) — la page marche, puis le vrai navigateur est fermé ; profil dans le dossier donné',
+  { ...options, skip: options.skip || (process.platform === 'win32' ? 'il faut un shell Unix pour simuler le lanceur' : false) },
+  async () => {
+    const { mkdtempSync, readdirSync, rmSync, writeFileSync } = await import('node:fs')
+    const { execFileSync } = await import('node:child_process')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-lanceur-'))
+    const root = join(dir, 'donnees', 'navigateur-test')
+    const launcher = join(dir, 'lanceur.sh')
+    // Comme Edge lancé depuis un paquet du Store : le vrai navigateur continue à part, le lanceur sort aussitôt en code 0.
+    writeFileSync(launcher, `#!/bin/sh\nsetsid "${browserPath}" "$@" >/dev/null 2>&1 &\nexit 0\n`, { mode: 0o755 })
+    const alive = () => {
+      try {
+        return execFileSync('pgrep', ['-f', root], { encoding: 'utf8' }).trim().split('\n').filter(Boolean).length
+      } catch {
+        return 0
+      }
+    }
+    try {
+      const { page, close } = await openBrowser(launcher, { profileRoot: root })
+      assert.equal(readdirSync(root).length, 1, 'le profil est dans le dossier donné')
+      await page.loadHtml('<p id="x">ok</p>')
+      assert.equal(await page.evaluate("document.getElementById('x').textContent"), 'ok')
+      assert.ok(alive() > 0, 'le navigateur qui a pris la suite tourne')
+      await close()
+      for (let i = 0; i < 30 && alive() > 0; i++) await new Promise((r) => setTimeout(r, 100))
+      assert.equal(alive(), 0, 'fermé par son port de contrôle')
+      assert.deepEqual(readdirSync(root), [], 'profil effacé')
+    } finally {
+      try {
+        execFileSync('pkill', ['-f', root])
+      } catch {
+        /* déjà fermé */
+      }
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)

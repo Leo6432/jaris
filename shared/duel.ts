@@ -715,7 +715,8 @@ export const DUEL_REMOTE_MAX_RAM_GB = 8192
  * L'adresse d'un Ollama d'une autre machine, ramenée à son origine (« https://abc-11434.proxy.runpod.net »), ou `null`
  * si ce n'est pas une adresse web utilisable. Sans « http(s):// », une adresse IP est lue en http (Ollama sans
  * chiffrement, sur un réseau) et un nom de domaine en https (un service en ligne comme RunPod). Contrairement à
- * l'Ollama de ce PC (normalizeOllamaHost, config.ts), aucun port n'est ajouté : une adresse https passe par le port 443.
+ * l'Ollama de ce PC (normalizeOllamaHost, config.ts), aucun port n'est ajouté : une adresse https passe par le port 443 —
+ * sauf (étape 525) une adresse IP collée seule, sans « http:// » ni port : celui d'Ollama (11434).
  */
 export function normalizeRemoteOllamaHost(value: string): string | null {
   const text = value.trim()
@@ -730,6 +731,9 @@ export function normalizeRemoteOllamaHost(value: string): string | null {
   }
   if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password || !url.hostname) return null
   if (url.hostname === '0.0.0.0') return null
+  // Étape 525 (Léo, serveur OVH : « 135.125.95.208 » → « la machine ne répond pas ») : une adresse IP collée sans
+  // « http:// » ni port est celle d'un Ollama, qui écoute sur 11434 — jamais sur le port 80 du web.
+  if (!hasScheme && scheme === 'http' && !url.port) return `http://${url.host}:11434`
   return `${url.protocol}//${url.host}`
 }
 

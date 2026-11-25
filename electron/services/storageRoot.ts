@@ -77,7 +77,9 @@ const MODEL_TEST_ENTRIES = [
   'benchmark-nouveaux-modeles.md.telecharges-machine.json',
   // Étape 438 : jusqu'où les résultats ont déjà été préparés pour Léo (« Préparer le fichier à m'envoyer »).
   // Étape 524 : plus écrit (le fichier à m'envoyer contient tout) ; gardé ici pour qu'un ancien repère suive « Déplacer ».
-  'benchmark-nouveaux-modeles.envoye.json'
+  'benchmark-nouveaux-modeles.envoye.json',
+  // Étape 525 : profils temporaires du navigateur du test de code, version Store (BROWSER_TEST_DIR, benchmarkRunner.ts).
+  'navigateur-test'
 ]
 
 /**

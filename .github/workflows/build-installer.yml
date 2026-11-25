@@ -234,6 +234,33 @@ jobs:
             Write-Host "pip dans AppData neuf : code $old ; dans un AppData laissé par l'ancien Jaris : code $mixed ; dans %USERPROFILE%\.jaris (nouveau) : code $new"
             if ("$new".Trim() -ne '0') { throw "pip échoue aussi hors d'AppData dans le paquet (code $new) : le correctif de l'étape 500 ne suffit pas." }
           }
+          # Étape 525 (Léo, version Store : test de code impossible, Edge « fermé dès son lancement (code 0) ») : le
+          # navigateur du test de code ouvert DANS le paquet, avec le Node et le module de Jaris — profil dans le
+          # dossier temporaire (ancien chemin, informatif) puis dans le dossier de données (nouveau, doit marcher).
+          $browserOut = "$env:RUNNER_TEMP\browser-probe"
+          New-Item -ItemType Directory -Force $browserOut | Out-Null
+          $browserCmd = "$env:RUNNER_TEMP\browser-probe.cmd"
+          $jarisExe = Join-Path $pkg.InstallLocation 'Jaris.exe'
+          $browserModule = Join-Path $pkg.InstallLocation 'resources\scripts\benchmark-browser.mjs'
+          Set-Content -Path $browserCmd -Encoding ascii -Value @(
+            '@echo off',
+            'set ELECTRON_RUN_AS_NODE=1',
+            "`"$jarisExe`" `"$env:GITHUB_WORKSPACE\scripts\ci-browser-probe.mjs`" `"$browserOut`" `"$browserModule`" > `"$browserOut\browser.log`" 2>&1",
+            "echo done> `"$browserOut\done.txt`""
+          )
+          $edgeBefore = @(Get-Process msedge -ErrorAction SilentlyContinue).Count
+          try {
+            Invoke-CommandInDesktopPackage -PackageFamilyName $pkg.PackageFamilyName -AppId Jaris -Command 'cmd.exe' -Args "/c `"$browserCmd`"" -PreventBreakaway
+            $deadline = (Get-Date).AddMinutes(4)
+            while (-not (Test-Path "$browserOut\done.txt") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 3 }
+            Get-Content "$browserOut\browser.log" -ErrorAction SilentlyContinue | Select-Object -Last 10 | ForEach-Object { Write-Host $_ }
+            $result = Get-Content "$browserOut\browser.json" -Raw -ErrorAction SilentlyContinue
+            Write-Host "--- navigateur du test de code dans le paquet ---"
+            Write-Host $result
+            Write-Host "Processus Edge avant : $edgeBefore ; après : $(@(Get-Process msedge -ErrorAction SilentlyContinue).Count)"
+          } catch {
+            Write-Warning "Essai du navigateur dans le paquet impossible : $($_.Exception.Message)"
+          }
           $proc | Stop-Process -Force
           Start-Sleep -Seconds 2
           Remove-AppxPackage -Package $pkg.PackageFullName
