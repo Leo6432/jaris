@@ -42,6 +42,7 @@ const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import CapacityScan from './src/components/CapacityScan'
 import RuntimeSetup from './src/components/RuntimeSetup'
+import SetupSupport from './src/components/SetupSupport'
 
 const models = ${JSON.stringify(MODELS)}
 const e = (model, tool, ai, speed, demands = null) => ({ model, vramGb: 8, usedIn: [], toolCalling: tool, demands, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: speed })
@@ -72,6 +73,8 @@ window.jaris = {
   runRuntimeSetup: () => new Promise((resolve) => { window.__finishRuntime = (ready) => resolve({ ready }) })
 }
 createRoot(document.getElementById('setup')).render(window.__screen === 'runtime' ? <RuntimeSetup onDone={() => {}} /> : <CapacityScan onDone={() => {}} />)
+// Étape 527 : le lien « Support » de la coque du premier lancement (App.tsx, setupShell).
+createRoot(document.getElementById('support')).render(<SetupSupport />)
 `
 
 let bundle = null
@@ -93,7 +96,7 @@ function build() {
 
 // La coque réelle du premier lancement (App.tsx, setupShell) : barre de titre + zone de l'écran.
 const pageHtml = (screen) =>
-  `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div id="root"><div class="app-shell app-shell--titlebar app-shell--setup"><div class="titlebar" style="height:40px"></div><div class="app-shell__setup" id="setup"></div></div></div><script>window.__screen=${JSON.stringify(screen)};window.__picksFailures=${screen === 'capacity-unreadable' ? 1 : 0}</script><script>${bundle}</script></body></html>`
+  `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div id="root"><div class="app-shell app-shell--titlebar app-shell--setup"><div class="titlebar" style="height:40px"></div><div class="app-shell__setup" id="setup"></div><div id="support" style="display:contents"></div></div></div><script>window.__screen=${JSON.stringify(screen)};window.__picksFailures=${screen === 'capacity-unreadable' ? 1 : 0}</script><script>${bundle}</script></body></html>`
 
 async function withScreen(screen, { width = 1000, height = 760, colorScheme = 'light' } = {}, run) {
   build()
@@ -336,3 +339,32 @@ test('modèles prévus illisibles : le vrai message, « Réessayer », et « Con
     assert.equal(await page.locator('.capacity-scan__warning').count(), 0)
   })
 })
+
+// Étape 527 (Léo : « le bouton support est là que dans le menu, pas en installation ni en téléchargement… discret ») :
+// le lien Support est dans le coin de chaque écran du premier lancement, lisible, sans jamais couvrir un bouton.
+for (const screen of ['runtime', 'capacity']) {
+  for (const width of [760, 1280]) {
+    test(`étape 527 : lien Support discret sur l’écran ${screen} (${width} px)`, options, async () => {
+      await withScreen(screen, { width, height: 720, colorScheme: 'dark' }, async (page) => {
+        const link = page.locator('.setup-support')
+        assert.equal(await link.count(), 1)
+        assert.equal(await link.getAttribute('href'), 'https://discord.gg/dVAQV7eJtr')
+        assert.equal((await link.textContent()).trim(), 'Support')
+        const box = await link.boundingBox()
+        assert.ok(box.x + box.width <= width && box.y + box.height <= 720 && box.height < 32, JSON.stringify(box))
+        // Jamais par-dessus un bouton de l'écran.
+        const covered = await page.evaluate(() => {
+          const l = document.querySelector('.setup-support').getBoundingClientRect()
+          return [...document.querySelectorAll('#setup button')].some((b) => {
+            const r = b.getBoundingClientRect()
+            return r.width && r.left < l.right && r.right > l.left && r.top < l.bottom && r.bottom > l.top
+          })
+        })
+        assert.equal(covered, false, 'le lien couvre un bouton')
+        const color = await link.evaluate((el) => getComputedStyle(el).color)
+        assert.equal(color, 'rgb(180, 180, 180)', 'texte secondaire en sombre')
+        if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/527-${screen}-${width}.png`, scale: 'device' })
+      })
+    })
+  }
+}

@@ -24,6 +24,9 @@ import { ShellSlotsContext } from '@/lib/shellContext'
 import logo160 from '@/assets/jaris-logo-160.png'
 import { t, tn, useLanguage } from '@/lib/i18n'
 import { ipcErrorMessage } from '@/lib/ipcError'
+import { ICON_SUPPORT, PRIVACY_URL, SUPPORT_URL } from '@/lib/support'
+import SetupSupport from './components/SetupSupport'
+import ErrorReportsPrompt from './components/ErrorReportsPrompt'
 import type { MessageKey } from '../shared/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../shared/i18n/languages'
 
@@ -62,10 +65,6 @@ const MORE_MODES: AppMode[] = ['duel', 'ranking']
 const ICON_MORE = 'M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0'
 /** Étape 437 : un serveur (deux baies), pour la machine louée. */
 const ICON_MACHINE = 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01'
-// Étape 474 (Léo : « ajoute un bouton support avec https://discord.gg/dVAQV7eJtr ») : un cercle avec un point d'interrogation.
-const ICON_SUPPORT = 'M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01'
-/** Le serveur Discord de Jaris (aide, communauté). Ouvert dans le navigateur de Windows (setWindowOpenHandler, main.ts). */
-const SUPPORT_URL = 'https://discord.gg/dVAQV7eJtr'
 
 const ICON_BRAIN =
   'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
@@ -239,6 +238,9 @@ export default function App(): JSX.Element {
   const [brainError, setBrainError] = useState<string | null>(null)
   // Premier écran : prénom ou langue non enregistrés — dit sous le formulaire, au lieu d'un bouton muet.
   const [onboardingError, setOnboardingError] = useState<string | null>(null)
+  // Étape 527 : rapports d'erreurs anonymes — une case sur l'écran de bienvenue, décochée (l'accord se donne, il ne se
+  // suppose pas). Les installations déjà faites ont la question une fois, sur la carte ErrorReportsPrompt.
+  const [reportsChecked, setReportsChecked] = useState(false)
   const [newModels, setNewModels] = useState<string[]>([])
   // Étape 252 : ce que Jaris fait pendant une demande vocale (« Je réfléchis… 12 s »), `null` hors demande.
   const [voiceActivity, setVoiceActivity] = useState<string | null>(null)
@@ -445,6 +447,8 @@ export default function App(): JSX.Element {
     const name = nameInput.trim()
     if (!name) return
     setOnboardingError(null)
+    // Oui comme non : la réponse est notée, la question ne reviendra pas (carte ErrorReportsPrompt).
+    void window.jaris.setErrorReports(reportsChecked).catch(() => {})
     window.jaris
       .saveProfile({ name })
       .then(() => {
@@ -630,14 +634,19 @@ export default function App(): JSX.Element {
     // Étape 265 : les écrans du premier lancement n'avaient AUCUNE barre de titre — la barre native étant
     // cachée (titleBarStyle: 'hidden'), la fenêtre ne pouvait même plus être déplacée avant la fin de
     // l'installation. Ils gardent maintenant la même barre que le reste de Jaris.
+    // Étape 527 : le lien « Support » discret, sur TOUS les écrans du premier lancement (SetupSupport.tsx).
     const setupShell = (screen: JSX.Element): JSX.Element =>
       chrome?.titleBar ? (
         <div className="app-shell app-shell--titlebar app-shell--setup">
           <TitleBar />
           <div className="app-shell__setup">{screen}</div>
+          <SetupSupport />
         </div>
       ) : (
-        screen
+        <>
+          {screen}
+          <SetupSupport />
+        </>
       )
 
     if (profileName === null) {
@@ -678,6 +687,15 @@ export default function App(): JSX.Element {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="app__onboarding-reports">
+              <input type="checkbox" checked={reportsChecked} onChange={(event) => setReportsChecked(event.target.checked)} />
+              <span>
+                {t('errorReports.onboarding')}{' '}
+                <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+                  {t('errorReports.privacy')}
+                </a>
+              </span>
             </label>
             {onboardingError && (
               <p className="options-menu__error" role="alert">
@@ -984,6 +1002,8 @@ export default function App(): JSX.Element {
           </main>
         </div>
 
+        {/* Étape 527 : la question des rapports d'erreurs, une seule fois, pour les installations d'avant. */}
+        <ErrorReportsPrompt />
       </div>
       </ShellSlotsContext.Provider>
     )

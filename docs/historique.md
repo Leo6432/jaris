@@ -13228,3 +13228,39 @@ relues (justes comprises).
 - Au passage (suite complète sous charge) : le bloc « test de vitesse » posait son écoute des évènements APRÈS
   l'affichage de « en cours » — les premiers évènements pouvaient être perdus (« Préparation… » figé). Écoute posée dès
   l'ouverture, seuls les évènements d'un test lancé d'ici comptent (SpeedTest.tsx).
+
+## Étape 527 — Bouton Support sur les écrans d'installation ; rapports d'erreurs anonymes (Sentry), seulement avec l'accord (0.79.0)
+
+Léo : « le bouton support est là que quand on est sur le menu, mais si on est en installation ou téléchargement… » et
+« on va faire un tableau de bord, avec tout ». Captures validées par Léo (« je valide, support plus statistique »).
+- **Support** discret (pilule en bas à droite, `SetupSupport.tsx`) sur tous les écrans d'avant l'accueil (bienvenue,
+  installation de Python/Ollama, test de capacité) ; adresses partagées dans `src/lib/support.ts`. Test : jamais
+  par-dessus un bouton, dans l'écran à 760 et 1280 px.
+- **Rapports d'erreurs** vers Sentry (organisation de Léo « jaris-zk », projet « jaris », serveurs en Allemagne :
+  `ingest.de`). `@sentry/electron` épinglé à 8.4.0 (8.5.0 sortie le jour même). Choix dans `rapports-erreurs.json`
+  (OWNED_ENTRIES, règle de rebranchement `destination-wins`). Sans « oui » : Sentry n'est JAMAIS démarré
+  (`startErrorReports`, appelé avant `ready` dans la seule instance). « Oui » démarre le main tout de suite (l'écran au
+  démarrage suivant) ; « non » le coupe tout de suite (`Sentry.close`).
+- La question est posée UNE fois : case **décochée** sur l'écran de bienvenue (nouvelle installation), petite carte
+  `ErrorReportsPrompt` pour une installation déjà faite (état illisible = pas de carte), interrupteur dans Options →
+  Général. Léo a demandé « cochée par défaut ? » : refusé avec lui — en Europe une case pré-cochée n'est pas un accord
+  valable (CJUE Planet49, 2019) ; une case « J'accepte les conditions » obligatoire, elle, est permise (contrat).
+- Ce que Sentry collecte par défaut, relu dans SON code (@sentry/core 11.16, @sentry/node, @sentry/electron 8.4) :
+  presque tout est ACTIVÉ. Coupé : `dataCollection` (dont `stackFrameVariables` — les variables du programme
+  contiendraient le texte d'une conversation), fil d'actions (`maxBreadcrumbs: 0` + retiré), capture d'écran, nom du
+  PC (`includeServerName: false` — `os.hostname()` par défaut), et surtout les **minidumps** : à un plantage natif,
+  Sentry joint un extrait de la MÉMOIRE du programme ; `beforeSend` vide `hint.attachments` (le même `hint` va à
+  l'envoi, client.js), le rapport part quand même. `scrubErrorEvent` retire utilisateur, requête, extras, et dans tout
+  le reste le nom d'utilisateur des chemins (y compris avec une espace : « Léo Moulard », trouvé par le test), le nom
+  du PC, le dossier personnel et les adresses mail.
+- Politique de confidentialité (`docs/confidentialite.md`, même adresse) : section « Rapports d'erreurs (seulement si
+  tu l'acceptes) », FR + EN. Elle promet que l'IP n'est pas gardée : Léo doit activer « Prevent Storing of IP
+  Addresses » dans Sentry (Security & Privacy). Partner Center : déclarer la collecte de diagnostics (à guider avec
+  ses captures).
+- Tests (mordent) : test-error-reports (nettoyage, rien sans accord, minidump retiré, choix gardé, fichier abîmé ≠
+  oui), test-error-reports-ui (case décochée, réponse notée dans les deux cas, carte une seule fois, interrupteur),
+  test-setup-screens-ui (Support), test-data-location (règle de rebranchement), test-options-reorganization-ui.
+- Au passage : le test « test de vitesse… suivi modèle par modèle » échouait encore sous la charge de la suite complète
+  (2 fois de suite) malgré l'étape 526. Le composant était juste : le TEST lisait l'écran aussitôt l'évènement envoyé,
+  avant le rendu de React. Il attend désormais le texte (waitForFunction) ; il mord toujours (évènement ignoré =
+  échec) et tient à 4 exécutions en parallèle.

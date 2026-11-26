@@ -1,6 +1,6 @@
 # Jaris — Politique de confidentialité / Privacy policy
 
-*Dernière mise à jour : 16 novembre 2026 · Last updated: November 16, 2026*
+*Dernière mise à jour : 26 novembre 2026 · Last updated: November 26, 2026*
 
 [English version below](#english)
 
@@ -8,7 +8,8 @@
 
 Jaris est un assistant vocal qui fonctionne **sur ton ordinateur**. L'intelligence artificielle (modèles de langage,
 reconnaissance et synthèse de la voix, images, vidéos) tourne en local. Le développeur de Jaris ne reçoit **aucune**
-de tes données : Jaris n'a ni compte, ni publicité, ni statistiques d'utilisation, ni mesure d'audience.
+de tes données : Jaris n'a ni compte, ni publicité, ni statistiques d'utilisation, ni mesure d'audience. La seule
+exception, **seulement si tu l'acceptes**, ce sont les rapports d'erreurs anonymes décrits plus bas.
 
 ### Ce que Jaris utilise sur ton ordinateur
 
@@ -41,6 +42,20 @@ perdre tes données par erreur.
 
 Ces services ont leurs propres règles de confidentialité. Jaris ne leur envoie rien d'autre que ce qui est décrit ici.
 
+### Rapports d'erreurs (seulement si tu l'acceptes)
+
+Jaris te demande une seule fois si tu veux aider à corriger les bugs. **Sans ton « oui », rien n'est envoyé.**
+
+- **Ce qui part** quand Jaris rencontre une erreur ou plante : le message d'erreur, l'endroit du code de Jaris où elle
+  s'est produite, la version de Jaris, la version de Windows et le type de PC (processeur, carte graphique,
+  mémoire, taille de l'écran, langue de Windows).
+- **Ce qui ne part jamais** : tes conversations, ta voix, tes fichiers, tes images, tes captures d'écran, ton prénom,
+  ton nom d'utilisateur, le nom de ton ordinateur, tes adresses mail, ni le contenu de la mémoire du programme. Avant
+  chaque envoi, Jaris efface ton nom des chemins de fichiers (`C:\Users\<user>\…`) et les adresses mail.
+- **Où** : chez Sentry (Functional Software, Inc.), sur des serveurs situés en Allemagne (Union européenne). Ton
+  adresse IP n'est pas enregistrée. Les rapports sont effacés automatiquement après 90 jours au plus.
+- **Pour arrêter** : Options → Général → « Rapports d'erreurs ». L'envoi s'arrête tout de suite.
+
 ### Contenu créé par l'IA
 
 Les réponses, images et vidéos sont créées par des modèles d'IA et peuvent être fausses ou inappropriées. Pour
@@ -50,7 +65,8 @@ signaler un contenu inapproprié ou poser une question : <https://github.com/Leo
 
 Jaris is a voice assistant that runs **on your computer**. Its artificial intelligence (language models, speech
 recognition and synthesis, images, videos) runs locally. The developer of Jaris receives **none** of your data: Jaris
-has no account, no ads, no usage statistics and no analytics.
+has no account, no ads, no usage statistics and no analytics. The only exception, **only if you accept it**, is the
+anonymous error reports described below.
 
 ### What Jaris uses on your computer
 
@@ -79,6 +95,20 @@ never lost by mistake.
   - **Connected services (MCP)** and **rented machine**: only the ones you add yourself; they receive what you ask them.
 
 These services have their own privacy policies. Jaris sends them nothing beyond what is described here.
+
+### Error reports (only if you accept)
+
+Jaris asks you once whether you want to help fix bugs. **Without your “yes”, nothing is sent.**
+
+- **What is sent** when Jaris hits an error or crashes: the error message, where in Jaris's code it happened, the Jaris
+  version, the Windows version and the type of PC (processor, graphics card, memory, screen size, Windows
+  language).
+- **What is never sent**: your conversations, voice, files, images, screenshots, first name, user name, computer name,
+  email addresses, or the contents of the program's memory. Before each report, Jaris removes your name from file paths
+  (`C:\Users\<user>\…`) and any email address.
+- **Where**: Sentry (Functional Software, Inc.), on servers located in Germany (European Union). Your IP address is not
+  stored. Reports are deleted automatically after at most 90 days.
+- **To stop**: Options → General → “Error reports”. Sending stops immediately.
 
 ### AI-generated content
 

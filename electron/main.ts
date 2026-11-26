@@ -2,6 +2,7 @@ import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerSaveBlo
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getMissingStorageRoot } from './services/storageRoot'
+import { readErrorReportsState, setErrorReports, startErrorReports } from './services/errorReports'
 import { isImageQuality, pickImageModel } from '../shared/imageModel'
 import { PILOT_MODEL, PILOT_MODEL_LABEL, pickPilotModel } from '../shared/pilotModel'
 import {
@@ -261,6 +262,8 @@ registerPreviewScheme()
 // À poser avant `ready`, comme tout commutateur Chromium.
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
+// Étape 527 : rapports d'erreurs anonymes — seulement si la personne a dit oui, et avant `ready` (plantages et fenêtres).
+if (gotSingleInstanceLock) startErrorReports()
 // Étape 312 : les choix de modèles écartent ce que la version d'Ollama installée ne sait pas charger (K2 Horizon).
 setOllamaVersionSource(() => getLocalOllamaVersion())
 // Étape 355 : la force que les votes des duels donnent aux modèles remplace leur note d'Artificial Analysis. Recalculée
@@ -2076,6 +2079,9 @@ app.whenReady().then(async () => {
     if (displayedWidgetMode === 'chat-idle') openChatWidgetBar()
   })
   ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform, process.windowsStore === true))
+  // Étape 527 : l'accord pour les rapports d'erreurs ; la valeur venue de l'écran est revérifiée (un vrai booléen).
+  ipcMain.handle(IPC_CHANNELS.getErrorReports, () => readErrorReportsState())
+  ipcMain.handle(IPC_CHANNELS.setErrorReports, (_event, enabled: unknown) => setErrorReports(enabled === true))
   // Étape 491 : une adresse fixe, jamais une valeur venue de l'écran.
   ipcMain.handle(IPC_CHANNELS.openStartupSettings, () => shell.openExternal(STORE_STARTUP_SETTINGS_URL))
   // Étape 502 : adresse fixe, jamais une adresse venue de l'écran.

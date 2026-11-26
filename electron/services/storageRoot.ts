@@ -107,6 +107,8 @@ export const OWNED_ENTRIES = [
   'conversation-history.json',
   'profile.json',
   'language.json',
+  // Étape 527 : l'accord pour les rapports d'erreurs anonymes (ERROR_REPORTS_FILE, errorReports.ts).
+  'rapports-erreurs.json',
   'memory',
   'generated-apps',
   'generated-images',
@@ -215,6 +217,7 @@ export const REBRANCH_RULES: Record<string, RebranchRule> = {
   conversations: 'merge-conversations',
   'profile.json': 'destination-wins',
   'language.json': 'destination-wins',
+  'rapports-erreurs.json': 'destination-wins',
   memory: 'merge-memory',
   'generated-apps': 'keep-both',
   'generated-images': 'keep-both',

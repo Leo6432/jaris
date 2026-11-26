@@ -18,12 +18,16 @@ import ScreenScan from './components/ScreenScan'
 import StartupSplash from './components/StartupSplash'
 import './index.css'
 import { initRendererLanguage } from './lib/i18n'
+import { startRendererErrorReports } from './lib/errorReports'
 
 // L'overlay de scan (étape 18) est un arbre React totalement séparé de App (pas un mode de plus dans
 // App.tsx) : il n'a besoin d'aucun état Jaris ni d'aucune des vérifications d'onboarding qui protègent le
 // rendu de App, seulement d'un canvas plein écran piloté par electron/services/scanOverlay.ts.
 // Avant le premier rendu : l'écran naît dans la bonne langue (lecture synchrone auprès du processus principal).
 initRendererLanguage()
+// Étape 527 : rapports d'erreurs anonymes de l'écran — seulement avec l'accord (jamais l'écran de démarrage ni le scan).
+const reportsMode = new URLSearchParams(window.location.search).get('mode')
+if (reportsMode !== 'scan' && reportsMode !== 'splash') startRendererErrorReports()
 
 const mode = new URLSearchParams(window.location.search).get('mode')
 

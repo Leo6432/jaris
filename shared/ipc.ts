@@ -1696,6 +1696,9 @@ export const IPC_CHANNELS = {
   getLaunchAtStartup: 'jaris:get-launch-at-startup',
   /** renderer <-> main : active/désactive le lancement de Jaris au démarrage de Windows. */
   setLaunchAtStartup: 'jaris:set-launch-at-startup',
+  /** Étape 527 : rapports d'erreurs anonymes (Sentry) — l'accord de la personne, demandé une fois. */
+  getErrorReports: 'jaris:get-error-reports',
+  setErrorReports: 'jaris:set-error-reports',
   /** Téléphone (étape 214) : état de l'accès, activation, code d'appairage, appareils connectés. */
   getPhoneAccess: 'jaris:get-phone-access',
   setPhoneAccessEnabled: 'jaris:set-phone-access-enabled',

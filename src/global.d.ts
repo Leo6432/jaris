@@ -293,6 +293,8 @@ declare global {
       getWindowChrome: () => Promise<WindowChrome>
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
       setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>
+      getErrorReports: () => Promise<import('../shared/errorReports').ErrorReportsState>
+      setErrorReports: (enabled: boolean) => Promise<import('../shared/errorReports').ErrorReportsState>
       getWidgetMode: () => Promise<WidgetMode>
       onWidgetMode: (cb: (mode: WidgetMode) => void) => () => void
       setChatWidgetHeight: (height: number | null) => void

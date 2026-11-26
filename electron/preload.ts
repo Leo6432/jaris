@@ -6,6 +6,7 @@ import type { MachineView, RemoteMachineSettings } from '../shared/machine'
 import type { McpServerView } from '../shared/mcp'
 import { contextBridge, ipcRenderer } from 'electron'
 import { ipcErrorMessage } from '../shared/ipcError'
+import type { ErrorReportsState } from '../shared/errorReports'
 import {
   IPC_CHANNELS,
   type WebActivity,
@@ -344,6 +345,9 @@ const api = {
   openStoreUpdates: (): Promise<void> => invoke(IPC_CHANNELS.openStoreUpdates),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
     invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),
+  // Étape 527 : rapports d'erreurs anonymes, seulement avec l'accord.
+  getErrorReports: (): Promise<ErrorReportsState> => invoke(IPC_CHANNELS.getErrorReports),
+  setErrorReports: (enabled: boolean): Promise<ErrorReportsState> => invoke(IPC_CHANNELS.setErrorReports, enabled),
   getWidgetMode: (): Promise<WidgetMode> => invoke(IPC_CHANNELS.getWidgetMode),
   onWidgetMode: (cb: (mode: WidgetMode) => void) => subscribe(IPC_CHANNELS.widgetMode, cb),
   setChatWidgetHeight: (height: number | null): void =>

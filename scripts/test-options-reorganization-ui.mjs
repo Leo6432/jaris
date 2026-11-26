@@ -314,7 +314,7 @@ test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et histori
     // (maquette "Options Jaris.dc.html"), remis ici à l'étape 122 sur demande explicite de Léo ("deplace
     // Fichiers et moteur local avec dossier etc... dans général") — voir le test "Modèles regroupe..."
     // ci-dessous, qui vérifie qu'il a bien disparu de Modèles plutôt que d'avoir simplement été dupliqué.
-    assert.deepEqual(titles, ['Langue', 'Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
+    assert.deepEqual(titles, ['Langue', 'Démarrage', "Rapports d'erreurs", 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
     assert.ok(content.includes('Dossier de Jaris'), 'le déplacement du dossier de Jaris doit être présent')
@@ -880,13 +880,17 @@ test('test de vitesse : les modèles jamais mesurés, la taille à télécharger
       window.__speedEvent({ type: 'progress', done: 0, total: 2 })
       window.__speedEvent({ type: 'measuring', model: 'qwen3.5:4b', question: 2, total: 3 })
     })
-    assert.match(await page.textContent(`${box} .options-menu__progress-label`), /^Mesure de qwen3\.5:4b : question 2 sur 3…$/)
+    // Étape 527 : l'écran se met à jour APRÈS l'évènement (rendu de React) — attendre, ne pas lire tout de suite
+    // (sous la charge de la suite complète, la lecture immédiate voyait encore « Préparation… »).
+    const label = (re) => page.waitForFunction(([sel, src]) => new RegExp(src).test(document.querySelector(sel)?.textContent ?? ''), [`${box} .options-menu__progress-label`, re.source])
+    await label(/^Mesure de qwen3\.5:4b : question 2 sur 3…$/)
     await page.evaluate(() => {
       window.__speedEvent({ type: 'done', model: 'qwen3.5:4b', speed: 61.25 })
       window.__speedEvent({ type: 'downloading', model: 'gemma4:12b', percent: 42 })
     })
-    assert.match(await page.textContent(`${box} .options-menu__progress-label`), /^Téléchargement de gemma4:12b… 42 %$/)
+    await label(/^Téléchargement de gemma4:12b… 42 %$/)
     await page.evaluate(() => window.__speedEvent({ type: 'skipped', model: 'gemma4:12b', reason: 'trop gros pour ce PC' }))
+    await page.waitForFunction((sel) => document.querySelectorAll(sel).length === 2, `${box} .options-menu__unscored-results li`)
     const results = await page.locator(`${box} .options-menu__unscored-results li`).allTextContents()
     assert.deepEqual(results, ['qwen3.5:4b : 61,3 tokens/s', 'gemma4:12b : sauté — trop gros pour ce PC'])
     // Arrêt possible pendant tout le test.

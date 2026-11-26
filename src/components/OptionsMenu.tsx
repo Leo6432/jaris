@@ -29,6 +29,7 @@ import { currentLocale, t, tn } from '../lib/i18n'
 import { ipcErrorMessage } from '../lib/ipcError'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
+import { PRIVACY_URL } from '../lib/support'
 
 interface VoiceOption {
   id: string
@@ -232,6 +233,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [installedVersion, setInstalledVersion] = useState<string | null>(null)
   const [launchAtStartup, setLaunchAtStartupStatus] = useState<LaunchAtStartupStatus | null>(null)
+  // Étape 527 : rapports d'erreurs anonymes (Sentry), seulement avec l'accord — l'état réel, relu à l'ouverture.
+  const [errorReports, setErrorReportsState] = useState<{ asked: boolean; enabled: boolean } | null>(null)
+  const [savingErrorReports, setSavingErrorReports] = useState(false)
   const [savingLaunchAtStartup, setSavingLaunchAtStartup] = useState(false)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
@@ -363,6 +367,10 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
       // Relu à chaque ouverture de l'onglet : l'entrée de démarrage peut avoir été retirée ou désactivée
       // depuis Windows lui-même (Gestionnaire des tâches) entre-temps.
       void window.jaris.getLaunchAtStartup().then(setLaunchAtStartupStatus)
+      Promise.resolve()
+        .then(() => window.jaris.getErrorReports())
+        .then((state) => state && setErrorReportsState(state))
+        .catch(() => {})
       // "Fichiers et moteur local" (Ollama + dossier des modèles) a rejoint Général à l'étape 122, sur
       // demande explicite de Léo — ces deux lectures doivent donc s'armer avec l'onglet, pas avec 'modeles'
       // qui ne montre plus ce bloc depuis ce même correctif (sinon la carte resterait vide au premier clic).
@@ -1257,6 +1265,34 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 />
               </SettingRow>
               )}
+            </SettingGroup>
+
+            <SettingGroup title={t('errorReports.option.group')}>
+              <SettingRow
+                label={t('errorReports.option.label')}
+                description={
+                  <>
+                    {t('errorReports.option.hint')}{' '}
+                    <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+                      {t('errorReports.privacy')}
+                    </a>
+                  </>
+                }
+              >
+                <Toggle
+                  label={t('errorReports.option.label')}
+                  checked={Boolean(errorReports?.enabled)}
+                  disabled={!errorReports || savingErrorReports}
+                  onChange={(next) => {
+                    setSavingErrorReports(true)
+                    void window.jaris
+                      .setErrorReports(next)
+                      .then(setErrorReportsState)
+                      .catch(() => window.jaris.getErrorReports().then(setErrorReportsState))
+                      .finally(() => setSavingErrorReports(false))
+                  }}
+                />
+              </SettingRow>
             </SettingGroup>
 
             <SettingGroup title={t('options.update.group')}>
