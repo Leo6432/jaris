@@ -40,8 +40,8 @@ test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être reco
   // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315), phi4-mini et K2 Horizon 0.9B (étape 317), Spark-X2.6-4B
   // (étape 442), nemotron-3.5-bolt:e4b (étape 445), et 25 modèles de la campagne de code ouverte à tous (étape 466).
   const code = rows(section('Code'))
-  // Étape 470 : les 12 modèles rejoués. Étape 497 : LFM3 1.7B.
-  assert.equal(code.length, 52)
+  // Étape 470 : les 12 modèles rejoués. Étape 497 : LFM3 1.7B. Étape 528 : Inkling 2 Mini et Nanbeige4.3 (27/11).
+  assert.equal(code.length, 54)
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 

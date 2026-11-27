@@ -13267,3 +13267,22 @@ Léo : « le bouton support est là que quand on est sur le menu, mais si on est
 - Décisions de Léo (27/11) : gemma4:31b ne passe PAS dans LARGE_RAM_OFFLOAD_MODELS (« on laisse la même marge » :
   proposé seulement si la carte graphique suffit, sans débordement sur la mémoire du PC, contrairement à Inkling) ;
   le suivi quotidien d'Inkling sur Ollama est arrêté (Inkling tourne sur Windows depuis Ollama 0.40.18).
+
+## Étape 528 — Scores de code d'Inkling 2 Mini et de Nanbeige4.3 ; le test de code retire la réflexion fuitée (0.79.1)
+
+Fichier de Léo du 27/11/2026 (Jaris 0.79.0, machine louée OVH par le tunnel SSH) : le navigateur de la version Store
+marche enfin (étape 525 confirmée chez Léo). Les 10 applications revérifiées ici dans un vrai navigateur.
+- **Inkling 2 Mini : 3/5.** 2 réponses coupées : fenêtre de contexte pleine (16 384 tokens, réflexion « high »
+  comprise) — comptées fausses, comme pour tous les modèles.
+- **Nanbeige4.3-33B : 3/5** (1/5 dans le fichier). Erreur du TEST : Nanbeige écrit sa réflexion dans la réponse
+  (sans champ « thinking » à part), avec des brouillons de page complets pleins de « ... » ; `extractHtml` du test
+  prenait le premier brouillon (SyntaxError « Unexpected token '...' »). Jaris, lui, reçoit la vraie page : `chat()`
+  (ollama.ts) retire tout ce qui précède le dernier « </think> ». `extractHtml` passe dans benchmark-code.mjs
+  (exportée, testée) et retire d'abord la réflexion fuitée, comme Jaris. Notes recalculées depuis les réponses
+  enregistrées. Ses 2 échecs sont réels : faute de frappe (« masquurerMessage ») ; formulaire dont la confirmation
+  disparaît si « Envoyer » arrive moins de 0,3 s après la dernière frappe (chaque frappe programme « cacher la
+  confirmation ») — vrai aussi pour un humain qui tape son email puis Entrée ; gardé faux, même règle pour tous.
+- Aucun des deux ne sera choisi pour le rôle Code (des modèles à 5/5 existent). Plus aucun modèle n'attend le test de
+  code (CODE_AWAITING vide).
+- Tests (mordent) : test-benchmark-code (code pris après la réflexion fuitée), test-verified-scores (54 en code),
+  test-hardwarescan-min-ollama (repart de l'état sans code pour tester la version d'Ollama), single-pool.

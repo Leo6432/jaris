@@ -9,6 +9,8 @@
  * 212 °F...), et les libellés des boutons sont imposés dans la demande pour qu'on puisse les retrouver.
  * Vérifié par scripts/test-benchmark-code.mjs : une application juste passe, une application cassée échoue.
  */
+import { stripLeakedThinking } from './benchmark-cases.mjs'
+
 /**
  * Copie de PREVIEW_CSP (electron/services/generatedAppPreview.ts) sans sa partie « sandbox », qui ne peut pas
  * s'écrire dans la page : ce qu'elle interdit est reproduit par benchmark-browser.mjs (alertes muettes, pas de
@@ -295,6 +297,32 @@ export const CODE_TEST_CASES = [
 ]
 
 export const CODE_TOTAL = CODE_TEST_CASES.length
+
+/**
+ * Copie de extractHtml (electron/services/codeGenerator.ts), précédée de ce que fait chat() dans Jaris
+ * (electron/services/ollama.ts) : la réflexion fuitée dans la réponse — tout ce qui précède le dernier « </think> »
+ * — est retirée AVANT de chercher le code. Étape 528 : Nanbeige4.3 écrit sa réflexion dans la réponse, avec des
+ * brouillons de page pleins de « ... » ; le test prenait le premier brouillon (SyntaxError) au lieu de la vraie page,
+ * que Jaris, lui, aurait reçue. Vérifié par scripts/test-benchmark-code.mjs.
+ */
+export function extractHtml(rawContent) {
+  const raw = stripLeakedThinking(rawContent ?? '')
+  const fences = [...raw.matchAll(/```(?:html)?\s*\n([\s\S]*?)```/gi)].map((match) => match[1].trim())
+  const candidates = fences.length ? [...fences] : [raw]
+  if (fences.length > 1) candidates.push(fences.join('\n'))
+
+  const documents = candidates
+    .map((candidate) => {
+      const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
+      return start === -1 ? null : candidate.slice(start).trim()
+    })
+    .filter((document) => document !== null)
+
+  if (!documents.length) return null
+
+  const score = (document) => (/<body[\s>]/i.test(document) ? 2 : 0) + (/<\/html>/i.test(document) ? 1 : 0)
+  return documents.reduce((best, document) => (score(document) > score(best) ? document : best))
+}
 
 /** Les règles de l'aperçu de Jaris, ajoutées en tête de page (seule la partie « sandbox » ne s'écrit pas ainsi). */
 export function withPreviewRules(html) {

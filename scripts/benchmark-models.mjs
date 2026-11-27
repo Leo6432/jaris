@@ -49,7 +49,7 @@ import {
   loadPilotTargets,
   loadVisionImage
 } from './benchmark-vision.mjs'
-import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp } from './benchmark-code.mjs'
+import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, extractHtml } from './benchmark-code.mjs'
 import { findBrowser, openBrowser } from './benchmark-browser.mjs'
 import {
   REPEATED_SCENARIOS,
@@ -829,24 +829,6 @@ const CODE_GENERATE_SYSTEM_PROMPT =
   "partir d'une description en langage naturel.\n\n" +
   `Règles impératives :\n${CODE_APP_RULES.map((r) => `- ${r}`).join('\n')}\n\n` +
   "Réponds UNIQUEMENT avec le code du fichier, dans un bloc ```html. Aucune explication avant ou après."
-
-function extractHtml(raw) {
-  const fences = [...raw.matchAll(/```(?:html)?\s*\n([\s\S]*?)```/gi)].map((match) => match[1].trim())
-  const candidates = fences.length ? [...fences] : [raw]
-  if (fences.length > 1) candidates.push(fences.join('\n'))
-
-  const documents = candidates
-    .map((candidate) => {
-      const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
-      return start === -1 ? null : candidate.slice(start).trim()
-    })
-    .filter((document) => document !== null)
-
-  if (!documents.length) return null
-
-  const score = (document) => (/<body[\s>]/i.test(document) ? 2 : 0) + (/<\/html>/i.test(document) ? 1 : 0)
-  return documents.reduce((best, document) => (score(document) > score(best) ? document : best))
-}
 
 function validateGeneratedHtml(html) {
   const issues = []

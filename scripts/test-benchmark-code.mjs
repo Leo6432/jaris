@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { PREVIEW_MEMORY_STORAGE_SOURCE, findBrowser, openBrowser } from './benchmark-browser.mjs'
-import { CODE_TEST_CASES, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, withPreviewRules } from './benchmark-code.mjs'
+import { CODE_TEST_CASES, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, extractHtml, withPreviewRules } from './benchmark-code.mjs'
 
 /**
  * Étape 232 : le test de code ouvre vraiment chaque application générée et clique dedans. Ici, des applications
@@ -300,3 +300,21 @@ test(
     }
   }
 )
+
+// Étape 528 (code de Nanbeige4.3, 27/11/2026) : sa réflexion est écrite DANS la réponse, avec des brouillons complets
+// pleins de « ... ». Jaris (chat() dans ollama.ts) retire tout ce qui précède le dernier « </think> » avant de chercher
+// le code : le test aussi, sinon il juge le brouillon au lieu de la page que Jaris aurait reçue.
+test('étape 528 : le code est pris APRÈS la réflexion fuitée, jamais dans un brouillon de la réflexion', () => {
+  const draft = '<!DOCTYPE html>\n<html><head><style>...</style></head><body><script>...</script></body></html>'
+  const real = '<!DOCTYPE html>\n<html><head><style>body{margin:0}</style></head><body><p>ok</p></body></html>'
+  const content = `<think>\nJe prépare la page.\n\`\`\`html\n${draft}\n\`\`\`\nVoilà le plan.\n</think>\n\n\`\`\`html\n${real}\n\`\`\`\nCe que fait la page…`
+  assert.equal(extractHtml(content), real)
+  // Sans réflexion, inchangé (comme codeGenerator.ts) ; une réponse vide ne plante pas.
+  assert.equal(extractHtml(`\`\`\`html\n${real}\n\`\`\``), real)
+  assert.equal(extractHtml(''), null)
+  // Copie fidèle de Jaris : même logique de choix que extractHtml de codeGenerator.ts.
+  const source = readFileSync(new URL('../electron/services/codeGenerator.ts', import.meta.url), 'utf8')
+  assert.match(source, /const score = \(document: string\): number =>\s*\(\/<body\[\\s>\]\/i\.test\(document\) \? 2 : 0\) \+ \(\/<\\\/html>\/i\.test\(document\) \? 1 : 0\)/)
+  const ollama = readFileSync(new URL('../electron/services/ollama.ts', import.meta.url), 'utf8')
+  assert.match(ollama, /content: stripLeakedThinking\(data\.message\.content \?\? ''\)/, 'Jaris retire bien la réflexion fuitée avant le code')
+})

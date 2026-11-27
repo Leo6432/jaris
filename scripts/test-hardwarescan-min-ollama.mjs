@@ -131,18 +131,26 @@ test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le
 // Étape 521 (Léo : « oui fais-le, et ajoute l'analyse pour que je la fasse ») : Inkling 2 Mini et Nanbeige4.3-33B sortent
 // des futurs modèles. Proposés à l'analyse (Inkling seulement avec Ollama 0.40.18, sinon la vraie raison), jamais
 // choisis tant qu'ils n'ont pas de score, même sur une carte où ils tiennent.
-test('étape 521 : Inkling 2 Mini et Nanbeige4.3 proposés à l’analyse (le code reste à faire) ; Inkling exige Ollama 0.40.18', async () => {
-  const recent = setup({ scores: REAL_SCORES, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.18' })
+test('étape 521 : Inkling 2 Mini et Nanbeige4.3 proposés à l’analyse tant qu’un score manque ; Inkling exige Ollama 0.40.18', async () => {
+  // Étape 528 : leur code est mesuré (27/11) — ce test porte sur la version d'Ollama : il repart de l'état d'avant
+  // (sans leurs lignes de code), comme les tests de Bolt et de K2 Horizon.
+  const withoutCode = REAL_SCORES.split(/\r?\n/)
+    .filter((line) => !(/^\| (inkling-2-mini:26b-a5b-iq4_NL|hf\.co\/bartowski\/Nanbeige_Nanbeige4\.3-33B-GGUF:Q4_K_M) \| \d\/5 \|/.test(line)))
+    .join('\n')
+  assert.notEqual(withoutCode, REAL_SCORES.split(/\r?\n/).join('\n'), 'leurs lignes de code existent')
+  const recent = setup({ scores: withoutCode, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.18' })
   const offered = [...recent.getUnscoredModels()]
   assert.ok(offered.includes(INKLING) && offered.includes(NANBEIGE), offered.join(' | '))
-  // Étape 526 : scores de Léo du 25/11 recopiés — il ne leur manque plus que le test de code.
   for (const model of [INKLING, NANBEIGE]) {
     const needs = recent.describeModelsToTest().find((m) => m.model === model)?.needs.map((n) => n.test)
     assert.equal(JSON.stringify(needs), JSON.stringify(['code']), model)
   }
-  const old = setup({ scores: REAL_SCORES, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.17' })
+  const old = setup({ scores: withoutCode, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.17' })
   assert.ok(![...old.getUnscoredModels()].includes(INKLING), 'pas proposé : cet Ollama ne le charge pas')
   assert.ok([...old.getUnscoredModels()].includes(NANBEIGE), 'architecture llama : proposé')
+  // Tous leurs scores mesurés : plus rien à leur faire passer.
+  const done = setup({ scores: REAL_SCORES, vramMib: 48 * 1024, ramGb: 64, ollamaVersion: '0.40.18' })
+  assert.ok(![...done.getUnscoredModels()].includes(INKLING) && ![...done.getUnscoredModels()].includes(NANBEIGE))
   const entry = (await recent.getModelOverview()).entries.find((e) => e.model === INKLING)
   assert.equal(JSON.stringify({ vramGb: entry.vramGb, quantization: entry.quantization }), JSON.stringify({ vramGb: 23.1, quantization: 'IQ4_NL' }), 'mémoire chargée mesurée avec Ollama 0.40.18')
 })

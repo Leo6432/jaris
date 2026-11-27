@@ -241,9 +241,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, attend d'être remesuré sur le PC de Léo — mais il exige
 // Ollama 0.40.13 (étape 501) : avec une version inconnue (ces tests), il n'est jamais proposé.
 const AWAITING = []
-// Étape 526 : Nanbeige4.3-33B a ses scores (analyse de Léo du 25/11), sauf le code — test de code impossible chez Léo
-// ce jour-là (Edge dans la version Store). Inkling 2 Mini aussi, mais il exige Ollama 0.40.18 : exclu ici (version inconnue).
-const CODE_AWAITING = ['hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M']
+// Étape 526 : Nanbeige4.3-33B avait ses scores sauf le code (Edge de la version Store). Étape 528 : code mesuré le 27/11 —
+// plus aucun modèle n'attend le test de code.
+const CODE_AWAITING = []
 const notAwaiting = (models) => [...models].filter((m) => !AWAITING.includes(m))
 
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {

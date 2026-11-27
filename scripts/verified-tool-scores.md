@@ -295,6 +295,8 @@ pour « écris bonjour »), et qwen3-vl:8b fait mieux en vision en plus petit.
 
 ## Code — génération de code
 
+Étape 528 : Inkling 2 Mini et Nanbeige4.3-33B, mesurés par Léo le 27/11/2026 sur sa machine louée (Jaris 0.79.0, le navigateur de la version Store marche enfin). Les 10 applications revérifiées dans un vrai navigateur. Nanbeige 1 → 3 : sa réflexion est écrite DANS la réponse, avec des brouillons de page pleins de « ... » ; le test prenait le premier brouillon (SyntaxError) au lieu de la vraie page, que Jaris reçoit (chat() retire la réflexion fuitée) — le test la retire désormais aussi (extractHtml dans benchmark-code.mjs). Ses 2 échecs sont réels : faute de frappe (« masquurerMessage » n'existe pas) ; formulaire dont la confirmation disparaît si l'on clique « Envoyer » moins de 0,3 s après la dernière frappe (chaque frappe programme « cacher la confirmation ») — réel aussi avec Entrée, gardé faux (même règle pour tous). Inkling 3/5 : 2 réponses coupées, fenêtre de contexte pleine (16 384, réflexion « high » comprise), comptées fausses comme pour tous les modèles.
+
 Campagne de Léo du 04-05/10/2026 (test de code version 3) : 5 applications générées par modèle, chacune ouverte
 dans un vrai navigateur avec les règles de l’aperçu de Jaris et utilisée comme le ferait Léo (clics, saisie,
 lecture de l’écran). Toutes revérifiées après la campagne : la liste de tâches de qwen2.5-coder:14b et 32b avait
@@ -409,6 +411,8 @@ somme affichée dans une fenêtre d'alerte chez qwen3-vl:2b, « +1 » désactiv�
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 2/5 |
 | qwen3-vl:2b | 2/5 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 1/5 |
+| inkling-2-mini:26b-a5b-iq4_NL | 3/5 |
+| hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M | 3/5 |
 
 ## Demandes complètes — de bout en bout
 
