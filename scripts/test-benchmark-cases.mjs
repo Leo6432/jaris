@@ -1617,3 +1617,70 @@ test('vision : une réponse coupée faute de place le dit, en lecture comme en v
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// Étape 528 (Léo : « il a pas faux, c'est juste coupé ») : comme Jaris (runModelStep, codeGenerator.ts), une réponse de
+// code coupée (fenêtre pleine pendant la réflexion) a UN nouvel essai, fenêtre doublée ; et une application coupée
+// écrite avant ce nouvel essai est refaite (régénérée, pas revérifiée) au rejeu.
+const COUNTER_APP =
+  '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>' +
+  "<script>let n=0;const s=()=>document.getElementById('n').textContent=n;p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}</script></body></html>"
+
+test('étape 528 : réponse de code coupée = un nouvel essai avec la fenêtre doublée, comme Jaris', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  const testCase = CODE_TEST_CASES[0]
+  let calls = 0
+  const fake = await startFakeOllama({
+    installed: [model],
+    // 1er appel : la réflexion remplit la fenêtre ; le nouvel essai, lui, écrit l'application.
+    answer: (_m, prompt) => (prompt.includes(testCase.prompt) ? (calls++ === 0 ? 'length' : { content: `\`\`\`html\n${COUNTER_APP}\n\`\`\`` }) : '')
+  })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ANALYSIS_SCOPE: 'code',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RETEST_ALL: '1'
+    })
+    assert.equal(code, 0, out)
+    const asked = fake.requests.filter((r) => r.messages.at(-1).content.includes(testCase.prompt)).map((r) => r.options?.num_ctx)
+    assert.equal(JSON.stringify(asked), JSON.stringify([16384, 32768]), 'même fenêtre que Jaris, puis le double')
+    const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
+    assert.equal(row.ok, true, row.reason)
+    assert.equal(row.ctxRetry, 1)
+    assert.equal(row.numCtx, 32768)
+    assert.ok(row.firstCut, 'le premier essai coupé reste écrit')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('étape 528 : une application coupée AVANT le nouvel essai est régénérée au rejeu (une fois), pas revérifiée', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  const testCase = CODE_TEST_CASES[0]
+  writeFileSync(
+    join(dir, 'r.traces.jsonl'),
+    [
+      { type: 'campagne', versions: { conversation: CONVERSATION_TEST_VERSION, code: CODE_TEST_VERSION } },
+      { type: 'code', model, id: testCase.id, ok: false, html: '<!DOCTYPE html><html><body><p>coupé', meta: { done_reason: 'length' }, reason: 'champ introuvable — réponse coupée : fenêtre de contexte pleine' }
+    ].map((row) => JSON.stringify(row)).join('\n') + '\n'
+  )
+  const fake = await startFakeOllama({ installed: [model], answer: (_m, prompt) => ({ content: prompt.includes(testCase.prompt) ? `\`\`\`html\n${COUNTER_APP}\n\`\`\`` : '' }) })
+  try {
+    const run = () => runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ANALYSIS_SCOPE: 'code', JARIS_ONLY_MODELS: model, JARIS_RESUME: '1' })
+    const first = await run()
+    assert.equal(first.code, 0, first.out)
+    assert.equal(fake.requests.length, 1, 'régénérée par le modèle (pas l’ancien code revérifié)')
+    const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code')
+    assert.ok(rows.at(-1).replay && rows.at(-1).ok && rows.at(-1).ctxRetry === 1, JSON.stringify(rows.at(-1).reason))
+    // Refaite une fois : un nouveau lancement ne la refait plus.
+    await run()
+    assert.equal(fake.requests.length, 1, 'jamais refaite deux fois')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

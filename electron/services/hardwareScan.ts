@@ -967,6 +967,24 @@ export function roundsStoppedTask(row: { turns?: unknown }): boolean {
   return turns.some((turn) => /^plus de 10 allers-retours/.test(String(turn?.error ?? '')))
 }
 
+/**
+ * Étape 528 : applications coupées (fenêtre de contexte pleine) AVANT que le test ne fasse comme Jaris (un nouvel essai,
+ * fenêtre doublée) — à refaire une fois. Copie de CODE_CTX_RETRY, CODE_CASES_TO_REDO et codeCutToRedo
+ * (scripts/benchmark-code.mjs), vérifiée identique par test.
+ */
+export const CODE_CTX_RETRY = 1
+export const CODE_CASES_TO_REDO: ReadonlyArray<readonly [string, string]> = [
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
+  ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
+  ['qwen3-vl:2b', 'liste-taches']
+]
+export function codeCutToRedo(row: Record<string, unknown>): boolean {
+  if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
+  if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
+  return row.ok !== true && (row.meta as { done_reason?: unknown } | undefined)?.done_reason === 'length'
+}
+
 /** Réponse d'Ollama quand le modèle n'est pas (ou plus) là : copie de MODEL_NOT_FOUND (benchmark-models.mjs). */
 const MODEL_NOT_FOUND = /model '[^']+' not found/
 
@@ -1020,7 +1038,10 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     // avant son rejeu, ou illisible par Ollama). Sans ça, K2 Horizon 0.9B, jamais testé en code, n'était plus proposé.
     const reason = String(row.reason ?? '')
     const pending =
-      Boolean(row.timeout) || (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) || (row.type === 'demande' && (lookStoppedTask(row) || roundsStoppedTask(row)))
+      Boolean(row.timeout) ||
+      (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) ||
+      (row.type === 'demande' && (lookStoppedTask(row) || roundsStoppedTask(row))) ||
+      codeCutToRedo(row)
     if (row.type === 'question' && versions?.conversation === CONVERSATION_TEST_VERSION) {
       latest.set(`conversation|${model}|${row.index}|${row.pass}`, { role: 'conversation', model, pending: false })
     } else if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
@@ -1030,6 +1051,10 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     } else if (row.type === 'code' && versions?.code === CODE_TEST_VERSION) {
       latest.set(`code|${model}|${row.id}`, { role: 'code', model, pending })
     }
+  }
+  // Étape 528 : les applications coupées des anciennes campagnes, absentes de ces traces, restent à refaire (une fois).
+  for (const [model, id] of CODE_CASES_TO_REDO) {
+    if (!latest.has(`code|${model}|${id}`)) latest.set(`code|${model}|${id}`, { role: 'code', model, pending: true })
   }
   const totals: Record<Role, number> = {
     conversation: CONVERSATION_TEST_TOTAL,

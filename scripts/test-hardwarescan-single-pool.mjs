@@ -492,6 +492,8 @@ test('modèle à remesurer : proposé au test, toujours choisi en attendant, plu
   for (let index = 0; index < 26; index++) for (let pass = 1; pass <= 3; pass++) lines.push({ type: 'question', model: k2, index, pass, ok: true })
   for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) lines.push({ type: 'demande', model: k2, id: `d${i % 24}`, pass: i < 24 ? 1 : 2, ok: true, turns: [], calls: [] })
   for (const id of ['compteur', 'addition', 'convertisseur', 'liste-taches', 'formulaire-contact']) lines.push({ type: 'code', model: k2, id, ok: true })
+  // Étape 528 : les applications coupées à refaire, déjà refaites (avec le nouvel essai) — ce test porte sur K2.
+  for (const [model, id] of scan.CODE_CASES_TO_REDO) lines.push({ type: 'code', model, id, ok: false, ctxRetry: scan.CODE_CTX_RETRY })
   const traces = (rows) => rows.map((l) => JSON.stringify(l)).join('\n')
   assert.deepEqual(notAwaiting(scan.getUnscoredModels(scan.campaignCompletion(traces(lines)))), [], 'tout passé : plus proposé')
   const withoutQuestions = lines.filter((l) => l.type !== 'question')
@@ -608,4 +610,46 @@ test('étape 463 : le test de code est proposé à TOUS les modèles qui n’ont
   }
   // Un modèle qui a déjà son score de code n'a pas à le repasser.
   assert.ok(!described.find((m) => m.model === 'qwen3-coder:30b'), 'qwen3-coder:30b a tous ses scores')
+})
+
+// Étape 528 (Léo : « il a pas faux, c'est juste coupé… pour tous les votes coupés à cause de ça ») : une application
+// coupée (fenêtre pleine) avant que le test ne réessaie comme Jaris est à refaire UNE fois — le bouton la propose,
+// même quand le score de code du modèle est déjà recopié, et même quand elle n'est pas dans les traces.
+test('étape 528 : les applications coupées avant le nouvel essai de Jaris sont à refaire une fois', () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const versions = { type: 'campagne', versions: { conversation: scan.CONVERSATION_TEST_VERSION, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }
+  const traces = (rows) => [versions, ...rows].map((l) => JSON.stringify(l)).join('\n')
+  // Sans traces : les 4 cas listés sont à refaire.
+  const empty = scan.campaignCompletion(traces([]))
+  assert.deepEqual([...empty.todo.code].sort(), [...new Set(scan.CODE_CASES_TO_REDO.map(([m]) => m))].sort())
+  assert.equal(empty.todoCases.get('code|inkling-2-mini:26b-a5b-iq4_NL'), 2)
+  // Proposé au bouton (score déjà recopié) : seulement le code, en « à refaire ».
+  const needs = scan.describeModelsToTest(empty).find((m) => m.model === 'qwen3-vl:2b')?.needs
+  assert.equal(JSON.stringify(needs), JSON.stringify([{ test: 'code', reason: 'redo' }]))
+  // Refaits avec le nouvel essai (même ratés) : plus rien à refaire.
+  const redone = scan.CODE_CASES_TO_REDO.map(([model, id]) => ({ type: 'code', model, id, ok: false, ctxRetry: scan.CODE_CTX_RETRY }))
+  assert.equal(scan.campaignCompletion(traces(redone)).todo.code.size, 0)
+  // Toute autre application ratée ET coupée, écrite avant le nouvel essai : à refaire ; juste, ou pas coupée : non.
+  const other = 'qwen3.5:4b'
+  const cut = (extra) => scan.campaignCompletion(traces([...redone, { type: 'code', model: other, id: 'addition', ...extra }])).todo.code.has(other)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' } }), true)
+  assert.equal(cut({ ok: true, meta: { done_reason: 'length' } }), false)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'stop' } }), false)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, ctxRetry: scan.CODE_CTX_RETRY }), false, 'déjà réessayée : jamais deux fois')
+})
+
+test('étape 528 : la règle des applications à refaire est la même dans Jaris et dans le script du test', async () => {
+  const scan = setup({ vramMib: 24 * 1024 })
+  const script = await import('./benchmark-code.mjs')
+  assert.equal(JSON.stringify(scan.CODE_CASES_TO_REDO), JSON.stringify(script.CODE_CASES_TO_REDO))
+  assert.equal(scan.CODE_CTX_RETRY, script.CODE_CTX_RETRY)
+  const rows = [
+    { type: 'code', model: 'qwen3-vl:2b', id: 'liste-taches', ok: false },
+    { type: 'code', model: 'qwen3-vl:2b', id: 'liste-taches', ok: false, ctxRetry: 1 },
+    { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'length' } },
+    { type: 'code', model: 'x', id: 'addition', ok: true, meta: { done_reason: 'length' } },
+    { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'stop' } },
+    { type: 'vision', model: 'x', ok: false, meta: { done_reason: 'length' } }
+  ]
+  for (const row of rows) assert.equal(scan.codeCutToRedo(row), script.codeCutToRedo(row), JSON.stringify(row))
 })

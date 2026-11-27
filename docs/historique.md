@@ -13286,3 +13286,21 @@ marche enfin (étape 525 confirmée chez Léo). Les 10 applications revérifiée
   code (CODE_AWAITING vide).
 - Tests (mordent) : test-benchmark-code (code pris après la réflexion fuitée), test-verified-scores (54 en code),
   test-hardwarescan-min-ollama (repart de l'état sans code pour tester la version d'Ollama), single-pool.
+
+## Étape 529 — Le test de code réessaie une réponse coupée, comme Jaris ; les 4 applications coupées à refaire (0.79.2)
+
+Léo, sur les 2 échecs d'Inkling : « il a pas faux, c'est juste coupé, mais on faisait ça depuis le début de mettre
+faux ? » — oui, pour tous les modèles ; mais le test était plus sévère que Jaris : en mode Code, une réponse coupée
+(fenêtre pleine pendant la réflexion) a UN nouvel essai avec la fenêtre doublée (runModelStep, codeGenerator.ts). Léo :
+« oui, pour tous les votes coupés à cause de ça ».
+- `chatCode` (benchmark-models.mjs) fait pareil : 16 384 puis min(32 768, fenêtre du modèle, 65 536) ; le premier essai
+  coupé reste écrit (`firstCut`). Chaque ligne de code écrite depuis porte `ctxRetry: 1` et `numCtx`.
+- À refaire une fois (`codeCutToRedo`, benchmark-code.mjs, copie dans hardwareScan.ts vérifiée par test) : toute ligne
+  de code ratée ET coupée (`done_reason: "length"`) sans `ctxRetry`, régénérée (pas revérifiée) au rejeu ; plus les 4
+  cas relevés dans TOUS les fichiers de Léo depuis le 04/11 (`CODE_CASES_TO_REDO`) : Inkling addition et liste de
+  tâches (27/11), Spark-X2.6-4B convertisseur (07/11), qwen3-vl:2b liste de tâches (11/11) — les deux derniers ne sont
+  pas dans les données de la version Store : ajoutés même absents des traces. Les campagnes d'octobre (fenêtre 8 192)
+  ne sont pas dans ces fichiers : non vérifiables.
+- Le bouton du test les propose en « à refaire » (code seulement) ; scores provisoires jusqu'au fichier de Léo.
+- Tests (mordent) : test-benchmark-cases (vrai script + faux Ollama : 16 384 puis 32 768 ; ancienne appli coupée
+  régénérée une fois, jamais deux), test-hardwarescan-single-pool (règle et liste identiques des deux côtés).

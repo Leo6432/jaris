@@ -299,6 +299,28 @@ export const CODE_TEST_CASES = [
 export const CODE_TOTAL = CODE_TEST_CASES.length
 
 /**
+ * Étape 528 (Léo : « il a pas faux, c'est juste coupé… oui, pour tous les votes coupés à cause de ça ») : quand la
+ * réponse est coupée parce que la fenêtre de contexte est pleine (réflexion comprise), Jaris (runModelStep,
+ * codeGenerator.ts) RÉESSAIE une fois avec une fenêtre doublée. Le test ne le faisait pas : il comptait faux ce que
+ * Jaris aurait peut-être réussi. Il le fait désormais (chatCode, benchmark-models.mjs), et chaque ligne de code écrite
+ * depuis porte `ctxRetry: CODE_CTX_RETRY`. Une ligne plus ancienne, ratée ET coupée (`done_reason: "length"`), est à
+ * refaire une fois — comme les cas listés ci-dessous, qui ne sont pas dans les données de la version Store de Léo.
+ * Copie dans electron/services/hardwareScan.ts (bouton du test), vérifiée identique par test.
+ */
+export const CODE_CTX_RETRY = 1
+export const CODE_CASES_TO_REDO = [
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
+  ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
+  ['qwen3-vl:2b', 'liste-taches']
+]
+export function codeCutToRedo(row) {
+  if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
+  if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
+  return row.ok !== true && row.meta?.done_reason === 'length'
+}
+
+/**
  * Copie de extractHtml (electron/services/codeGenerator.ts), précédée de ce que fait chat() dans Jaris
  * (electron/services/ollama.ts) : la réflexion fuitée dans la réponse — tout ce qui précède le dernier « </think> »
  * — est retirée AVANT de chercher le code. Étape 528 : Nanbeige4.3 écrit sa réflexion dans la réponse, avec des

@@ -49,7 +49,7 @@ import {
   loadPilotTargets,
   loadVisionImage
 } from './benchmark-vision.mjs'
-import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, extractHtml } from './benchmark-code.mjs'
+import { CODE_CASES_TO_REDO, CODE_CTX_RETRY, CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, codeCutToRedo, extractHtml } from './benchmark-code.mjs'
 import { findBrowser, openBrowser } from './benchmark-browser.mjs'
 import {
   REPEATED_SCENARIOS,
@@ -1708,7 +1708,29 @@ async function chatPilot(model, testCase, imageBase64) {
  * séparé), `think: 'high'`, num_ctx élargi à 16384 (un fichier HTML complet dépasse largement 4096 tokens).
  * Même repli "sans think" que chat()/chatOnce() ci-dessus si le premier essai échoue.
  */
-async function chatCodeOnce(model, prompt, withThink) {
+/** Fenêtre du mode Code pour une application nouvelle (CODE_NUM_CTX_MIN de codeGenerator.ts) et son plafond. */
+const CODE_NUM_CTX = 16384
+const CODE_NUM_CTX_MAX = 65536
+const nativeContextCache = new Map()
+/** Fenêtre maximale du modèle (comme modelMaxContext de Jaris) ; null si Ollama ne la donne pas. */
+async function modelNativeContext(model) {
+  if (nativeContextCache.has(model)) return nativeContextCache.get(model)
+  let value = null
+  try {
+    const res = await postJson('/api/show', { model })
+    if (res.ok) {
+      const info = JSON.parse(res.text).model_info ?? {}
+      const arch = info['general.architecture']
+      value = arch ? (info[`${arch}.context_length`] ?? null) : null
+    }
+  } catch {
+    value = null
+  }
+  nativeContextCache.set(model, value)
+  return value
+}
+
+async function chatCodeOnce(model, prompt, withThink, numCtx = CODE_NUM_CTX) {
   const start = performance.now()
   const body = {
     model,
@@ -1717,7 +1739,7 @@ async function chatCodeOnce(model, prompt, withThink) {
       { role: 'user', content: `Application à créer : ${prompt}` }
     ],
     stream: false,
-    options: { num_ctx: 16384 }
+    options: { num_ctx: numCtx }
   }
   if (withThink) body.think = 'high'
 
@@ -1739,6 +1761,21 @@ async function chatCode(model, prompt) {
       throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
     }
   }
+  // Étape 528 : comme Jaris (runModelStep, codeGenerator.ts) — réponse coupée, fenêtre pleine : UN nouvel essai avec
+  // la fenêtre doublée (dans la limite du modèle), seulement si ça change vraiment quelque chose.
+  let numCtx = CODE_NUM_CTX
+  let firstCut = null
+  if (data.done_reason === 'length') {
+    const native = await modelNativeContext(model)
+    const larger = Math.min(numCtx * 2, native ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
+    if (larger > numCtx) {
+      firstCut = { eval_count: data.eval_count ?? null, prompt_eval_count: data.prompt_eval_count ?? null, ms: Math.round(wallMs) }
+      const again = await chatCodeOnce(model, prompt, think === 'high', larger)
+      wallMs += again.wallMs
+      data = again.data
+      numCtx = larger
+    }
+  }
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   return {
@@ -1746,7 +1783,9 @@ async function chatCode(model, prompt) {
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
     content: data.message?.content?.trim() ?? '',
     data,
-    think
+    think,
+    // Écrit avec chaque ligne de code (voir CODE_CTX_RETRY, benchmark-code.mjs).
+    ctx: { ctxRetry: CODE_CTX_RETRY, numCtx, ...(firstCut ? { firstCut } : {}) }
   }
 }
 
@@ -2143,11 +2182,11 @@ async function main() {
    * cas à refaire ont reçu « model not found » — et ont été notés comme rejoués.
    */
   function pendingCases() {
-    if (!existsSync(TRACES_PATH)) return []
     // La DERNIÈRE ligne de chaque cas, et seulement du test actuel : un cas déjà rejoué (ou refait) n'est plus en délai.
     const latest = new Map()
     let versions = null
-    for (const line of readFileSync(TRACES_PATH, 'utf8').split('\n')) {
+    const tracesText = existsSync(TRACES_PATH) ? readFileSync(TRACES_PATH, 'utf8') : ''
+    for (const line of tracesText.split('\n')) {
       if (!line.trim()) continue
       let row
       try {
@@ -2182,7 +2221,12 @@ async function main() {
     // refaite aussi : avec Jaris corrigé, le modèle aurait continué. Une fois refaite, elle n'a plus cette forme.
     // Étape 402 : aussi les demandes coupées par l'ancienne limite de 10 allers-retours.
     const lookStopped = (r) => r.type === 'demande' && (lookStoppedTask(r) || roundsStoppedTask(r))
-    return [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r)) && inScope(r))
+    // Étape 528 : les applications coupées (fenêtre pleine) avant le nouvel essai de Jaris — y compris celles qui ne
+    // sont pas dans ces traces (anciennes campagnes, hors des données de la version Store) : refaites une fois.
+    for (const [model, id] of CODE_CASES_TO_REDO) {
+      if (!latest.has(`code|${model}|${id}`)) latest.set(`code|${model}|${id}`, { type: 'code', model, id, ok: false, reason: 'à refaire : réponse coupée avant le nouvel essai de Jaris' })
+    }
+    return [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r) || codeCutToRedo(r)) && inScope(r))
   }
 
   /** Modèles gardés après leur dernière épreuve parce qu'ils ont encore des cas à refaire : supprimés après le rejeu. */
@@ -2323,7 +2367,8 @@ async function main() {
     // Le modèle avait bien écrit son application, c'est la VÉRIFICATION qui a planté (bug du test, ex. « reading
     // 'map' » sur une ligne de liste sans balise, campagne de Léo du 05/10/2026) : on revérifie CE code-là. Le
     // regénérer donnerait une autre application — ce ne serait plus le même test.
-    if (record.html && !record.timeout) {
+    // Étape 528 : sauf une application COUPÉE (fenêtre pleine) : elle se régénère, avec le nouvel essai de Jaris.
+    if (record.html && !record.timeout && !codeCutToRedo(record)) {
       beginLine(`  code « ${testCase.id} » (revérifié, même code) ... `)
       const steps = []
       const { type: _type, ok: _ok, reason: _reason, steps: _steps, ...kept } = record
@@ -2356,7 +2401,8 @@ async function main() {
         response: r.data.message ?? null,
         meta: ollamaMeta(r.data),
         html,
-        replay: true
+        replay: true,
+        ...r.ctx
       }
       // Écrite AVANT le navigateur, comme pendant la campagne : une génération ne se refait jamais à l'identique.
       trace({ type: 'code-generation', ...base })
@@ -2377,7 +2423,8 @@ async function main() {
         timeout: err instanceof CallTimeoutError,
         steps,
         replay: true,
-        ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt: testCase.prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html } : {})
+        ctxRetry: CODE_CTX_RETRY,
+        ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt: testCase.prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html, ...r.ctx } : {})
       })
       console.log(`ERREUR (${err.message})`)
       return err instanceof CallTimeoutError
@@ -3078,7 +3125,8 @@ async function main() {
           systemRef: textRef(CODE_GENERATE_SYSTEM_PROMPT),
           response: r.data.message ?? null,
           meta: ollamaMeta(r.data),
-          html
+          html,
+          ...r.ctx
         })
         const issues = html ? validateGeneratedHtml(html) : []
         const verdict = html ? await checkInBrowser(testCase, html, steps) : 'pas de code HTML exploitable dans la réponse'
@@ -3110,7 +3158,8 @@ async function main() {
           meta: ollamaMeta(r.data),
           html,
           steps,
-          previewCsp: PREVIEW_CSP_FOR_TEST
+          previewCsp: PREVIEW_CSP_FOR_TEST,
+          ...r.ctx
         })
         console.log(`${ok ? 'OK' : `RATÉ (${reason})`} — ${fmt(r.wallMs / 1000)} s, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
@@ -3132,7 +3181,8 @@ async function main() {
           timeout: err instanceof CallTimeoutError,
           skipped: Boolean(err.skipped),
           steps,
-          ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html } : {})
+          ctxRetry: CODE_CTX_RETRY,
+          ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html, ...r.ctx } : {})
         })
       }
       testsDone++
