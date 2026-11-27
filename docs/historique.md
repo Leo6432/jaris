@@ -13264,3 +13264,6 @@ Léo : « le bouton support est là que quand on est sur le menu, mais si on est
   (2 fois de suite) malgré l'étape 526. Le composant était juste : le TEST lisait l'écran aussitôt l'évènement envoyé,
   avant le rendu de React. Il attend désormais le texte (waitForFunction) ; il mord toujours (évènement ignoré =
   échec) et tient à 4 exécutions en parallèle.
+- Décisions de Léo (27/11) : gemma4:31b ne passe PAS dans LARGE_RAM_OFFLOAD_MODELS (« on laisse la même marge » :
+  proposé seulement si la carte graphique suffit, sans débordement sur la mémoire du PC, contrairement à Inkling) ;
+  le suivi quotidien d'Inkling sur Ollama est arrêté (Inkling tourne sur Windows depuis Ollama 0.40.18).
