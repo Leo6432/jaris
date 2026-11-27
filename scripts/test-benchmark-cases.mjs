@@ -1648,7 +1648,7 @@ test('étape 528 : réponse de code coupée = un nouvel essai avec la fenêtre d
     assert.equal(JSON.stringify(asked), JSON.stringify([16384, 32768]), 'même fenêtre que Jaris, puis le double')
     const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
     assert.equal(row.ok, true, row.reason)
-    assert.equal(row.ctxRetry, 1)
+    assert.equal(row.ctxRetry, 2)
     assert.equal(row.numCtx, 32768)
     assert.ok(row.firstCut, 'le premier essai coupé reste écrit')
   } finally {
@@ -1675,10 +1675,38 @@ test('étape 528 : une application coupée AVANT le nouvel essai est régénér�
     assert.equal(first.code, 0, first.out)
     assert.equal(fake.requests.length, 1, 'régénérée par le modèle (pas l’ancien code revérifié)')
     const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code')
-    assert.ok(rows.at(-1).replay && rows.at(-1).ok && rows.at(-1).ctxRetry === 1, JSON.stringify(rows.at(-1).reason))
+    assert.ok(rows.at(-1).replay && rows.at(-1).ok && rows.at(-1).ctxRetry === 2, JSON.stringify(rows.at(-1).reason))
     // Refaite une fois : un nouveau lancement ne la refait plus.
     await run()
     assert.equal(fake.requests.length, 1, 'jamais refaite deux fois')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('étape 530 : une page commencée puis coupée n’a PAS de nouvel essai — comme Jaris (fenêtre pleine sans rien écrire seulement)', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  const testCase = CODE_TEST_CASES[0]
+  const fake = await startFakeOllama({ installed: [model], answer: (_m, prompt) => (prompt.includes(testCase.prompt) ? { content: '```html\n<!DOCTYPE html><html><body><div id="n">0' } : '') })
+  // Le faux Ollama répond « stop » : on force « length » pour cette réponse commencée.
+  const original = fake.server.listeners('request')[0]
+  fake.server.removeAllListeners('request')
+  fake.server.on('request', (req, res) => {
+    const end = res.end.bind(res)
+    res.end = (chunk, ...rest) => end(typeof chunk === 'string' && chunk.includes('"done_reason":"stop"') && chunk.includes('<div id=\\"n\\">0') ? chunk.replace('"done_reason":"stop"', '"done_reason":"length"') : chunk, ...rest)
+    original(req, res)
+  })
+  try {
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ANALYSIS_SCOPE: 'code', JARIS_ONLY_MODELS: model, JARIS_RETEST_ALL: '1' })
+    assert.equal(code, 0, out)
+    const asked = fake.requests.filter((r) => r.messages.at(-1).content.includes(testCase.prompt)).map((r) => r.options?.num_ctx)
+    assert.equal(JSON.stringify(asked), JSON.stringify([16384]), 'un seul essai')
+    const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
+    assert.equal(row.ok, false)
+    assert.match(row.reason, /réponse coupée/)
+    assert.equal(row.numCtx, 16384)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

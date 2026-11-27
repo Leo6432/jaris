@@ -968,21 +968,31 @@ export function roundsStoppedTask(row: { turns?: unknown }): boolean {
 }
 
 /**
- * Étape 528 : applications coupées (fenêtre de contexte pleine) AVANT que le test ne fasse comme Jaris (un nouvel essai,
- * fenêtre doublée) — à refaire une fois. Copie de CODE_CTX_RETRY, CODE_CASES_TO_REDO et codeCutToRedo
- * (scripts/benchmark-code.mjs), vérifiée identique par test.
+ * Étapes 528 et 530 : applications dont la réflexion avait rempli toute la fenêtre SANS rien écrire, AVANT que le test
+ * ne réessaie comme Jaris (fenêtre doublée) — à refaire une fois. Copie de CODE_CTX_RETRY, CODE_CASES_TO_REDO,
+ * codeNeedsLargerCtx et codeCutToRedo (scripts/benchmark-code.mjs), vérifiée identique par test.
  */
-export const CODE_CTX_RETRY = 1
+export const CODE_CTX_RETRY = 2
 export const CODE_CASES_TO_REDO: ReadonlyArray<readonly [string, string]> = [
-  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
-  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
   ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
   ['qwen3-vl:2b', 'liste-taches']
 ]
+const LEAKED_THINK_END_CODE = /<\/(?:ifm\|)?think>/gi
+function withoutLeakedThinking(content: string): string {
+  let end = -1
+  for (const match of content.matchAll(LEAKED_THINK_END_CODE)) end = (match.index ?? 0) + match[0].length
+  return end < 0 ? content : content.slice(end).trimStart()
+}
+export function codeNeedsLargerCtx(data: { done_reason?: unknown; message?: { content?: unknown; tool_calls?: unknown[] } } | null | undefined): boolean {
+  if (data?.done_reason !== 'length') return false
+  const content = withoutLeakedThinking(String(data?.message?.content ?? '')).trim()
+  return !content && !((data?.message?.tool_calls?.length ?? 0) > 0)
+}
 export function codeCutToRedo(row: Record<string, unknown>): boolean {
   if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
   if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
-  return row.ok !== true && (row.meta as { done_reason?: unknown } | undefined)?.done_reason === 'length'
+  const meta = row.meta as { done_reason?: unknown } | undefined
+  return row.ok !== true && codeNeedsLargerCtx({ done_reason: meta?.done_reason, message: (row.response as { content?: unknown; tool_calls?: unknown[] } | undefined) ?? {} })
 }
 
 /** Réponse d'Ollama quand le modèle n'est pas (ou plus) là : copie de MODEL_NOT_FOUND (benchmark-models.mjs). */

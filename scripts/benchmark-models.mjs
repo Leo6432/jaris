@@ -49,7 +49,7 @@ import {
   loadPilotTargets,
   loadVisionImage
 } from './benchmark-vision.mjs'
-import { CODE_CASES_TO_REDO, CODE_CTX_RETRY, CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, codeCutToRedo, extractHtml } from './benchmark-code.mjs'
+import { CODE_CASES_TO_REDO, CODE_CTX_RETRY, CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, codeCutToRedo, codeNeedsLargerCtx, extractHtml } from './benchmark-code.mjs'
 import { findBrowser, openBrowser } from './benchmark-browser.mjs'
 import {
   REPEATED_SCENARIOS,
@@ -1761,11 +1761,12 @@ async function chatCode(model, prompt) {
       throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
     }
   }
-  // Étape 528 : comme Jaris (runModelStep, codeGenerator.ts) — réponse coupée, fenêtre pleine : UN nouvel essai avec
-  // la fenêtre doublée (dans la limite du modèle), seulement si ça change vraiment quelque chose.
+  // Étapes 528 et 530 : comme Jaris (ContextFullError puis runModelStep, codeGenerator.ts) — la réflexion a rempli la
+  // fenêtre SANS rien écrire : UN nouvel essai, fenêtre doublée (dans la limite du modèle). Une page commencée puis
+  // coupée est gardée telle quelle, comme dans Jaris.
   let numCtx = CODE_NUM_CTX
   let firstCut = null
-  if (data.done_reason === 'length') {
+  if (codeNeedsLargerCtx(data)) {
     const native = await modelNativeContext(model)
     const larger = Math.min(numCtx * 2, native ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
     if (larger > numCtx) {

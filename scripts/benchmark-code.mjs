@@ -299,25 +299,29 @@ export const CODE_TEST_CASES = [
 export const CODE_TOTAL = CODE_TEST_CASES.length
 
 /**
- * Étape 528 (Léo : « il a pas faux, c'est juste coupé… oui, pour tous les votes coupés à cause de ça ») : quand la
- * réponse est coupée parce que la fenêtre de contexte est pleine (réflexion comprise), Jaris (runModelStep,
- * codeGenerator.ts) RÉESSAIE une fois avec une fenêtre doublée. Le test ne le faisait pas : il comptait faux ce que
- * Jaris aurait peut-être réussi. Il le fait désormais (chatCode, benchmark-models.mjs), et chaque ligne de code écrite
- * depuis porte `ctxRetry: CODE_CTX_RETRY`. Une ligne plus ancienne, ratée ET coupée (`done_reason: "length"`), est à
- * refaire une fois — comme les cas listés ci-dessous, qui ne sont pas dans les données de la version Store de Léo.
- * Copie dans electron/services/hardwareScan.ts (bouton du test), vérifiée identique par test.
+ * Étape 528, corrigée à l'étape 530 : quand la réflexion a rempli TOUTE la fenêtre de contexte SANS qu'un seul caractère
+ * de réponse soit écrit, Jaris (ContextFullError, ollama.ts, puis runModelStep, codeGenerator.ts) réessaie une fois avec
+ * une fenêtre doublée. Une réponse coupée APRÈS avoir commencé la page, elle, est gardée telle quelle par Jaris (pas de
+ * nouvel essai) : le test fait exactement pareil (`codeNeedsLargerCtx`). Chaque ligne de code écrite depuis porte
+ * `ctxRetry: CODE_CTX_RETRY`. Une ligne plus ancienne, ratée, coupée ET vide est à refaire une fois — comme les 2 cas
+ * listés ci-dessous, absents des données de la version Store de Léo. Copie dans electron/services/hardwareScan.ts
+ * (bouton du test), vérifiée identique par test.
  */
-export const CODE_CTX_RETRY = 1
+export const CODE_CTX_RETRY = 2
 export const CODE_CASES_TO_REDO = [
-  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
-  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
   ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
   ['qwen3-vl:2b', 'liste-taches']
 ]
+/** Réponse d'Ollama vide une fois la réflexion fuitée retirée, et coupée par la fenêtre : ce que Jaris réessaie. */
+export function codeNeedsLargerCtx(data) {
+  if (data?.done_reason !== 'length') return false
+  const content = stripLeakedThinking(String(data?.message?.content ?? '')).trim()
+  return !content && !(data?.message?.tool_calls?.length > 0)
+}
 export function codeCutToRedo(row) {
   if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
   if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
-  return row.ok !== true && row.meta?.done_reason === 'length'
+  return row.ok !== true && codeNeedsLargerCtx({ done_reason: row.meta?.done_reason, message: row.response ?? {} })
 }
 
 /**

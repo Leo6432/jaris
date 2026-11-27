@@ -622,7 +622,10 @@ test('étape 528 : les applications coupées avant le nouvel essai de Jaris sont
   // Sans traces : les 4 cas listés sont à refaire.
   const empty = scan.campaignCompletion(traces([]))
   assert.deepEqual([...empty.todo.code].sort(), [...new Set(scan.CODE_CASES_TO_REDO.map(([m]) => m))].sort())
-  assert.equal(empty.todoCases.get('code|inkling-2-mini:26b-a5b-iq4_NL'), 2)
+  assert.equal(empty.todoCases.get('code|qwen3-vl:2b'), 1)
+  // Étape 530 : Inkling avait déjà écrit une partie de sa page quand la fenêtre s'est remplie — Jaris ne réessaie pas
+  // dans ce cas (ContextFullError seulement pour une réponse VIDE) : ses 2 échecs restent, il n'est pas à refaire.
+  assert.ok(!empty.todo.code.has('inkling-2-mini:26b-a5b-iq4_NL'))
   // Proposé au bouton (score déjà recopié) : seulement le code, en « à refaire ».
   const needs = scan.describeModelsToTest(empty).find((m) => m.model === 'qwen3-vl:2b')?.needs
   assert.equal(JSON.stringify(needs), JSON.stringify([{ test: 'code', reason: 'redo' }]))
@@ -632,10 +635,13 @@ test('étape 528 : les applications coupées avant le nouvel essai de Jaris sont
   // Toute autre application ratée ET coupée, écrite avant le nouvel essai : à refaire ; juste, ou pas coupée : non.
   const other = 'qwen3.5:4b'
   const cut = (extra) => scan.campaignCompletion(traces([...redone, { type: 'code', model: other, id: 'addition', ...extra }])).todo.code.has(other)
-  assert.equal(cut({ ok: false, meta: { done_reason: 'length' } }), true)
-  assert.equal(cut({ ok: true, meta: { done_reason: 'length' } }), false)
-  assert.equal(cut({ ok: false, meta: { done_reason: 'stop' } }), false)
-  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, ctxRetry: scan.CODE_CTX_RETRY }), false, 'déjà réessayée : jamais deux fois')
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, response: { content: '' } }), true)
+  // La réflexion fuitée seule (avant « </think> ») ne compte pas comme une page commencée, comme dans Jaris.
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, response: { content: 'je réfléchis…</think>\n' } }), true)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, response: { content: '```html\n<!DOCTYPE html><html><body>' } }), false, 'page commencée : Jaris ne réessaie pas')
+  assert.equal(cut({ ok: true, meta: { done_reason: 'length' }, response: { content: '' } }), false)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'stop' }, response: { content: '' } }), false)
+  assert.equal(cut({ ok: false, meta: { done_reason: 'length' }, response: { content: '' }, ctxRetry: scan.CODE_CTX_RETRY }), false, 'déjà réessayée : jamais deux fois')
 })
 
 test('étape 528 : la règle des applications à refaire est la même dans Jaris et dans le script du test', async () => {
@@ -645,8 +651,11 @@ test('étape 528 : la règle des applications à refaire est la même dans Jaris
   assert.equal(scan.CODE_CTX_RETRY, script.CODE_CTX_RETRY)
   const rows = [
     { type: 'code', model: 'qwen3-vl:2b', id: 'liste-taches', ok: false },
+    { type: 'code', model: 'qwen3-vl:2b', id: 'liste-taches', ok: false, ctxRetry: 2 },
     { type: 'code', model: 'qwen3-vl:2b', id: 'liste-taches', ok: false, ctxRetry: 1 },
     { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'length' } },
+    { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'length' }, response: { content: 'a</think>b' } },
+    { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'length' }, response: { content: 'a</ifm|think>  ' } },
     { type: 'code', model: 'x', id: 'addition', ok: true, meta: { done_reason: 'length' } },
     { type: 'code', model: 'x', id: 'addition', ok: false, meta: { done_reason: 'stop' } },
     { type: 'vision', model: 'x', ok: false, meta: { done_reason: 'length' } }

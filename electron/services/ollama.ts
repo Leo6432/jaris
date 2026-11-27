@@ -331,7 +331,10 @@ async function requestChatWith(
       thinking += chunk.message.thinking
       onThinking?.(chunk.message.thinking)
     }
-    if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
+    // Étape 530 : en flux, chaque fragment ne porte que les appels d'outil QU'IL vient de terminer (Ollama,
+    // server/routes.go : le parseur rend les appels au fil de l'eau ; sans flux, il les ADDITIONNE). Les remplacer
+    // gardait seulement le dernier : « Lance Spotify et monte le son » en un seul message n'ouvrait jamais Spotify.
+    if (chunk.message?.tool_calls?.length) toolCalls = [...(toolCalls ?? []), ...chunk.message.tool_calls]
     if (chunk.message?.role) role = chunk.message.role
     if (chunk.done_reason) doneReason = chunk.done_reason
     if (chunk.eval_count !== undefined || chunk.load_duration !== undefined) finalChunk = chunk

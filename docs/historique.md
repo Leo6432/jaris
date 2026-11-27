@@ -13304,3 +13304,20 @@ faux ? » — oui, pour tous les modèles ; mais le test était plus sévère qu
 - Le bouton du test les propose en « à refaire » (code seulement) ; scores provisoires jusqu'au fichier de Léo.
 - Tests (mordent) : test-benchmark-cases (vrai script + faux Ollama : 16 384 puis 32 768 ; ancienne appli coupée
   régénérée une fois, jamais deux), test-hardwarescan-single-pool (règle et liste identiques des deux côtés).
+
+## Étape 530 — Relecture « le test fait-il comme Jaris ? » : un vrai bug de Jaris (plusieurs actions d'un coup) ; règle de l'étape 529 corrigée (0.79.3)
+
+Léo : « regarde comment les analyses sont faites, il y a pas des bugs comme celui-ci qui fait pas exactement comme
+l'application Jaris, regarde bien tous les duels ». 4 relectures en parallèle (questions/demandes, vision, code, duels),
+chaque point revérifié ici avant d'agir.
+- **Vrai bug de Jaris, pour tous** : en flux, Ollama envoie chaque appel d'outil dans le fragment où il se termine
+  (server/routes.go, relu sur main) ; sans flux, il les additionne. `requestChatWith` (ollama.ts) REMPLAÇAIT les appels
+  déjà reçus : « Lance Spotify et monte le son » en un seul message ne gardait que le dernier. Ils s'additionnent
+  désormais. Le test des modèles (sans flux) ne pouvait pas le voir. Test : test-ollama-chat-stream (mord).
+- **Mon erreur de l'étape 529** : Jaris ne réessaie avec une fenêtre doublée que si la réflexion l'a remplie SANS rien
+  écrire (ContextFullError, ollama.ts : `!content && !toolCalls`) ; une page commencée puis coupée est gardée telle
+  quelle. `codeNeedsLargerCtx` (benchmark-code.mjs, copie dans hardwareScan.ts) suit cette règle (réflexion fuitée
+  retirée d'abord) ; `CODE_CTX_RETRY` passe à 2. Inkling avait écrit 14 535 et 6 511 caractères : son 3/5 est juste,
+  il n'est plus à refaire. Restent Spark-X2.6-4B convertisseur et qwen3-vl:2b liste de tâches (rien écrit).
+  Tests : test-benchmark-cases (page commencée puis coupée : un seul essai, mord), single-pool.
+- Autres écarts trouvés (test ≠ Jaris, duels ≠ Jaris) : présentés à Léo pour décision, voir l'étape suivante.

@@ -126,3 +126,20 @@ test('étape 389 : main.ts branche un Agent d’undici dont l’attente des en-t
   assert.ok(set, 'dispatcher branché au démarrage')
   assert.ok(Function(`return ${set[1].replace(/_/g, '')}`)() > 5 * 60_000)
 })
+
+// Étape 530 (relecture du test des modèles) : en flux, Ollama envoie chaque appel d'outil dans le fragment où il se
+// termine (server/routes.go) ; sans flux, il les additionne. Jaris gardait seulement ceux du DERNIER fragment.
+test('plusieurs appels d’outil en flux, chacun dans son fragment : tous gardés, dans l’ordre', async () => {
+  respond = async (url) =>
+    noShow(url) ||
+    new Response(
+      ndjson([
+        { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'open_app', arguments: { app: 'Spotify' } } }] } },
+        { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'media_control', arguments: { action: 'volume_up' } } }] } },
+        { message: { role: 'assistant', content: '' }, done: true, done_reason: 'stop', eval_count: 3 }
+      ]),
+      { status: 200 }
+    )
+  const message = await ollama.chatWithOllama([{ role: 'user', content: 'Lance Spotify et monte le son.' }], [{ type: 'function', function: { name: 'open_app' } }], 'qwen3.5:4b', 'low')
+  assert.equal(JSON.stringify(message.tool_calls.map((c) => c.function.name)), JSON.stringify(['open_app', 'media_control']))
+})
