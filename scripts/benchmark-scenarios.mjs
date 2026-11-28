@@ -22,7 +22,8 @@ import { TOOLS, buildBenchmarkSystemPrompt, isRealReply, stripLeakedThinking, wi
 
 /** À augmenter à chaque changement des demandes ou de leurs jugements : un ancien score est alors refait. */
 // Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
-export const SCENARIO_TEST_VERSION = 4
+// Étape 532 : une réponse commencée puis coupée est désormais CONTINUÉE (comme Jaris).
+export const SCENARIO_TEST_VERSION = 5
 
 /** Même valeur que MAX_TOOL_ROUNDS (assistant.ts), vérifiée par le test. */
 /** Copie de LOOKUP_TOOLS (assistant.ts), vérifiée par le test : après l'un d'eux, pas de relance vers search_web. */

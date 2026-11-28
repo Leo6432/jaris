@@ -13364,3 +13364,25 @@ les demandes). Léo : « je valide », puis « tous les 54 modèles ».
   le téléchargement suivant voyait le disque libre (journal : `reserved=0`) et partait. Désormais la taille connue du
   modèle est réservée dès le départ (`startedPullsGb`), et un modèle téléchargé qui attend son test compte comme de la
   place qui sera libérée (`awaitingTest`). 12/12 sous charge.
+
+## Étape 532 — Une réponse commencée puis coupée est CONTINUÉE, dans Jaris comme dans le test (0.81.0)
+
+Léo, sur la règle de l'étape 530 (nouvel essai seulement si rien n'est écrit) : « tu encourages un modèle qui ne fait
+que réfléchir avec deux fois plus de place, et pour un modèle qui a commencé, tu ne fais rien… même pour le code, il
+doit terminer ».
+- **Mesuré avec un vrai Ollama 0.40.18** (lfm3:1.7b, page HTML coupée exprès au milieu d'une règle CSS) : renvoyer la
+  partie écrite comme dernier message « assistant » fait enchaîner le modèle AU CARACTÈRE PRÈS (« .1); »), avec ou
+  sans réflexion ; une consigne « continue là où tu t'es arrêté » le faisait tout recommencer (`<!DOCTYPE html>`).
+- `requestChat` (ollama.ts) : une réponse coupée par la fenêtre (`done_reason: "length"`) après avoir commencé est
+  marquée (`cutReplies`, sans rien ajouter au message), puis continuée au plus `CONTINUE_MAX` (2) fois, fenêtre au
+  palier suivant (automatique) ou doublée (fixée par l'appelant : Code, vision), jamais au-delà de 65 536 ni de la
+  fenêtre du modèle. La suite est relayée à l'écran à la suite du texte affiché ; une suite vide garde la réponse
+  telle quelle (jamais une erreur). Vaut partout : voix, Chat, Code, duels. Vérifié pour de vrai dans le conteneur :
+  fenêtre de 320, la page coupée continue à 640 et finit complète (un seul `<!DOCTYPE`, `</html>` présent), le texte
+  relayé égal à la réponse finale.
+- Le test des modèles fait pareil (copie dans `requestChat`, benchmark-models.mjs, constantes vérifiées par test) ;
+  `codeCutToRedo` : toute application ratée et coupée avant ce changement est à refaire (Inkling de nouveau dans la
+  liste). Versions des tests : questions 8, demandes 5, vision 6, code 5 (rien de la 0.80.0 ne se mélange).
+- Tests (mordent) : test-ollama-chat-stream (suite affichée à la suite, fenêtre doublée, au plus 2 suites),
+  test-benchmark-cases (page continuée 16 384 → 32 768 → 65 536 avec la partie écrite ; question continuée),
+  test-hardwarescan-single-pool (règle et liste identiques des deux côtés).

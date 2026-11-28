@@ -39,7 +39,8 @@
  * (remember avec replace: true, comme l'exigent les consignes de Jaris).
  */
 // Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
-export const CONVERSATION_TEST_VERSION = 7
+// Étape 532 : une réponse commencée puis coupée est désormais CONTINUÉE (comme Jaris).
+export const CONVERSATION_TEST_VERSION = 8
 
 /**
  * Nombre de passages de chaque question (étape 230). Les modèles répondent avec leur réglage d'échantillonnage

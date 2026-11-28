@@ -21,7 +21,8 @@ export const PREVIEW_CSP_FOR_TEST =
 
 /** Augmenté à chaque changement des demandes ou des vérifications : un score d'une autre version est refait. */
 // Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
-export const CODE_TEST_VERSION = 4
+// Étape 532 : une réponse commencée puis coupée est désormais CONTINUÉE (comme Jaris).
+export const CODE_TEST_VERSION = 5
 
 /** Une vérification ratée, avec la raison lisible écrite dans le fichier de résultats. */
 class Fail extends Error {}
@@ -308,21 +309,27 @@ export const CODE_TOTAL = CODE_TEST_CASES.length
  * listés ci-dessous, absents des données de la version Store de Léo. Copie dans electron/services/hardwareScan.ts
  * (bouton du test), vérifiée identique par test.
  */
-export const CODE_CTX_RETRY = 2
+export const CODE_CTX_RETRY = 3
 export const CODE_CASES_TO_REDO = [
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
   ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
   ['qwen3-vl:2b', 'liste-taches']
 ]
-/** Réponse d'Ollama vide une fois la réflexion fuitée retirée, et coupée par la fenêtre : ce que Jaris réessaie. */
+/** Réponse vide (réflexion fuitée retirée) et coupée par la fenêtre : Jaris réessaie avec une fenêtre doublée. */
 export function codeNeedsLargerCtx(data) {
   if (data?.done_reason !== 'length') return false
   const content = stripLeakedThinking(String(data?.message?.content ?? '')).trim()
   return !content && !(data?.message?.tool_calls?.length > 0)
 }
+/**
+ * Étape 532 : une ligne ratée et coupée par la fenêtre, écrite avant que le test ne fasse comme Jaris (nouvel essai si
+ * rien n'est écrit, SUITE de la réponse si elle avait commencé) — à refaire une fois.
+ */
 export function codeCutToRedo(row) {
   if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
   if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
-  return row.ok !== true && codeNeedsLargerCtx({ done_reason: row.meta?.done_reason, message: row.response ?? {} })
+  return row.ok !== true && row.meta?.done_reason === 'length'
 }
 
 /**

@@ -204,6 +204,20 @@ export async function autoContextFor(model: string, payload?: unknown): Promise<
   return fitToModelContext(model, Math.max(autoContextStep(need), stickyWindow(model)))
 }
 
+/**
+ * Étape 532 (Léo : « tu encourages un modèle qui ne fait que réfléchir avec deux fois plus de place, et pour un modèle
+ * qui a commencé, tu ne fais rien… même pour le code, il doit terminer ») : une réponse COMMENCÉE puis coupée par la
+ * fenêtre (`done_reason: "length"`) n'est plus gardée coupée. Le modèle la CONTINUE, avec une fenêtre plus grande : la
+ * partie déjà écrite lui est renvoyée comme début de SA réponse (dernier message « assistant »), et Ollama enchaîne au
+ * caractère près — mesuré avec un vrai Ollama 0.40.18 (lfm3:1.7b, page HTML coupée au milieu d'une règle CSS : suite
+ * exacte, avec ou sans réflexion). Une consigne « continue » faisait tout recommencer depuis le début. La suite est
+ * relayée à l'écran à la suite du texte déjà affiché. Au plus CONTINUE_MAX fois, et jamais au-delà de CONTINUE_MAX_CTX.
+ */
+const CONTINUE_MAX = 2
+const CONTINUE_MAX_CTX = 65536
+/** Réponses rendues coupées par la fenêtre (texte commencé) : marquées ici, sans rien ajouter au message lui-même. */
+const cutReplies = new WeakSet<OllamaMessage>()
+
 async function requestChat(
   body: Record<string, unknown>,
   model: string,
@@ -215,19 +229,47 @@ async function requestChat(
   const options = body.options as { num_ctx?: number } | undefined
   const auto = options?.num_ctx === undefined
   // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
-  const numCtx = auto
+  let numCtx = auto
     ? await autoContextFor(model, { messages: body.messages, tools: body.tools })
     : await fitToModelContext(model, options.num_ctx as number)
+  /** La fenêtre suivante : le palier du dessus (automatique) ou le double (fixée par l'appelant), plafonnée. */
+  const larger = async (current: number): Promise<number> =>
+    fitToModelContext(model, Math.min(auto ? autoContextStep(current + 1) : current * 2, Math.max(current, CONTINUE_MAX_CTX)))
+  let message: OllamaMessage
   try {
-    return await requestChatWith(body, model, numCtx, signal, onToken, onThinking, onMetrics)
+    message = await requestChatWith(body, model, numCtx, signal, onToken, onThinking, onMetrics)
   } catch (err) {
     // Fenêtre automatique remplie (souvent par la réflexion) : un seul nouvel essai au palier suivant, que le modèle
     // garde ensuite. Rien n'a été affiché (la fenêtre pleine n'est signalée que sans texte ni outil).
     if (!auto || (err as { name?: string } | null)?.name !== 'ContextFullError') throw err
     const bigger = await fitToModelContext(model, autoContextStep(numCtx + 1))
     if (bigger <= numCtx) throw err
-    return requestChatWith(body, model, bigger, signal, onToken, onThinking, onMetrics)
+    numCtx = bigger
+    message = await requestChatWith(body, model, numCtx, signal, onToken, onThinking, onMetrics)
   }
+  for (let attempt = 0; attempt < CONTINUE_MAX && cutReplies.has(message) && !message.tool_calls?.length; attempt++) {
+    const bigger = await larger(numCtx)
+    if (bigger <= numCtx) break
+    numCtx = bigger
+    const messages = [...((body.messages as OllamaMessage[] | undefined) ?? []), { role: 'assistant' as const, content: message.content }]
+    let rest: OllamaMessage
+    try {
+      rest = await requestChatWith({ ...body, messages }, model, numCtx, signal, onToken, onThinking, onMetrics)
+    } catch (err) {
+      // La suite n'a rien donné (vide, ou fenêtre encore pleine) : la réponse commencée reste ce qu'on a de mieux.
+      const name = (err as { name?: string } | null)?.name
+      if (name === 'EmptyReplyError' || name === 'ContextFullError') break
+      throw err
+    }
+    const joined: OllamaMessage = {
+      ...rest,
+      content: message.content + rest.content,
+      ...(message.thinking || rest.thinking ? { thinking: `${message.thinking ?? ''}${rest.thinking ?? ''}` } : {})
+    }
+    if (cutReplies.has(rest)) cutReplies.add(joined)
+    message = joined
+  }
+  return message
 }
 
 async function requestChatWith(
@@ -289,7 +331,9 @@ async function requestChatWith(
     }
     if (!data.message) throw new EmptyReplyError(model)
     reportMetrics(metricsOf(data, data.message.thinking?.length ?? 0), onMetrics)
-    return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
+    const whole: OllamaMessage = { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
+    if (data.done_reason === 'length' && whole.content) cutReplies.add(whole)
+    return whole
   }
 
   const reader = response.body.getReader()
@@ -366,7 +410,10 @@ async function requestChatWith(
   if (finalChunk) reportMetrics(metricsOf(finalChunk, thinking.length), onMetrics)
   // Sans relais (voix, mémoire), la forme d'avant le flux : la réflexion reste jointe au message, comme une réponse
   // d'un bloc — le canal voix la garde entre deux appels d'outils (étape 233).
-  return { role, content, tool_calls: toolCalls, ...(!relays && thinking ? { thinking } : {}) }
+  const reply: OllamaMessage = { role, content, tool_calls: toolCalls, ...(!relays && thinking ? { thinking } : {}) }
+  // Étape 532 : coupée par la fenêtre après avoir commencé — requestChat la fait continuer.
+  if (doneReason === 'length' && content) cutReplies.add(reply)
+  return reply
 }
 
 /**

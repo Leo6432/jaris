@@ -924,10 +924,10 @@ export const SCENARIO_TEST_TOTAL = 48
 export const CODE_TEST_TOTAL = 5
 
 /** Versions des tests en cours (copies de CONVERSATION/SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
-export const CONVERSATION_TEST_VERSION = 7
-export const SCENARIO_TEST_VERSION = 4
-export const VISION_TEST_VERSION = 5
-export const CODE_TEST_VERSION = 4
+export const CONVERSATION_TEST_VERSION = 8
+export const SCENARIO_TEST_VERSION = 5
+export const VISION_TEST_VERSION = 6
+export const CODE_TEST_VERSION = 5
 
 /**
  * Étape 242 : la demande porte-t-elle sur l'écran lui-même (« qu'est-ce qu'il y a sur mon écran ? », « tu vois
@@ -972,8 +972,10 @@ export function roundsStoppedTask(row: { turns?: unknown }): boolean {
  * ne réessaie comme Jaris (fenêtre doublée) — à refaire une fois. Copie de CODE_CTX_RETRY, CODE_CASES_TO_REDO,
  * codeNeedsLargerCtx et codeCutToRedo (scripts/benchmark-code.mjs), vérifiée identique par test.
  */
-export const CODE_CTX_RETRY = 2
+export const CODE_CTX_RETRY = 3
 export const CODE_CASES_TO_REDO: ReadonlyArray<readonly [string, string]> = [
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'addition'],
+  ['inkling-2-mini:26b-a5b-iq4_NL', 'liste-taches'],
   ['hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M', 'convertisseur'],
   ['qwen3-vl:2b', 'liste-taches']
 ]
@@ -991,8 +993,7 @@ export function codeNeedsLargerCtx(data: { done_reason?: unknown; message?: { co
 export function codeCutToRedo(row: Record<string, unknown>): boolean {
   if (row?.type !== 'code' || row.ctxRetry === CODE_CTX_RETRY) return false
   if (CODE_CASES_TO_REDO.some(([model, id]) => model === row.model && id === row.id)) return true
-  const meta = row.meta as { done_reason?: unknown } | undefined
-  return row.ok !== true && codeNeedsLargerCtx({ done_reason: meta?.done_reason, message: (row.response as { content?: unknown; tool_calls?: unknown[] } | undefined) ?? {} })
+  return row.ok !== true && (row.meta as { done_reason?: unknown } | undefined)?.done_reason === 'length'
 }
 
 /** Réponse d'Ollama quand le modèle n'est pas (ou plus) là : copie de MODEL_NOT_FOUND (benchmark-models.mjs). */

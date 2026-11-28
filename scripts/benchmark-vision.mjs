@@ -22,7 +22,8 @@ const IMAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), 'vision-tests')
 
 /** Augmenté à chaque changement des images ou des jugements : un score d'une autre version est refait. */
 // Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
-export const VISION_TEST_VERSION = 5
+// Étape 532 : une réponse commencée puis coupée est désormais CONTINUÉE (comme Jaris).
+export const VISION_TEST_VERSION = 6
 
 /** Chaque image posée 2 fois : de nouvelles images valent mieux que la même répétée. */
 export const VISION_REPEATS = 2

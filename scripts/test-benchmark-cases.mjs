@@ -1663,7 +1663,7 @@ test('étape 528 : réponse de code coupée = un nouvel essai avec la fenêtre d
     assert.equal(JSON.stringify(asked), JSON.stringify([16384, 32768]), 'même fenêtre que Jaris, puis le double')
     const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
     assert.equal(row.ok, true, row.reason)
-    assert.equal(row.ctxRetry, 2)
+    assert.equal(row.ctxRetry, 3)
     assert.equal(row.numCtx, 32768)
     assert.ok(row.firstCut, 'le premier essai coupé reste écrit')
   } finally {
@@ -1690,7 +1690,7 @@ test('étape 528 : une application coupée AVANT le nouvel essai est régénér�
     assert.equal(first.code, 0, first.out)
     assert.equal(fake.requests.length, 1, 'régénérée par le modèle (pas l’ancien code revérifié)')
     const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code')
-    assert.ok(rows.at(-1).replay && rows.at(-1).ok && rows.at(-1).ctxRetry === 2, JSON.stringify(rows.at(-1).reason))
+    assert.ok(rows.at(-1).replay && rows.at(-1).ok && rows.at(-1).ctxRetry === 3, JSON.stringify(rows.at(-1).reason))
     // Refaite une fois : un nouveau lancement ne la refait plus.
     await run()
     assert.equal(fake.requests.length, 1, 'jamais refaite deux fois')
@@ -1700,7 +1700,7 @@ test('étape 528 : une application coupée AVANT le nouvel essai est régénér�
   }
 })
 
-test('étape 530 : une page commencée puis coupée n’a PAS de nouvel essai — comme Jaris (fenêtre pleine sans rien écrire seulement)', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+test('étape 532 : une page commencée puis coupée est CONTINUÉE (fenêtre plus grande, sa partie écrite renvoyée), comme Jaris', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const model = 'qwen2.5-coder:7b'
   const testCase = CODE_TEST_CASES[0]
@@ -1716,12 +1716,14 @@ test('étape 530 : une page commencée puis coupée n’a PAS de nouvel essai �
   try {
     const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ANALYSIS_SCOPE: 'code', JARIS_ONLY_MODELS: model, JARIS_RETEST_ALL: '1' })
     assert.equal(code, 0, out)
-    const asked = fake.requests.filter((r) => r.messages.at(-1).content.includes(testCase.prompt)).map((r) => r.options?.num_ctx)
-    assert.equal(JSON.stringify(asked), JSON.stringify([16384]), 'un seul essai')
+    const mine = fake.requests.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.includes(testCase.prompt)))
+    // Coupée à chaque fois ici (faux Ollama) : 2 suites au plus, fenêtre doublée, partie écrite en dernier message.
+    assert.equal(JSON.stringify(mine.map((r) => r.options?.num_ctx)), JSON.stringify([16384, 32768, 65536]))
+    assert.equal(JSON.stringify(mine.map((r) => r.messages.at(-1).role)), JSON.stringify(['user', 'assistant', 'assistant']))
+    assert.equal(mine[1].messages.at(-1).content, '```html\n<!DOCTYPE html><html><body><div id="n">0', 'la partie déjà écrite, telle quelle')
     const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
-    assert.equal(row.ok, false)
-    assert.match(row.reason, /réponse coupée/)
-    assert.equal(row.numCtx, 16384)
+    assert.equal(row.numCtx, 65536)
+    assert.match(row.response.content, /^```html\n<!DOCTYPE html><html><body><div id="n">0```html/, 'la suite est ajoutée à la partie écrite')
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
@@ -1733,8 +1735,9 @@ test('étape 531 : fenêtre automatique, limite et règles du code — copies id
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const ollama = readFileSync(new URL('../electron/services/ollama.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const code = readFileSync(new URL('../electron/services/codeGenerator.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
-  const value = (source, name) => source.match(new RegExp(`const ${name}(?:: [^=]+)? = ([^\\n]+)`))?.[1]?.trim()
-  for (const name of ['AUTO_CONTEXT_STEPS', 'AUTO_REPLY_RESERVE', 'AUTO_CHARS_PER_TOKEN', 'AUTO_STICKY_MS']) {
+  const value = (source, name) => source.match(new RegExp(`const ${name}(?:: [^=\\n]+)? = ([^\\n]+)`))?.[1]?.trim()
+  // Étape 532 : CONTINUE_MAX et CONTINUE_MAX_CTX (suite d'une réponse coupée) aussi.
+  for (const name of ['AUTO_CONTEXT_STEPS', 'AUTO_REPLY_RESERVE', 'AUTO_CHARS_PER_TOKEN', 'AUTO_STICKY_MS', 'CONTINUE_MAX', 'CONTINUE_MAX_CTX']) {
     assert.ok(value(script, name), name)
     assert.equal(value(script, name), value(ollama, name), name)
   }
@@ -1744,7 +1747,7 @@ test('étape 531 : fenêtre automatique, limite et règles du code — copies id
   }
   // Limite de longueur et estimation de la demande, comme requestChatWith / estimateRequestTokens.
   assert.match(ollama, /num_predict: \(options as \{ num_predict\?: number \}\)\.num_predict \?\? numCtx/)
-  assert.match(script, /num_predict: body\.options\?\.num_predict \?\? numCtx/)
+  assert.match(script, /num_predict: options\.num_predict \?\? numCtx/)
   // Les 13 règles du mode Code, au mot près, et la relance « ce n'est pas un fichier HTML ».
   const rules = (source, name) => {
     const start = source.indexOf(`const ${name} = [`)
@@ -1804,7 +1807,7 @@ test('étape 531 : lecture d’écran — la réflexion fuitée est retirée ava
   }
 })
 
-test('étape 531 : questions — vide et coupée : un essai au palier suivant puis échec ; commencée puis coupée : jugée, comme Jaris', { timeout: 240000 }, async () => {
+test('étape 531 : questions — vide et coupée : un essai au palier suivant puis échec ; commencée puis coupée : continuée puis jugée, comme Jaris', { timeout: 240000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const model = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
   const [emptyCase, partialCase] = [TEST_CASES[0].prompt, TEST_CASES[1].prompt]
@@ -1831,7 +1834,10 @@ test('étape 531 : questions — vide et coupée : un essai au palier suivant pu
     assert.equal(JSON.stringify(first), JSON.stringify([16384, 32768]), JSON.stringify(asked(emptyCase).map((r) => r.options.num_ctx)))
     const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'question')
     assert.ok(rows.filter((t) => t.index === 0).every((t) => /réponse coupée/.test(t.reason ?? '')), 'vide et coupée : échec')
-    assert.ok(rows.filter((t) => t.index === 1).every((t) => !/^erreur/.test(t.reason ?? '') && t.response?.content === 'Je ne peux pas'), 'commencée puis coupée : jugée comme une réponse')
+    assert.ok(rows.filter((t) => t.index === 1).every((t) => !/^erreur/.test(t.reason ?? '') && /^Je ne peux pas/.test(t.response?.content ?? '')), 'commencée puis coupée : jugée comme une réponse')
+    // Étape 532 : et d'abord CONTINUÉE, sa partie écrite renvoyée comme début de la réponse du modèle.
+    const continued = asked(partialCase).find((r) => r.messages.at(-1).role === 'assistant')
+    assert.equal(continued?.messages.at(-1).content, 'Je ne peux pas')
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

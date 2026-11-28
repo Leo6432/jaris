@@ -1484,7 +1484,10 @@ class EmptyReplyError extends Error {
 
 async function requestChatWith(body, numCtx) {
   recentWindows.set(body.model, { numCtx, at: Date.now() })
-  const data = await postChat({ ...body, options: { ...(body.options ?? {}), num_ctx: numCtx, num_predict: body.options?.num_predict ?? numCtx } })
+  const { options: _options, ...rest } = body
+  const options = { ...(body.options ?? {}) }
+  delete options.num_ctx
+  const data = await postChat({ ...rest, options: { ...options, num_ctx: numCtx, num_predict: options.num_predict ?? numCtx } })
   data.jaris_num_ctx = numCtx
   const content = stripLeakedThinking(String(data.message?.content ?? ''))
   if (!content && !data.message?.tool_calls?.length) {
@@ -1494,17 +1497,43 @@ async function requestChatWith(body, numCtx) {
   return data
 }
 
+/** Étape 532 : copie de CONTINUE_MAX / CONTINUE_MAX_CTX (ollama.ts), vérifiée par test. */
+const CONTINUE_MAX = 2
+const CONTINUE_MAX_CTX = 65536
+
 async function requestChat(body) {
   const auto = body.options?.num_ctx === undefined
-  const numCtx = auto ? await autoContextFor(body.model, { messages: body.messages, tools: body.tools }) : await fitToModelContext(body.model, body.options.num_ctx)
+  let numCtx = auto ? await autoContextFor(body.model, { messages: body.messages, tools: body.tools }) : await fitToModelContext(body.model, body.options.num_ctx)
+  const larger = (current) => fitToModelContext(body.model, Math.min(auto ? autoContextStep(current + 1) : current * 2, Math.max(current, CONTINUE_MAX_CTX)))
+  let data
   try {
-    return await requestChatWith(body, numCtx)
+    data = await requestChatWith(body, numCtx)
   } catch (err) {
     if (!auto || err?.name !== 'ContextFullError') throw err
     const bigger = await fitToModelContext(body.model, autoContextStep(numCtx + 1))
     if (bigger <= numCtx) throw err
-    return requestChatWith(body, bigger)
+    numCtx = bigger
+    data = await requestChatWith(body, numCtx)
   }
+  // Étape 532 : comme Jaris (requestChat, ollama.ts) — une réponse COMMENCÉE puis coupée par la fenêtre est continuée
+  // (sa partie écrite renvoyée comme début de la réponse du modèle), avec une fenêtre plus grande.
+  for (let attempt = 0; attempt < CONTINUE_MAX && data.done_reason === 'length' && !data.message?.tool_calls?.length; attempt++) {
+    const bigger = await larger(numCtx)
+    if (bigger <= numCtx) break
+    numCtx = bigger
+    const written = stripLeakedThinking(String(data.message?.content ?? ''))
+    let rest
+    try {
+      rest = await requestChatWith({ ...body, messages: [...body.messages, { role: 'assistant', content: written }] }, numCtx)
+    } catch (err) {
+      if (err?.name === 'EmptyReplyError' || err?.name === 'ContextFullError') break
+      throw err
+    }
+    rest.message = { ...rest.message, content: written + String(rest.message?.content ?? '') }
+    rest.jaris_continued = (data.jaris_continued ?? 0) + 1
+    data = rest
+  }
+  return data
 }
 
 /** chatWithOllama : le niveau de réflexion demandé, puis un second essai sans `think` (toute erreur sauf exceptions). */

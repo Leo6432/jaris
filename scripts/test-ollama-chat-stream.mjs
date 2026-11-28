@@ -143,3 +143,36 @@ test('plusieurs appels d’outil en flux, chacun dans son fragment : tous gardé
   const message = await ollama.chatWithOllama([{ role: 'user', content: 'Lance Spotify et monte le son.' }], [{ type: 'function', function: { name: 'open_app' } }], 'qwen3.5:4b', 'low')
   assert.equal(JSON.stringify(message.tool_calls.map((c) => c.function.name)), JSON.stringify(['open_app', 'media_control']))
 })
+
+// Étape 532 (Léo : « pour un modèle qui a commencé, tu ne fais rien… même pour le code, il doit terminer ») : une
+// réponse COMMENCÉE puis coupée par la fenêtre est CONTINUÉE — sa partie écrite renvoyée comme début de la réponse du
+// modèle (dernier message « assistant »), fenêtre plus grande, et la suite relayée à l'écran à la suite.
+test('réponse commencée puis coupée par la fenêtre : continuée avec une fenêtre plus grande, affichée à la suite', async () => {
+  calls.length = 0
+  let n = 0
+  respond = async (url) =>
+    noShow(url) ||
+    new Response(
+      n++ === 0
+        ? ndjson([{ message: { role: 'assistant', content: 'Bon' } }, { message: { role: 'assistant', content: '' }, done: true, done_reason: 'length', eval_count: 3 }])
+        : ndjson([{ message: { role: 'assistant', content: 'jour.' } }, { message: { role: 'assistant', content: '' }, done: true, done_reason: 'stop', eval_count: 3 }]),
+      { status: 200 }
+    )
+  let shown = ''
+  const message = await ollama.chatWithOllama([{ role: 'user', content: 'salut' }], undefined, 'qwen3.5:4b', 'low', undefined, 4096, (d) => (shown += d))
+  assert.equal(message.content, 'Bonjour.')
+  assert.equal(shown, 'Bonjour.', 'la suite s’affiche à la suite, sans rien répéter')
+  const [first, second] = chats()
+  assert.equal(JSON.stringify([first.body.options.num_ctx, second.body.options.num_ctx]), JSON.stringify([4096, 8192]), 'fenêtre doublée')
+  assert.deepEqual(second.body.messages.at(-1), { role: 'assistant', content: 'Bon' }, 'la partie écrite, comme début de la réponse')
+  assert.equal(chats().length, 2)
+})
+
+test('réponse coupée encore et encore : au plus 2 suites, puis la réponse telle qu’elle est (jamais une erreur)', async () => {
+  calls.length = 0
+  respond = async (url) =>
+    noShow(url) || new Response(ndjson([{ message: { role: 'assistant', content: 'a' } }, { message: { role: 'assistant', content: '' }, done: true, done_reason: 'length' }]), { status: 200 })
+  const message = await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'qwen3.5:4b', 'low', undefined, 4096)
+  assert.equal(message.content, 'aaa')
+  assert.equal(chats().length, 3)
+})
