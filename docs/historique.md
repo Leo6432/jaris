@@ -13357,3 +13357,10 @@ les demandes). Léo : « je valide », puis « tous les 54 modèles ».
   test-duel-session (vision sans réflexion, voix sans relais, avis de Claude en Agentique), test-duel-judge, nouveau
   test-duel-overload, test-verified-scores (les 54 à remesurer). Les tests qui portent sur autre chose lisent le fichier
   de scores sans cette liste (scripts/verified-scores-for-tests.mjs).
+- CI Windows de la 0.80.0 en échec (aucune Release) : (1) un test lisait benchmark-models.mjs sans retirer les « \r »
+  (CRLF) — corrigé, suite complète repassée sur une copie CRLF ; (2) « étape 453 : disque de la machine juste » échouait
+  ~1 fois sur 4 sous charge (jamais avant ce changement : 6/6 sur la 0.79.3). Vraie cause, réelle aussi sur une machine
+  louée : la place d'un téléchargement n'était réservée qu'une fois sa taille annoncée par Ollama ; dans cet intervalle,
+  le téléchargement suivant voyait le disque libre (journal : `reserved=0`) et partait. Désormais la taille connue du
+  modèle est réservée dès le départ (`startedPullsGb`), et un modèle téléchargé qui attend son test compte comme de la
+  place qui sera libérée (`awaitingTest`). 12/12 sous charge.

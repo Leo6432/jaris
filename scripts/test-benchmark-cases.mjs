@@ -788,7 +788,8 @@ test('reprise : une ligne sans AUCUNE réponse (0/17, latence « — ») est ref
 })
 
 test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minutes sans réponse)', () => {
-  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+  // Fins de ligne lues sans « \r » : la CI Windows récupère les fichiers en CRLF.
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
   // Étape 232 : + les demandes complètes. Étape 531 : un seul envoi (requestChatWith, la logique de chatWithOllama) pour
   // les questions, les demandes, la lecture d'écran et le code ; la visée garde le sien (streamOllamaChat dans Jaris).

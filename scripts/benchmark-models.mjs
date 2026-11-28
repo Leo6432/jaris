@@ -2677,6 +2677,13 @@ async function main() {
    */
   const diskQueue = []
   let pullsInFlight = 0
+  // Étape 531 : téléchargés, pas encore en test — leur test (puis leur suppression) libérera de la place. Sans eux, le
+  // court instant entre la fin d'un téléchargement et le début de son test passait pour « rien ne peut libérer de
+  // place » : le téléchargement suivant partait sur un disque trop juste (test de l'étape 453, vu sur la CI Windows).
+  const awaitingTest = new Set()
+  // Étape 531 : la place des téléchargements partis mais dont Ollama n'a pas encore donné la taille (pullModel ne réserve
+  // qu'à ce moment-là) — comptée dès le départ, sinon un second téléchargement se glissait dans cet intervalle.
+  let startedPullsGb = 0
   async function waitForDiskRoom(model) {
     const ticket = {}
     diskQueue.push(ticket)
@@ -2685,8 +2692,8 @@ async function main() {
         if (diskQueue[0] === ticket) {
           await refreshMachineFreeDisk()
           const free = detectFreeDiskGb()
-          if (free === null || free - diskCtx.reservedGb - DISK_SAFETY_MARGIN_GB >= modelWeightGb(model)) return
-          if (testSlots.running() === 0 && pullsInFlight === 0) return
+          if (free === null || free - Math.max(diskCtx.reservedGb, startedPullsGb) - DISK_SAFETY_MARGIN_GB >= modelWeightGb(model)) return
+          if (testSlots.running() === 0 && pullsInFlight === 0 && awaitingTest.size === 0) return
         }
         await new Promise((resolve) => setTimeout(resolve, DISK_WAIT_POLL_MS))
       }
@@ -2699,6 +2706,7 @@ async function main() {
     if (TEST_SLOTS > 1) await waitForDiskRoom(model)
     pullsInFlight++
     const weight = modelWeightGb(model)
+    startedPullsGb += weight
     console.log(`##PULL_MODEL_PROGRESS## ${model} 0`)
     // Noté AVANT le téléchargement : coupé en plein milieu, le modèle reste à la charge du test.
     downloadedByTest.add(model)
@@ -2719,6 +2727,8 @@ async function main() {
         console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
       }
     }
+    if (ok) awaitingTest.add(model)
+    startedPullsGb -= weight
     pullsInFlight--
     weightDone += weight
     pullsDone++
@@ -3352,10 +3362,12 @@ async function main() {
           ['code', codeToRun, runCodeModel]
         ].filter(([, list]) => list.includes(model))
         if (!(await ensureReady(model))) {
+          awaitingTest.delete(model)
           for (const [phase] of phases) reportSkip(model, phase)
           continue
         }
         const release = await testSlots.acquire(model)
+        awaitingTest.delete(model)
         try {
           for (const [phase, , run] of phases) {
             await withModelLines(model, true, () => run(model))
