@@ -285,7 +285,7 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       },
       judgeDuel: async (key, input, signal) => {
         const { prompt, a, b, tools, screens } = input
-        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)), tools: tools.map((tool) => tool.name), screens: screens ?? null, followUps: input.followUps ?? null, spoken: input.spoken ?? null, model: input.model ?? null, effort: input.effort ?? null })
+        calls.judge.verdicts.push({ key, prompt, a: JSON.parse(JSON.stringify(a)), b: JSON.parse(JSON.stringify(b)), tools: tools.map((tool) => tool.name), screens: screens ?? null, followUps: input.followUps ?? null, spoken: input.spoken ?? null, simulated: input.simulated ?? null, model: input.model ?? null, effort: input.effort ?? null })
         if (judge?.verdictImpl) return judge.verdictImpl(calls.judge.verdicts.length, signal)
         return { outcome: 'a', reason: 'A a vraiment ouvert l’application.' }
       }
@@ -296,7 +296,8 @@ function setup({ installed = [], failPull = [], category = 'conversation', profi
       agentTaskExists: (id) => ['ouvrir-bloc-notes', 'chercher-mail'].includes(id),
       agentTaskChoices: () => [{ id: 'ouvrir-bloc-notes', text: 'Ouvre le bloc-notes et écris bonjour' }, { id: 'chercher-mail', text: 'Cherche le mail de Julie' }],
       agentTaskById: (id) => ({ 'ouvrir-bloc-notes': { id, turns: ['Ouvre le bloc-notes et écris bonjour'], variant: 0 }, 'chercher-mail': { id, turns: ['Cherche le mail de Julie', 'Et réponds-lui oui'], variant: 1 } })[id] ?? null,
-      runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args)
+      runAgentTask: (...args) => (globalThis.__duelAgentRun ?? (async () => ({ replies: ['fait'], ok: true })))(...args),
+      agentToolsForJudge: () => [{ name: 'open_app', description: 'Ouvre une application' }, { name: 'type_text', description: 'Tape du texte' }]
     },
     './duelStore': {
       addDuelReview: async (review) => {
@@ -652,6 +653,8 @@ test('étape 504 : Discussion lue à voix haute (l’ancien duel Vocal) : la ré
   env.session.askDuel('Quel temps fera-t-il demain ?')
   await waitFor(() => env.session.getDuelView().round.a.status === 'done', 'A')
   assert.equal(env.calls.converse[0][7], 'voice', 'canal voix : pas de listes ni de gras')
+  // Étape 531 : comme le vrai mode vocal (voicePipeline.ts), SANS relais du texte : la réflexion reste entre deux outils.
+  assert.equal(env.calls.converse[0][8], undefined, 'aucun relais en voix')
   assert.equal(env.session.getDuelView().round.a.audio, true)
   assert.ok(env.session.duelAudio('a') instanceof Uint8Array)
   assert.equal(env.session.duelAudio('b'), null)
@@ -746,6 +749,8 @@ test('étape 475 : Duel Vision — une image, aucune question : chaque modèle d
     assert.equal(call.messages.at(-1).content, 'Décris cette image.', 'la même consigne fixe, aucune question de Léo')
     assert.deepEqual(call.messages.at(-1).images, [IMAGE], 'la même image aux deux')
     assert.match(call.messages[0].content, /Décris-la précisément/)
+    // Étape 531 : sans réflexion, comme partout où Jaris lit une image (describeImage, pilotage).
+    assert.equal(call.think, false, 'jamais de réflexion : Jaris n’en donne jamais pour lire une image')
   }
   assert.notEqual(a.model, b.model, 'chaque côté avec SON modèle (jamais remplacé par un plus petit)')
   assert.equal(env.calls.converse.length, 0, 'jamais par converse() (outils, raccourcis de Jaris)')
@@ -2342,5 +2347,34 @@ test('étape 506 : série Agentique relue — identifiant de tâche et jeu de r�
   assert.equal(ok.rounds[0].a.check, true)
   for (const bad of [{ id: '../secret', variant: 0 }, { id: 'duel-pause', variant: 2 }, { id: '', variant: 0 }, null]) {
     assert.equal(seriesStoreModule.parseSeriesSnapshot(base(bad)), null, JSON.stringify(bad))
+  }
+})
+
+// Étape 531 (relecture « les duels font-ils comme Jaris ? ») : l'avis de Claude sur un duel Agentique ne voyait que les
+// actions du DERNIER message, sans leurs résultats, avec « aucun outil » dans sa notice et un PC présenté comme réel.
+test('étape 531 : avis de Claude en Agentique — tous les outils de chaque message avec leurs résultats, PC simulé dit', async () => {
+  globalThis.__duelAgentRun = async (task, model, _think, _signal, onStep) => {
+    onStep({ kind: 'tool', turn: 0, name: 'search_mail', args: { from: 'Julie' }, result: 'Mail de Julie : « On dîne samedi ? »' })
+    onStep({ kind: 'tool', turn: 1, name: 'send_mail', args: { to: 'Julie', text: 'Oui' }, result: 'Mail envoyé à Julie.' })
+    return { replies: ['Trouvé.', `Répondu (${model}).`], ok: true }
+  }
+  try {
+    const env = setup({ installed: MODELS, judge: { key: 'sk-ant-cle' } })
+    await env.session.startDuel('agent', 4)
+    await waitFor(() => env.session.getDuelView()?.phase === 'ready', 'prête')
+    env.session.askDuel('chercher-mail')
+    await waitFor(() => env.session.getDuelView().round.b.status === 'done', 'B')
+    await env.session.adviseDuel('claude-sonnet-5-5', 'medium')
+    const verdict = env.calls.judge.verdicts.at(-1)
+    assert.equal(verdict.simulated, true, 'Claude sait que le PC est simulé')
+    assert.deepEqual(verdict.tools, ['open_app', 'type_text'], 'les outils du PC simulé, plus « aucun outil »')
+    assert.deepEqual(verdict.a.toolLog, [
+      '[message 1] Outil appelé : search_mail({"from":"Julie"})',
+      '[message 1] Résultat de l\'outil : Mail de Julie : « On dîne samedi ? »',
+      '[message 2] Outil appelé : send_mail({"to":"Julie","text":"Oui"})',
+      '[message 2] Résultat de l\'outil : Mail envoyé à Julie.'
+    ])
+  } finally {
+    delete globalThis.__duelAgentRun
   }
 })

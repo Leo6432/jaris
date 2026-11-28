@@ -106,7 +106,7 @@ import type {
 } from '../../shared/ipc'
 import { formatDecimal, replyLanguageRule, t, tn, type MessageKey } from '../../shared/i18n'
 import { equivalentThink, type ThinkValue } from '../../shared/effort'
-import { agentTaskById, agentTaskChoices, agentTaskExists, pickAgentTask, runAgentTask, type AgentTask } from './duelAgent'
+import { agentTaskById, agentTaskChoices, agentTaskExists, agentToolsForJudge, pickAgentTask, runAgentTask, type AgentTask } from './duelAgent'
 
 /**
  * Étape 355 — le Duel. Léo : « un bouton duel, une session télécharge 4-6 modèles qui tiennent, anonymes, on choisit
@@ -980,7 +980,13 @@ async function claudeVerdict(
               prompt,
               a: { ...judgedSide(a), earlier: a.earlier.map((turn) => turn.text) },
               b: { ...judgedSide(b), earlier: b.earlier.map((turn) => turn.text) },
-              tools: TOOLS.filter((tool) => round.tools?.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description })),
+              // Étape 531 : en Agentique, les outils du PC simulé (round.tools n'est rempli qu'en Discussion : Claude lisait
+              // « aucun outil »), et Claude est prévenu que ce PC est simulé.
+              tools:
+                current.category === 'agent'
+                  ? agentToolsForJudge()
+                  : TOOLS.filter((tool) => round.tools?.has(tool.function.name)).map((tool) => ({ name: tool.function.name, description: tool.function.description })),
+              simulated: current.category === 'agent',
               followUps: round.followUps,
               spoken: current.spoken,
               model,
@@ -1919,12 +1925,17 @@ async function runConversation(
     signal,
     undefined,
     channel,
-    (delta) => {
-      streamed += delta
-      side.text = streamed
-      side.activity = { kind: 'writing' }
-      emitSoon()
-    },
+    // Étape 531 : lue à voix haute, comme le vrai mode vocal (voicePipeline.ts) — SANS relais du texte : Jaris garde
+    // alors la réflexion du modèle entre deux appels d'outil (ollama.ts, étape 233). Avec un relais, elle était perdue
+    // en duel et jamais à l'Agent vocal. La réponse s'affiche d'un coup, comme elle est dite.
+    current.spoken
+      ? undefined
+      : (delta) => {
+          streamed += delta
+          side.text = streamed
+          side.activity = { kind: 'writing' }
+          emitSoon()
+        },
     undefined,
     undefined,
     duelRestrictions(model, think, tools, (tool, error) => {
@@ -1966,6 +1977,13 @@ async function runAgent(round: RoundState, side: SideState, model: string, think
     else if (step.kind === 'tool') {
       const action = duelActionFromLog(`Outil appelé : ${step.name}(${JSON.stringify(step.args)})`) ?? { tool: step.name, detail: null }
       actionsByTurn[step.turn]?.push(action)
+      // Étape 531 : ce que Claude lit pour juger (outils réellement appelés et leurs résultats, À CHAQUE message de la
+      // tâche) — avant, il ne voyait que les actions du dernier message, sans leurs résultats.
+      if (side.toolLog.length < 60) {
+        const turnLabel = task.turns.length > 1 ? `[message ${step.turn + 1}] ` : ''
+        side.toolLog.push(`${turnLabel}Outil appelé : ${step.name}(${JSON.stringify(step.args)})`.slice(0, 600))
+        side.toolLog.push(`${turnLabel}Résultat de l'outil : ${step.result}`.slice(0, 600))
+      }
       side.actions = [...side.actions, action]
       side.activity = { kind: 'action', action }
     }
@@ -1992,7 +2010,7 @@ const DUEL_VISION_SYSTEM_PROMPT =
  * Étape 475 : un côté du Duel Vision — le modèle du duel lui-même (jamais remplacé par un plus petit comme le fait
  * describeImage), sans outils, la réponse affichée au fil de l'écriture.
  */
-async function runVision(side: SideState, model: string, image: string, think: ThinkValue, signal: AbortSignal): Promise<void> {
+async function runVision(side: SideState, model: string, image: string, _think: ThinkValue, signal: AbortSignal): Promise<void> {
   if (!image) throw new Error(t('duel.error.badRequest'))
   let streamed = ''
   const message = await chatWithOllama(
@@ -2003,7 +2021,9 @@ async function runVision(side: SideState, model: string, image: string, think: T
     ],
     undefined,
     model,
-    think,
+    // Étape 531 : SANS réflexion, comme partout où Jaris lit une image (describeImage, vision.ts ; le pilotage,
+    // computerUse.ts). Avec, le vote comparait un modèle plus lent et autre que celui que Léo aura vraiment.
+    false,
     signal,
     undefined,
     (delta) => {

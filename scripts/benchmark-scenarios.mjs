@@ -21,7 +21,8 @@
 import { TOOLS, buildBenchmarkSystemPrompt, isRealReply, stripLeakedThinking, withDateTimeNote } from './benchmark-cases.mjs'
 
 /** À augmenter à chaque changement des demandes ou de leurs jugements : un ancien score est alors refait. */
-export const SCENARIO_TEST_VERSION = 3
+// Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
+export const SCENARIO_TEST_VERSION = 4
 
 /** Même valeur que MAX_TOOL_ROUNDS (assistant.ts), vérifiée par le test. */
 /** Copie de LOOKUP_TOOLS (assistant.ts), vérifiée par le test : après l'un d'eux, pas de relance vers search_web. */
@@ -720,6 +721,9 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
     let reminderOrNote = false
     let draftBeforeSearch
     let toolCalled = false
+    // Copie de l'étape 452 (assistant.ts, `lastActionResult`) : le résultat de la dernière action réussie de CE tour.
+    // Si le modèle se tait ensuite (réponse vide, même après le second essai sans réflexion), c'est lui qui répond.
+    let lastActionResult
     let reply = null
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS && reply === null; round++) {
@@ -729,7 +733,17 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
         // résultat d'outil dès qu'ils arrivent — une demande interrompue (erreur, Jaris fermé, PC éteint) ne perd
         // plus ce qui s'était passé avant.
         onEvent?.({ kind: 'requete', turn: turnIndex, round, messages: [...messages] })
-        const data = await chat(messages)
+        let data
+        try {
+          data = await chat(messages)
+        } catch (err) {
+          // Étape 531 : le duel passe par chatWithOllama, qui lève EmptyReplyError (après son second essai sans
+          // réflexion) ; Jaris répond alors avec le résultat de l'action — le duel finissait en erreur.
+          if (lastActionResult === undefined || err?.name !== 'EmptyReplyError') throw err
+          reply = finalizeReply(lastActionResult, userText)
+          turn.emptyAfterAction = true
+          break
+        }
         const rawMessage = data.message ?? { role: 'assistant', content: '' }
         // Étape 314 : comme chatWithOllama (ollama.ts), la réflexion fuitée avant « </ifm|think> » n'est jamais une
         // réponse. La trace garde la réponse brute d'Ollama.
@@ -741,6 +755,15 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           const content = str(message.content)
           if (data.done_reason === 'length' && !content) {
             throw new ScenarioStop(`réponse coupée : fenêtre de contexte pleine (${data.prompt_eval_count ?? '?'} tokens de demande)`)
+          }
+          // Étape 531 : le test (sans flux) reçoit la réponse vide au lieu d'une erreur — même règle que Jaris
+          // (EmptyReplyError, levée par chatWithOllama AVANT toute relance) : après une action réussie, son résultat
+          // répond ; sinon, la demande s'arrête sur « réponse vide », comme Jaris qui affiche l'erreur.
+          if (!content.trim()) {
+            if (lastActionResult === undefined) throw new ScenarioStop("réponse vide d'Ollama (même après le second essai sans réflexion)")
+            reply = finalizeReply(lastActionResult, userText)
+            turn.emptyAfterAction = true
+            break
           }
           if (wantsEmailSent && !computerUseCalled && !turn.nudges.includes('mail') && !reminderOrNote) {
             turn.nudges.push('mail')
@@ -783,7 +806,10 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           if (name === 'computer_use_task') computerUseCalled = true
           // Copie de LOOKUP_TOOLS (assistant.ts) : lire la mémoire ou l'état du PC compte comme vérifier.
           if (LOOKUP_TOOLS.has(name)) searchCalled = true
-          else actionCalled = true
+          else {
+            actionCalled = true
+            lastActionResult = result
+          }
           if (name === 'set_reminder' || name === 'remember') reminderOrNote = true
           // Copie de l'étape 242 (assistant.ts) : regarder l'écran ne clôt la demande que si c'est la question posée,
           // en tout premier outil ; en pleine tâche, le résultat repart au modèle.

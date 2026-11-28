@@ -34,9 +34,11 @@ import {
   TEST_CASES,
   TOOLS,
   buildCaseMessages,
-  isCorrectAnswer
+  isCorrectAnswer,
+  stripLeakedThinking
 } from './benchmark-cases.mjs'
 import {
+  PILOT_OPEN_APP_RULE,
   PILOT_SYSTEM_PROMPT,
   VISION_PILOT_CASES,
   VISION_REPEATS,
@@ -49,7 +51,7 @@ import {
   loadPilotTargets,
   loadVisionImage
 } from './benchmark-vision.mjs'
-import { CODE_CASES_TO_REDO, CODE_CTX_RETRY, CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, codeCutToRedo, codeNeedsLargerCtx, extractHtml } from './benchmark-code.mjs'
+import { CODE_CASES_TO_REDO, CODE_CTX_RETRY, CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp, codeCutToRedo, extractHtml } from './benchmark-code.mjs'
 import { findBrowser, openBrowser } from './benchmark-browser.mjs'
 import {
   REPEATED_SCENARIOS,
@@ -794,6 +796,11 @@ const VISION_SYSTEM_PROMPT =
  */
 const CODE_APP_RULES = [
   "Produis UN SEUL fichier HTML complet et autonome, commençant par <!DOCTYPE html> et finissant par </html>.",
+  "Le fichier tourne dans un NAVIGATEUR WEB (HTML/CSS/JavaScript uniquement), jamais dans un autre langage : " +
+    "même pour un jeu ou un programme dont l'implémentation la plus connue dans les tutoriels est ailleurs " +
+    "(ex: un Snake, un Tetris ou un Pong en Python/tkinter/pygame), écris-le TOUJOURS en HTML/CSS/JavaScript " +
+    "(un <canvas> pour un jeu en 2D), jamais dans ce langage d'origine, même s'il te semble plus naturel " +
+    "pour ce cas précis.",
   "Fais EXACTEMENT ce qui est demandé, rien de plus : n'invente aucune fonctionnalité, aucun titre, aucun " +
     "texte d'ambiance ni aucun élément d'interface qui n'a pas été demandé. Une demande simple (un bouton) " +
     "doit donner une page simple. Soigner le design ne veut pas dire ajouter du contenu en plus. Quand " +
@@ -821,7 +828,13 @@ const CODE_APP_RULES = [
   "Gère les cas limites visibles par l'utilisateur : liste vide, champ non rempli, saisie invalide, action " +
     "impossible. L'interface ne doit jamais rester silencieuse ou cassée après une action.",
   "Si l'application a besoin de garder des données entre deux ouvertures, utilise localStorage, en " +
-    "protégeant chaque lecture/écriture par un try/catch."
+    "protégeant chaque lecture/écriture par un try/catch.",
+  "N'utilise JAMAIS `overflow: hidden` combiné à une hauteur fixe (`height: 100vh`, `height: 100%`) sur " +
+    "<html> ou <body> : l'aperçu dans lequel cette page s'affiche est PLUS PETIT qu'une fenêtre de " +
+    "navigateur classique, donc tout contenu qui dépasse cette hauteur (souvent un bouton en bas de page) " +
+    "devient invisible ET impossible à cliquer, sans aucun moyen de faire défiler pour l'atteindre. Laisse " +
+    "toujours la page défiler normalement (`overflow-y: auto`, ou pas de règle d'overflow du tout) si son " +
+    "contenu peut dépasser la hauteur disponible."
 ]
 
 const CODE_GENERATE_SYSTEM_PROMPT =
@@ -1415,57 +1428,141 @@ async function postChat(body) {
   }
 }
 
-async function chatOnce(model, testCase, withThink) {
-  const start = performance.now()
-  const body = {
-    model,
-    // Étape 230 : consignes (avec notes en mémoire si la question en donne), question, puis ce que Jaris a déjà
-    // fait dans ce tour (ex. search_web et son résultat).
-    messages: buildCaseMessages(testCase),
-    tools: TOOLS,
-    stream: false,
-    // Étape 163 : sans num_ctx, Ollama prenait 4096 et coupait les vraies consignes de Jaris (~4 600 tokens).
-    options: { num_ctx: CONVERSATION_NUM_CTX }
-  }
-  if (withThink) body.think = 'medium'
+/**
+ * Étape 531 (Léo : « regarde si les analyses font exactement comme Jaris ») : chaque appel du test passe par la MÊME
+ * logique que chatWithOllama (electron/services/ollama.ts), au lieu de réglages à part :
+ * - fenêtre automatique (requestChat) : la demande estimée + 8 192 pour la réflexion et la réponse, au palier du
+ *   dessus, gardée 5 min par modèle (stickyWindow), jamais plus que le modèle n'accepte ; fixée par l'appelant (code,
+ *   vision), elle est prise telle quelle ;
+ * - `num_predict` = la fenêtre (étape 411) : une réponse ne la dépasse jamais, comme dans Jaris ;
+ * - réponse VIDE (réflexion fuitée retirée) : fenêtre pleine → ContextFullError, nouvel essai au palier suivant si la
+ *   fenêtre est automatique ; sinon EmptyReplyError ;
+ * - toute erreur sauf fenêtre pleine, délai ou Ollama arrêté : un second essai SANS le champ `think`.
+ * Copies des constantes vérifiées par scripts/test-benchmark-cases.mjs.
+ */
+const AUTO_CONTEXT_STEPS = [16384, 32768, 65536, 131072, 262144]
+const AUTO_REPLY_RESERVE = 8192
+const AUTO_CHARS_PER_TOKEN = 2.5
+const AUTO_STICKY_MS = 5 * 60_000
+const recentWindows = new Map()
 
-  const data = await postChat(body)
-  return { wallMs: performance.now() - start, data }
+export function estimateRequestTokens(payload) {
+  const text = JSON.stringify(payload ?? '', (key, value) => (key === 'images' ? undefined : value)) ?? ''
+  return Math.ceil(text.length / AUTO_CHARS_PER_TOKEN)
+}
+export function autoContextStep(needTokens) {
+  return AUTO_CONTEXT_STEPS.find((step) => step >= needTokens) ?? AUTO_CONTEXT_STEPS[AUTO_CONTEXT_STEPS.length - 1]
+}
+function stickyWindow(model) {
+  const recent = recentWindows.get(model)
+  return recent && Date.now() - recent.at < AUTO_STICKY_MS ? recent.numCtx : 0
+}
+async function fitToModelContext(model, numCtx) {
+  const native = await modelNativeContext(model)
+  return native !== null && native < numCtx ? native : numCtx
+}
+/** Comme autoContextFor (ollama.ts) : sans `payload`, la fenêtre avec laquelle le modèle tourne déjà (vision). */
+async function autoContextFor(model, payload) {
+  const need = payload === undefined ? 0 : estimateRequestTokens(payload) + AUTO_REPLY_RESERVE
+  return fitToModelContext(model, Math.max(autoContextStep(need), stickyWindow(model)))
 }
 
-async function chat(model, testCase) {
-  let wallMs, data
-  let think = 'medium'
+class ContextFullError extends Error {
+  constructor(data, numCtx) {
+    super(`réponse coupée : fenêtre de contexte pleine (${numCtx} tokens, réflexion comprise)`)
+    this.name = 'ContextFullError'
+    this.data = data
+  }
+}
+class EmptyReplyError extends Error {
+  constructor(data) {
+    super("réponse vide d'Ollama")
+    this.name = 'EmptyReplyError'
+    this.data = data
+  }
+}
+
+async function requestChatWith(body, numCtx) {
+  recentWindows.set(body.model, { numCtx, at: Date.now() })
+  const data = await postChat({ ...body, options: { ...(body.options ?? {}), num_ctx: numCtx, num_predict: body.options?.num_predict ?? numCtx } })
+  data.jaris_num_ctx = numCtx
+  const content = stripLeakedThinking(String(data.message?.content ?? ''))
+  if (!content && !data.message?.tool_calls?.length) {
+    if (data.done_reason === 'length') throw new ContextFullError(data, numCtx)
+    throw new EmptyReplyError(data)
+  }
+  return data
+}
+
+async function requestChat(body) {
+  const auto = body.options?.num_ctx === undefined
+  const numCtx = auto ? await autoContextFor(body.model, { messages: body.messages, tools: body.tools }) : await fitToModelContext(body.model, body.options.num_ctx)
   try {
-    ;({ wallMs, data } = await chatOnce(model, testCase, true))
+    return await requestChatWith(body, numCtx)
+  } catch (err) {
+    if (!auto || err?.name !== 'ContextFullError') throw err
+    const bigger = await fitToModelContext(body.model, autoContextStep(numCtx + 1))
+    if (bigger <= numCtx) throw err
+    return requestChatWith(body, bigger)
+  }
+}
+
+/** chatWithOllama : le niveau de réflexion demandé, puis un second essai sans `think` (toute erreur sauf exceptions). */
+async function chatLikeJaris(body) {
+  try {
+    const data = await requestChat(body)
+    data.jaris_think = body.think ?? false
+    return data
   } catch (firstErr) {
-    // Un délai dépassé n'est pas retenté sans réflexion : ce serait 20 minutes de plus pour le même test.
-    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError) throw firstErr
-    think = false
+    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError || firstErr?.name === 'ContextFullError') throw firstErr
+    const { think: _think, ...withoutThink } = body
     try {
-      ;({ wallMs, data } = await chatOnce(model, testCase, false))
+      const data = await requestChat(withoutThink)
+      data.jaris_think = false
+      data.jaris_first_error = String(firstErr.message).slice(0, 300)
+      return data
     } catch (secondErr) {
-      // Le premier message est le plus informatif, sauf s'il dit seulement que la réflexion est refusée (étape 232).
       throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
     }
   }
+}
+
+/** Les réponses vides ou coupées gardent leur réponse d'Ollama : l'appelant décide (comme les appelants de Jaris). */
+async function chatLikeJarisData(body) {
+  try {
+    return await chatLikeJaris(body)
+  } catch (err) {
+    if ((err?.name === 'EmptyReplyError' || err?.name === 'ContextFullError') && err.data) {
+      err.data.jaris_error = err.name
+      return err.data
+    }
+    throw err
+  }
+}
+
+async function chat(model, testCase) {
+  const start = performance.now()
+  // Étape 230 : consignes (avec notes en mémoire si la question en donne), question, puis ce que Jaris a déjà fait dans
+  // ce tour (ex. search_web et son résultat). Étape 531 : fenêtre, limite, essais — comme chatWithOllama.
+  const data = await chatLikeJarisData({ model, messages: buildCaseMessages(testCase), tools: TOOLS, stream: false, think: 'medium' })
+  const wallMs = performance.now() - start
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   const tokPerSec = evalDurationS > 0 ? evalCount / evalDurationS : null
   const toolCalls = data.message?.tool_calls ?? []
-  // Étape 163 : une réponse coupée faute de place (fenêtre pleine pendant la réflexion) n'est PAS « aucun outil » —
-  // sinon elle passerait pour juste sur les questions où il n'en faut pas. C'est un échec, noté dans les erreurs.
-  if (data.done_reason === 'length' && !toolCalls.length) {
-    throw new Error(`réponse coupée : fenêtre de contexte pleine (${data.prompt_eval_count ?? '?'} tokens de demande)`)
+  // Étape 163, corrigée à l'étape 531 : la fenêtre pleine pendant la réflexion, SANS rien écrire (même après le palier
+  // suivant), est un échec. Une réponse commencée puis coupée, elle, est montrée par Jaris : elle est jugée.
+  if (data.jaris_error === 'ContextFullError') {
+    throw new Error(`réponse coupée : fenêtre de contexte pleine (${data.jaris_num_ctx ?? '?'} tokens, réflexion comprise)`)
   }
   return {
     wallMs,
     tokPerSec,
     toolName: toolCalls[0]?.function?.name ?? null,
     toolArgs: toolCalls[0]?.function?.arguments ?? null,
-    content: data.message?.content?.trim() ?? '',
+    content: stripLeakedThinking(data.message?.content ?? '').trim(),
     data,
-    think
+    think: data.jaris_think ?? false
   }
 }
 
@@ -1478,33 +1575,15 @@ async function chat(model, testCase) {
 const THINK_REFUSED = /does not support thinking|thinking is not supported/i
 
 async function chatScenario(model, messages, seed, thinkModes, { tools = true } = {}) {
-  // Étape 402 : la dernière réponse, après 20 allers-retours, part sans outil.
-  const body = { model, messages, tools: tools ? TOOLS : undefined, stream: false, options: { num_ctx: CONVERSATION_NUM_CTX, seed } }
+  // Étape 402 : la dernière réponse, après 20 allers-retours, part sans outil. Étape 531 : fenêtre automatique (elle
+  // grandit avec la conversation, comme dans Jaris), limite, réponse vide et second essai — comme chatWithOllama.
+  const body = { model, messages, tools: tools ? TOOLS : undefined, stream: false, options: { seed } }
   // Un modèle qui a déjà refusé la réflexion n'est plus interrogé avec : une requête de moins par appel.
   if (!thinkModes.has(THINK_OFF)) body.think = 'medium'
-  try {
-    const data = await postChat(body)
-    thinkModes.add(body.think ? 'medium' : THINK_OFF)
-    // Ce qui a VRAIMENT été envoyé pour cet appel, noté dans les traces (relecture ChatGPT : « medium » écrit dans
-    // un fichier ne prouve pas ce que le modèle a reçu).
-    data.jaris_think = body.think ?? false
-    return data
-  } catch (firstErr) {
-    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError || !body.think) throw firstErr
-    // Comme chatWithOllama (ollama.ts) : une seconde tentative sans réflexion, quelle que soit l'erreur.
-    delete body.think
-    try {
-      const data = await postChat(body)
-      thinkModes.add(THINK_REFUSED.test(firstErr.message) ? THINK_OFF : 'sans réflexion après une erreur')
-      data.jaris_think = false
-      data.jaris_first_error = firstErr.message.slice(0, 300)
-      return data
-    } catch (secondErr) {
-      // Vu le 04/10/2026 (ministral-3:3b) : la réflexion refusée, puis un appel d'outil mal formé refusé par Ollama
-      // (500). La vraie raison est la seconde : c'est elle qui doit figurer dans le fichier.
-      throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
-    }
-  }
+  const data = await chatLikeJarisData(body)
+  const refused = data.jaris_first_error && THINK_REFUSED.test(data.jaris_first_error)
+  thinkModes.add(data.jaris_think ? 'medium' : refused || !body.think ? THINK_OFF : 'sans réflexion après une erreur')
+  return data
 }
 const THINK_OFF = 'désactivée (refusée par le modèle)'
 
@@ -1675,14 +1754,16 @@ async function chatVision(model, prompt, imageBase64) {
     { role: 'system', content: VISION_SYSTEM_PROMPT },
     { role: 'user', content: prompt, images: [imageBase64] }
   ]
-  const data = await postChat({ model, messages, stream: false, think: false, options: { num_ctx: CONVERSATION_NUM_CTX } })
+  // Étape 531 : comme describeImage — la fenêtre avec laquelle le modèle tourne déjà (sharedNumCtx), `think: false`,
+  // la limite, le second essai sans `think` d'une réponse vide, et la réflexion fuitée RETIRÉE avant d'être jugée.
+  const data = await chatLikeJarisData({ model, messages, stream: false, think: false, options: { num_ctx: await autoContextFor(model) } })
   const wallMs = performance.now() - start
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   return {
     wallMs,
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
-    content: data.message?.content?.trim() ?? '',
+    content: stripLeakedThinking(data.message?.content ?? '').trim(),
     data,
     messages
   }
@@ -1695,10 +1776,13 @@ async function chatVision(model, prompt, imageBase64) {
 async function chatPilot(model, testCase, imageBase64) {
   const start = performance.now()
   const messages = [
-    { role: 'system', content: PILOT_SYSTEM_PROMPT },
+    // Étape 531 : avec la règle « open_app » que Jaris ajoute toujours (computerUse.ts).
+    { role: 'system', content: [PILOT_SYSTEM_PROMPT, PILOT_OPEN_APP_RULE].join('\n\n') },
     { role: 'user', content: buildPilotPrompt(testCase.goal, [], testCase.elements ?? []), images: [imageBase64] }
   ]
-  const data = await postChat({ model, messages, stream: false, think: false, options: { num_ctx: CONVERSATION_NUM_CTX } })
+  // Étape 531 : la fenêtre de sharedNumCtx (computerUse.ts) ; ni limite ni réflexion fuitée retirée — Jaris ne le fait
+  // pas non plus sur ce chemin (streamOllamaChat).
+  const data = await postChat({ model, messages, stream: false, think: false, options: { num_ctx: await autoContextFor(model) } })
   return { wallMs: performance.now() - start, content: data.message?.content?.trim() ?? '', data, messages }
 }
 
@@ -1708,9 +1792,27 @@ async function chatPilot(model, testCase, imageBase64) {
  * séparé), `think: 'high'`, num_ctx élargi à 16384 (un fichier HTML complet dépasse largement 4096 tokens).
  * Même repli "sans think" que chat()/chatOnce() ci-dessus si le premier essai échoue.
  */
-/** Fenêtre du mode Code pour une application nouvelle (CODE_NUM_CTX_MIN de codeGenerator.ts) et son plafond. */
+/**
+ * Fenêtre du mode Code (codeGenerator.ts, copies vérifiées par scripts/test-benchmark-code.mjs) : computeCodeNumCtx —
+ * la demande + la page attendue (12 000 caractères pour une application nouvelle, +30 %) + 8 192 pour la réflexion,
+ * arrondie à 4 096, entre 16 384 et 65 536 (et jamais plus que le modèle n'accepte).
+ */
 const CODE_NUM_CTX = 16384
 const CODE_NUM_CTX_MAX = 65536
+const CODE_CHARS_PER_TOKEN = 2.5
+const CODE_THINKING_RESERVE_TOKENS = 8192
+const CODE_NUM_CTX_GRANULARITY = 4096
+const NEW_APP_EXPECTED_CHARS = 12000
+export function computeCodeNumCtx(messages, expectedOutputChars, modelMax = null) {
+  const promptChars = messages.reduce((total, message) => total + message.content.length, 0)
+  const needed =
+    Math.ceil(promptChars / CODE_CHARS_PER_TOKEN) +
+    Math.ceil((expectedOutputChars * 1.3) / CODE_CHARS_PER_TOKEN) +
+    CODE_THINKING_RESERVE_TOKENS
+  const rounded = Math.ceil(needed / CODE_NUM_CTX_GRANULARITY) * CODE_NUM_CTX_GRANULARITY
+  const ceiling = modelMax && modelMax > 0 ? Math.min(CODE_NUM_CTX_MAX, modelMax) : CODE_NUM_CTX_MAX
+  return Math.max(CODE_NUM_CTX, Math.min(rounded, ceiling))
+}
 const nativeContextCache = new Map()
 /** Fenêtre maximale du modèle (comme modelMaxContext de Jaris) ; null si Ollama ne la donne pas. */
 async function modelNativeContext(model) {
@@ -1730,63 +1832,73 @@ async function modelNativeContext(model) {
   return value
 }
 
-async function chatCodeOnce(model, prompt, withThink, numCtx = CODE_NUM_CTX) {
-  const start = performance.now()
-  const body = {
-    model,
-    messages: [
-      { role: 'system', content: CODE_GENERATE_SYSTEM_PROMPT },
-      { role: 'user', content: `Application à créer : ${prompt}` }
-    ],
-    stream: false,
-    options: { num_ctx: numCtx }
-  }
-  if (withThink) body.think = 'high'
-
-  const data = await postChat(body)
-  return { wallMs: performance.now() - start, data }
+/**
+ * Une étape de génération, comme runModelStep (codeGenerator.ts) : sa fenêtre calculée, réflexion « high », la limite,
+ * le second essai sans `think` d'une réponse vide (chatWithOllama) ; la réflexion qui remplit TOUTE la fenêtre sans
+ * rien écrire : UN nouvel essai, fenêtre doublée (étapes 528-530). Une page commencée puis coupée est gardée.
+ */
+async function codeStep(model, messages, think, firstCuts) {
+  const native = await modelNativeContext(model)
+  const numCtx = computeCodeNumCtx(messages, NEW_APP_EXPECTED_CHARS, native)
+  const body = { model, messages, stream: false, ...(think ? { think } : {}), options: { num_ctx: numCtx } }
+  const data = await chatLikeJarisData(body)
+  if (data.jaris_error !== 'ContextFullError') return data
+  const larger = Math.min(numCtx * 2, native ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
+  if (larger <= numCtx) return data
+  firstCuts.push({ numCtx, eval_count: data.eval_count ?? null, prompt_eval_count: data.prompt_eval_count ?? null })
+  return chatLikeJarisData({ ...body, options: { num_ctx: larger } })
 }
 
 async function chatCode(model, prompt) {
-  let wallMs, data
-  let think = 'high'
-  try {
-    ;({ wallMs, data } = await chatCodeOnce(model, prompt, true))
-  } catch (firstErr) {
-    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError) throw firstErr
-    think = false
-    try {
-      ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
-    } catch (secondErr) {
-      throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
-    }
+  const start = performance.now()
+  const firstCuts = []
+  const messages = [
+    { role: 'system', content: CODE_GENERATE_SYSTEM_PROMPT },
+    { role: 'user', content: `Application à créer : ${prompt}` }
+  ]
+  let data = await codeStep(model, messages, 'high', firstCuts)
+  let content = stripLeakedThinking(data.message?.content ?? '').trim()
+  let wrongLanguageRetry = false
+  // Étape 531 : comme generateApp (codeGenerator.ts) — une réponse qui n'est PAS un fichier HTML (Python, texte…) a
+  // UNE relance avec la consigne corrective de Jaris, au mot près. Ce n'est pas la relecture/réparation (laissées de
+  // côté exprès) : c'est la première écriture elle-même.
+  // Une réponse vide ou une fenêtre trop petite, elles, arrêtent Jaris (EmptyReplyError, contextTooSmallError).
+  if (!data.jaris_error && !extractHtml(content)) {
+    const wrongLanguage = content.match(/```(\w+)/)?.[1]?.toLowerCase()
+    wrongLanguageRetry = true
+    const retryMessages = [
+      ...messages,
+      { role: 'assistant', content },
+      {
+        role: 'user',
+        content:
+          "Ta réponse n'est PAS un fichier HTML" +
+          (wrongLanguage && wrongLanguage !== 'html' ? ` (tu as répondu en ${wrongLanguage})` : '') +
+          ". Cette application doit tourner dans un NAVIGATEUR WEB : réponds UNIQUEMENT avec un fichier " +
+          "HTML complet (HTML + CSS + JavaScript, tout dans le même fichier), dans un bloc ```html, en " +
+          "respectant exactement les mêmes règles que précédemment — jamais dans un autre langage, même " +
+          "si ce langage te semblait plus naturel pour cette demande précise."
+      }
+    ]
+    data = await codeStep(model, retryMessages, 'high', firstCuts)
+    content = stripLeakedThinking(data.message?.content ?? '').trim()
   }
-  // Étapes 528 et 530 : comme Jaris (ContextFullError puis runModelStep, codeGenerator.ts) — la réflexion a rempli la
-  // fenêtre SANS rien écrire : UN nouvel essai, fenêtre doublée (dans la limite du modèle). Une page commencée puis
-  // coupée est gardée telle quelle, comme dans Jaris.
-  let numCtx = CODE_NUM_CTX
-  let firstCut = null
-  if (codeNeedsLargerCtx(data)) {
-    const native = await modelNativeContext(model)
-    const larger = Math.min(numCtx * 2, native ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
-    if (larger > numCtx) {
-      firstCut = { eval_count: data.eval_count ?? null, prompt_eval_count: data.prompt_eval_count ?? null, ms: Math.round(wallMs) }
-      const again = await chatCodeOnce(model, prompt, think === 'high', larger)
-      wallMs += again.wallMs
-      data = again.data
-      numCtx = larger
-    }
-  }
+  const wallMs = performance.now() - start
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   return {
     wallMs,
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
-    content: data.message?.content?.trim() ?? '',
+    content,
     data,
-    think,
+    think: data.jaris_think ?? false,
     // Écrit avec chaque ligne de code (voir CODE_CTX_RETRY, benchmark-code.mjs).
-    ctx: { ctxRetry: CODE_CTX_RETRY, numCtx, ...(firstCut ? { firstCut } : {}) }
+    ctx: {
+      ctxRetry: CODE_CTX_RETRY,
+      numCtx: data.jaris_num_ctx ?? null,
+      ...(firstCuts.length ? { firstCut: firstCuts[0], firstCuts } : {}),
+      ...(wrongLanguageRetry ? { wrongLanguageRetry: true } : {})
+    }
   }
 }
 

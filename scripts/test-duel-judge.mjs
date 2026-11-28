@@ -267,3 +267,13 @@ test('étape 480 : avis en Code — le code complet des deux applications (coup�
   await judge.adviseCodeDuel('k', { prompt: 'x', followUps: [], a: { html: '<html></html>', error: null }, b: { html: null, error: 'Modèle arrêté' }, model: 'claude-haiku-5-5', effort: 'low' })
   assert.match(empty[0].body.messages[0].content, /=== Application B ===\nError: Modèle arrêté\n\(no application\)/)
 })
+
+// Étape 531 : en Agentique, le PC est SIMULÉ et la tâche a plusieurs messages — Claude est prévenu ; ailleurs, jamais.
+test('étape 531 : Agentique — la consigne de Claude dit que le PC est simulé et que chaque message a ses outils', async () => {
+  const sent = fake(message(JSON.stringify({ winner: 'a', reason: 'A a répondu au mail.' })))
+  await judge.judgeDuel('k', { prompt: 'Cherche le mail de Julie', a: side('Fait.'), b: side('Fait.'), tools: [], simulated: true })
+  assert.match(sent[0].body.system.map((b) => b.text).join('\n'), /SIMULATED test PC[\s\S]*\[message N\]/)
+  const normal = fake(message(JSON.stringify({ winner: 'tie', reason: 'Pareil.' })))
+  await judge.judgeDuel('k', { prompt: 'Ouvre le bloc-notes', a: side('Fait.'), b: side('Fait.'), tools: [] })
+  assert.doesNotMatch(normal[0].body.system.map((b) => b.text).join('\n'), /SIMULATED/)
+})

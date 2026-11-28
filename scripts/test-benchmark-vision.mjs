@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import {
+  PILOT_OPEN_APP_RULE,
   PILOT_SYSTEM_PROMPT,
   VISION_PILOT_CASES,
   VISION_TEST_CASES,
@@ -173,6 +174,8 @@ test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, m
   const real = loadTs('electron/services/computerUse.ts')
   const ui = loadTs('electron/services/uiAutomation.ts')
   assert.equal(PILOT_SYSTEM_PROMPT, real.SYSTEM_PROMPT)
+  // Étape 531 : la règle « open_app », ajoutée par Jaris à chaque étape, aussi.
+  assert.equal(PILOT_OPEN_APP_RULE, real.OPEN_APP_RULE)
   const elements = [{ name: 'Annuler', type: 'Button', x: 1, y: 1 }, { name: 'Ne pas enregistrer', type: 'Button', x: 2, y: 2 }]
   for (const testCase of VISION_PILOT_CASES) {
     assert.equal(buildPilotPrompt(testCase.goal, [], testCase.elements ?? []), real.buildStepPrompt(testCase.goal, [], testCase.elements ?? []))

@@ -58,3 +58,14 @@ test('l’application ne lit plus aucun fichier de résultats local', () => {
   assert.doesNotMatch(hardwareScan, /parseLocalBenchmark/)
   assert.match(hardwareScan, /verified-tool-scores\.md/)
 })
+
+// Étape 531 (Léo : « tous les 54 modèles ») : le test fait désormais exactement comme Jaris — chaque modèle noté est
+// listé « à remesurer », pour que le bouton du test le propose malgré ses anciens scores.
+test('étape 531 : tous les modèles notés sont « à remesurer » avec le test corrigé', () => {
+  const text = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+  const scored = new Set([...text.matchAll(/^\| (\S+) \| \d+\/\d+ \|/gm)].map((m) => m[1]))
+  const section = text.slice(text.indexOf('## À remesurer'))
+  const listed = new Set([...section.matchAll(/^\| (\S+) \| ancien test/gm)].map((m) => m[1]))
+  assert.equal(scored.size, 54)
+  assert.deepEqual([...scored].filter((m) => !listed.has(m)), [], 'modèle noté oublié dans la liste')
+})

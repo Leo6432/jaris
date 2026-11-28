@@ -899,7 +899,9 @@ async function conversation(
   // VRAM effectivement libre) permet encore de lancer le modèle normalement prévu pour ce palier — sans
   // jamais changer les paliers eux-mêmes, seulement ce qui est effectivement invoqué pour cette question.
   const [overloadWarning, installedModels] = await Promise.all([
-    checkOverloadWarning(),
+    // Étape 531 : jamais en duel (modelOnly) — l'alerte, avec son délai de 2 min, tombait sur UN seul côté : une phrase
+    // de Jaris sur le PC (le PC local, même pour une machine louée), lue comme si le modèle l'avait écrite.
+    restrictions?.modelOnly ? Promise.resolve(null) : checkOverloadWarning(),
     // Si Ollama ne répond pas ici, l'erreur claire viendra plus bas au vrai appel de chatWithOllama :
     // liste vide -> pas de repli possible -> on garde le modèle normalement configuré pour le palier.
     listInstalledModels().catch(() => [] as string[])

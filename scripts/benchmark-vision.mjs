@@ -21,7 +21,8 @@ import { fileURLToPath } from 'url'
 const IMAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), 'vision-tests')
 
 /** Augmenté à chaque changement des images ou des jugements : un score d'une autre version est refait. */
-export const VISION_TEST_VERSION = 4
+// Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
+export const VISION_TEST_VERSION = 5
 
 /** Chaque image posée 2 fois : de nouvelles images valent mieux que la même répétée. */
 export const VISION_REPEATS = 2
@@ -125,6 +126,15 @@ export function loadVisionImage(testCase) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Visée : une étape de computer_use_task (computerUse.ts) — copies vérifiées par scripts/test-benchmark-vision.mjs
+
+/**
+ * Étape 531 : ajoutée par Jaris à CHAQUE étape de pilotage (computerUse.ts, messages système : SYSTEM_PROMPT puis
+ * OPEN_APP_RULE, joints par une ligne vide) — le test l'oubliait. Copie vérifiée par scripts/test-benchmark-vision.mjs.
+ */
+export const PILOT_OPEN_APP_RULE =
+  'Pour ouvrir une application installée (Calculatrice, Bloc-notes, un navigateur, Discord…), réponds ' +
+  '{"action":"open_app","app":"<nom de l\'application>"} : Windows l\'ouvre directement, sans passer par le menu ' +
+  'Démarrer ni la barre de recherche.'
 
 export const PILOT_SYSTEM_PROMPT =
   'Tu es un agent qui contrôle un ordinateur Windows à la souris et au clavier, exactement comme le ferait ' +

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { SCORES_WITHOUT_REMEASURE } from './verified-scores-for-tests.mjs'
 import { withCodeForAll } from './scores-with-code.mjs'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
@@ -18,7 +19,8 @@ const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
-const REAL_SCORES = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+// Étape 531 : sans les 54 modèles « à remesurer » (voir verified-scores-for-tests.mjs).
+const REAL_SCORES = SCORES_WITHOUT_REMEASURE
 
 const K2 = {
   tiny: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',

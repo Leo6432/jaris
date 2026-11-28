@@ -478,8 +478,14 @@ function loadRealConverse() {
         const step = current.script[current.i++]
         if (!step) throw new Error(`réponse ${current.i} non prévue par le test`)
         const data = toData(step)
-        // Comme requestChat (ollama.ts) : fenêtre pleine sans rien produire = erreur.
-        if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) throw new Error('fenêtre de contexte pleine')
+        // Comme requestChat (ollama.ts) : fenêtre pleine sans rien produire = erreur. Étape 531 : une réponse vide aussi
+        // (EmptyReplyError, après le second essai sans réflexion — ici, la même réponse du script) ; le faux renvoyait
+        // le texte vide, et la vérification croisée validait un comportement que Jaris n'a pas.
+        const visible = typeof data.message?.content === 'string' ? stripLeakedThinking(data.message.content) : ''
+        if (!visible && !data.message?.tool_calls?.length) {
+          if (data.done_reason === 'length') throw new Error('fenêtre de contexte pleine')
+          throw Object.assign(new Error("Réponse vide d'Ollama"), { name: 'EmptyReplyError' })
+        }
         return typeof data.message?.content === 'string' ? { ...data.message, content: stripLeakedThinking(data.message.content) } : data.message
       },
       getModelThinking: async () => null,
@@ -546,7 +552,7 @@ const EXTRA_TRACES = [
   ['plafond d’allers-retours atteint, puis dernière réponse sans outil', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [...Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }])), text('Je n’ai trouvé aucune note.')]],
   ['réflexion du modèle gardée entre deux appels (canal voix)', SCENARIOS.find((s) => s.id === 'bitcoin'), [{ ...calls(['search_web', { query: 'bitcoin euro' }]), thinking: 'Il faut chercher le cours.' }, text('61 234,50 €.', 'Je lis le résultat.')]],
   ['mise en forme et émojis nettoyés comme à la voix', SCENARIOS.find((s) => s.id === 'blague'), [text('**Blague** 😄 :\n- Pourquoi les poissons sont-ils mal payés ? Parce qu’ils travaillent au noir&#33;')]],
-  ['réponse vide remplacée par la phrase de secours', SCENARIOS.find((s) => s.id === 'merci'), [text('')]],
+  ['réponse vide : Jaris s’arrête sur l’erreur, le test aussi', SCENARIOS.find((s) => s.id === 'merci'), [text('')]],
   ['fenêtre pleine', SCENARIOS.find((s) => s.id === 'merci'), [{ raw: { message: { role: 'assistant', content: '' }, done_reason: 'length', prompt_eval_count: 8100 } }]],
   // Le nom d'un outil dans le texte déclenche la relance « action » de Jaris : le modèle récidive ici.
   ['appel écrit en texte (pas un vrai appel)', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [text('{"name": "open_app", "arguments": {}}'), text('{"name": "open_app", "arguments": {}}')]],
@@ -571,7 +577,9 @@ const EXTRA_TRACES = [
     ]
   ],
   ['arguments en texte JSON (certains modèles)', SCENARIOS.find((s) => s.id === 'dictee-rappel'), [{ raw: { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: '{"message":"Sortir le gâteau","delay_minutes":20}' } }] }, done_reason: 'stop' } }, text('Rappel programmé.')]],
-  ['plafond atteint, puis dernière réponse vide : abandon', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [...Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }])), text('')]]
+  ['plafond atteint, puis dernière réponse vide : abandon', SCENARIOS.find((s) => s.id === 'ne-pas-lancer'), [...Array.from({ length: MAX_TOOL_ROUNDS }, () => calls(['recall_memory', { title: 'x' }])), text('')]],
+  // Étape 531 : réponse vide APRÈS une action réussie — le résultat de l'action répond (assistant.ts, étape 452).
+  ['réponse vide après une action : son résultat répond', SCENARIOS.find((s) => s.id === 'spotify-volume'), [calls(['open_app', { app_name: 'Spotify' }]), text('')]]
 ]
 
 test('le VRAI converse() et la copie du test envoient les mêmes requêtes et donnent les mêmes réponses — toutes les demandes, toutes les façons', async () => {
@@ -617,6 +625,10 @@ test('la boucle est bien exercée : relances, échecs, plafond et nettoyage ont 
   assert.match((await run(byId('ne-pas-lancer'), EXTRA_TRACES[10][2])).reason, /aucune réponse finale/)
   assert.equal((await run(byId('blague'), EXTRA_TRACES[3][2])).turns[0].reply, 'Blague : Pourquoi les poissons sont-ils mal payés ? Parce qu’ils travaillent au noir!')
   assert.match((await run(byId('merci'), EXTRA_TRACES[4][2])).reason, /réponse vide/)
+  // Étape 531 : vide après une action réussie → le résultat de l'action répond, comme Jaris.
+  const afterAction = await run(byId('spotify-volume'), EXTRA_TRACES.at(-1)[2])
+  assert.equal(afterAction.turns[0].emptyAfterAction, true)
+  assert.match(afterAction.turns[0].reply, /Spotify/)
   assert.match((await run(byId('merci'), EXTRA_TRACES[5][2])).reason, /fenêtre de contexte pleine/)
   assert.match((await run(byId('ne-pas-lancer'), EXTRA_TRACES[6][2])).reason, /appel d'outil écrit en texte/)
   assert.equal((await run(byId('dictee-rappel'), EXTRA_TRACES[9][2])).ok, true)
@@ -893,7 +905,19 @@ test('vrai script : demandes complètes notées, trace, configuration et graines
     // Graines : chaque passage d'une demande a la sienne.
     const seedsOf = (model) => new Set(fake.requests.filter((r) => r.model === model).map((r) => r.options.seed))
     assert.equal(seedsOf('ministral-3:3b').size, SCENARIO_TOTAL)
-    assert.ok(fake.requests.every((r) => r.options.num_ctx === CONVERSATION_NUM_CTX))
+    // Étape 531 : la fenêtre AUTOMATIQUE de Jaris (autoContextFor, ollama.ts) — la demande estimée + 8 192, au palier du
+    // dessus (16 384 au moins), gardée par modèle (elle ne redescend jamais d'une demande à la suivante) ; et la limite
+    // num_predict = la fenêtre, comme Jaris.
+    const steps = [16384, 32768, 65536, 131072, 262144]
+    const need = (r) => Math.ceil(JSON.stringify({ messages: r.messages, tools: r.tools }, (k, v) => (k === 'images' ? undefined : v)).length / 2.5) + 8192
+    const lastByModel = new Map()
+    for (const r of fake.requests) {
+      assert.ok(steps.includes(r.options.num_ctx), String(r.options.num_ctx))
+      assert.equal(r.options.num_predict, r.options.num_ctx)
+      assert.equal(r.options.num_ctx, Math.max(steps.find((x) => x >= need(r)) ?? 262144, lastByModel.get(r.model) ?? 0), 'exactement celle de Jaris')
+      lastByModel.set(r.model, r.options.num_ctx)
+    }
+    assert.ok(fake.requests.some((r) => r.options.num_ctx === CONVERSATION_NUM_CTX), 'les premières demandes restent à 16 384')
     // Données brutes : chaque passage, complet, relisible et rejugeable sans relancer le test.
     const rawLine = results.split('\n').find((l) => l.startsWith('- `ministral-3:3b` '))
     const raw = JSON.parse(rawLine.slice('- `ministral-3:3b` '.length))

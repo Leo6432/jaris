@@ -526,5 +526,64 @@ demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deu
 grand, surtout en code. Étape 497 : LFM3 1.7B, mesuré dans le conteneur de Claude, y a été ajouté, puis remesuré par
 Léo (étape 503) et retiré : liste vide.
 
+Étape 531 (Léo : « tous les 54 modèles ») : le test fait désormais exactement comme Jaris (fenêtre de contexte
+automatique, limite de longueur, réponse vide redemandée sans réflexion, règles du mode Code complètes, règle
+« open_app » du pilotage, réflexion fuitée retirée en lecture d'écran). Tous les modèles sont remesurés ; Jaris garde
+les anciens scores pour ses choix en attendant.
+
 | Modèle | Mesuré où |
 |---|---|
+| qwen3.5:2b | ancien test (avant l'étape 531) |
+| qwen3.5:4b | ancien test (avant l'étape 531) |
+| qwen3.5:9b | ancien test (avant l'étape 531) |
+| gemma4:e4b | ancien test (avant l'étape 531) |
+| gemma4:12b | ancien test (avant l'étape 531) |
+| granite4.1:8b | ancien test (avant l'étape 531) |
+| granite4.2:8b | ancien test (avant l'étape 531) |
+| granite4.2:3b | ancien test (avant l'étape 531) |
+| granite4.1:3b | ancien test (avant l'étape 531) |
+| ministral-3:3b | ancien test (avant l'étape 531) |
+| qwen3:1.7b | ancien test (avant l'étape 531) |
+| qwen3.5:0.8b | ancien test (avant l'étape 531) |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | ancien test (avant l'étape 531) |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| lfm3:1.7b | ancien test (avant l'étape 531) |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| phi4-mini | ancien test (avant l'étape 531) |
+| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| qwen3.5:35b | ancien test (avant l'étape 531) |
+| qwen3.6:35b | ancien test (avant l'étape 531) |
+| qwen3.5:27b | ancien test (avant l'étape 531) |
+| qwen3.8:27b | ancien test (avant l'étape 531) |
+| qwen3.6:27b | ancien test (avant l'étape 531) |
+| granite4.2:30b | ancien test (avant l'étape 531) |
+| gemma4:26b | ancien test (avant l'étape 531) |
+| gpt-oss:20b | ancien test (avant l'étape 531) |
+| mistral-small3.2:24b | ancien test (avant l'étape 531) |
+| glm-4.7-flash:q4_K_M | ancien test (avant l'étape 531) |
+| nemotron-3.5-lightning:30b | ancien test (avant l'étape 531) |
+| ministral-3:8b | ancien test (avant l'étape 531) |
+| ministral-3:14b | ancien test (avant l'étape 531) |
+| ornith-1.5:9b | ancien test (avant l'étape 531) |
+| ornith-1.5:35b | ancien test (avant l'étape 531) |
+| muse-glimmer:30b | ancien test (avant l'étape 531) |
+| gemma4:31b | ancien test (avant l'étape 531) |
+| nemotron-3.5-bolt:e4b | ancien test (avant l'étape 531) |
+| hf.co/XHToken/Spark-X2.6-4B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |
+| qwen3-vl:8b | ancien test (avant l'étape 531) |
+| qwen3-vl:4b | ancien test (avant l'étape 531) |
+| qwen2.5-coder:7b | ancien test (avant l'étape 531) |
+| qwen3-vl:2b | ancien test (avant l'étape 531) |
+| qwen2.5-coder:14b | ancien test (avant l'étape 531) |
+| qwen3.6:35b-a3b | ancien test (avant l'étape 531) |
+| north-mini-code-1.0 | ancien test (avant l'étape 531) |
+| qwen2.5-coder:32b | ancien test (avant l'étape 531) |
+| devstral-small-2:24b | ancien test (avant l'étape 531) |
+| qwen3-coder:30b | ancien test (avant l'étape 531) |
+| inkling-2-mini:26b-a5b-iq4_NL | ancien test (avant l'étape 531) |
+| hf.co/bartowski/Nanbeige_Nanbeige4.3-33B-GGUF:Q4_K_M | ancien test (avant l'étape 531) |

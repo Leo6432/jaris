@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { SCORES_WITHOUT_REMEASURE, withoutRemeasure } from './verified-scores-for-tests.mjs'
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -259,7 +260,12 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
  */
 const BROWSER = process.env.JARIS_BROWSER_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : findBrowser())
 
+// Étape 531 : le script lit par défaut le fichier sans les 54 modèles « à remesurer » (sinon chaque test les reteste).
+const SCORES_FOR_SCRIPT = join(mkdtempSync(join(tmpdir(), 'jaris-scores-')), 'verified-tool-scores.md')
+writeFileSync(SCORES_FOR_SCRIPT, SCORES_WITHOUT_REMEASURE)
+
 function runScript(env) {
+  env = { JARIS_VERIFIED_SCORES_PATH: SCORES_FOR_SCRIPT, ...env }
   return new Promise((resolve) => {
     const proc = spawn(process.execPath, [new URL('./benchmark-models.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], {
       // Attente d'Ollama raccourcie pour les tests (3 minutes en vrai).
@@ -784,8 +790,14 @@ test('reprise : une ligne sans AUCUNE réponse (0/17, latence « — ») est ref
 test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minutes sans réponse)', () => {
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
-  // Étape 232 : + les demandes complètes (chatScenario : avec réflexion, puis sans si le modèle la refuse).
-  assert.equal((script.match(/await postChat\(/g) ?? []).length, 6, 'conversation, vision (lecture et visée), code et demandes complètes passent tous par postChat')
+  // Étape 232 : + les demandes complètes. Étape 531 : un seul envoi (requestChatWith, la logique de chatWithOllama) pour
+  // les questions, les demandes, la lecture d'écran et le code ; la visée garde le sien (streamOllamaChat dans Jaris).
+  assert.equal((script.match(/await postChat\(/g) ?? []).length, 2, 'requestChatWith et chatPilot')
+  for (const caller of ['async function chat(model, testCase)', 'async function chatScenario(', 'async function chatVision(', 'async function codeStep(']) {
+    const body = script.slice(script.indexOf(caller), script.indexOf('\n}\n', script.indexOf(caller)))
+    assert.match(body, /chatLikeJarisData\(/, caller)
+    assert.doesNotMatch(body, /postChat\(/, caller)
+  }
 })
 
 test('reprise : une mesure de code INCOMPLÈTE (3/4, une génération perdue) est refaite, une complète (4/5) est gardée', { skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
@@ -1414,7 +1426,7 @@ test('rejeu : modèle supprimé, score recopié, « model not found » au 1er re
 test('« À remesurer » : un modèle de la section est retesté malgré ses scores', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const model = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
-  const real = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+  const real = withoutRemeasure(readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8'))
   assert.match(real, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m)
   const scores = real.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${model} | exemple |\n`)
   assert.notEqual(scores, real, 'section « À remesurer » introuvable dans le vrai fichier')
@@ -1513,7 +1525,9 @@ test('rejeu : en vision et en code, seuls les cas arrêtés par le délai sont r
       const { code, out } = await runScript(env(second.host))
       assert.equal(code, 0, out)
       assert.match(out, /5 test\(s\) arrêté\(s\) par le délai maximal/)
-      assert.equal(second.requests.length, 5, out)
+      // Étape 531 : la réponse VIDE du code est redemandée une fois sans réflexion, comme chatWithOllama : 4 + 2.
+      assert.equal(second.requests.length, 6, out)
+      assert.equal(second.requests.filter((r) => userPrompt(r).includes(codePrompt)).map((r) => r.think ?? false).join(','), 'high,false')
       assert.ok(second.requests.every((r) => frozen(r.model, userPrompt(r))), 'jamais l’horloge (fausse) ni les réponses vides')
       const replayed = readTraces().slice(traces1.length).filter((t) => t.type === 'vision' || t.type === 'code')
       assert.equal(replayed.length, 5)
@@ -1707,6 +1721,116 @@ test('étape 530 : une page commencée puis coupée n’a PAS de nouvel essai �
     assert.equal(row.ok, false)
     assert.match(row.reason, /réponse coupée/)
     assert.equal(row.numCtx, 16384)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Étape 531 (relecture « le test fait-il exactement comme Jaris ? ») : les copies de la logique d'appel de Jaris.
+test('étape 531 : fenêtre automatique, limite et règles du code — copies identiques à ollama.ts et codeGenerator.ts', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const ollama = readFileSync(new URL('../electron/services/ollama.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const code = readFileSync(new URL('../electron/services/codeGenerator.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const value = (source, name) => source.match(new RegExp(`const ${name}(?:: [^=]+)? = ([^\\n]+)`))?.[1]?.trim()
+  for (const name of ['AUTO_CONTEXT_STEPS', 'AUTO_REPLY_RESERVE', 'AUTO_CHARS_PER_TOKEN', 'AUTO_STICKY_MS']) {
+    assert.ok(value(script, name), name)
+    assert.equal(value(script, name), value(ollama, name), name)
+  }
+  for (const [mine, theirs] of [['CODE_NUM_CTX', 'CODE_NUM_CTX_MIN'], ['CODE_NUM_CTX_MAX', 'CODE_NUM_CTX_MAX'], ['CODE_CHARS_PER_TOKEN', 'CODE_CHARS_PER_TOKEN'], ['CODE_THINKING_RESERVE_TOKENS', 'CODE_THINKING_RESERVE_TOKENS'], ['CODE_NUM_CTX_GRANULARITY', 'CODE_NUM_CTX_GRANULARITY'], ['NEW_APP_EXPECTED_CHARS', 'NEW_APP_EXPECTED_CHARS']]) {
+    assert.ok(value(script, mine), mine)
+    assert.equal(value(script, mine), value(code, theirs), mine)
+  }
+  // Limite de longueur et estimation de la demande, comme requestChatWith / estimateRequestTokens.
+  assert.match(ollama, /num_predict: \(options as \{ num_predict\?: number \}\)\.num_predict \?\? numCtx/)
+  assert.match(script, /num_predict: body\.options\?\.num_predict \?\? numCtx/)
+  // Les 13 règles du mode Code, au mot près, et la relance « ce n'est pas un fichier HTML ».
+  const rules = (source, name) => {
+    const start = source.indexOf(`const ${name} = [`)
+    return eval(`(${source.slice(source.indexOf('[', start), source.indexOf('\n]\n', start) + 2)})`)
+  }
+  assert.equal(JSON.stringify(rules(script, 'CODE_APP_RULES')), JSON.stringify(rules(code, 'APP_RULES')))
+  const retryText = (source) => source.match(/"Ta réponse n'est PAS un fichier HTML"[\s\S]*?pour cette demande précise\."/)?.[0].replace(/\s+/g, ' ')
+  assert.ok(retryText(script))
+  assert.equal(retryText(script), retryText(code))
+})
+
+test('étape 531 : une réponse de code qui n’est PAS une page web a UNE relance avec la consigne corrective de Jaris', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  const testCase = CODE_TEST_CASES[0]
+  let calls = 0
+  const fake = await startFakeOllama({
+    installed: [model],
+    answer: (_m, prompt) => (prompt.includes(testCase.prompt) || prompt.startsWith('Ta réponse') ? { content: calls++ === 0 ? '```python\nprint(0)\n```' : `\`\`\`html\n${COUNTER_APP}\n\`\`\`` } : '')
+  })
+  try {
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ANALYSIS_SCOPE: 'code', JARIS_ONLY_MODELS: model, JARIS_RETEST_ALL: '1' })
+    assert.equal(code, 0, out)
+    const mine = fake.requests.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.includes(testCase.prompt)))
+    assert.equal(mine.length, 2)
+    assert.equal(mine[1].messages.at(-2).content, '```python\nprint(0)\n```', 'la première réponse est montrée au modèle')
+    assert.match(mine[1].messages.at(-1).content, /^Ta réponse n'est PAS un fichier HTML \(tu as répondu en python\)\. Cette application doit tourner dans un NAVIGATEUR WEB/)
+    assert.equal(mine[1].think, 'high')
+    assert.ok(mine.every((r) => r.options.num_predict === r.options.num_ctx), 'la limite de Jaris')
+    const row = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((t) => t.type === 'code' && t.id === testCase.id)
+    assert.equal(row.ok, true, row.reason)
+    assert.equal(row.wrongLanguageRetry, true)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('étape 531 : lecture d’écran — la réflexion fuitée est retirée avant d’être jugée, comme describeImage', { timeout: 240000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({
+    installed: ['qwen3-vl:2b'],
+    // La réflexion cite un MAUVAIS nombre ; la vraie réponse, après « </think> », est juste.
+    answer: (_m, prompt) => ({ content: prompt.startsWith("Combien d'œufs") ? 'Je compte… peut-être 4 ?</think>6' : 'je ne sais pas' })
+  })
+  try {
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ANALYSIS_SCOPE: 'vision', JARIS_RETEST_ALL: '1', JARIS_ONLY_MODELS: 'qwen3-vl:2b' })
+    assert.equal(code, 0, out)
+    const eggs = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'vision' && /Combien d'œufs/.test(t.prompt ?? ''))
+    assert.ok(eggs.length >= 1)
+    assert.ok(eggs.every((t) => t.ok), JSON.stringify(eggs.map((t) => t.reason)))
+    const reading = fake.requests.filter((r) => !r.messages[1].content.startsWith('Objectif : '))
+    assert.ok(reading.every((r) => r.think === false && r.options.num_predict === r.options.num_ctx), 'sans réflexion, avec la limite de Jaris')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('étape 531 : questions — vide et coupée : un essai au palier suivant puis échec ; commencée puis coupée : jugée, comme Jaris', { timeout: 240000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
+  const [emptyCase, partialCase] = [TEST_CASES[0].prompt, TEST_CASES[1].prompt]
+  const real = withoutRemeasure(readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8'))
+  writeFileSync(join(dir, 'scores.md'), real.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${model} | exemple |\n`))
+  const fake = await startFakeOllama({
+    installed: [model],
+    answer: (_m, prompt) => (prompt === emptyCase ? 'length' : prompt === partialCase ? { content: 'Je ne peux pas' } : null)
+  })
+  // Le faux Ollama dit « stop » : la réponse commencée est coupée par la fenêtre (« length »).
+  const original = fake.server.listeners('request')[0]
+  fake.server.removeAllListeners('request')
+  fake.server.on('request', (req, res) => {
+    const end = res.end.bind(res)
+    res.end = (chunk, ...rest) => end(typeof chunk === 'string' && chunk.includes('"content":"Je ne peux pas"') ? chunk.replace('"done_reason":"stop"', '"done_reason":"length"') : chunk, ...rest)
+    original(req, res)
+  })
+  try {
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ONLY_MODELS: model, JARIS_ANALYSIS_SCOPE: 'medium', JARIS_VERIFIED_SCORES_PATH: join(dir, 'scores.md') })
+    assert.equal(code, 0, out)
+    const asked = (text) => fake.requests.filter((r) => withoutDateTimeNote(r.messages.findLast((m) => m.role === 'user').content) === text)
+    // Vide et coupée : 16 384, puis le palier suivant (32 768), au premier passage ; ensuite le modèle garde 32 768 (5 min).
+    const first = asked(emptyCase).slice(0, 2).map((r) => r.options.num_ctx)
+    assert.equal(JSON.stringify(first), JSON.stringify([16384, 32768]), JSON.stringify(asked(emptyCase).map((r) => r.options.num_ctx)))
+    const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'question')
+    assert.ok(rows.filter((t) => t.index === 0).every((t) => /réponse coupée/.test(t.reason ?? '')), 'vide et coupée : échec')
+    assert.ok(rows.filter((t) => t.index === 1).every((t) => !/^erreur/.test(t.reason ?? '') && t.response?.content === 'Je ne peux pas'), 'commencée puis coupée : jugée comme une réponse')
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

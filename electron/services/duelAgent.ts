@@ -65,6 +65,11 @@ export function pickAgentTask(played: ReadonlySet<string>, random: () => number 
   return toTask(pool[Math.floor(random() * pool.length) % pool.length], random)
 }
 
+/** Étape 531 : les outils du PC simulé, tels qu'ils sont proposés aux modèles — pour l'avis de Claude. */
+export function agentToolsForJudge(): { name: string; description: string }[] {
+  return (SCENARIO_TOOLS as unknown as OllamaTool[]).map((tool) => ({ name: tool.function.name, description: tool.function.description ?? '' }))
+}
+
 export function agentTaskExists(id: string): boolean {
   return AGENT_SCENARIOS.some((s) => s.id === id)
 }

@@ -13321,3 +13321,39 @@ chaque point revérifié ici avant d'agir.
   il n'est plus à refaire. Restent Spark-X2.6-4B convertisseur et qwen3-vl:2b liste de tâches (rien écrit).
   Tests : test-benchmark-cases (page commencée puis coupée : un seul essai, mord), single-pool.
 - Autres écarts trouvés (test ≠ Jaris, duels ≠ Jaris) : présentés à Léo pour décision, voir l'étape suivante.
+
+## Étape 531 — Le test des modèles et les duels font exactement comme Jaris ; les 54 modèles à remesurer (0.80.0)
+
+Suite de l'étape 530. Liste revérifiée par une seconde relecture « pour prouver que c'est faux » (2 points étaient des
+choix de Léo — réflexion « moyenne » pour tous en duel, étape 365 — gardés ; « réponse coupée = faux » était faux pour
+les demandes). Léo : « je valide », puis « tous les 54 modèles ».
+**Duels**
+- Vision : sans réflexion (`think: false`), comme describeImage et le pilotage — le vote comparait un modèle qui
+  réfléchissait, jamais le cas dans Jaris.
+- Agentique : réponse vide après une action réussie → le résultat de l'action répond (assistant.ts, étape 452), au
+  lieu d'une erreur qui faisait perdre le duel (`runScenario`, benchmark-scenarios.mjs, partagé avec le test).
+- Discussion lue à voix haute : sans relais du texte, comme voicePipeline.ts — la réflexion reste entre deux outils.
+- Avis de Claude en Agentique : tous les outils de CHAQUE message avec leurs résultats (`side.toolLog`, « [message N] »),
+  les outils du PC simulé (avant : « aucun outil ») et la mention que ce PC est SIMULÉ (`simulated`, duelJudge.ts).
+- Alerte « PC surchargé » : jamais en duel (`modelOnly`) — elle tombait sur un seul côté.
+**Test des modèles** (une seule logique d'appel, copie de chatWithOllama : `chatLikeJaris`, benchmark-models.mjs)
+- Fenêtre AUTOMATIQUE (demande estimée + 8 192, palier du dessus, gardée 5 min par modèle, plafonnée au modèle) au lieu
+  de 16 384 fixe — elle grandit avec les demandes à plusieurs tours, comme dans Jaris ; `num_predict` = la fenêtre
+  (étape 411) ; fenêtre pleine sans rien écrire → un essai au palier suivant ; réponse vide → second essai sans
+  `think`. Constantes vérifiées identiques à ollama.ts par test.
+- Questions : une réponse commencée puis coupée est jugée (Jaris la montre) ; seule la vide coupée est un échec.
+- Demandes : vide après une action → son résultat ; vide sans action → échec « réponse vide » (Jaris affiche l'erreur).
+  Le faux chatWithOllama de la vérification croisée lève désormais EmptyReplyError comme le vrai.
+- Lecture d'écran : réflexion fuitée retirée avant d'être jugée ; fenêtre de sharedNumCtx. Visée : règle OPEN_APP_RULE
+  ajoutée (Jaris l'envoie toujours ; copie vérifiée). Les captures numérotées de Windows restent à faire (limite connue).
+- Code : les 13 règles de Jaris (2 manquaient : « NAVIGATEUR WEB, jamais Python », « pas d'overflow: hidden avec une
+  hauteur fixe »), copiées et vérifiées au mot près ; fenêtre computeCodeNumCtx ; une réponse qui n'est pas une page
+  web a la relance corrective de generateApp (même texte) — pas la relecture/réparation, toujours laissées de côté.
+- Versions des tests : questions 7, demandes 4, vision 5, code 4 ; les 54 modèles notés listés « à remesurer » (le
+  bouton les propose, Jaris garde leurs anciens scores en attendant). Durée estimée d'après les fichiers de Léo :
+  ~31 h mesurées (+ les questions de 30 modèles sans temps connu), moins sur la machine louée (plusieurs à la fois).
+- Tests (tous mordent) : test-benchmark-cases (copies, relance « pas du HTML », lecture sans réflexion fuitée, questions
+  coupées), test-benchmark-scenarios (fenêtre exacte de Jaris, vide après action), test-benchmark-vision (OPEN_APP_RULE),
+  test-duel-session (vision sans réflexion, voix sans relais, avis de Claude en Agentique), test-duel-judge, nouveau
+  test-duel-overload, test-verified-scores (les 54 à remesurer). Les tests qui portent sur autre chose lisent le fichier
+  de scores sans cette liste (scripts/verified-scores-for-tests.mjs).

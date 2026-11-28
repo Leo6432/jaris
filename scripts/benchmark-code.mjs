@@ -20,7 +20,8 @@ export const PREVIEW_CSP_FOR_TEST =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
 
 /** Augmenté à chaque changement des demandes ou des vérifications : un score d'une autre version est refait. */
-export const CODE_TEST_VERSION = 3
+// Étape 531 : le test fait désormais exactement comme Jaris (fenêtre automatique, limite, réponses vides) : tout est remesuré.
+export const CODE_TEST_VERSION = 4
 
 /** Une vérification ratée, avec la raison lisible écrite dans le fichier de résultats. */
 class Fail extends Error {}

@@ -924,10 +924,10 @@ export const SCENARIO_TEST_TOTAL = 48
 export const CODE_TEST_TOTAL = 5
 
 /** Versions des tests en cours (copies de CONVERSATION/SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
-export const CONVERSATION_TEST_VERSION = 6
-export const SCENARIO_TEST_VERSION = 3
-export const VISION_TEST_VERSION = 4
-export const CODE_TEST_VERSION = 3
+export const CONVERSATION_TEST_VERSION = 7
+export const SCENARIO_TEST_VERSION = 4
+export const VISION_TEST_VERSION = 5
+export const CODE_TEST_VERSION = 4
 
 /**
  * Étape 242 : la demande porte-t-elle sur l'écran lui-même (« qu'est-ce qu'il y a sur mon écran ? », « tu vois

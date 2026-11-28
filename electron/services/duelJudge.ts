@@ -272,6 +272,8 @@ export interface JudgeInput {
   followUps?: readonly string[]
   /** Étape 480 : Duel Vocal — la réponse est LUE à voix haute (pas de mise en forme, courte). */
   spoken?: boolean
+  /** Étape 531 : Duel Agentique — le PC est SIMULÉ, la tâche peut compter plusieurs messages. */
+  simulated?: boolean
   /** Étape 480 : le modèle Claude et l'effort choisis par Léo pour son avis (défaut : le juge, effort élevé). */
   model?: DuelAdviceModel
   effort?: DuelAdviceEffort
@@ -304,6 +306,13 @@ export async function judgeDuel(apiKey: string, input: JudgeInput, signal?: Abor
     `3. Does it answer the actual request, in ${language}, clearly and without padding?`,
     ...(input.spoken
       ? ['4. Each reply is read ALOUD by a voice: it must sound natural when spoken, short, with no formatting (lists,', '   tables, markdown, emojis) and no links.']
+      : []),
+    ...(input.simulated
+      ? [
+          'This duel runs on a SIMULATED test PC, not on Léo\'s real PC: tool results come from that simulation, and nothing',
+          'appears on a real screen. The task can have several messages from Léo; the tool lines of EVERY message are',
+          'listed in order, marked "[message N]", so an action done in an earlier message is really done.'
+        ]
       : []),
     'Ignore which side came first, and do not reward length for its own sake.',
     'Answer "tie" when both are about equally good, "bothBad" when neither is acceptable.',
